@@ -14,14 +14,23 @@ jobs:
       - name: Build for iOS device (arm64)
         working-directory: Stockfish/src
         run: |
-          # Stockfish's ARCH=armv8 emits -arch armv8 which Apple clang rejects.
-          # ARCH=apple-silicon emits valid -arch arm64. Wrap CXX to use iOS device SDK.
-          CXX_WRAPPER="$(mktemp /tmp/ios-device-cxx.XXXXXX)"
-          printf '#!/bin/sh\nexec xcrun --sdk iphoneos clang++ "$@" -miphoneos-version-min=14.0\n' > "$CXX_WRAPPER"
-          chmod +x "$CXX_WRAPPER"
+          # Write a wrapper that strips macOS-specific flags before forwarding to iOS clang
+          {
+            echo '#!/bin/bash'
+            echo 'args=()'
+            echo 'for arg in "$@"; do'
+            echo '  case "$arg" in'
+            echo '    -mmacosx-version-min=*) ;;'
+            echo '    -m64) ;;'
+            echo '    *) args+=("$arg") ;;'
+            echo '  esac'
+            echo 'done'
+            echo 'exec xcrun --sdk iphoneos clang++ "${args[@]}" -miphoneos-version-min=14.0'
+          } > /tmp/ios-device-cxx.sh
+          chmod +x /tmp/ios-device-cxx.sh
           make -j"$(sysctl -n hw.logicalcpu)" \
             ARCH=apple-silicon \
-            CXX="$CXX_WRAPPER" \
+            CXX=/tmp/ios-device-cxx.sh \
             build
           strip stockfish
           mv stockfish ../../stockfish-ios-device
@@ -33,12 +42,22 @@ jobs:
       - name: Build for iOS simulator (Apple Silicon)
         working-directory: Stockfish/src
         run: |
-          CXX_WRAPPER="$(mktemp /tmp/ios-sim-cxx.XXXXXX)"
-          printf '#!/bin/sh\nexec xcrun --sdk iphonesimulator clang++ "$@" -miphonesimulator-version-min=14.0\n' > "$CXX_WRAPPER"
-          chmod +x "$CXX_WRAPPER"
+          {
+            echo '#!/bin/bash'
+            echo 'args=()'
+            echo 'for arg in "$@"; do'
+            echo '  case "$arg" in'
+            echo '    -mmacosx-version-min=*) ;;'
+            echo '    -m64) ;;'
+            echo '    *) args+=("$arg") ;;'
+            echo '  esac'
+            echo 'done'
+            echo 'exec xcrun --sdk iphonesimulator clang++ "${args[@]}" -miphonesimulator-version-min=14.0'
+          } > /tmp/ios-sim-cxx.sh
+          chmod +x /tmp/ios-sim-cxx.sh
           make -j"$(sysctl -n hw.logicalcpu)" \
             ARCH=apple-silicon \
-            CXX="$CXX_WRAPPER" \
+            CXX=/tmp/ios-sim-cxx.sh \
             build
           strip stockfish
           mv stockfish ../../stockfish-ios-simulator
