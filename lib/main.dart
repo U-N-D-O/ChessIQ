@@ -876,8 +876,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   // --- Engine Logic ---
   Future<void> _startEngine() async {
     if (_engine != null) return;
-    if (kIsWeb) {
-      _addLog('Engine unavailable on web; running without Stockfish process.');
+    if (kIsWeb || Platform.isIOS) {
+      _addLog(
+        'Engine unavailable on this platform; running without Stockfish process.',
+      );
       return;
     }
     try {
@@ -896,7 +898,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _ensureEngineStarted() async {
-    if (kIsWeb || _engine != null) return;
+    if (kIsWeb || Platform.isIOS || _engine != null) return;
     _engineStartFuture ??= _startEngine();
     try {
       await _engineStartFuture;
@@ -962,17 +964,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     for (final path in fileNames) {
       try {
-        String content;
-        if (kIsWeb) {
-          content = await rootBundle.loadString(path);
-        } else {
-          final file = File(path);
-          if (!await file.exists()) {
-            _addLog('ECO file missing: $path');
-            continue;
-          }
-          content = await file.readAsString();
-        }
+        final content = await rootBundle.loadString(path);
         final data = jsonDecode(content);
         if (data is Map<String, dynamic>) {
           data.forEach((_, entry) {
@@ -4955,6 +4947,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       onTap: (!_buttonUnlocked || _suggestionLaunchInProgress)
           ? null
           : () async {
+              if (kIsWeb || Platform.isIOS) {
+                _addLog(
+                  'Suggestions unavailable on this platform (iOS/Web process engine not supported).',
+                );
+                return;
+              }
               setState(() {
                 _suggestionLaunchInProgress = true;
               });
