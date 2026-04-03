@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#101624"/>
+      <stop offset="100%" stop-color="#080A12"/>
+    </radialGradient>
+
+    <radialGradient id="yellow-grad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#F0D060"/>
+      <stop offset="100%" stop-color="#D8B640"/>
+    </radialGradient>
+
+    <radialGradient id="blue-grad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#6090F0"/>
+      <stop offset="100%" stop-color="#3F6ED8"/>
+    </radialGradient>
+
+    <radialGradient id="green-grad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#90ECA0"/>
+      <stop offset="100%" stop-color="#7EDC8A"/>
+    </radialGradient>
+
+    <filter id="glow-yellow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <filter id="glow-blue" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <filter id="glow-green" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="22" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <radialGradient id="pawn-grad" cx="38%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#C8D0DC"/>
+    </radialGradient>
+
+    <filter id="queen-blur" x="-30%" y="-20%" width="160%" height="150%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+    <filter id="pawn-shadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="text-glow" x="-20%" y="-60%" width="140%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+
+  <!-- ═══ QUEEN SILHOUETTE (behind balls) ═══ -->
+  <g filter="url(#queen-blur)" fill="#060A12" opacity="0.62">
+    <!-- 5 crown orbs -->
+    <circle cx="178" cy="108" r="14"/>
+    <circle cx="214" cy="90"  r="16"/>
+    <circle cx="256" cy="74"  r="18"/>
+    <circle cx="298" cy="90"  r="16"/>
+    <circle cx="334" cy="108" r="14"/>
+    <!-- Crown body: fan from orb bases down to waist -->
+    <path d="M164 122 L178 174 L232 184 L232 202 Q232 210 240 214 L272 214 Q280 210 280 202 L280 184 L334 174 L348 122 L298 104 L256 90 L214 104 Z"/>
+    <!-- Skirt: waist widens to base -->
+    <path d="M232 214 Q206 232 190 262 L170 282 L342 282 L322 262 Q306 232 280 214 Z"/>
+    <!-- Base -->
+    <rect x="162" y="280" width="188" height="20" rx="7"/>
+  </g>
+
+  <!-- Subtle background ring hint -->
+  <circle cx="256" cy="210" r="160" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.04"/>
+
+  <!-- Yellow ball (left, slightly behind) -->
+  <circle cx="172" cy="210" r="72" fill="url(#yellow-grad)" opacity="0.82" filter="url(#glow-yellow)"/>
+
+  <!-- Blue ball (right, slightly behind) -->
+  <circle cx="340" cy="210" r="72" fill="url(#blue-grad)" opacity="0.82" filter="url(#glow-blue)"/>
+
+  <!-- Green result ball (center, on top) -->
+  <circle cx="256" cy="210" r="66" fill="url(#green-grad)" filter="url(#glow-green)"/>
+
+  <!-- Specular highlight on green ball -->
+  <ellipse cx="238" cy="192" rx="22" ry="14" fill="#ffffff" opacity="0.22"/>
+
+  <!-- ═══ WHITE PAWN (front layer, on green ball) ═══ -->
+  <g filter="url(#pawn-shadow)">
+    <circle cx="256" cy="183" r="20" fill="url(#pawn-grad)"/>
+    <ellipse cx="256" cy="207" rx="12" ry="10" fill="url(#pawn-grad)"/>
+    <path d="M244 207 Q231 220 229 244 L283 244 Q281 220 268 207 Z" fill="url(#pawn-grad)"/>
+    <rect x="224" y="244" width="64" height="14" rx="6" fill="url(#pawn-grad)"/>
+    <ellipse cx="249" cy="177" rx="8" ry="5" fill="#ffffff" opacity="0.45"/>
+  </g>
+
+  <!-- ChessIQ text -->
+  <text x="256" y="336"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="62"
+    font-weight="700"
+    letter-spacing="2"
+    text-anchor="middle"
+    fill="#F2F4F8"
+    filter="url(#text-glow)">ChessIQ</text>
+
+  <!-- Tagline -->
+  <text x="256" y="372"
+    font-family="Arial, sans-serif"
+    font-size="18"
+    letter-spacing="4"
+    text-anchor="middle"
+    fill="#B9A46A"
+    opacity="0.85">POWERED BY STOCKFISH</text>
+</svg>
