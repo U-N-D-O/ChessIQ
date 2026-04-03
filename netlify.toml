@@ -1,6 +1,0 @@
-[build]
-  command = "bash netlify-build.sh"
-  publish = "build/web"
-
-[build.environment]
-  FLUTTER_CHANNEL = "stable"

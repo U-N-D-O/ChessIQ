@@ -15,25 +15,3 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
-
-## Deploy To Netlify
-
-This repo is configured for Netlify with:
-
-- `netlify.toml`
-- `netlify-build.sh`
-- `web/_redirects`
-
-### One-time setup
-
-1. Push this project to GitHub.
-2. In Netlify, choose **Add new site** -> **Import an existing project**.
-3. Select your GitHub repo.
-4. Netlify will detect `netlify.toml` automatically.
-5. Trigger deploy.
-
-### Notes
-
-- Build command: `bash netlify-build.sh`
-- Publish directory: `build/web`
-- Redirect rule in `web/_redirects` ensures SPA routes load correctly.
