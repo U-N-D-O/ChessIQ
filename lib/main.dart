@@ -4308,6 +4308,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     bool reverse =
         (_perspective == BoardPerspective.black) ||
         (_perspective == BoardPerspective.auto && !_isWhiteTurn);
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
       body: Container(
@@ -4367,57 +4369,155 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     child: Stack(
                       children: [
                         SafeArea(
-                          child: Column(
-                            children: [
-                              _buildHeader(scale),
-                              _buildEvalBarHorizontal(scale),
-                              SizedBox(
-                                height: 0,
-                                child: OverflowBox(
-                                  maxHeight: 32 * scale,
-                                  alignment: Alignment.topCenter,
-                                  child: _buildOpeningLabel(scale),
-                                ),
-                              ),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: LayoutBuilder(
-                                    builder: (context, inner) {
-                                      final boardSize = min(
-                                        inner.maxWidth,
-                                        inner.maxHeight,
-                                      );
-                                      return Center(
-                                        child: SizedBox(
-                                          key: _boardKey,
-                                          width: boardSize,
-                                          height: boardSize,
-                                          child: Stack(
-                                            children: [
-                                              Opacity(
-                                                opacity: _boardIntroOpacity(),
-                                                child: _buildBoard(reverse),
-                                              ),
-                                              Opacity(
-                                                opacity: _boardIntroOpacity(),
-                                                child: _buildAnimatedArrows(
-                                                  reverse,
+                          child: isLandscape
+                              ? Column(
+                                  children: [
+                                    _buildHeader(scale),
+                                    _buildEvalBarHorizontal(scale),
+                                    SizedBox(
+                                      height: 0,
+                                      child: OverflowBox(
+                                        maxHeight: 28 * scale,
+                                        alignment: Alignment.topCenter,
+                                        child: _buildOpeningLabel(scale),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          10,
+                                          8,
+                                          10,
+                                          8,
+                                        ),
+                                        child: LayoutBuilder(
+                                          builder: (context, inner) {
+                                            final sideWidth = (inner.maxWidth *
+                                                    0.36)
+                                                .clamp(240.0, 360.0);
+                                            final boardWidth =
+                                                inner.maxWidth - sideWidth - 12;
+                                            final boardSize = min(
+                                              boardWidth,
+                                              inner.maxHeight,
+                                            );
+                                            return Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Center(
+                                                    child: SizedBox(
+                                                      key: _boardKey,
+                                                      width: boardSize,
+                                                      height: boardSize,
+                                                      child: Stack(
+                                                        children: [
+                                                          Opacity(
+                                                            opacity:
+                                                                _boardIntroOpacity(),
+                                                            child: _buildBoard(
+                                                              reverse,
+                                                            ),
+                                                          ),
+                                                          Opacity(
+                                                            opacity:
+                                                                _boardIntroOpacity(),
+                                                            child:
+                                                                _buildAnimatedArrows(
+                                                                  reverse,
+                                                                ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                SizedBox(
+                                                  width: sideWidth,
+                                                  child: Column(
+                                                    children: [
+                                                      _buildSuggestedMovesList(
+                                                        height: 124,
+                                                      ),
+                                                      _buildHistoryBar(
+                                                        height: 54,
+                                                        margin:
+                                                            const EdgeInsets.symmetric(
+                                                              vertical: 6,
+                                                            ),
+                                                      ),
+                                                      const Spacer(),
+                                                      _buildActionArea(
+                                                        compactBottom: 8,
+                                                        horizontal: 0,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    _buildHeader(scale),
+                                    _buildEvalBarHorizontal(scale),
+                                    SizedBox(
+                                      height: 0,
+                                      child: OverflowBox(
+                                        maxHeight: 32 * scale,
+                                        alignment: Alignment.topCenter,
+                                        child: _buildOpeningLabel(scale),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: LayoutBuilder(
+                                          builder: (context, inner) {
+                                            final boardSize = min(
+                                              inner.maxWidth,
+                                              inner.maxHeight,
+                                            );
+                                            return Center(
+                                              child: SizedBox(
+                                                key: _boardKey,
+                                                width: boardSize,
+                                                height: boardSize,
+                                                child: Stack(
+                                                  children: [
+                                                    Opacity(
+                                                      opacity:
+                                                          _boardIntroOpacity(),
+                                                      child: _buildBoard(
+                                                        reverse,
+                                                      ),
+                                                    ),
+                                                    Opacity(
+                                                      opacity:
+                                                          _boardIntroOpacity(),
+                                                      child:
+                                                          _buildAnimatedArrows(
+                                                            reverse,
+                                                          ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ],
-                                          ),
+                                            );
+                                          },
                                         ),
-                                      );
-                                    },
-                                  ),
+                                      ),
+                                    ),
+                                    _buildSuggestedMovesList(),
+                                    _buildHistoryBar(),
+                                    _buildActionArea(),
+                                  ],
                                 ),
-                              ),
-                              _buildSuggestedMovesList(),
-                              _buildHistoryBar(),
-                              _buildActionArea(),
-                            ],
-                          ),
                         ),
                         if (!_introCompleted)
                           _buildPremiumIntroOverlay(Size(width, height)),
@@ -4818,9 +4918,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildSuggestedMovesList() {
+  Widget _buildSuggestedMovesList({double height = 130}) {
     return SizedBox(
-      height: 130,
+      height: height,
       child: _topLines.isEmpty
           ? const SizedBox.shrink()
           : SingleChildScrollView(
@@ -4890,10 +4990,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return Colors.redAccent;
   }
 
-  Widget _buildHistoryBar() {
+  Widget _buildHistoryBar({
+    double height = 60,
+    EdgeInsets margin = const EdgeInsets.symmetric(vertical: 10),
+  }) {
     return Container(
-      height: 60,
-      margin: const EdgeInsets.symmetric(vertical: 10),
+      height: height,
+      margin: margin,
       child: ListView.builder(
         controller: _historyScrollController,
         scrollDirection: Axis.horizontal,
@@ -4911,9 +5014,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildActionArea() {
+  Widget _buildActionArea({
+    double compactBottom = 20,
+    double horizontal = 20,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+      padding: EdgeInsets.only(
+        bottom: compactBottom,
+        left: horizontal,
+        right: horizontal,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
