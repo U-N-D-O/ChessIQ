@@ -22,7 +22,7 @@ jobs:
       - name: Clone Stockfish 18
         run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
 
-      - name: Build Stockfish (iOS device arm64)
+      - name: Build Stockfish objects (iOS device arm64)
         working-directory: Stockfish/src
         run: |
           set -euo pipefail
@@ -46,23 +46,49 @@ jobs:
             CXX=/tmp/ios-device-cxx.sh \
             build
 
-          strip stockfish
-          mv stockfish ../../stockfish-ios-device
+      - name: Build libstockfish_ios.a
+        run: |
+          set -euo pipefail
+          cd Stockfish/src
+
+          # Rename main() -> stockfish_main in main.o so iOS app can link it.
+          xcrun llvm-objcopy \
+            --redefine-sym _main=_stockfish_main \
+            main.o main_stockfish.o
+
+          shopt -s nullglob
+          objs=()
+          for obj in *.o; do
+            if [[ "$obj" != "main.o" && "$obj" != "main_stockfish.o" ]]; then
+              objs+=("$obj")
+            fi
+          done
+          for obj in syzygy/*.o; do
+            objs+=("$obj")
+          done
+
+          /usr/bin/libtool -static \
+            -o ../../ios/Runner/libstockfish_ios.a \
+            main_stockfish.o "${objs[@]}"
+
+      - name: Configure iOS link flags for Stockfish
+        run: |
+          set -euo pipefail
+          cat >> ios/Flutter/Release.xcconfig <<'EOF'
+          LIBRARY_SEARCH_PATHS=$(inherited) $(PROJECT_DIR)/Runner
+          OTHER_LDFLAGS=$(inherited) -lstockfish_ios -lc++
+          EOF
 
       - name: Build Flutter iOS app (no codesign)
         run: flutter build ios --release --no-codesign
 
-      - name: Inject Stockfish and package IPA
+      - name: Package IPA
         run: |
           set -euo pipefail
           APP_PATH="build/ios/iphoneos/Runner.app"
           IPA_DIR="build/ios/ipa"
 
           test -d "$APP_PATH"
-          test -f "stockfish-ios-device"
-
-          cp "stockfish-ios-device" "$APP_PATH/stockfish"
-          chmod +x "$APP_PATH/stockfish"
 
           rm -rf "$IPA_DIR"
           mkdir -p "$IPA_DIR/Payload"

@@ -876,10 +876,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   // --- Engine Logic ---
   Future<void> _startEngine() async {
     if (_engine != null) return;
-    if (kIsWeb || Platform.isIOS) {
-      _addLog(
-        'Engine unavailable on this platform; running without Stockfish process.',
-      );
+    if (kIsWeb) {
+      _addLog('Engine unavailable on web; running without Stockfish process.');
       return;
     }
     try {
@@ -898,7 +896,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _ensureEngineStarted() async {
-    if (kIsWeb || Platform.isIOS || _engine != null) return;
+    if (kIsWeb || _engine != null) return;
     _engineStartFuture ??= _startEngine();
     try {
       await _engineStartFuture;
@@ -5179,9 +5177,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       onTap: (!_buttonUnlocked || _suggestionLaunchInProgress)
           ? null
           : () async {
-              if (kIsWeb || Platform.isIOS) {
+              if (kIsWeb) {
                 _addLog(
-                  'Suggestions unavailable on this platform (iOS/Web process engine not supported).',
+                  'Suggestions unavailable on web (engine process not supported).',
                 );
                 return;
               }
