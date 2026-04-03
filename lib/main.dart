@@ -1067,6 +1067,106 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
+  List<String> _moveSequenceTokens(String notation) {
+    return notation
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+  }
+
+  String _pieceCodeForSanToken(String san, bool isWhiteMove) {
+    final cleaned = _sanitizeSanToken(san);
+    String pieceCode;
+
+    if (cleaned.startsWith('O-O')) {
+      pieceCode = 'k';
+    } else {
+      final designator = RegExp(r'^[KQRBN]').stringMatch(cleaned);
+      switch (designator) {
+        case 'K':
+          pieceCode = 'k';
+          break;
+        case 'Q':
+          pieceCode = 'q';
+          break;
+        case 'R':
+          pieceCode = 't';
+          break;
+        case 'B':
+          pieceCode = 'b';
+          break;
+        case 'N':
+          pieceCode = 'n';
+          break;
+        default:
+          pieceCode = 'p';
+          break;
+      }
+    }
+
+    return '${pieceCode}_${isWhiteMove ? 'w' : 'b'}';
+  }
+
+  Widget _buildMoveSequenceText(
+    String notation, {
+    double fontSize = 12,
+    Color color = Colors.white70,
+    FontWeight fontWeight = FontWeight.w600,
+    int? maxLines,
+    TextOverflow overflow = TextOverflow.clip,
+  }) {
+    final tokens = _moveSequenceTokens(notation);
+    if (tokens.isEmpty) {
+      return Text(
+        notation,
+        maxLines: maxLines,
+        overflow: overflow,
+        style: TextStyle(
+          fontSize: fontSize,
+          color: color,
+          fontWeight: fontWeight,
+        ),
+      );
+    }
+
+    final iconSize = fontSize + 4;
+    final spans = <InlineSpan>[];
+    for (int index = 0; index < tokens.length; index++) {
+      if (index > 0) {
+        spans.add(const TextSpan(text: '  '));
+      }
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: _pieceImage(
+              _pieceCodeForSanToken(tokens[index], index.isEven),
+              width: iconSize,
+              height: iconSize,
+            ),
+          ),
+        ),
+      );
+      spans.add(
+        TextSpan(
+          text: tokens[index],
+          style: TextStyle(
+            fontSize: fontSize,
+            color: color,
+            fontWeight: fontWeight,
+          ),
+        ),
+      );
+    }
+
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: overflow,
+    );
+  }
+
   bool _isCurrentTurnPiece(String? piece) {
     if (piece == null) return false;
     return _isWhiteTurn ? piece.endsWith('_w') : piece.endsWith('_b');
@@ -1320,14 +1420,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                     ),
                                   ),
                                   const SizedBox(height: 3),
-                                  Text(
+                                  _buildMoveSequenceText(
                                     gambit.normalizedMoves,
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.45,
-                                      ),
+                                    fontSize: 11.5,
+                                    color: Colors.white.withValues(
+                                      alpha: 0.72,
                                     ),
+                                    fontWeight: FontWeight.w500,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -1655,14 +1754,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                     ),
                                   ),
                                   const SizedBox(height: 3),
-                                  Text(
+                                  _buildMoveSequenceText(
                                     gambit.normalizedMoves,
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.45,
-                                      ),
+                                    fontSize: 11.5,
+                                    color: Colors.white.withValues(
+                                      alpha: 0.72,
                                     ),
+                                    fontWeight: FontWeight.w500,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -1758,7 +1856,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
-            Text(gambit.normalizedMoves),
+            _buildMoveSequenceText(
+              gambit.normalizedMoves,
+              fontSize: 13,
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ],
         ),
         actions: [
@@ -2279,9 +2382,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       if (isCorrect) {
         _quizSessionCorrect += 1;
       }
-      _quizFeedback = isCorrect
+        _quizFeedback = isCorrect
           ? 'Correct. Great pattern recognition.'
-          : 'Not quite. Correct answer: ${_quizOptions[_quizCorrectIndex]}';
+          : (_quizMode == GambitQuizMode.guessLine
+            ? 'Not quite. The correct continuation is highlighted.'
+            : 'Not quite. Correct answer: ${_quizOptions[_quizCorrectIndex]}');
       _recordQuizResult(isCorrect: isCorrect);
     });
   }
@@ -3956,11 +4061,20 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             ? const Color(0xFFFF8A80).withValues(alpha: 0.08)
                             : null),
                 ),
-                label: Text(
-                  _quizOptions[i],
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                label: _quizMode == GambitQuizMode.guessLine
+                    ? _buildMoveSequenceText(
+                        _quizOptions[i],
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontWeight: FontWeight.w600,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    : Text(
+                        _quizOptions[i],
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
               ),
             ),
           ),
