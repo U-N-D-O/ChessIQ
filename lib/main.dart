@@ -18,6 +18,8 @@ void main() {
 
 enum BoardPerspective { white, black, auto }
 enum BoardThemeMode { dark, light, monochrome }
+enum AppSection { menu, analysis, gambitQuiz }
+enum GambitQuizMode { guessName, guessLine }
 
 class ChessIQApp extends StatelessWidget {
   const ChessIQApp({super.key});
@@ -96,12 +98,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
   static const int _defaultMultiPvCount = 1;
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
   static const String _storeStateKey = 'store_state_v1';
+  static const String _viewedGambitsKey = 'viewed_gambits_v1';
+  static const String _muteSoundsKey = 'mute_sounds_v1';
 
   late Map<String, String> boardState;
   Process? _stockfishProcess;
   StreamSubscription? _engineStream;
   late AnimationController _pulseController;
   late AnimationController _introController;
+  late AnimationController _menuRevealController;
   late AnimationController _launchController;
   late AnimationController _buttonRippleController;
   Offset? _buttonRippleCenter;
@@ -141,11 +146,21 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
   bool _themePackOwned = false;
   bool _piecePackOwned = false;
   bool _adFreeOwned = false;
-  bool _introCompleted = false;
+  bool _introCompleted = true;
   bool _suggestionsEnabled = false;
   bool _suggestionLaunchInProgress = false;
   Offset? _launchStart;
   List<Offset> _launchTargets = <Offset>[];
+
+  AppSection _activeSection = AppSection.menu;
+  GambitQuizMode _quizMode = GambitQuizMode.guessName;
+  bool _menuReady = false;
+  bool _muteSounds = false;
+  final Set<String> _viewedGambits = <String>{};
+  String _quizPrompt = '';
+  List<String> _quizOptions = <String>[];
+  int _quizCorrectIndex = 0;
+  String _quizFeedback = '';
 
   void _addLog(String message) {
     setState(() {
@@ -167,17 +182,23 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
             _introCompleted = true;
           });
         }
-      })
-      ..forward();
+      });
+    _menuRevealController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _launchController = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
     _buttonRippleController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _historyScrollController = ScrollController();
-    _resetBoard(initialLaunch: true);
+    _resetBoard(withIntro: false);
     _loadEcoOpenings();
     _restoreSnapshotAndStart();
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      setState(() => _menuReady = true);
+      _menuRevealController.forward(from: 0);
+    });
   }
 
   Future<void> _playIntroSound() async {
+    if (_muteSounds) return;
     try {
       await _introAudioPlayer.stop();
       await _introAudioPlayer.setReleaseMode(ReleaseMode.stop);
@@ -193,9 +214,37 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
   }
 
   Future<void> _restoreSnapshotAndStart() async {
+    await _loadUiPrefs();
     await _loadStoreState();
     await _loadSavedDefaultSnapshot();
     _startEngine();
+  }
+
+  Future<void> _loadUiPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _muteSounds = prefs.getBool(_muteSoundsKey) ?? false;
+      final viewed = prefs.getStringList(_viewedGambitsKey) ?? const <String>[];
+      _viewedGambits
+        ..clear()
+        ..addAll(viewed);
+    } catch (e) {
+      debugPrint('Failed to load UI prefs: $e');
+    }
+  }
+
+  Future<void> _saveViewedGambits() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_viewedGambitsKey, _viewedGambits.toList()..sort());
+  }
+
+  Future<void> _setMute(bool value) async {
+    setState(() => _muteSounds = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_muteSoundsKey, value);
+    if (value) {
+      await _introAudioPlayer.stop();
+    }
   }
 
   int get _maxDepthAllowed {
@@ -366,7 +415,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
     }
   }
 
-  void _resetBoard({bool initialLaunch = false}) {
+  void _resetBoard({bool initialLaunch = false, bool withIntro = true}) {
     boardState = {
       'a8': 't_b','b8': 'n_b','c8': 'b_b','d8': 'q_b','e8': 'k_b','f8': 'b_b','g8': 'n_b','h8': 't_b',
       'a7': 'p_b','b7': 'p_b','c7': 'p_b','d7': 'p_b','e7': 'p_b','f7': 'p_b','g7': 'p_b','h7': 'p_b',
@@ -390,20 +439,26 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
     _topLines = [];
     _currentDepth = 0;
     _currentEval = 0.0;
-    _introCompleted = false;
-    _buttonUnlocked = false;
-    _introController.forward(from: 0);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final delay = initialLaunch ? const Duration(milliseconds: 800) : Duration.zero;
-      Future.delayed(delay, () {
+    if (withIntro) {
+      _introCompleted = false;
+      _buttonUnlocked = false;
+      _introController.forward(from: 0);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        unawaited(_playIntroSound());
+        final delay = initialLaunch ? const Duration(milliseconds: 800) : Duration.zero;
+        Future.delayed(delay, () {
+          if (!mounted) return;
+          unawaited(_playIntroSound());
+        });
+        Future.delayed(const Duration(milliseconds: 3000), () {
+          if (mounted) setState(() => _buttonUnlocked = true);
+        });
       });
-      Future.delayed(const Duration(milliseconds: 3000), () {
-        if (mounted) setState(() => _buttonUnlocked = true);
-      });
-    });
+    } else {
+      _introCompleted = true;
+      _buttonUnlocked = true;
+      _introController.value = 1.0;
+    }
   }
 
   // --- Engine Logic ---
@@ -920,6 +975,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
 
   void _activateGambit(EcoLine gambit) {
     final preview = _buildGambitPreviewLines(gambit);
+    _markGambitViewed(gambit.name);
     setState(() {
       _selectedGambit = gambit;
       _gambitPreviewLines = preview;
@@ -930,6 +986,104 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
       _isChoosingGambit = false;
     });
     _addLog('Selected gambit: ${gambit.name} (${preview.length} preview arrows)');
+  }
+
+  List<EcoLine> _uniqueGambits() {
+    final map = <String, EcoLine>{};
+    for (final line in _ecoLines.where((line) => line.isGambit)) {
+      map.putIfAbsent(line.name, () => line);
+    }
+    final values = map.values.toList();
+    values.sort((a, b) => a.name.compareTo(b.name));
+    return values;
+  }
+
+  void _markGambitViewed(String name) {
+    if (name.isEmpty) return;
+    if (_viewedGambits.add(name)) {
+      unawaited(_saveViewedGambits());
+    }
+  }
+
+  void _openGambitDetail(EcoLine gambit) {
+    _markGambitViewed(gambit.name);
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(gambit.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Main line', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(gambit.normalizedMoves),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _startQuizRound({GambitQuizMode? mode}) {
+    final gambits = _uniqueGambits();
+    if (gambits.length < 3) {
+      setState(() {
+        _quizPrompt = 'Not enough gambits loaded yet.';
+        _quizOptions = const <String>[];
+        _quizCorrectIndex = 0;
+        _quizFeedback = '';
+        if (mode != null) _quizMode = mode;
+      });
+      return;
+    }
+
+    final activeMode = mode ?? _quizMode;
+    final random = Random();
+    final correct = gambits[random.nextInt(gambits.length)];
+    _markGambitViewed(correct.name);
+
+    final options = <EcoLine>[correct];
+    while (options.length < 3) {
+      final candidate = gambits[random.nextInt(gambits.length)];
+      if (!options.any((entry) => entry.name == candidate.name)) {
+        options.add(candidate);
+      }
+    }
+    options.shuffle(random);
+    final correctIndex = options.indexWhere((entry) => entry.name == correct.name);
+
+    setState(() {
+      _quizMode = activeMode;
+      _quizCorrectIndex = correctIndex;
+      _quizFeedback = '';
+      if (activeMode == GambitQuizMode.guessName) {
+        _quizPrompt = correct.normalizedMoves;
+        _quizOptions = options.map((entry) => entry.name).toList();
+      } else {
+        _quizPrompt = correct.name;
+        _quizOptions = options.map((entry) => entry.normalizedMoves).toList();
+      }
+    });
+  }
+
+  void _submitQuizAnswer(int index) {
+    final isCorrect = index == _quizCorrectIndex;
+    setState(() {
+      _quizFeedback = isCorrect
+          ? 'Correct'
+          : 'Not quite. Correct answer: ${_quizOptions[_quizCorrectIndex]}';
+    });
+  }
+
+  void _enterAnalysisBoard() {
+    setState(() {
+      _activeSection = AppSection.analysis;
+    });
+    _resetBoard(initialLaunch: true, withIntro: true);
+    _analyze();
   }
 
   Set<String> _legalMovesFrom(String from) {
@@ -1613,6 +1767,262 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
   // --- UI Sections ---
   @override
   Widget build(BuildContext context) {
+    if (_activeSection == AppSection.analysis) {
+      return _buildAnalysisBoardScaffold(context);
+    }
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0B0F19),
+              Color(0xFF080A12),
+              Color(0xFF101624),
+            ],
+            stops: [0.0, 0.55, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: !_menuReady
+              ? Center(
+                  child: SvgPicture.asset(
+                    'assets/logo.svg',
+                    width: 220,
+                    fit: BoxFit.contain,
+                  ),
+                )
+              : FadeTransition(
+                  opacity: CurvedAnimation(parent: _menuRevealController, curve: Curves.easeOutCubic),
+                  child: _activeSection == AppSection.menu
+                      ? _buildStartMenu()
+                      : _buildGambitQuizScreen(),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStartMenu() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              SvgPicture.asset('assets/logo.svg', width: 160, fit: BoxFit.contain),
+              const Spacer(),
+              IconButton(
+                onPressed: () => _setMute(!_muteSounds),
+                icon: Icon(_muteSounds ? Icons.volume_off_rounded : Icons.volume_up_rounded),
+                tooltip: _muteSounds ? 'Unmute sound' : 'Mute sound',
+              ),
+              IconButton(
+                onPressed: _openSettings,
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: 'Settings',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Choose Your Mode',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFFF2F4F8)),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Training, analysis, puzzles, and more in one place.',
+            style: TextStyle(color: Colors.white54),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: GridView.count(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.15,
+              children: [
+                _menuCard(
+                  icon: Icons.analytics_outlined,
+                  title: 'Analysis Board',
+                  subtitle: 'Open board and engine tools',
+                  onTap: _enterAnalysisBoard,
+                ),
+                _menuCard(
+                  icon: Icons.extension_outlined,
+                  title: 'Gambit Puzzles',
+                  subtitle: 'Quiz by gambit names and lines',
+                  onTap: () {
+                    setState(() => _activeSection = AppSection.gambitQuiz);
+                    _startQuizRound();
+                  },
+                ),
+                _menuCard(
+                  icon: Icons.storefront_outlined,
+                  title: 'Store',
+                  subtitle: 'Upgrades and coin packs',
+                  onTap: _openStore,
+                ),
+                _menuCard(
+                  icon: Icons.info_outline,
+                  title: 'Credits',
+                  subtitle: 'Ownership and attributions',
+                  onTap: _showCreditsDialog,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _menuCard({required IconData icon, required String title, required String subtitle, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: const Color(0xFF121724).withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white12),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6)),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: const Color(0xFFB9A46A), size: 24),
+              const Spacer(),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              const SizedBox(height: 4),
+              Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGambitQuizScreen() {
+    final gambits = _uniqueGambits();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(() => _activeSection = AppSection.menu),
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back to menu',
+              ),
+              const SizedBox(width: 6),
+              const Text('Gambit Puzzles', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+              const Spacer(),
+              Text('${_viewedGambits.length}/${gambits.length} viewed', style: const TextStyle(color: Colors.white60)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('Guess Gambit Name'),
+                  selected: _quizMode == GambitQuizMode.guessName,
+                  onSelected: (_) => _startQuizRound(mode: GambitQuizMode.guessName),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('Guess Gambit Line'),
+                  selected: _quizMode == GambitQuizMode.guessLine,
+                  onSelected: (_) => _startQuizRound(mode: GambitQuizMode.guessLine),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF121724).withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Text(
+              _quizPrompt.isEmpty ? 'Tap Next Question to start.' : _quizPrompt,
+              style: const TextStyle(fontSize: 14, height: 1.35),
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (int i = 0; i < _quizOptions.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => _submitQuizAnswer(i),
+                  child: Text(_quizOptions[i], maxLines: 3, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            ),
+          if (_quizFeedback.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 8),
+              child: Text(
+                _quizFeedback,
+                style: TextStyle(
+                  color: _quizFeedback == 'Correct' ? const Color(0xFF7EDC8A) : const Color(0xFFFFB26A),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _startQuizRound,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Next Question'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Gambit Library', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: ListView.separated(
+              itemCount: gambits.length,
+              separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
+              itemBuilder: (context, index) {
+                final gambit = gambits[index];
+                final viewed = _viewedGambits.contains(gambit.name);
+                return ListTile(
+                  dense: true,
+                  title: Text(gambit.name),
+                  subtitle: Text(gambit.normalizedMoves, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: Icon(viewed ? Icons.check_circle : Icons.radio_button_unchecked, color: viewed ? const Color(0xFF7EDC8A) : Colors.white30, size: 18),
+                  onTap: () => _openGambitDetail(gambit),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalysisBoardScaffold(BuildContext context) {
     bool reverse = (_perspective == BoardPerspective.black) || (_perspective == BoardPerspective.auto && !_isWhiteTurn);
 
     return Scaffold(
@@ -1785,6 +2195,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    onPressed: () => setState(() => _activeSection = AppSection.menu),
+                    icon: Icon(Icons.home_outlined, color: Colors.white38, size: 16 * scale),
+                    splashRadius: 14 * scale,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints.tightFor(width: 20 * scale, height: 20 * scale),
+                  ),
+                  SizedBox(width: 4 * scale),
                   Text("Depth $_currentDepth", style: TextStyle(color: Colors.white30, fontSize: 11 * scale)),
                   SizedBox(width: 4 * scale),
                   IconButton(
@@ -3213,7 +3632,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
 
   @override
   void dispose() {
-    _send('quit'); _engineStream?.cancel(); _stockfishProcess?.kill(); _pulseController.dispose(); _introController.dispose(); _launchController.dispose(); _buttonRippleController.dispose(); _introAudioPlayer.dispose();
+    _send('quit'); _engineStream?.cancel(); _stockfishProcess?.kill(); _pulseController.dispose(); _introController.dispose(); _menuRevealController.dispose(); _launchController.dispose(); _buttonRippleController.dispose(); _introAudioPlayer.dispose();
     super.dispose();
   }
 }

@@ -59,6 +59,7 @@ flutter:
   assets:
     - assets/sounds/
     - assets/ChessIQ.svg
+    - assets/logo.svg
     - pieces/
     - openings/
 
