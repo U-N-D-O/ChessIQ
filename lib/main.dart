@@ -199,6 +199,18 @@ class QuizBoardSnapshot {
   });
 }
 
+class _RenderedMoveToken {
+  final String notation;
+  final String movingPiece;
+  final String? capturedPiece;
+
+  const _RenderedMoveToken({
+    required this.notation,
+    required this.movingPiece,
+    this.capturedPiece,
+  });
+}
+
 class ChessAnalysisPage extends StatefulWidget {
   const ChessAnalysisPage({super.key});
   @override
@@ -1107,6 +1119,56 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return '${pieceCode}_${isWhiteMove ? 'w' : 'b'}';
   }
 
+  List<_RenderedMoveToken> _renderedMoveTokens(String notation) {
+    final tokens = _moveSequenceTokens(notation);
+    if (tokens.isEmpty) return const <_RenderedMoveToken>[];
+
+    final rendered = <_RenderedMoveToken>[];
+    var state = _initialBoardState();
+    var whiteToMove = true;
+
+    for (int index = 0; index < tokens.length; index++) {
+      final token = tokens[index];
+      final fallbackPiece = _pieceCodeForSanToken(token, whiteToMove);
+      final uciMove = _resolveSanToUci(state, token, whiteToMove);
+
+      if (uciMove == null) {
+        rendered.add(
+          _RenderedMoveToken(notation: token, movingPiece: fallbackPiece),
+        );
+        whiteToMove = !whiteToMove;
+        continue;
+      }
+
+      final from = uciMove.substring(0, 2);
+      final to = uciMove.substring(2, 4);
+      final movingPiece = state[from] ?? fallbackPiece;
+      String? capturedPiece = state[to];
+
+      if (capturedPiece == null &&
+          movingPiece.startsWith('p') &&
+          from[0] != to[0]) {
+        final targetRank = int.parse(to[1]);
+        final capturedRank = whiteToMove ? targetRank - 1 : targetRank + 1;
+        final capturedSquare = '${to[0]}$capturedRank';
+        capturedPiece = state[capturedSquare];
+      }
+
+      rendered.add(
+        _RenderedMoveToken(
+          notation: token,
+          movingPiece: movingPiece,
+          capturedPiece: capturedPiece,
+        ),
+      );
+
+      state = _applyUciMove(state, uciMove);
+      whiteToMove = !whiteToMove;
+    }
+
+    return rendered;
+  }
+
   Widget _buildMoveSequenceText(
     String notation, {
     double fontSize = 12,
@@ -1115,8 +1177,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     int? maxLines,
     TextOverflow overflow = TextOverflow.clip,
   }) {
-    final tokens = _moveSequenceTokens(notation);
-    if (tokens.isEmpty) {
+    final renderedTokens = _renderedMoveTokens(notation);
+    if (renderedTokens.isEmpty) {
       return Text(
         notation,
         maxLines: maxLines,
@@ -1131,7 +1193,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     final iconSize = fontSize + 4;
     final spans = <InlineSpan>[];
-    for (int index = 0; index < tokens.length; index++) {
+    for (int index = 0; index < renderedTokens.length; index++) {
+      final token = renderedTokens[index];
       if (index > 0) {
         spans.add(const TextSpan(text: '  '));
       }
@@ -1141,16 +1204,44 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           child: Padding(
             padding: const EdgeInsets.only(right: 4),
             child: _pieceImage(
-              _pieceCodeForSanToken(tokens[index], index.isEven),
+              token.movingPiece,
               width: iconSize,
               height: iconSize,
             ),
           ),
         ),
       );
+      if (token.capturedPiece != null) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Icon(
+                Icons.arrow_right_alt_rounded,
+                size: fontSize + 2,
+                color: color.withValues(alpha: 0.85),
+              ),
+            ),
+          ),
+        );
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _pieceImage(
+                token.capturedPiece!,
+                width: iconSize,
+                height: iconSize,
+              ),
+            ),
+          ),
+        );
+      }
       spans.add(
         TextSpan(
-          text: tokens[index],
+          text: token.notation,
           style: TextStyle(
             fontSize: fontSize,
             color: color,
