@@ -4013,17 +4013,24 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         children: [
           Row(
             children: [
-              IconButton(
-                onPressed: _goToMenu,
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back to menu',
+              Expanded(
+                child: Text(
+                  '${_quizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(width: 6),
-              const Text(
-                'Gambit Puzzles',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+              TextButton.icon(
+                onPressed: _returnToQuizSetup,
+                icon: const Icon(Icons.tune, size: 16),
+                label: const Text('Back to Setup'),
               ),
-              const Spacer(),
+              const SizedBox(width: 6),
               IconButton(
                 onPressed: _openQuizStatsSheet,
                 icon: const Icon(Icons.insights_outlined),
@@ -4036,21 +4043,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            '${_quizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              TextButton.icon(
-                onPressed: _returnToQuizSetup,
-                icon: const Icon(Icons.tune, size: 16),
-                label: const Text('Back to Setup'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -4414,138 +4406,99 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                         ),
                                         child: LayoutBuilder(
                                           builder: (context, inner) {
-                                            final targetSideWidth =
-                                                (inner.maxWidth * 0.36)
-                                                    .clamp(240.0, 360.0);
-                                            final maxAllowedSideWidth =
-                                                max(0.0, inner.maxWidth - 170.0);
-                                            final sideWidth = min(
-                                              targetSideWidth,
-                                              maxAllowedSideWidth,
-                                            );
-                                            final boardWidth = max(
-                                              0.0,
-                                              inner.maxWidth - sideWidth - 12,
-                                            );
-
-                                            // During desktop drag-resize, very narrow
-                                            // transient widths can occur. Fall back
-                                            // to stacked layout instead of forcing
-                                            // a split row that can underflow.
-                                            final useSplit =
-                                                sideWidth >= 200 &&
-                                                boardWidth >= 170;
-                                            if (!useSplit) {
-                                              final boardSize = max(
-                                                0.0,
-                                                min(
-                                                  inner.maxWidth,
-                                                  inner.maxHeight - 190,
-                                                ),
-                                              );
-                                              return Column(
-                                                children: [
-                                                  Expanded(
-                                                    child: Center(
-                                                      child: SizedBox(
-                                                        key: _boardKey,
-                                                        width: boardSize,
-                                                        height: boardSize,
-                                                        child: Stack(
-                                                          children: [
-                                                            Opacity(
-                                                              opacity:
-                                                                  _boardIntroOpacity(),
-                                                              child: _buildBoard(
-                                                                reverse,
-                                                              ),
-                                                            ),
-                                                            Opacity(
-                                                              opacity:
-                                                                  _boardIntroOpacity(),
-                                                              child:
-                                                                  _buildAnimatedArrows(
-                                                                    reverse,
-                                                                  ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  _buildSuggestedMovesList(
-                                                    height: 92,
-                                                  ),
-                                                  _buildHistoryBar(
-                                                    height: 50,
-                                                    margin:
-                                                        const EdgeInsets.symmetric(
-                                                          vertical: 4,
-                                                        ),
-                                                  ),
-                                                  _buildActionArea(
-                                                    compactBottom: 6,
-                                                    horizontal: 8,
-                                                  ),
-                                                ],
-                                              );
-                                            }
-
-                                            final boardSize = min(
-                                              boardWidth,
-                                              inner.maxHeight,
-                                            );
+                                            final sideWidth =
+                                                (inner.maxWidth * 0.34).clamp(
+                                                  220.0,
+                                                  360.0,
+                                                );
                                             return Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
                                               children: [
                                                 Expanded(
-                                                  child: Center(
-                                                    child: SizedBox(
-                                                      key: _boardKey,
-                                                      width: boardSize,
-                                                      height: boardSize,
-                                                      child: Stack(
-                                                        children: [
-                                                          Opacity(
-                                                            opacity:
-                                                                _boardIntroOpacity(),
-                                                            child: _buildBoard(
-                                                              reverse,
-                                                            ),
+                                                  flex: 7,
+                                                  child: LayoutBuilder(
+                                                    builder: (
+                                                      context,
+                                                      boardBox,
+                                                    ) {
+                                                      final boardSize = max(
+                                                        0.0,
+                                                        min(
+                                                          boardBox.maxWidth,
+                                                          boardBox.maxHeight,
+                                                        ),
+                                                      );
+                                                      return Center(
+                                                        child: SizedBox(
+                                                          key: _boardKey,
+                                                          width: boardSize,
+                                                          height: boardSize,
+                                                          child: Stack(
+                                                            children: [
+                                                              Opacity(
+                                                                opacity:
+                                                                    _boardIntroOpacity(),
+                                                                child:
+                                                                    _buildBoard(
+                                                                      reverse,
+                                                                    ),
+                                                              ),
+                                                              Opacity(
+                                                                opacity:
+                                                                    _boardIntroOpacity(),
+                                                                child:
+                                                                    _buildAnimatedArrows(
+                                                                      reverse,
+                                                                    ),
+                                                              ),
+                                                            ],
                                                           ),
-                                                          Opacity(
-                                                            opacity:
-                                                                _boardIntroOpacity(),
-                                                            child:
-                                                                _buildAnimatedArrows(
-                                                                  reverse,
-                                                                ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
+                                                        ),
+                                                      );
+                                                    },
                                                   ),
                                                 ),
                                                 const SizedBox(width: 12),
                                                 SizedBox(
                                                   width: sideWidth,
-                                                  child: Column(
-                                                    children: [
-                                                      _buildSuggestedMovesList(
-                                                        height: 124,
-                                                      ),
-                                                      _buildHistoryBar(
-                                                        height: 54,
-                                                        margin:
-                                                            const EdgeInsets.symmetric(
-                                                              vertical: 6,
-                                                            ),
-                                                      ),
-                                                      const Spacer(),
-                                                      _buildActionArea(
-                                                        compactBottom: 8,
-                                                        horizontal: 0,
-                                                      ),
-                                                    ],
+                                                  child: LayoutBuilder(
+                                                    builder: (
+                                                      context,
+                                                      sideConstraints,
+                                                    ) {
+                                                      final suggestionsHeight =
+                                                          (sideConstraints
+                                                                  .maxHeight *
+                                                              0.46)
+                                                              .clamp(96.0, 220.0);
+                                                      final historyHeight =
+                                                          (sideConstraints
+                                                                  .maxHeight *
+                                                              0.16)
+                                                              .clamp(46.0, 72.0);
+                                                      return Column(
+                                                        children: [
+                                                          _buildSuggestedMovesList(
+                                                            height:
+                                                                suggestionsHeight,
+                                                          ),
+                                                          _buildHistoryBar(
+                                                            height:
+                                                                historyHeight,
+                                                            margin:
+                                                                const EdgeInsets.symmetric(
+                                                                  vertical: 6,
+                                                                ),
+                                                          ),
+                                                          const Spacer(),
+                                                          _buildActionArea(
+                                                            compactBottom: 8,
+                                                            horizontal: 0,
+                                                          ),
+                                                        ],
+                                                      );
+                                                    },
                                                   ),
                                                 ),
                                               ],
