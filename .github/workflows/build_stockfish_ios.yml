@@ -14,9 +14,14 @@ jobs:
       - name: Build for iOS device (arm64)
         working-directory: Stockfish/src
         run: |
-          make -j$(sysctl -n hw.logicalcpu) \
-            ARCH=armv8 \
-            target_os=ios \
+          # Stockfish's ARCH=armv8 emits -arch armv8 which Apple clang rejects.
+          # ARCH=apple-silicon emits valid -arch arm64. Wrap CXX to use iOS device SDK.
+          CXX_WRAPPER="$(mktemp /tmp/ios-device-cxx.XXXXXX)"
+          printf '#!/bin/sh\nexec xcrun --sdk iphoneos clang++ "$@" -miphoneos-version-min=14.0\n' > "$CXX_WRAPPER"
+          chmod +x "$CXX_WRAPPER"
+          make -j"$(sysctl -n hw.logicalcpu)" \
+            ARCH=apple-silicon \
+            CXX="$CXX_WRAPPER" \
             build
           strip stockfish
           mv stockfish ../../stockfish-ios-device
@@ -28,9 +33,12 @@ jobs:
       - name: Build for iOS simulator (Apple Silicon)
         working-directory: Stockfish/src
         run: |
-          make -j$(sysctl -n hw.logicalcpu) \
+          CXX_WRAPPER="$(mktemp /tmp/ios-sim-cxx.XXXXXX)"
+          printf '#!/bin/sh\nexec xcrun --sdk iphonesimulator clang++ "$@" -miphonesimulator-version-min=14.0\n' > "$CXX_WRAPPER"
+          chmod +x "$CXX_WRAPPER"
+          make -j"$(sysctl -n hw.logicalcpu)" \
             ARCH=apple-silicon \
-            target_os=ios \
+            CXX="$CXX_WRAPPER" \
             build
           strip stockfish
           mv stockfish ../../stockfish-ios-simulator
