@@ -16,9 +16,26 @@ Note: this repository does not currently distribute `engine/stockfish.exe`.
 
 - Files: `openings/ecoA.json`, `openings/ecoB.json`, `openings/ecoC.json`, `openings/ecoD.json`, `openings/ecoE.json`
 - Purpose: Encyclopaedia of Chess Openings (ECO) move/name lookup.
-- Source markers inside data: values such as `eco_tsv` and `scid` in each entry's `src` field.
+- Upstream repository used for these files:
+  - https://github.com/hayatbiralem/eco.json (archived)
+  - file examples: `ecoA.json` through `ecoE.json`
+- License: MIT
+- License text source: https://raw.githubusercontent.com/hayatbiralem/eco.json/master/LICENSE
+- Local copy of license text: `licenses/eco.json-MIT.txt`
 
-Important: keep upstream attribution and license terms for whichever ECO dataset export you used to create these files. If you publish or redistribute this app, include the exact upstream URL(s) and license text(s) for those ECO data sources.
+Upstream project notes indicate active development moved to:
+
+- https://github.com/JeffML/eco.json
+
+Acknowledgements from upstream README include:
+
+- Ömur Yanıkoğlu (original eco.json compilation)
+- Shane Hudson (original SCID opening data credit)
+- niklasf/eco project acknowledgements
+
+Data provenance note:
+
+- These ECO files are a collation that may include source markers such as `eco_tsv`, `scid`, `eco_wikip`, `ct`, `chessGraph`, `icsbot`, and others inside entries.
 
 ## 3) Flutter, Dart, and Pub Packages
 
