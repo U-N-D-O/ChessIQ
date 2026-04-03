@@ -4392,11 +4392,83 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                         ),
                                         child: LayoutBuilder(
                                           builder: (context, inner) {
-                                            final sideWidth = (inner.maxWidth *
-                                                    0.36)
-                                                .clamp(240.0, 360.0);
-                                            final boardWidth =
-                                                inner.maxWidth - sideWidth - 12;
+                                            final targetSideWidth =
+                                                (inner.maxWidth * 0.36)
+                                                    .clamp(240.0, 360.0);
+                                            final maxAllowedSideWidth =
+                                                max(0.0, inner.maxWidth - 170.0);
+                                            final sideWidth = min(
+                                              targetSideWidth,
+                                              maxAllowedSideWidth,
+                                            );
+                                            final boardWidth = max(
+                                              0.0,
+                                              inner.maxWidth - sideWidth - 12,
+                                            );
+
+                                            // During desktop drag-resize, very narrow
+                                            // transient widths can occur. Fall back
+                                            // to stacked layout instead of forcing
+                                            // a split row that can underflow.
+                                            final useSplit =
+                                                sideWidth >= 200 &&
+                                                boardWidth >= 170;
+                                            if (!useSplit) {
+                                              final boardSize = max(
+                                                0.0,
+                                                min(
+                                                  inner.maxWidth,
+                                                  inner.maxHeight - 190,
+                                                ),
+                                              );
+                                              return Column(
+                                                children: [
+                                                  Expanded(
+                                                    child: Center(
+                                                      child: SizedBox(
+                                                        key: _boardKey,
+                                                        width: boardSize,
+                                                        height: boardSize,
+                                                        child: Stack(
+                                                          children: [
+                                                            Opacity(
+                                                              opacity:
+                                                                  _boardIntroOpacity(),
+                                                              child: _buildBoard(
+                                                                reverse,
+                                                              ),
+                                                            ),
+                                                            Opacity(
+                                                              opacity:
+                                                                  _boardIntroOpacity(),
+                                                              child:
+                                                                  _buildAnimatedArrows(
+                                                                    reverse,
+                                                                  ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  _buildSuggestedMovesList(
+                                                    height: 92,
+                                                  ),
+                                                  _buildHistoryBar(
+                                                    height: 50,
+                                                    margin:
+                                                        const EdgeInsets.symmetric(
+                                                          vertical: 4,
+                                                        ),
+                                                  ),
+                                                  _buildActionArea(
+                                                    compactBottom: 6,
+                                                    horizontal: 8,
+                                                  ),
+                                                ],
+                                              );
+                                            }
+
                                             final boardSize = min(
                                               boardWidth,
                                               inner.maxHeight,
