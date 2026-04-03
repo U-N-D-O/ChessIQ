@@ -5074,15 +5074,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          _iconBtn(Icons.refresh, _confirmReset),
           _marketplaceBtn(),
+          _buildSuggestionTriggerButton(),
           _iconBtn(
             _isChoosingGambit
                 ? Icons.auto_awesome
                 : Icons.auto_awesome_outlined,
             _toggleGambitMode,
           ),
-          _buildSuggestionTriggerButton(),
-          _iconBtn(Icons.refresh, _confirmReset),
           _iconBtn(Icons.settings_outlined, _openSettings),
         ],
       ),
