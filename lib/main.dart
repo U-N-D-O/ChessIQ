@@ -1806,103 +1806,235 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
   }
 
   Widget _buildStartMenu() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              SvgPicture.asset('assets/logo.svg', width: 160, fit: BoxFit.contain),
-              const Spacer(),
-              IconButton(
-                onPressed: () => _setMute(!_muteSounds),
-                icon: Icon(_muteSounds ? Icons.volume_off_rounded : Icons.volume_up_rounded),
-                tooltip: _muteSounds ? 'Unmute sound' : 'Mute sound',
+    const coreBlue = Color(0xFF2A6CF0);
+    const coreGold = Color(0xFFD8B640);
+    const fusionGreen = Color(0xFF7EDC8A);
+
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, _) {
+        final t = _pulseController.value;
+        final blueOrb = Alignment(-0.66 + 0.05 * sin(t * pi * 2), -0.24 + 0.03 * cos(t * pi * 2));
+        final goldOrb = Alignment(0.66 + 0.05 * cos(t * pi * 2), -0.24 + 0.03 * sin(t * pi * 2));
+        final fusionPulse = 0.22 + 0.13 * (0.5 + 0.5 * sin(t * pi * 2));
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF060912), Color(0xFF0B1022), Color(0xFF12102A)],
+                    stops: [0.0, 0.55, 1.0],
+                  ),
+                  boxShadow: [
+                    BoxShadow(color: coreBlue.withValues(alpha: 0.2), blurRadius: 120, spreadRadius: 10),
+                  ],
+                ),
               ),
-              IconButton(
-                onPressed: _openSettings,
-                icon: const Icon(Icons.settings_outlined),
-                tooltip: 'Settings',
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Choose Your Mode',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFFF2F4F8)),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Training, analysis, puzzles, and more in one place.',
-            style: TextStyle(color: Colors.white54),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.15,
-              children: [
-                _menuCard(
-                  icon: Icons.analytics_outlined,
-                  title: 'Analysis Board',
-                  subtitle: 'Open board and engine tools',
-                  onTap: _enterAnalysisBoard,
-                ),
-                _menuCard(
-                  icon: Icons.extension_outlined,
-                  title: 'Gambit Puzzles',
-                  subtitle: 'Quiz by gambit names and lines',
-                  onTap: () {
-                    setState(() => _activeSection = AppSection.gambitQuiz);
-                    _startQuizRound();
-                  },
-                ),
-                _menuCard(
-                  icon: Icons.storefront_outlined,
-                  title: 'Store',
-                  subtitle: 'Upgrades and coin packs',
-                  onTap: _openStore,
-                ),
-                _menuCard(
-                  icon: Icons.info_outline,
-                  title: 'Credits',
-                  subtitle: 'Ownership and attributions',
-                  onTap: _showCreditsDialog,
-                ),
-              ],
             ),
-          ),
-        ],
-      ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Stack(
+                  children: [
+                    Align(
+                      alignment: blueOrb,
+                      child: Container(
+                        width: 170,
+                        height: 170,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: coreBlue.withValues(alpha: 0.16),
+                          boxShadow: [BoxShadow(color: coreBlue.withValues(alpha: 0.55), blurRadius: 60)],
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: goldOrb,
+                      child: Container(
+                        width: 160,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: coreGold.withValues(alpha: 0.15),
+                          boxShadow: [BoxShadow(color: coreGold.withValues(alpha: 0.5), blurRadius: 56)],
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: const Alignment(0, -0.22),
+                      child: Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: fusionGreen.withValues(alpha: fusionPulse),
+                          boxShadow: [BoxShadow(color: fusionGreen.withValues(alpha: 0.7), blurRadius: 70)],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                children: [
+                  Center(
+                    child: SvgPicture.asset(
+                      'assets/logo.svg',
+                      width: 220,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 430, maxHeight: 560),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 360,
+                              height: 360,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white24, width: 2),
+                              ),
+                            ),
+                            Container(
+                              width: 285,
+                              height: 285,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1.5),
+                              ),
+                            ),
+                            Container(
+                              width: 220,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0D1020).withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: const Color(0x66D8B640)),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _menuGlyphButton(
+                                    label: 'ANALYSIS',
+                                    icon: Icons.analytics_outlined,
+                                    accent: coreGold,
+                                    onTap: _enterAnalysisBoard,
+                                  ),
+                                  _menuGlyphButton(
+                                    label: 'GAMBIT QUIZ',
+                                    icon: Icons.extension_outlined,
+                                    accent: coreBlue,
+                                    onTap: () {
+                                      setState(() => _activeSection = AppSection.gambitQuiz);
+                                      _startQuizRound();
+                                    },
+                                  ),
+                                  _menuGlyphButton(
+                                    label: 'STORE',
+                                    icon: Icons.storefront_outlined,
+                                    accent: fusionGreen,
+                                    onTap: _openStore,
+                                  ),
+                                  _menuGlyphButton(
+                                    label: 'CREDITS',
+                                    icon: Icons.info_outline,
+                                    accent: Colors.white70,
+                                    onTap: _showCreditsDialog,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => _setMute(!_muteSounds),
+                        icon: Icon(_muteSounds ? Icons.volume_off_rounded : Icons.volume_up_rounded),
+                        label: Text(_muteSounds ? 'Muted' : 'Sound On'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF10172A),
+                          foregroundColor: Colors.white70,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton.icon(
+                        onPressed: _openSettings,
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text('Settings'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF10172A),
+                          foregroundColor: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _menuCard({required IconData icon, required String title, required String subtitle, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Ink(
-        decoration: BoxDecoration(
-          color: const Color(0xFF121724).withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white12),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 16, offset: const Offset(0, 6)),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _menuGlyphButton({
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: accent.withValues(alpha: 0.45)),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                accent.withValues(alpha: 0.14),
+                const Color(0x14000000),
+                accent.withValues(alpha: 0.08),
+              ],
+            ),
+          ),
+          child: Row(
             children: [
-              Icon(icon, color: const Color(0xFFB9A46A), size: 24),
-              const Spacer(),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              const SizedBox(height: 4),
-              Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              Icon(icon, color: accent, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.9,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: accent.withValues(alpha: 0.8)),
             ],
           ),
         ),
