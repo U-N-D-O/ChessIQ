@@ -1,0 +1,79 @@
+name: Build iOS IPA (No Sign)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios-ipa:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Clone Stockfish 18
+        run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
+
+      - name: Build Stockfish (iOS device arm64)
+        working-directory: Stockfish/src
+        run: |
+          set -euo pipefail
+
+          {
+            echo '#!/bin/bash'
+            echo 'args=()'
+            echo 'for arg in "$@"; do'
+            echo '  case "$arg" in'
+            echo '    -mmacosx-version-min=*) ;;'
+            echo '    -m64) ;;'
+            echo '    *) args+=("$arg") ;;'
+            echo '  esac'
+            echo 'done'
+            echo 'exec xcrun --sdk iphoneos clang++ "${args[@]}" -miphoneos-version-min=14.0'
+          } > /tmp/ios-device-cxx.sh
+          chmod +x /tmp/ios-device-cxx.sh
+
+          make -j"$(sysctl -n hw.logicalcpu)" \
+            ARCH=apple-silicon \
+            CXX=/tmp/ios-device-cxx.sh \
+            build
+
+          strip stockfish
+          mv stockfish ../../stockfish-ios-device
+
+      - name: Build Flutter iOS app (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Inject Stockfish and package IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          IPA_DIR="build/ios/ipa"
+
+          test -d "$APP_PATH"
+          test -f "stockfish-ios-device"
+
+          cp "stockfish-ios-device" "$APP_PATH/stockfish"
+          chmod +x "$APP_PATH/stockfish"
+
+          rm -rf "$IPA_DIR"
+          mkdir -p "$IPA_DIR/Payload"
+          cp -R "$APP_PATH" "$IPA_DIR/Payload/"
+
+          cd "$IPA_DIR"
+          /usr/bin/zip -qry ChessIQ.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChessIQ-ipa-no-sign
+          path: build/ios/ipa/ChessIQ.ipa
+          retention-days: 90
