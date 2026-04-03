@@ -10,6 +10,82 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 
+// ─── Engine Service Abstraction ──────────────────────────────────────────────
+
+abstract class _EngineService {
+  Future<void> start(void Function(String line) onOutput);
+  void send(String cmd);
+  Future<void> stop();
+}
+
+/// No-op — used on web where no engine is available.
+class _NullEngineService extends _EngineService {
+  @override
+  Future<void> start(void Function(String line) onOutput) async {}
+  @override
+  void send(String cmd) {}
+  @override
+  Future<void> stop() async {}
+}
+
+/// Desktop — launches stockfish.exe as a subprocess via dart:io Process.
+class _DesktopEngineService extends _EngineService {
+  Process? _process;
+  StreamSubscription<String>? _sub;
+
+  @override
+  Future<void> start(void Function(String line) onOutput) async {
+    _process = await Process.start('./engine/stockfish.exe', []);
+    _sub = _process!.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(onOutput);
+  }
+
+  @override
+  void send(String cmd) => _process?.stdin.writeln(cmd);
+
+  @override
+  Future<void> stop() async {
+    send('quit');
+    await _sub?.cancel();
+    _process?.kill();
+    _process = null;
+    _sub = null;
+  }
+}
+
+/// iOS — communicates with the native Swift bridge via platform channels.
+class _IosEngineService extends _EngineService {
+  static const _method = MethodChannel('com.chessiq/stockfish');
+  static const _event  = EventChannel('com.chessiq/stockfish_output');
+  StreamSubscription? _sub;
+
+  @override
+  Future<void> start(void Function(String line) onOutput) async {
+    await _method.invokeMethod<void>('start');
+    _sub = _event.receiveBroadcastStream().cast<String>().listen(onOutput);
+  }
+
+  @override
+  void send(String cmd) => _method.invokeMethod<void>('send', cmd);
+
+  @override
+  Future<void> stop() async {
+    await _method.invokeMethod<void>('stop');
+    await _sub?.cancel();
+    _sub = null;
+  }
+}
+
+_EngineService _createEngineService() {
+  if (kIsWeb) return _NullEngineService();
+  if (Platform.isIOS) return _IosEngineService();
+  return _DesktopEngineService();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ChessIQApp());
@@ -143,8 +219,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   static const String _quizStatsKey = 'quiz_stats_v1';
 
   late Map<String, String> boardState;
-  Process? _stockfishProcess;
-  StreamSubscription? _engineStream;
+  _EngineService? _engine;
   late AnimationController _pulseController;
   late AnimationController _introController;
   late AnimationController _menuRevealController;
@@ -800,33 +875,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   // --- Engine Logic ---
   Future<void> _startEngine() async {
-    if (_stockfishProcess != null) return;
+    if (_engine != null) return;
     if (kIsWeb) {
       _addLog('Engine unavailable on web; running without Stockfish process.');
       return;
     }
     try {
-      _stockfishProcess = await Process.start('./engine/stockfish.exe', []);
-      _engineStream = _stockfishProcess!.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(_parseOutput);
-      _send('uci');
-      _send('setoption name MultiPV value $_multiPvCount');
+      _engine = _createEngineService();
+      await _engine!.start(_parseOutput);
+      _engine!.send('uci');
+      _engine!.send('setoption name MultiPV value $_multiPvCount');
       if (_suggestionsEnabled) {
         _analyze();
       }
     } catch (e) {
-      _stockfishProcess = null;
-      await _engineStream?.cancel();
-      _engineStream = null;
+      _engine = null;
       _addLog('Engine start failed: $e');
       debugPrint('Engine start failed: $e');
     }
   }
 
   Future<void> _ensureEngineStarted() async {
-    if (kIsWeb || _stockfishProcess != null) return;
+    if (kIsWeb || _engine != null) return;
     _engineStartFuture ??= _startEngine();
     try {
       await _engineStartFuture;
@@ -835,7 +905,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
-  void _send(String cmd) => _stockfishProcess?.stdin.writeln(cmd);
+  void _send(String cmd) => _engine?.send(cmd);
 
   void _analyze() {
     if (!_suggestionsEnabled) {
@@ -7084,9 +7154,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   @override
   void dispose() {
-    _send('quit');
-    _engineStream?.cancel();
-    _stockfishProcess?.kill();
+    _engine?.stop();
     _pulseController.dispose();
     _introController.dispose();
     _menuRevealController.dispose();

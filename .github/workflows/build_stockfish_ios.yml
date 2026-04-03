@@ -1,0 +1,50 @@
+name: Build Stockfish for iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone Stockfish 18
+        run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
+
+      - name: Build for iOS device (arm64)
+        working-directory: Stockfish/src
+        run: |
+          make -j$(sysctl -n hw.logicalcpu) \
+            ARCH=armv8 \
+            target_os=ios \
+            build
+          strip stockfish
+          mv stockfish ../../stockfish-ios-device
+
+      - name: Clean before simulator build
+        working-directory: Stockfish/src
+        run: make clean
+
+      - name: Build for iOS simulator (Apple Silicon)
+        working-directory: Stockfish/src
+        run: |
+          make -j$(sysctl -n hw.logicalcpu) \
+            ARCH=apple-silicon \
+            target_os=ios \
+            build
+          strip stockfish
+          mv stockfish ../../stockfish-ios-simulator
+
+      - name: Upload device binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: stockfish-ios-device
+          path: stockfish-ios-device
+          retention-days: 90
+
+      - name: Upload simulator binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: stockfish-ios-simulator
+          path: stockfish-ios-simulator
+          retention-days: 90
