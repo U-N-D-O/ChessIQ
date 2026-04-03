@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -1746,13 +1747,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
         children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                "ChessIQ Pro",
-                style: GoogleFonts.cormorantGaramond(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 23 * scale,
-                  letterSpacing: 0.2,
-                  color: const Color(0xFFF2F4F8),
+              InkWell(
+                onTap: _showCreditsDialog,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 2 * scale, horizontal: 2 * scale),
+                  child: SvgPicture.asset(
+                    'assets/ChessIQ.svg',
+                    width: 120 * scale,
+                    height: 34 * scale,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
               Text("Engine: Stockfish 18", style: TextStyle(color: Colors.white38, fontSize: 10 * scale, letterSpacing: 0.4)),
