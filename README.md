@@ -1,4 +1,4 @@
-# chessiq
+# ChessIQ
 
 A new Flutter project.
 
@@ -18,5 +18,8 @@ samples, guidance on mobile development, and a full API reference.
 
 ## Ownership And Attribution
 
+- Project license terms: see `LICENSE`
 - Ownership statement: see `COPYRIGHT.md`
 - Third-party credits and notices: see `THIRD_PARTY_NOTICES.md`
+- ECO dataset MIT text: see `licenses/eco.json-MIT.txt`
+- In-app credits: open Settings -> Credits & Attribution

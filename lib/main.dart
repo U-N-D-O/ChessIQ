@@ -2324,6 +2324,47 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
     );
   }
 
+  void _showCreditsDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Credits & Attribution'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'ChessIQ original code, design, and project-specific assets are owned by U-N-D-O.',
+                style: TextStyle(fontSize: 13),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Third-party components used by this app include:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              SizedBox(height: 6),
+              Text('- Stockfish chess engine (GPL-3.0)'),
+              Text('- ECO opening data (MIT; ecoA.json through ecoE.json)'),
+              Text('- Flutter/Dart and pub packages under their own licenses'),
+              SizedBox(height: 10),
+              Text(
+                'See COPYRIGHT.md and THIRD_PARTY_NOTICES.md in the repository for full legal notices.',
+                style: TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmReset() {
     showDialog<bool>(
       context: context,
@@ -2555,6 +2596,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage> with TickerProvid
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _showCreditsDialog,
+                icon: const Icon(Icons.info_outline, size: 18),
+                label: const Text('Credits & Attribution'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  side: const BorderSide(color: Colors.white24),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
             ],
           ),
