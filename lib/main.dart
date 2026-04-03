@@ -2231,8 +2231,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       return;
     }
 
-    final resolvedCorrect = correct!;
-    final resolvedSnapshot = snapshot!;
+    final resolvedCorrect = correct;
+    final resolvedSnapshot = snapshot;
 
     _markGambitViewed(resolvedCorrect.name);
 
@@ -3207,6 +3207,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   // --- UI Sections ---
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
@@ -3233,29 +3235,51 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     stops: [0.0, 0.55, 1.0],
                   ),
                 ),
-                child: SafeArea(
-                  child: !_menuReady
-                      ? Center(
-                          child: FadeTransition(
-                            opacity: CurvedAnimation(
-                              parent: _menuRevealController,
-                              curve: Curves.easeOutCubic,
-                            ),
-                            child: Image.asset(
-                              'assets/logo.png',
-                              width: 220,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        )
-                      : FadeTransition(
-                          opacity: CurvedAnimation(
-                            parent: _sectionTransitionController,
-                            curve: Curves.easeInOutCubic,
-                          ),
-                          child: _buildMenuExitTransition(),
-                        ),
-                ),
+                child: (!isLandscape)
+                    ? SafeArea(
+                        child: !_menuReady
+                            ? Center(
+                                child: FadeTransition(
+                                  opacity: CurvedAnimation(
+                                    parent: _menuRevealController,
+                                    curve: Curves.easeOutCubic,
+                                  ),
+                                  child: Image.asset(
+                                    'assets/logo.png',
+                                    width: 220,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              )
+                            : FadeTransition(
+                                opacity: CurvedAnimation(
+                                  parent: _sectionTransitionController,
+                                  curve: Curves.easeInOutCubic,
+                                ),
+                                child: _buildMenuExitTransition(),
+                              ),
+                      )
+                    : (!_menuReady
+                          ? Center(
+                              child: FadeTransition(
+                                opacity: CurvedAnimation(
+                                  parent: _menuRevealController,
+                                  curve: Curves.easeOutCubic,
+                                ),
+                                child: Image.asset(
+                                  'assets/logo.png',
+                                  width: 220,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            )
+                          : FadeTransition(
+                              opacity: CurvedAnimation(
+                                parent: _sectionTransitionController,
+                                curve: Curves.easeInOutCubic,
+                              ),
+                              child: _buildMenuExitTransition(),
+                            )),
               ),
             ),
     );
@@ -5975,7 +5999,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         builder: (ctx, setL) => SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
             20,
-            12,
+            12 + MediaQuery.of(ctx).padding.top,
             20,
             MediaQuery.of(ctx).viewInsets.bottom + 20,
           ),
