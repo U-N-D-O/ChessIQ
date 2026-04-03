@@ -2314,13 +2314,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   void _goToMenu() {
+    if (_activeSection == AppSection.gambitQuiz) {
+      setState(() {
+        _resetQuizToSetupState();
+        _activeSection = AppSection.menu;
+      });
+      unawaited(_playMenuMusic());
+      return;
+    }
+
     _menuExitAnimationController.reset();
     _sectionTransitionController.reset();
     _sectionTransitionController.forward().then((_) {
       setState(() {
-        if (_activeSection == AppSection.gambitQuiz) {
-          _resetQuizToSetupState();
-        }
         _activeSection = AppSection.menu;
       });
       unawaited(_playMenuMusic());
@@ -2835,8 +2841,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return 0.86 + (((t - 0.62) / 0.28).clamp(0.0, 1.0) * 0.14);
   }
 
-  Offset _introBoardCenter(Size scene) =>
-      Offset(scene.width / 2, scene.height * 0.40);
+    Offset _introBoardCenter(Size scene, {double topInsetCompensation = 0.0}) =>
+      Offset(scene.width / 2, (scene.height * 0.40) - topInsetCompensation);
 
   Offset _introButtonCenter(Size scene) =>
       Offset(scene.width / 2, scene.height - 52);
@@ -2845,15 +2851,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     required bool yellow,
     required double t,
     required Size scene,
+    required double topInsetCompensation,
   }) {
-    final boardCenter = _introBoardCenter(scene);
+    final boardCenter = _introBoardCenter(
+      scene,
+      topInsetCompensation: topInsetCompensation,
+    );
     final buttonCenter = _introButtonCenter(scene);
 
     if (t < 0.22) {
       final p = Curves.easeOutCubic.transform(t / 0.22);
       final start = yellow
-          ? Offset(scene.width * 0.22, 46)
-          : Offset(scene.width * 0.76, 96);
+          ? Offset(scene.width * 0.22, 46 - topInsetCompensation)
+          : Offset(scene.width * 0.76, 96 - topInsetCompensation);
       final settle =
           boardCenter +
           (yellow ? const Offset(-42, -58) : const Offset(48, -18));
@@ -2915,9 +2925,20 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       animation: _introController,
       builder: (context, child) {
         final t = _introController.value.clamp(0.0, 1.0);
+        final topInsetCompensation = MediaQuery.of(context).padding.top;
         final fade = (1.0 - ((t - 0.90) / 0.10).clamp(0.0, 1.0));
-        final yellowOffset = _sceneDotOffset(yellow: true, t: t, scene: scene);
-        final blueOffset = _sceneDotOffset(yellow: false, t: t, scene: scene);
+        final yellowOffset = _sceneDotOffset(
+          yellow: true,
+          t: t,
+          scene: scene,
+          topInsetCompensation: topInsetCompensation,
+        );
+        final blueOffset = _sceneDotOffset(
+          yellow: false,
+          t: t,
+          scene: scene,
+          topInsetCompensation: topInsetCompensation,
+        );
 
         return IgnorePointer(
           child: Opacity(
@@ -3244,6 +3265,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     const coreBlue = Color(0xFF2A6CF0);
     const coreGold = Color(0xFFD8B640);
     const fusionGreen = Color(0xFF7EDC8A);
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final isTablet = media.size.shortestSide >= 700;
+    final showMenuLogo = !isLandscape || isTablet;
 
     return AnimatedBuilder(
       animation: _pulseController,
@@ -3347,14 +3372,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               child: Column(
                 children: [
-                  Center(
-                    child: Image.asset(
-                      'assets/logo.png',
-                      width: 220,
-                      fit: BoxFit.contain,
+                  if (showMenuLogo)
+                    Center(
+                      child: Image.asset(
+                        'assets/logo.png',
+                        width: 220,
+                        fit: BoxFit.contain,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: showMenuLogo ? 10 : 2),
                   Expanded(
                     child: Center(
                       child: Container(
