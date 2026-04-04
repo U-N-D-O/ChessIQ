@@ -1202,7 +1202,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: Padding(
-            padding: const EdgeInsets.only(right: 4),
+            padding: EdgeInsets.only(right: token.capturedPiece == null ? 4 : 0),
             child: _pieceImage(
               token.movingPiece,
               width: iconSize,
@@ -1215,13 +1215,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         spans.add(
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Icon(
-                Icons.arrow_right_alt_rounded,
-                size: fontSize + 2,
-                color: color.withValues(alpha: 0.85),
-              ),
+            child: Icon(
+              Icons.arrow_right_alt_rounded,
+              size: fontSize + 2,
+              color: color.withValues(alpha: 0.85),
             ),
           ),
         );
@@ -1229,7 +1226,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: Padding(
-              padding: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.only(right: 3),
               child: _pieceImage(
                 token.capturedPiece!,
                 width: iconSize,
@@ -4572,11 +4569,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   const double modelRatio = 393.0 / 852.0;
                   double maxWidth = constraints.maxWidth;
                   double maxHeight = constraints.maxHeight;
-                  double width = maxWidth <= 430 ? maxWidth : 430;
-                  double height = width / modelRatio;
-                  if (height > maxHeight) {
+                  double width;
+                  double height;
+
+                  if (isLandscape) {
+                    width = maxWidth;
                     height = maxHeight;
-                    width = height * modelRatio;
+                  } else {
+                    width = maxWidth <= 430 ? maxWidth : 430;
+                    height = width / modelRatio;
+                    if (height > maxHeight) {
+                      height = maxHeight;
+                      width = height * modelRatio;
+                    }
                   }
 
                   final double scale = (width / 430.0).clamp(0.8, 1.4);
