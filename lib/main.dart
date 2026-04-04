@@ -3873,9 +3873,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final gambits = _uniqueGambits();
     final hasQuizBoard =
         _quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty;
-    final revealContinuation =
-        hasQuizBoard &&
-        (_quizMode == GambitQuizMode.guessName || _quizAnswered);
+    final revealContinuation = hasQuizBoard && _quizAnswered;
     final isCorrectAnswer =
         _quizAnswered && _quizSelectedIndex == _quizCorrectIndex;
 
@@ -4164,7 +4162,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 child: LayoutBuilder(
                   builder: (context, bc) {
                     final sqSize = bc.maxWidth / 8;
-                    const pieceSize = 34.0;
                     Offset? flyFromPx, flyToPx;
                     if (_quizFlyFrom != null && _quizFlyTo != null) {
                       flyFromPx = _squareToGridOffset(
@@ -4220,16 +4217,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 )! - (6 * sin(t * pi));
                                 final lift = 1.0 + 0.04 * sin(t * pi);
                                 return Positioned(
-                                  left: x - (pieceSize / 2),
-                                  top: y - (pieceSize / 2),
-                                  width: pieceSize,
-                                  height: pieceSize,
-                                  child: Transform.scale(
-                                    scale: lift,
-                                    child: _pieceImage(
-                                      _quizFlyPiece!,
-                                      width: pieceSize,
-                                      height: pieceSize,
+                                  left: x - (sqSize / 2),
+                                  top: y - (sqSize / 2),
+                                  width: sqSize,
+                                  height: sqSize,
+                                  child: Center(
+                                    child: Transform.scale(
+                                      scale: lift,
+                                      child: _pieceImage(_quizFlyPiece!),
                                     ),
                                   ),
                                 );
@@ -4668,7 +4663,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ),
           child: piece == null
               ? null
-              : Center(child: _pieceImage(piece, width: 34, height: 34)),
+              : Center(child: _pieceImage(piece)),
         );
       },
     );
