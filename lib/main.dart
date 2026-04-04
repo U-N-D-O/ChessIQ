@@ -2484,7 +2484,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     });
   }
 
-  /// Returns the top-left pixel offset of a square in the quiz board widget.
+  /// Returns the center point of a square in the quiz board widget.
   Offset _squareToGridOffset(String sq, double sqSize, bool reverse) {
     int col = sq.codeUnitAt(0) - 97;
     int row = int.parse(sq[1]) - 1;
@@ -2493,7 +2493,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     } else {
       row = 7 - row;
     }
-    return Offset(col * sqSize, row * sqSize);
+    return Offset(col * sqSize + sqSize / 2, row * sqSize + sqSize / 2);
   }
 
   Future<void> _startQuizPlayback() async {
@@ -2504,7 +2504,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     var board = Map<String, String>.from(_quizBoardState);
     setState(() {
       _quizPlayBoard = Map<String, String>.from(board);
-      _quizPlayArrowCount = 0;
+      _quizPlayArrowCount = _quizContinuation.length;
       _quizPlayActive = true;
       _quizFlyFrom = null;
       _quizFlyTo = null;
@@ -4114,9 +4114,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final reverse =
           _perspective == BoardPerspective.black ||
           (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
-      final visibleArrows = _quizPlayActive
-          ? _quizContinuation.take(_quizPlayArrowCount).toList()
-          : _quizContinuation;
+      final visibleArrows = !_quizAnswered
+        ? _quizContinuation
+        : _quizContinuation.take(
+          _quizPlayArrowCount == 0
+            ? _quizContinuation.length
+            : _quizPlayArrowCount,
+        ).toList();
 
       return Container(
         width: double.infinity,
@@ -4160,6 +4164,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 child: LayoutBuilder(
                   builder: (context, bc) {
                     final sqSize = bc.maxWidth / 8;
+                    const pieceSize = 34.0;
                     Offset? flyFromPx, flyToPx;
                     if (_quizFlyFrom != null && _quizFlyTo != null) {
                       flyFromPx = _squareToGridOffset(
@@ -4189,6 +4194,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   progress: _pulseController.value,
                                   reverse: reverse,
                                   showSequenceNumbers: true,
+                                  overrideColor: const Color(0xFFB8BFC8),
+                                  staticArrowStyle: true,
                                 ),
                               ),
                             ),
@@ -4210,20 +4217,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   flyFromPx.dy,
                                   flyToPx.dy,
                                   t,
-                                )!;
-                                // slight scale-up arc during flight
-                                final lift = 1.0 + 0.14 * sin(t * pi);
+                                )! - (6 * sin(t * pi));
+                                final lift = 1.0 + 0.04 * sin(t * pi);
                                 return Positioned(
-                                  left: x,
-                                  top: y,
-                                  width: sqSize,
-                                  height: sqSize,
+                                  left: x - (pieceSize / 2),
+                                  top: y - (pieceSize / 2),
+                                  width: pieceSize,
+                                  height: pieceSize,
                                   child: Transform.scale(
                                     scale: lift,
                                     child: _pieceImage(
                                       _quizFlyPiece!,
-                                      width: sqSize,
-                                      height: sqSize,
+                                      width: pieceSize,
+                                      height: pieceSize,
                                     ),
                                   ),
                                 );
@@ -4630,7 +4636,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Widget _buildQuizBoard() {
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
-    final boardState = _quizPlayActive ? _quizPlayBoard : _quizBoardState;
+    final boardState = _quizPlayBoard.isNotEmpty
+      ? _quizPlayBoard
+      : _quizBoardState;
     final reverse =
         _perspective == BoardPerspective.black ||
         (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
@@ -7936,12 +7944,16 @@ class EnergyArrowPainter extends CustomPainter {
   final double progress;
   final bool reverse;
   final bool showSequenceNumbers;
+  final Color? overrideColor;
+  final bool staticArrowStyle;
   EnergyArrowPainter({
     required this.lines,
     required this.bestEval,
     required this.progress,
     required this.reverse,
     this.showSequenceNumbers = false,
+    this.overrideColor,
+    this.staticArrowStyle = false,
   });
 
   // Engine mode: color based on eval quality
@@ -7970,18 +7982,26 @@ class EnergyArrowPainter extends CustomPainter {
       final unitY = dy / distance;
       final lineEnd = Offset(end.dx - unitX * 8, end.dy - unitY * 8);
 
-      final bool isGambitMode = showSequenceNumbers;
-      final bool isFirstArrow = l.multiPv == 1;
-      final Color baseColor = _getRelativeColor(l.eval, l.multiPv);
+        final bool isGambitMode = showSequenceNumbers;
+        final bool isFirstArrow = l.multiPv == 1;
+        final bool useStaticStyle = staticArrowStyle && isGambitMode;
+        final Color baseColor =
+          overrideColor ?? _getRelativeColor(l.eval, l.multiPv);
 
       // Opacity fades with sequence depth in gambit mode
-      final double alphaScale = isGambitMode
-          ? (isFirstArrow ? 1.0 : max(0.45, 1.0 - (l.multiPv - 1) * 0.10))
-          : 1.0;
+        final double alphaScale = useStaticStyle
+          ? 0.92
+          : (isGambitMode
+            ? (isFirstArrow
+                ? 1.0
+                : max(0.45, 1.0 - (l.multiPv - 1) * 0.10))
+            : 1.0);
 
-      final double strokeWidth = isGambitMode
-          ? (isFirstArrow ? 9.0 : (l.multiPv == 2 ? 5.5 : 4.5))
-          : (l.multiPv == 1 ? 6.0 : 4.0);
+        final double strokeWidth = useStaticStyle
+          ? 4.8
+          : (isGambitMode
+            ? (isFirstArrow ? 9.0 : (l.multiPv == 2 ? 5.5 : 4.5))
+            : (l.multiPv == 1 ? 6.0 : 4.0));
 
       final path = Path()
         ..moveTo(start.dx, start.dy)
@@ -7992,42 +8012,47 @@ class EnergyArrowPainter extends CustomPainter {
         ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.round
         ..style = PaintingStyle.stroke
-        ..color = baseColor.withValues(alpha: 0.30 * alphaScale);
+        ..color = baseColor.withValues(
+          alpha: useStaticStyle ? 0.58 : 0.30 * alphaScale,
+        );
       canvas.drawPath(path, basePaint);
 
-      // Moving highlight pulse
-      final pulseHalfLen = max(18.0, distance * 0.14);
-      final travel = distance + (pulseHalfLen * 2);
-      final pulseCenter = (-pulseHalfLen) + (travel * (progress % 1.0));
-      final pulseStart = Offset(
-        start.dx + unitX * (pulseCenter - pulseHalfLen),
-        start.dy + unitY * (pulseCenter - pulseHalfLen),
-      );
-      final pulseEnd = Offset(
-        start.dx + unitX * (pulseCenter + pulseHalfLen),
-        start.dy + unitY * (pulseCenter + pulseHalfLen),
-      );
-
-      final pulsePaint = Paint()
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke
-        ..shader = ui.Gradient.linear(
-          pulseStart,
-          pulseEnd,
-          [
-            baseColor.withValues(alpha: 0.0),
-            baseColor.withValues(alpha: alphaScale),
-            baseColor.withValues(alpha: 0.0),
-          ],
-          const [0.0, 0.5, 1.0],
-          TileMode.clamp,
+      if (!useStaticStyle) {
+        final pulseHalfLen = max(18.0, distance * 0.14);
+        final travel = distance + (pulseHalfLen * 2);
+        final pulseCenter = (-pulseHalfLen) + (travel * (progress % 1.0));
+        final pulseStart = Offset(
+          start.dx + unitX * (pulseCenter - pulseHalfLen),
+          start.dy + unitY * (pulseCenter - pulseHalfLen),
         );
-      canvas.drawPath(path, pulsePaint);
+        final pulseEnd = Offset(
+          start.dx + unitX * (pulseCenter + pulseHalfLen),
+          start.dy + unitY * (pulseCenter + pulseHalfLen),
+        );
+
+        final pulsePaint = Paint()
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round
+          ..style = PaintingStyle.stroke
+          ..shader = ui.Gradient.linear(
+            pulseStart,
+            pulseEnd,
+            [
+              baseColor.withValues(alpha: 0.0),
+              baseColor.withValues(alpha: alphaScale),
+              baseColor.withValues(alpha: 0.0),
+            ],
+            const [0.0, 0.5, 1.0],
+            TileMode.clamp,
+          );
+        canvas.drawPath(path, pulsePaint);
+      }
 
       // Arrowhead
       final angle = atan2(end.dy - start.dy, end.dx - start.dx);
-      final double headLen = isGambitMode && isFirstArrow ? 22.0 : 18.0;
+        final double headLen = useStaticStyle
+          ? 18.0
+          : (isGambitMode && isFirstArrow ? 22.0 : 18.0);
       final double headWaist = headLen * (2.0 / 3.0);
       final headPath = Path()
         ..moveTo(end.dx, end.dy)
@@ -8069,7 +8094,13 @@ class EnergyArrowPainter extends CustomPainter {
           start.dy + (end.dy - start.dy) * 0.68,
         );
 
-        if (isFirstArrow) {
+        if (useStaticStyle) {
+          canvas.drawCircle(
+            markerCenter,
+            badgeRadius,
+            Paint()..color = const Color(0xFF1D222A).withValues(alpha: 0.96),
+          );
+        } else if (isFirstArrow) {
           // Glowing halo behind badge 1
           canvas.drawCircle(
             markerCenter,
@@ -8103,11 +8134,13 @@ class EnergyArrowPainter extends CustomPainter {
           markerCenter,
           badgeRadius,
           Paint()
-            ..color = isFirstArrow
+          ..color = useStaticStyle
+            ? baseColor
+            : (isFirstArrow
                 ? const Color(0xFFFFD700)
-                : baseColor.withValues(alpha: alphaScale)
+                : baseColor.withValues(alpha: alphaScale))
             ..style = PaintingStyle.stroke
-            ..strokeWidth = isFirstArrow ? 2.5 : 1.5,
+          ..strokeWidth = useStaticStyle ? 1.8 : (isFirstArrow ? 2.5 : 1.5),
         );
 
         final textPainter = TextPainter(
