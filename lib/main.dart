@@ -310,6 +310,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   String? _quizFlyFrom;
   String? _quizFlyTo;
   String? _quizFlyPiece;
+  double _quizFlyProgress = 0.0;
   bool _quizAnswered = false;
   int _quizSelectedIndex = -1;
   QuizDifficulty _quizDifficulty = QuizDifficulty.medium;
@@ -2215,6 +2216,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _quizFlyFrom = null;
     _quizFlyTo = null;
     _quizFlyPiece = null;
+    _quizFlyProgress = 0.0;
   }
 
   void _resetQuizToSetupState() {
@@ -2493,6 +2495,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizFlyFrom = null;
       _quizFlyTo = null;
       _quizFlyPiece = null;
+      _quizFlyProgress = 0.0;
       if (activeMode == GambitQuizMode.guessName) {
         _quizPrompt = 'Name this gambit from the position and continuation.';
         _quizPromptFocus = '';
@@ -2535,6 +2538,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizFlyFrom = null;
       _quizFlyTo = null;
       _quizFlyPiece = null;
+      _quizFlyProgress = 0.0;
     });
 
     for (int i = 0; i < _quizContinuation.length; i++) {
@@ -2552,18 +2556,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizFlyFrom = from;
         _quizFlyTo = to;
         _quizFlyPiece = piece;
+        _quizFlyProgress = 0.0;
       });
 
-      // One frame for layout measurement before animating
-      await Future.delayed(const Duration(milliseconds: 16));
-      if (!mounted || !_quizPlayActive) return;
-
-      _quizMoveController.reset();
-      await _quizMoveController.animateTo(
-        1.0,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+      for (final step in const <double>[0.25, 0.5, 0.75, 1.0]) {
+        if (!mounted || !_quizPlayActive) return;
+        setState(() {
+          _quizFlyProgress = step;
+        });
+        await Future.delayed(const Duration(milliseconds: 90));
+      }
       if (!mounted || !_quizPlayActive) return;
 
       board = _applyUciMove(board, uciMove);
@@ -2573,6 +2575,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizFlyFrom = null;
         _quizFlyTo = null;
         _quizFlyPiece = null;
+        _quizFlyProgress = 0.0;
       });
 
       if (i < _quizContinuation.length - 1) {
@@ -4230,10 +4233,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             flyToPx != null &&
                             _quizFlyPiece != null)
                           IgnorePointer(
-                            child: AnimatedBuilder(
-                              animation: _quizMoveController,
-                              builder: (ctx, _) {
-                                final t = _quizMoveController.value;
+                            child: Builder(
+                              builder: (ctx) {
+                                final t = _quizFlyProgress.clamp(0.0, 1.0);
                                 final x = ui.lerpDouble(
                                   flyFromPx!.dx,
                                   flyToPx!.dx,
