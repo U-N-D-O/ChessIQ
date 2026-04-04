@@ -6234,7 +6234,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                       ),
                       icon: const Icon(Icons.menu_rounded, size: 18),
-                      label: const Text('Return to Main Menu'),
+                      label: const Text('Main Menu'),
                     ),
                   ),
                   const SizedBox(height: 8),
