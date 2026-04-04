@@ -2537,12 +2537,21 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizFlyProgress = 0.0;
       });
 
-      for (final step in const <double>[0.25, 0.5, 0.75, 1.0]) {
+      for (final step in const <double>[
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875,
+        1.0,
+      ]) {
         if (!mounted || !_quizPlayActive) return;
         setState(() {
           _quizFlyProgress = step;
         });
-        await Future.delayed(const Duration(milliseconds: 90));
+        await Future.delayed(const Duration(milliseconds: 60));
       }
       if (!mounted || !_quizPlayActive) return;
 
