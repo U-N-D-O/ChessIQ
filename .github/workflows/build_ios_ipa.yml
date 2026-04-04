@@ -51,16 +51,19 @@ jobs:
           set -euo pipefail
           cd Stockfish/src
 
-          # Deterministic symbol rename path: compile a renamed copy of main.cpp.
-          perl -0777 -pe 's/\bint\s+main\s*\(/int stockfish_main(/' main.cpp > main_stockfish.cpp
+          # Deterministic symbol rename path: compile a renamed copy of main.cpp
+          # and force C linkage so the symbol is exactly _stockfish_main.
+          perl -0777 -pe 's/\bint\s+main\s*\(/extern "C" int stockfish_main(/' main.cpp > main_stockfish.cpp
           /tmp/ios-device-cxx.sh \
+            -arch arm64 \
             -Wall -Wcast-qual -fno-exceptions -std=c++17 -pedantic -Wextra -Wshadow -Wmissing-declarations \
             -DUSE_PTHREADS -DNDEBUG -O3 -funroll-loops -DIS_64BIT -DUSE_POPCNT \
-            -DUSE_NEON=8 -march=armv8.2-a+dotprod -DUSE_NEON_DOTPROD -DARCH=apple-silicon \
+            -DUSE_NEON=8 -march=armv8.2-a+dotprod -DUSE_NEON_DOTPROD -DARCH=apple-silicon -flto=full \
             -c -o main_stockfish.o main_stockfish.cpp
 
           # Sanity check: ensure renamed symbol is present.
-          xcrun --sdk iphoneos nm -gU main_stockfish.o | grep -E "_stockfish_main$"
+          xcrun --sdk iphoneos nm -gU main_stockfish.o | tee /tmp/main_stockfish_symbols.txt
+          grep -E "_stockfish_main$" /tmp/main_stockfish_symbols.txt >/dev/null
 
           shopt -s nullglob
           objs=()
