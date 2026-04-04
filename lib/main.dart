@@ -3798,6 +3798,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 ),
                 const Spacer(),
                 IconButton(
+                  onPressed: _openAppearanceSettings,
+                  icon: const Icon(Icons.palette_outlined),
+                  tooltip: 'Board & Pieces',
+                ),
+                IconButton(
                   onPressed: _openQuizStatsSheet,
                   icon: const Icon(Icons.insights_outlined),
                   tooltip: 'Performance Stats',
@@ -4195,6 +4200,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+              ),
+              IconButton(
+                onPressed: _openAppearanceSettings,
+                icon: const Icon(Icons.palette_outlined),
+                tooltip: 'Board & Pieces',
               ),
               IconButton(
                 onPressed: _openQuizStatsSheet,
@@ -6126,6 +6136,210 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _goToMenu();
       }
     });
+  }
+
+  void _openAppearanceSettings() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF10131B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setL) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            12 + MediaQuery.of(ctx).padding.top,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Board & Pieces',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.04),
+                  border: Border.all(color: Colors.white12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'BOARD PERSPECTIVE',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _perspectiveOption('White', BoardPerspective.white, setL),
+                        _perspectiveOption('Black', BoardPerspective.black, setL),
+                        _perspectiveOption('Auto', BoardPerspective.auto, setL),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.04),
+                  border: Border.all(color: Colors.white12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'THEMES',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Board Themes',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: _availableBoardThemes
+                          .map((mode) => _boardThemeOption(_boardThemeLabel(mode), mode, setL))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Piece Themes',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: _availablePieceThemes
+                          .map((mode) => _pieceThemeOption(_pieceThemeLabel(mode), mode, setL))
+                          .toList(),
+                    ),
+                    if (_availableBoardThemes.length < BoardThemeMode.values.length ||
+                        _availablePieceThemes.length < PieceThemeMode.values.length) ...
+                      [
+                        const SizedBox(height: 14),
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(ctx).pop();
+                            Future.microtask(
+                              () => _openStore(initialSection: StoreSection.themes),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(14),
+                          child: Ink(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF2D6EF2), Color(0xFF1F56C8)],
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFF89AEFF).withValues(alpha: 0.5),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF2A6CF0).withValues(alpha: 0.35),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.white),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Get More Themes',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      SizedBox(height: 1),
+                                      Text(
+                                        'Open Theme Store',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(Icons.chevron_right_rounded, color: Colors.white),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _openSettings() {
