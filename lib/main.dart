@@ -3833,41 +3833,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: const Color(
-                              0xFF5AAEE8,
-                            ).withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.psychology_alt_outlined,
-                          size: 16,
-                          color: Color(0xFF5AAEE8),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Quiz Setup',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
                   const Text(
                     'Mode',
                     style: TextStyle(
@@ -4215,6 +4180,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         children: [
           Row(
             children: [
+              IconButton(
+                onPressed: _returnToQuizSetup,
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back to Setup',
+              ),
               Expanded(
                 child: Text(
                   '${_quizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
@@ -4226,13 +4196,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 6),
-              TextButton.icon(
-                onPressed: _returnToQuizSetup,
-                icon: const Icon(Icons.tune, size: 16),
-                label: const Text('Back to Setup'),
-              ),
-              const SizedBox(width: 6),
               IconButton(
                 onPressed: _openQuizStatsSheet,
                 icon: const Icon(Icons.insights_outlined),
@@ -4688,7 +4651,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                               0.16)
                                                               .clamp(46.0, 72.0);
                                                       return Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment.start,
                                                         children: [
+                                                          if (_selectedGambit != null)
+                                                            Padding(
+                                                              padding: const EdgeInsets.only(
+                                                                bottom: 6,
+                                                              ),
+                                                              child: Text(
+                                                                _selectedGambit!.name,
+                                                                style: const TextStyle(
+                                                                  fontSize: 13,
+                                                                  fontWeight: FontWeight.w700,
+                                                                  color: Color(0xFFD8B640),
+                                                                ),
+                                                                maxLines: 2,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ),
                                                           _buildSuggestedMovesList(
                                                             height:
                                                                 suggestionsHeight,
