@@ -34,6 +34,7 @@ jobs:
             echo '  case "$arg" in'
             echo '    -mmacosx-version-min=*) ;;'
             echo '    -m64) ;;'
+            echo '    -flto|-flto=*) ;;'
             echo '    *) args+=("$arg") ;;'
             echo '  esac'
             echo 'done'
@@ -58,7 +59,7 @@ jobs:
             -arch arm64 \
             -Wall -Wcast-qual -fno-exceptions -std=c++17 -pedantic -Wextra -Wshadow -Wmissing-declarations \
             -DUSE_PTHREADS -DNDEBUG -O3 -funroll-loops -DIS_64BIT -DUSE_POPCNT \
-            -DUSE_NEON=8 -march=armv8.2-a+dotprod -DUSE_NEON_DOTPROD -DARCH=apple-silicon -flto=full \
+            -DUSE_NEON=8 -march=armv8.2-a+dotprod -DUSE_NEON_DOTPROD -DARCH=apple-silicon \
             -c -o main_stockfish.o main_stockfish.cpp
 
           # Sanity check: ensure renamed symbol is present.
