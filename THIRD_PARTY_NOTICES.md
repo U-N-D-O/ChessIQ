@@ -1,56 +1,67 @@
 # Third-Party Notices
 
-This project includes or depends on third-party software, data, and services.
+This project incorporates, references, or relies on third-party software, data, and services. The notices below are provided for attribution and licensing transparency.
 
-## 1) Chess Engine
+## 1. Chess Engine
+
+This project is designed to support the Stockfish chess engine for local analysis.
 
 - Component: Stockfish chess engine
 - Website: https://stockfishchess.org/
-- Source: https://github.com/official-stockfish/Stockfish
+- Source code: https://github.com/official-stockfish/Stockfish
 - License: GNU General Public License v3.0 (GPL-3.0)
-- Usage in this project: optional local engine binary expected at `engine/stockfish.exe` for native analysis.
+- Project integration: Optional local engine binary expected at `engine/stockfish.exe` for native analysis workflows
 
-Note: this repository does not currently distribute `engine/stockfish.exe`.
+This repository does not currently distribute `engine/stockfish.exe`.
 
-## 2) Opening Database Files
+## 2. Opening Database Files
 
-- Files: `openings/ecoA.json`, `openings/ecoB.json`, `openings/ecoC.json`, `openings/ecoD.json`, `openings/ecoE.json`
-- Purpose: Encyclopaedia of Chess Openings (ECO) move/name lookup.
-- Upstream repository used for these files:
-  - https://github.com/hayatbiralem/eco.json (archived)
-  - file examples: `ecoA.json` through `ecoE.json`
+This project includes ECO opening data files for move and opening-name lookup.
+
+- Included files: `openings/ecoA.json`, `openings/ecoB.json`, `openings/ecoC.json`, `openings/ecoD.json`, `openings/ecoE.json`
+- Historical upstream repository: https://github.com/hayatbiralem/eco.json (archived)
+- Current upstream continuation noted by maintainers: https://github.com/JeffML/eco.json
 - License: MIT
-- License text source: https://raw.githubusercontent.com/hayatbiralem/eco.json/master/LICENSE
-- Local copy of license text: `licenses/eco.json-MIT.txt`
+- Upstream license text URL: https://raw.githubusercontent.com/hayatbiralem/eco.json/master/LICENSE
+- Local license copy: `licenses/eco.json-MIT.txt`
 
-Upstream project notes indicate active development moved to:
+Acknowledgements referenced in upstream project materials include Ömur Yanıkoğlu (original eco.json compilation), Shane Hudson (SCID opening data credit), and contributors acknowledged by the `niklasf/eco` project.
 
-- https://github.com/JeffML/eco.json
+These ECO files are collated datasets and may contain source markers within entries, including `eco_tsv`, `scid`, `eco_wikip`, `ct`, `chessGraph`, and `icsbot`.
 
-Acknowledgements from upstream README include:
+## 3. Flutter, Dart, and Pub Packages
 
-- Ömur Yanıkoğlu (original eco.json compilation)
-- Shane Hudson (original SCID opening data credit)
-- niklasf/eco project acknowledgements
+This application is built with the Flutter and Dart ecosystems and depends on third-party packages from pub.dev.
 
-Data provenance note:
-
-- These ECO files are a collation that may include source markers such as `eco_tsv`, `scid`, `eco_wikip`, `ct`, `chessGraph`, `icsbot`, and others inside entries.
-
-## 3) Flutter, Dart, and Pub Packages
-
-- Flutter SDK (includes Material/Cupertino frameworks)
+- Flutter SDK (including Material and Cupertino frameworks)
   - Website: https://flutter.dev/
-  - License: BSD-style license (see Flutter repository)
+  - License: BSD-style license (see the Flutter repository for full terms)
 - Dart SDK
   - Website: https://dart.dev/
   - License: BSD-style license
 
-Direct pub dependencies used by this app:
+Direct pub dependencies used by this app include:
 
-- `cupertino_icons` - https://pub.dev/packages/cupertino_icons
-- `shared_preferences` - https://pub.dev/packages/shared_preferences
-- `google_fonts` - https://pub.dev/packages/google_fonts
-- `audioplayers` - https://pub.dev/packages/audioplayers
+- `cupertino_icons`: https://pub.dev/packages/cupertino_icons
+- `shared_preferences`: https://pub.dev/packages/shared_preferences
+- `google_fonts`: https://pub.dev/packages/google_fonts
+- `audioplayers`: https://pub.dev/packages/audioplayers
+- `flutter_svg`: https://pub.dev/packages/flutter_svg
 
-Each package remains under its own license. See pub.dev package pages and bundled license metadata for details.
+Each third-party package remains licensed under its own terms. For complete and current licensing details, refer to each package page on pub.dev and bundled license metadata where applicable.
+
+## 4. Audio Asset Attribution
+
+This project includes third-party audio assets used for coin and rewards feedback.
+
+- Asset: `assets/sounds/coin.mp3`
+- Title: `Coin Drop`
+- Creator: VSokorelos
+- Source platform: Freesound
+- Description / usage note: Iekdelta, Drop, Coin sound effect. Free for use.
+
+- Asset: `assets/sounds/coinbag.mp3`
+- Title: `Coin and Money Bag 3`
+- Creator: Floraphonic
+- License / usage note: Free for use. Royalty Free Audio
+- Source website: https://www.floraphonic.com/

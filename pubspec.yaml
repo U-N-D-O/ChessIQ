@@ -49,6 +49,12 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  ios: true
+  image_path_ios: assets/logo.png
+  remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -58,13 +64,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/sounds/
+    - assets/bots/
     - assets/ChessIQ.png
     - assets/QILAmodus.png
     - assets/logo.png
-    - assets/ChessIQ.svg
-    - assets/logo.svg
     - pieces/
     - openings/
+    - COPYRIGHT.md
+    - THIRD_PARTY_NOTICES.md
+    - LICENSE
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
