@@ -2091,6 +2091,147 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
+  String _pickQuizMessage(List<String> messages, Random random) {
+    return messages[random.nextInt(messages.length)];
+  }
+
+  String _buildQuizFeedbackMessage({
+    required bool isCorrect,
+    required int nextStreak,
+    required bool isPerfectSession,
+  }) {
+    final random = Random();
+    final correctName = _quizOptions[_quizCorrectIndex];
+    final correctMoves = _quizOptions[_quizCorrectIndex];
+
+    if (_quizMode == GambitQuizMode.guessName) {
+      if (isCorrect) {
+        if (isPerfectSession) {
+          return 'Flawless Identification. You have mastered every gambit in this set.';
+        }
+        if (nextStreak >= 7) {
+          return _pickQuizMessage(const <String>[
+            'Elite performance. 7 straight identifications.',
+            'Masterful! Your opening database is extensive.',
+          ], random);
+        }
+        if (nextStreak >= 5) {
+          return _pickQuizMessage(const <String>[
+            'Excellent consistency. 5 gambits correctly named.',
+            'High-level recall. You are in full command of the theory.',
+          ], random);
+        }
+        if (nextStreak >= 3) {
+          return _pickQuizMessage(const <String>[
+            'Three-fold accuracy. You are finding a rhythm.',
+            'Strong momentum. Three gambits identified.',
+            'Precision streak. Your focus is high.',
+          ], random);
+        }
+        if (nextStreak >= 2) {
+          return _pickQuizMessage(const <String>[
+            'Two in a row. Your recall is sharpening.',
+            'Consecutive accuracy. Keep it up.',
+            'Double success. Your study is paying off.',
+          ], random);
+        }
+
+        final message = _pickQuizMessage(const <String>[
+          'Correct. Theory identified.',
+          'Accurate. That is the {name}.',
+          'Correct. Your opening knowledge is precise.',
+          'Confirmed. This is the {name}.',
+          'Correct. The position is well-recognized.',
+          'Exactly. You\'ve identified the line.',
+          'Correct. Book knowledge verified.',
+          'Spot on. This is standard theory.',
+          'Correct. You\'ve recognized the pattern.',
+          'Correct. Identification successful.',
+        ], random);
+        return message.replaceAll('{name}', correctName);
+      }
+
+      final message = _pickQuizMessage(const <String>[
+        'Incorrect. This is the {name}.',
+        'Not quite. Theory indicates the {name}.',
+        'Inaccurate. The correct answer is {name}.',
+        'Mistake. This position arises in the {name}.',
+        'Incorrect. You\'ve identified the wrong line.',
+        'Wrong choice. It was actually the {name}.',
+        'Negative. Correct response: {name}.',
+        'Misidentified. This is the {name}.',
+        'Incorrect. Review the {name} line.',
+        'Error. The correct name is {name}.',
+      ], random);
+      return message.replaceAll('{name}', correctName);
+    }
+
+    if (isCorrect) {
+      if (isPerfectSession) {
+        return 'Total Theoretical Mastery. Every move was book-perfect.';
+      }
+      if (nextStreak >= 7) {
+        return _pickQuizMessage(const <String>[
+          'Grandmaster precision! 7-streak reached.',
+          'Incredible vision. You are navigating the board like a pro.',
+        ], random);
+      }
+      if (nextStreak >= 5) {
+        return _pickQuizMessage(const <String>[
+          'Professional grade! 5 complex lines solved.',
+          'Superb calculation. You\'re out-thinking the quiz.',
+        ], random);
+      }
+      if (nextStreak >= 3) {
+        return _pickQuizMessage(const <String>[
+          'Triple accuracy. You are seeing deep into the lines.',
+          'A hat trick of theory! Excellent vision.',
+          'Three perfect sequences. You\'re in the flow.',
+        ], random);
+      }
+      if (nextStreak >= 2) {
+        return _pickQuizMessage(const <String>[
+          'Back-to-back accuracy. Your lines are clean.',
+          'Two sequences solved. You\'re building an advantage.',
+          'Steady progress. Your calculation is consistent.',
+        ], random);
+      }
+
+      return _pickQuizMessage(const <String>[
+        'Correct. The moves are theoretically sound.',
+        'Accurate. You followed the main line.',
+        'Correct. Sequence verified by theory.',
+        'Well played. Those are the book moves.',
+        'Correct. Your calculation is exact.',
+        'Perfect execution of the sequence.',
+        'Correct. You\'ve navigated the line correctly.',
+        'Right. You avoided the deviations.',
+        'Correct. Technical accuracy achieved.',
+        'Precisely. The theory is handled well.',
+      ], random);
+    }
+
+    final message = _pickQuizMessage(const <String>[
+      'Incorrect. The main line is: {moves}',
+      'Blunder. The correct sequence is: {moves}',
+      'Inaccurate. Theory requires: {moves}',
+      'Mistake. The intended moves were: {moves}',
+      'Wrong sequence. The book move is: {moves}',
+      'Incorrect. You deviated from the main line.',
+      'Error. The correct continuation is: {moves}',
+      'Wrong. That choice loses the initiative.',
+      'Incorrect. Follow the theory: {moves}',
+      'Mistake. The correct play is {moves}.',
+    ], random);
+    return message.replaceAll('{moves}', correctMoves);
+  }
+
+  Future<void> _triggerSuccessHaptic() async {
+    await HapticFeedback.lightImpact();
+    await Future.delayed(const Duration(milliseconds: 65));
+    await HapticFeedback.lightImpact();
+  }
+
   void _recordQuizResult({required bool isCorrect}) {
     final base = _baseQuizPoints();
     final modeBonus = _quizMode == GambitQuizMode.guessLine ? 20 : 0;
@@ -2577,6 +2718,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   void _submitQuizAnswer(int index) {
     if (_quizAnswered) return;
     final isCorrect = index == _quizCorrectIndex;
+    final nextAnswered = _quizSessionAnswered + 1;
+    final nextCorrect = _quizSessionCorrect + (isCorrect ? 1 : 0);
+    final nextStreak = isCorrect ? _quizStreak + 1 : 0;
+    final isPerfectSession =
+        isCorrect &&
+        nextAnswered == _quizQuestionsTarget &&
+        nextCorrect == _quizQuestionsTarget;
+    final feedback = _buildQuizFeedbackMessage(
+      isCorrect: isCorrect,
+      nextStreak: nextStreak,
+      isPerfectSession: isPerfectSession,
+    );
+
     setState(() {
       _quizSelectedIndex = index;
       _quizAnswered = true;
@@ -2584,13 +2738,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       if (isCorrect) {
         _quizSessionCorrect += 1;
       }
-        _quizFeedback = isCorrect
-          ? 'Correct. Great pattern recognition.'
-          : (_quizMode == GambitQuizMode.guessLine
-            ? 'Not quite. The correct continuation is highlighted.'
-            : 'Not quite. Correct answer: ${_quizOptions[_quizCorrectIndex]}');
+      _quizFeedback = feedback;
       _recordQuizResult(isCorrect: isCorrect);
     });
+
+    if (isCorrect) {
+      if (nextStreak >= 5) {
+        unawaited(_triggerSuccessHaptic());
+      } else {
+        unawaited(HapticFeedback.lightImpact());
+      }
+    }
+
     if (_quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty) {
       unawaited(_startQuizPlayback());
     }
