@@ -2444,11 +2444,32 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _markGambitViewed(resolvedCorrect.name);
 
     final options = <EcoLine>[resolvedCorrect];
-    final targetOptions = min(_quizOptionCount(), gambits.length);
-    while (options.length < targetOptions) {
-      final candidate = gambits[random.nextInt(gambits.length)];
-      if (!options.any((entry) => entry.name == candidate.name)) {
+    if (activeMode == GambitQuizMode.guessLine &&
+        resolvedCorrect.moveTokens.length >= 2) {
+      final first = resolvedCorrect.moveTokens[0];
+      final second = resolvedCorrect.moveTokens[1];
+      final linePool = gambits
+          .where(
+            (entry) =>
+                entry.name != resolvedCorrect.name &&
+                entry.moveTokens.length >= 2 &&
+                entry.moveTokens[0] == first &&
+                entry.moveTokens[1] == second,
+          )
+          .toList()
+        ..shuffle(random);
+      final targetLineOptions = min(_quizOptionCount(), linePool.length + 1);
+      for (final candidate in linePool) {
+        if (options.length >= targetLineOptions) break;
         options.add(candidate);
+      }
+    } else {
+      final targetOptions = min(_quizOptionCount(), gambits.length);
+      while (options.length < targetOptions) {
+        final candidate = gambits[random.nextInt(gambits.length)];
+        if (!options.any((entry) => entry.name == candidate.name)) {
+          options.add(candidate);
+        }
       }
     }
     options.shuffle(random);
@@ -2485,7 +2506,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   /// Returns the center point of a square in the quiz board widget.
-  Offset _squareToGridOffset(String sq, double sqSize, bool reverse) {
+  Offset _squareToGridOffset(String sq, double boardSize, bool reverse) {
+    const inset = 2.0;
+    final sqSize = (boardSize - inset * 2) / 8;
     int col = sq.codeUnitAt(0) - 97;
     int row = int.parse(sq[1]) - 1;
     if (reverse) {
@@ -2493,7 +2516,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     } else {
       row = 7 - row;
     }
-    return Offset(col * sqSize + sqSize / 2, row * sqSize + sqSize / 2);
+    return Offset(
+      inset + col * sqSize + sqSize / 2,
+      inset + row * sqSize + sqSize / 2,
+    );
   }
 
   Future<void> _startQuizPlayback() async {
@@ -4164,17 +4190,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 child: LayoutBuilder(
                   builder: (context, bc) {
                     final sqSize = bc.maxWidth / 8;
-                    final pieceSize = sqSize * 0.82;
+                    final pieceSize = sqSize;
                     Offset? flyFromPx, flyToPx;
                     if (_quizFlyFrom != null && _quizFlyTo != null) {
                       flyFromPx = _squareToGridOffset(
                         _quizFlyFrom!,
-                        sqSize,
+                        bc.maxWidth,
                         reverse,
                       );
                       flyToPx = _squareToGridOffset(
                         _quizFlyTo!,
-                        sqSize,
+                        bc.maxWidth,
                         reverse,
                       );
                     }
