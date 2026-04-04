@@ -240,7 +240,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   late AnimationController _sectionTransitionController;
   late AnimationController _menuExitAnimationController;
   late AnimationController _buttonRippleController;
-  late AnimationController _quizMoveController;
   Offset? _buttonRippleCenter;
   bool _buttonUnlocked = false;
   final AudioPlayer _introAudioPlayer = AudioPlayer();
@@ -381,10 +380,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _menuExitAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
-    );
-    _quizMoveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
     );
     _historyScrollController = ScrollController();
     _resetBoard(withIntro: false);
@@ -1942,39 +1937,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
-  void _openGambitDetail(EcoLine gambit) {
-    _markGambitViewed(gambit.name);
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(gambit.name),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Main line',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            _buildMoveSequenceText(
-              gambit.normalizedMoves,
-              fontSize: 13,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Map<String, String> _initialBoardState() {
     return {
       'a8': 't_b',
@@ -2055,13 +2017,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   double _quizAccuracy() {
     if (_quizTotalAnswered <= 0) return 0.0;
     return (_quizCorrectAnswers / _quizTotalAnswered) * 100.0;
-  }
-
-  List<MapEntry<String, int>> _recentQuizScoreEntries({int days = 7}) {
-    final entries = _quizDailyScore.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    if (entries.length <= days) return entries;
-    return entries.sublist(entries.length - days);
   }
 
   String _quizTrendFilterLabel(QuizTrendFilter filter) {
@@ -4232,34 +4187,31 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         if (flyFromPx != null &&
                             flyToPx != null &&
                             _quizFlyPiece != null)
-                          IgnorePointer(
-                            child: Builder(
-                              builder: (ctx) {
-                                final t = _quizFlyProgress.clamp(0.0, 1.0);
-                                final x = ui.lerpDouble(
-                                  flyFromPx!.dx,
-                                  flyToPx!.dx,
-                                  t,
-                                )!;
-                                final y = ui.lerpDouble(
+                          Positioned(
+                            left:
+                                ui.lerpDouble(
+                                  flyFromPx.dx,
+                                  flyToPx.dx,
+                                  _quizFlyProgress.clamp(0.0, 1.0),
+                                )! -
+                                (pieceSize / 2),
+                            top:
+                                ui.lerpDouble(
                                   flyFromPx.dy,
                                   flyToPx.dy,
-                                  t,
-                                )!;
-                                return Positioned(
-                                  left: x - (pieceSize / 2),
-                                  top: y - (pieceSize / 2),
+                                  _quizFlyProgress.clamp(0.0, 1.0),
+                                )! -
+                                (pieceSize / 2),
+                            width: pieceSize,
+                            height: pieceSize,
+                            child: IgnorePointer(
+                              child: Center(
+                                child: _pieceImage(
+                                  _quizFlyPiece!,
                                   width: pieceSize,
                                   height: pieceSize,
-                                  child: Center(
-                                    child: _pieceImage(
-                                      _quizFlyPiece!,
-                                      width: pieceSize,
-                                      height: pieceSize,
-                                    ),
-                                  ),
-                                );
-                              },
+                                ),
+                              ),
                             ),
                           ),
                       ],
@@ -7956,7 +7908,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _menuMusicFadeController.dispose();
     _sectionTransitionController.dispose();
     _menuExitAnimationController.dispose();
-    _quizMoveController.dispose();
     _introAudioPlayer.dispose();
     _menuAudioPlayer.dispose();
     super.dispose();
