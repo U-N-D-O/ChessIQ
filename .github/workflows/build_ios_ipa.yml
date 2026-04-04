@@ -27,6 +27,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Avoid llvm-objcopy dependency on newer Xcode runners by renaming
+          # Stockfish entrypoint in source before compilation.
+          perl -0777 -i -pe 's/\bint\s+main\s*\(/int stockfish_main(/' main.cpp
+
           {
             echo '#!/bin/bash'
             echo 'args=()'
@@ -51,25 +55,12 @@ jobs:
           set -euo pipefail
           cd Stockfish/src
 
-          # Rename main() -> stockfish_main in main.o so iOS app can link it.
-          xcrun llvm-objcopy \
-            --redefine-sym _main=_stockfish_main \
-            main.o main_stockfish.o
-
           shopt -s nullglob
-          objs=()
-          for obj in *.o; do
-            if [[ "$obj" != "main.o" && "$obj" != "main_stockfish.o" ]]; then
-              objs+=("$obj")
-            fi
-          done
-          for obj in syzygy/*.o; do
-            objs+=("$obj")
-          done
+          objs=( *.o syzygy/*.o )
 
           /usr/bin/libtool -static \
             -o ../../ios/Runner/libstockfish_ios.a \
-            main_stockfish.o "${objs[@]}"
+            "${objs[@]}"
 
       - name: Configure iOS link flags for Stockfish
         run: |
