@@ -65,7 +65,7 @@ extern "C" int stockfish_main(int argc, char* argv[]);
 }
 
 - (void)setOutputHandler:(StockfishOutputHandler _Nullable)handler {
-  self.outputHandler = handler;
+  _outputHandler = [handler copy];
 }
 
 static void *StockfishThreadEntry(void *ctx) {
