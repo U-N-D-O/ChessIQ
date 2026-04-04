@@ -240,6 +240,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   late AnimationController _sectionTransitionController;
   late AnimationController _menuExitAnimationController;
   late AnimationController _buttonRippleController;
+  late AnimationController _quizMoveController;
   Offset? _buttonRippleCenter;
   bool _buttonUnlocked = false;
   final AudioPlayer _introAudioPlayer = AudioPlayer();
@@ -302,6 +303,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   List<EngineLine> _quizContinuation = <EngineLine>[];
   bool _quizWhiteToMove = true;
   int _quizShownPly = 0;
+  // Quiz piece-by-piece playback state
+  Map<String, String> _quizPlayBoard = <String, String>{};
+  int _quizPlayArrowCount = 0;
+  bool _quizPlayActive = false;
+  String? _quizFlyFrom;
+  String? _quizFlyTo;
+  String? _quizFlyPiece;
   bool _quizAnswered = false;
   int _quizSelectedIndex = -1;
   QuizDifficulty _quizDifficulty = QuizDifficulty.medium;
@@ -372,6 +380,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _menuExitAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
+    );
+    _quizMoveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
     );
     _historyScrollController = ScrollController();
     _resetBoard(withIntro: false);
@@ -2197,6 +2209,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _quizShownPly = 0;
     _quizAnswered = false;
     _quizSelectedIndex = -1;
+    _quizPlayActive = false;
+    _quizPlayArrowCount = 0;
+    _quizPlayBoard = <String, String>{};
+    _quizFlyFrom = null;
+    _quizFlyTo = null;
+    _quizFlyPiece = null;
   }
 
   void _resetQuizToSetupState() {
@@ -2448,6 +2466,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizShownPly = resolvedSnapshot.shownPly;
       _quizAnswered = false;
       _quizSelectedIndex = -1;
+      _quizPlayActive = false;
+      _quizPlayArrowCount = 0;
+      _quizPlayBoard = <String, String>{};
+      _quizFlyFrom = null;
+      _quizFlyTo = null;
+      _quizFlyPiece = null;
       if (activeMode == GambitQuizMode.guessName) {
         _quizPrompt = 'Name this gambit from the position and continuation.';
         _quizPromptFocus = '';
@@ -2458,6 +2482,80 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizOptions = options.map((entry) => entry.normalizedMoves).toList();
       }
     });
+  }
+
+  /// Returns the top-left pixel offset of a square in the quiz board widget.
+  Offset _squareToGridOffset(String sq, double sqSize, bool reverse) {
+    int col = sq.codeUnitAt(0) - 97;
+    int row = int.parse(sq[1]) - 1;
+    if (reverse) {
+      col = 7 - col;
+    } else {
+      row = 7 - row;
+    }
+    return Offset(col * sqSize, row * sqSize);
+  }
+
+  Future<void> _startQuizPlayback() async {
+    if (!mounted || _quizContinuation.isEmpty || _quizBoardState.isEmpty) return;
+    await Future.delayed(const Duration(milliseconds: 420));
+    if (!mounted || !_quizAnswered) return;
+
+    var board = Map<String, String>.from(_quizBoardState);
+    setState(() {
+      _quizPlayBoard = Map<String, String>.from(board);
+      _quizPlayArrowCount = 0;
+      _quizPlayActive = true;
+      _quizFlyFrom = null;
+      _quizFlyTo = null;
+      _quizFlyPiece = null;
+    });
+
+    for (int i = 0; i < _quizContinuation.length; i++) {
+      if (!mounted || !_quizPlayActive) return;
+      final uciMove = _quizContinuation[i].move;
+      final from = uciMove.substring(0, 2);
+      final to = uciMove.substring(2, 4);
+      final piece = board[from];
+      if (piece == null) break;
+
+      final boardDuringFlight = Map<String, String>.from(board)
+        ..remove(from);
+      setState(() {
+        _quizPlayBoard = boardDuringFlight;
+        _quizFlyFrom = from;
+        _quizFlyTo = to;
+        _quizFlyPiece = piece;
+      });
+
+      // One frame for layout measurement before animating
+      await Future.delayed(const Duration(milliseconds: 16));
+      if (!mounted || !_quizPlayActive) return;
+
+      _quizMoveController.reset();
+      await _quizMoveController.animateTo(
+        1.0,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+      if (!mounted || !_quizPlayActive) return;
+
+      board = _applyUciMove(board, uciMove);
+      setState(() {
+        _quizPlayBoard = Map<String, String>.from(board);
+        _quizPlayArrowCount = i + 1;
+        _quizFlyFrom = null;
+        _quizFlyTo = null;
+        _quizFlyPiece = null;
+      });
+
+      if (i < _quizContinuation.length - 1) {
+        await Future.delayed(const Duration(milliseconds: 340));
+        if (!mounted || !_quizPlayActive) return;
+      }
+    }
+
+    if (mounted) setState(() => _quizPlayActive = false);
   }
 
   void _submitQuizAnswer(int index) {
@@ -2477,6 +2575,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             : 'Not quite. Correct answer: ${_quizOptions[_quizCorrectIndex]}');
       _recordQuizResult(isCorrect: isCorrect);
     });
+    if (_quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty) {
+      unawaited(_startQuizPlayback());
+    }
   }
 
   Future<void> _enterAnalysisBoard() async {
@@ -4010,6 +4111,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         MediaQuery.of(context).orientation == Orientation.landscape;
 
     Widget buildQuizBoardCard() {
+      final reverse =
+          _perspective == BoardPerspective.black ||
+          (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
+      final visibleArrows = _quizPlayActive
+          ? _quizContinuation.take(_quizPlayArrowCount).toList()
+          : _quizContinuation;
+
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(10),
@@ -4049,27 +4157,82 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.white10, width: 1.2),
                 ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _buildQuizBoard(),
-                    if (revealContinuation)
-                      AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) => IgnorePointer(
-                          child: CustomPaint(
-                            size: Size.infinite,
-                            painter: EnergyArrowPainter(
-                              lines: _quizContinuation,
-                              bestEval: 0,
-                              progress: _pulseController.value,
-                              reverse: false,
-                              showSequenceNumbers: true,
+                child: LayoutBuilder(
+                  builder: (context, bc) {
+                    final sqSize = bc.maxWidth / 8;
+                    Offset? flyFromPx, flyToPx;
+                    if (_quizFlyFrom != null && _quizFlyTo != null) {
+                      flyFromPx = _squareToGridOffset(
+                        _quizFlyFrom!,
+                        sqSize,
+                        reverse,
+                      );
+                      flyToPx = _squareToGridOffset(
+                        _quizFlyTo!,
+                        sqSize,
+                        reverse,
+                      );
+                    }
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _buildQuizBoard(),
+                        if (revealContinuation && visibleArrows.isNotEmpty)
+                          AnimatedBuilder(
+                            animation: _pulseController,
+                            builder: (context, child) => IgnorePointer(
+                              child: CustomPaint(
+                                size: Size.infinite,
+                                painter: EnergyArrowPainter(
+                                  lines: visibleArrows,
+                                  bestEval: 0,
+                                  progress: _pulseController.value,
+                                  reverse: reverse,
+                                  showSequenceNumbers: true,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                  ],
+                        if (flyFromPx != null &&
+                            flyToPx != null &&
+                            _quizFlyPiece != null)
+                          IgnorePointer(
+                            child: AnimatedBuilder(
+                              animation: _quizMoveController,
+                              builder: (ctx, _) {
+                                final t = _quizMoveController.value;
+                                final x = ui.lerpDouble(
+                                  flyFromPx!.dx,
+                                  flyToPx!.dx,
+                                  t,
+                                )!;
+                                final y = ui.lerpDouble(
+                                  flyFromPx.dy,
+                                  flyToPx.dy,
+                                  t,
+                                )!;
+                                // slight scale-up arc during flight
+                                final lift = 1.0 + 0.14 * sin(t * pi);
+                                return Positioned(
+                                  left: x,
+                                  top: y,
+                                  width: sqSize,
+                                  height: sqSize,
+                                  child: Transform.scale(
+                                    scale: lift,
+                                    child: _pieceImage(
+                                      _quizFlyPiece!,
+                                      width: sqSize,
+                                      height: sqSize,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -4467,6 +4630,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Widget _buildQuizBoard() {
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
+    final boardState = _quizPlayActive ? _quizPlayBoard : _quizBoardState;
+    final reverse =
+        _perspective == BoardPerspective.black ||
+        (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
 
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
@@ -4475,11 +4642,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       ),
       itemCount: 64,
       itemBuilder: (context, i) {
-        final row = 7 - i ~/ 8;
-        final col = i % 8;
+        int row, col;
+        if (reverse) {
+          row = i ~/ 8;
+          col = 7 - i % 8;
+        } else {
+          row = 7 - i ~/ 8;
+          col = i % 8;
+        }
         final sq = '${String.fromCharCode(97 + col)}${row + 1}';
         final isDark = (row + col) % 2 == 0;
-        final piece = _quizBoardState[sq];
+        final piece = boardState[sq];
 
         return Container(
           decoration: BoxDecoration(
@@ -7749,6 +7922,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _menuMusicFadeController.dispose();
     _sectionTransitionController.dispose();
     _menuExitAnimationController.dispose();
+    _quizMoveController.dispose();
     _introAudioPlayer.dispose();
     _menuAudioPlayer.dispose();
     super.dispose();
