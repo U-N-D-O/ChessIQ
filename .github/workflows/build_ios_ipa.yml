@@ -51,11 +51,14 @@ jobs:
           set -euo pipefail
           cd Stockfish/src
 
-          # Keep Stockfish's normal build (which needs _main), then alias
-          # _main -> _stockfish_main for app linking without llvm-objcopy.
-          xcrun --sdk iphoneos ld -r -arch arm64 \
-            -alias _main _stockfish_main \
+          # Keep Stockfish's normal build (which needs _main), then create a
+          # relocatable object that aliases _main -> _stockfish_main.
+          xcrun --sdk iphoneos clang++ -arch arm64 -r \
+            -Wl,-alias,_main,_stockfish_main \
             -o main_stockfish.o main.o
+
+          # Sanity check: ensure aliased symbol is present.
+          xcrun --sdk iphoneos nm -gU main_stockfish.o | grep -E "_stockfish_main$"
 
           shopt -s nullglob
           objs=()
