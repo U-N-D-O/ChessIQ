@@ -56,20 +56,20 @@ public class StockfishPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             self?.eventSink?(line)
         }
 
-        var nsError: NSError?
-        let ok = engine.start(&nsError)
-        if ok {
+        do {
+            _ = try engine.start()
             result(nil)
             return
-        }
-
-        result(
-            FlutterError(
-                code: "IN_PROCESS_START_FAIL",
-                message: nsError?.localizedDescription ?? "Failed to start Stockfish in-process engine",
-                details: nil
+        } catch {
+            let message = (error as NSError).localizedDescription
+            result(
+                FlutterError(
+                    code: "IN_PROCESS_START_FAIL",
+                    message: message.isEmpty ? "Failed to start Stockfish in-process engine" : message,
+                    details: nil
+                )
             )
-        )
+        }
     }
 
     // MARK: - FlutterStreamHandler
