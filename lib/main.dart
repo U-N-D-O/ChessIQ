@@ -2280,27 +2280,34 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     if (tokens.length < 2) return null;
 
     final maxPrefix = tokens.length - 1;
-    int minPrefix;
-    int maxHintPrefix;
-    switch (_quizDifficulty) {
-      case QuizDifficulty.easy:
-        minPrefix = mode == GambitQuizMode.guessName ? 3 : 2;
-        maxHintPrefix = mode == GambitQuizMode.guessName ? 7 : 5;
-        break;
-      case QuizDifficulty.medium:
-        minPrefix = mode == GambitQuizMode.guessName ? 2 : 1;
-        maxHintPrefix = mode == GambitQuizMode.guessName ? 6 : 4;
-        break;
-      case QuizDifficulty.hard:
-        minPrefix = 1;
-        maxHintPrefix = mode == GambitQuizMode.guessName ? 4 : 2;
-        break;
+    final int prefix;
+    if (mode == GambitQuizMode.guessLine) {
+      // Guess Line always starts from exactly 2 ply (two moved pieces).
+      if (tokens.length < 3) return null;
+      prefix = 2;
+    } else {
+      int minPrefix;
+      int maxHintPrefix;
+      switch (_quizDifficulty) {
+        case QuizDifficulty.easy:
+          minPrefix = 3;
+          maxHintPrefix = 7;
+          break;
+        case QuizDifficulty.medium:
+          minPrefix = 2;
+          maxHintPrefix = 6;
+          break;
+        case QuizDifficulty.hard:
+          minPrefix = 1;
+          maxHintPrefix = 4;
+          break;
+      }
+      minPrefix = minPrefix.clamp(1, maxPrefix);
+      final maxPrefixUsed = min(maxHintPrefix, maxPrefix);
+      prefix = maxPrefixUsed <= minPrefix
+          ? minPrefix
+          : (minPrefix + random.nextInt(maxPrefixUsed - minPrefix + 1));
     }
-    minPrefix = minPrefix.clamp(1, maxPrefix);
-    final maxPrefixUsed = min(maxHintPrefix, maxPrefix);
-    final prefix = maxPrefixUsed <= minPrefix
-        ? minPrefix
-        : (minPrefix + random.nextInt(maxPrefixUsed - minPrefix + 1));
 
     var state = _initialBoardState();
     var whiteToMove = true;
@@ -2315,7 +2322,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final continuation = <EngineLine>[];
     var continuationState = Map<String, String>.from(state);
     var continuationWhiteToMove = whiteToMove;
-    for (int i = prefix; i < tokens.length && continuation.length < 4; i++) {
+    for (int i = prefix; i < tokens.length; i++) {
       final uciMove = _resolveSanToUci(
         continuationState,
         tokens[i],
@@ -2326,7 +2333,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         EngineLine(
           uciMove,
           -90 * continuation.length,
-          max(1, 4 - continuation.length),
+          max(1, tokens.length - i),
           continuation.length + 1,
         ),
       );
@@ -2371,11 +2378,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     QuizBoardSnapshot? snapshot;
     for (final candidate in candidates) {
       final built = _buildQuizSnapshot(candidate, activeMode, random);
-      if (built != null) {
-        correct = candidate;
-        snapshot = built;
-        break;
+      if (built == null) continue;
+
+      if (activeMode == GambitQuizMode.guessLine) {
+        if (candidate.moveTokens.length < 2) continue;
+        final first = candidate.moveTokens[0];
+        final second = candidate.moveTokens[1];
+        final possibleOptions = gambits.where(
+          (entry) =>
+              entry.moveTokens.length >= 2 &&
+              entry.moveTokens[0] == first &&
+              entry.moveTokens[1] == second,
+        );
+        if (possibleOptions.length < 3) {
+          // Skip weak line quizzes with fewer than 3 total answer choices.
+          continue;
+        }
       }
+
+      correct = candidate;
+      snapshot = built;
+      break;
     }
     if (correct == null || snapshot == null) {
       setState(() {
