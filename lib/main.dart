@@ -112,6 +112,7 @@ enum OpeningMode { off, yellowGlow, blueGlow }
 enum BotSkillProfile {
   baby,
   nephew,
+  bestFriend,
   nerdyGirl,
   teenBoy,
   uncle,
@@ -128,9 +129,13 @@ class BotCharacter {
   final String name;
   final String description;
   final int elo;
+  final bool limitStrength;
   final int multiPv;
   final int threads;
   final int? contempt;
+  final int? skillLevel;
+  final int? searchDepth;
+  final int? moveTimeMs;
   final BotSkillProfile profile;
   final String? avatarAsset;
 
@@ -139,9 +144,13 @@ class BotCharacter {
     required this.name,
     required this.description,
     required this.elo,
+    this.limitStrength = true,
     required this.multiPv,
     required this.threads,
     this.contempt,
+    this.skillLevel,
+    this.searchDepth,
+    this.moveTimeMs,
     required this.profile,
     this.avatarAsset,
   });
@@ -313,6 +322,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   final AudioPlayer _introAudioPlayer = AudioPlayer();
   final AudioPlayer _menuAudioPlayer = AudioPlayer();
   final AudioPlayer _sfxAudioPlayer = AudioPlayer();
+  static const int _boardSfxPlayerPoolSize = 4;
+  final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
+    _boardSfxPlayerPoolSize,
+    (_) => AudioPlayer(),
+  );
+  int _nextBoardSfxPlayerIndex = 0;
   bool _menuMusicPlaying = false;
   bool _isHotkeyResetting = false;
   Future<void>? _engineStartFuture;
@@ -322,6 +337,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   int _currentDepth = 0;
   double _currentEval = 0.0;
+  bool _evalWhiteTurn =
+      true; // whose turn it was when _currentEval was last set
   int _multiPvCount = _defaultMultiPvCount;
   int _engineDepth = _defaultEngineDepth;
   bool _isWhiteTurn = true;
@@ -355,7 +372,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   bool _playVsBot = false;
   bool _humanPlaysWhite = true;
   bool _botThinking = false;
-  int _botTurnsPlayed = 0;
   final List<_GhostArrow> _botGhostArrows = <_GhostArrow>[];
   final Map<int, Timer> _botGhostArrowTimers = <int, Timer>{};
   int _ghostArrowIdSeed = 0;
@@ -373,71 +389,90 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     BotCharacter(
       rank: 1,
       name: 'The Baby',
-      description: 'First Time Touching Pieces. Total chaos.',
-      elo: 400,
-      multiPv: 10,
+      description: 'Pure chaos. Anything can happen.',
+      elo: 100,
+      multiPv: 20,
       threads: 1,
+      searchDepth: 3,
       profile: BotSkillProfile.baby,
       avatarAsset: 'assets/bots/babybot.png',
     ),
     BotCharacter(
       rank: 2,
       name: 'The Nephew',
-      description: 'Enthusiastic amateur. Loves shiny captures.',
+      description: 'Always lunges for the shiny capture.',
       elo: 800,
       multiPv: 5,
       threads: 1,
+      searchDepth: 6,
       profile: BotSkillProfile.nephew,
       avatarAsset: 'assets/bots/nephewbot.png',
     ),
     BotCharacter(
       rank: 3,
+      name: 'Best Friend',
+      description: 'A relaxed casual player with decent instincts.',
+      elo: 1000,
+      multiPv: 3,
+      threads: 1,
+      searchDepth: 8,
+      profile: BotSkillProfile.bestFriend,
+      avatarAsset: 'assets/bots/frenbot.png',
+    ),
+    BotCharacter(
+      rank: 4,
       name: 'Nerdy Girl',
-      description: 'Theory student. Nervous in the middlegame.',
-      elo: 1300,
+      description: 'Booked up early, less sure later on.',
+      elo: 1400,
       multiPv: 3,
       threads: 2,
+      searchDepth: 10,
       profile: BotSkillProfile.nerdyGirl,
       avatarAsset: 'assets/bots/nerdygirlbot.jpg',
     ),
     BotCharacter(
-      rank: 4,
-      name: 'College Student',
-      description: 'Hyper-aggressive rebel. Wants attacks now.',
+      rank: 5,
+      name: 'HS Senior',
+      description: 'Fast, sharp, and a little reckless.',
       elo: 1700,
-      multiPv: 4,
+      multiPv: 1,
       threads: 1,
-      contempt: 50,
+      moveTimeMs: 500,
       profile: BotSkillProfile.teenBoy,
       avatarAsset: 'assets/bots/studentbot.jpg',
     ),
     BotCharacter(
-      rank: 5,
+      rank: 6,
       name: 'The Uncle',
-      description: 'Tricky club player with hidden traps.',
-      elo: 2100,
+      description: 'Prefers tricky, messy positions.',
+      elo: 2000,
       multiPv: 3,
       threads: 2,
+      searchDepth: 12,
       profile: BotSkillProfile.uncle,
       avatarAsset: 'assets/bots/unclebot.jpg',
     ),
     BotCharacter(
-      rank: 6,
-      name: 'Grandpa',
-      description: 'Positional legend. Slow squeeze specialist.',
-      elo: 2600,
-      multiPv: 2,
+      rank: 7,
+      name: 'The Grandpa',
+      description: 'Calm, precise, and relentlessly solid.',
+      elo: 2400,
+      multiPv: 1,
       threads: 4,
+      moveTimeMs: 2000,
       profile: BotSkillProfile.grandpa,
       avatarAsset: 'assets/bots/grandpabot.jpg',
     ),
     BotCharacter(
-      rank: 7,
-      name: 'Inter-GM',
-      description: '4th-dimension entity. Near-perfect precision.',
-      elo: 3190,
-      multiPv: 2,
-      threads: 6,
+      rank: 8,
+      name: 'The Alien',
+      description: 'Instant calculation with no mercy.',
+      elo: 3500,
+      limitStrength: false,
+      multiPv: 1,
+      threads: 8,
+      skillLevel: 20,
+      moveTimeMs: 80,
       profile: BotSkillProfile.interGm,
       avatarAsset: 'assets/bots/alienbot.png',
     ),
@@ -463,6 +498,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   bool _menuReady = false;
   bool _muteSounds = false;
   bool _hapticsEnabled = true;
+  bool _analysisEditMode = true;
   final Set<String> _viewedGambits = <String>{};
   String _quizPrompt = '';
   String _quizPromptFocus = '';
@@ -650,6 +686,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
+  Future<void> _playBoardMoveSound({required bool isCapture}) async {
+    if (_muteSounds) return;
+    final assetPath = isCapture
+        ? 'sounds/take1.mp3'
+        : 'sounds/move${_rng.nextInt(8) + 1}.mp3';
+    final player = _boardSfxPlayers[_nextBoardSfxPlayerIndex];
+    _nextBoardSfxPlayerIndex =
+        (_nextBoardSfxPlayerIndex + 1) % _boardSfxPlayers.length;
+    try {
+      await player.stop();
+      await player.setReleaseMode(ReleaseMode.stop);
+      await player.play(
+        AssetSource(assetPath),
+        mode: PlayerMode.mediaPlayer,
+        volume: 1.0,
+      );
+    } catch (e) {
+      debugPrint('Board move sound failed: $e');
+      _addLog('Board move sound failed: $e');
+    }
+  }
+
   Future<void> _restoreSnapshotAndStart() async {
     await _loadUiPrefs();
     await _loadStoreState();
@@ -786,6 +844,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       await _introAudioPlayer.stop();
       await _stopMenuMusic(fadeOut: false);
       await _sfxAudioPlayer.stop();
+      await Future.wait(_boardSfxPlayers.map((player) => player.stop()));
     } else if (_activeSection != AppSection.analysis) {
       await _playMenuMusic();
     }
@@ -821,11 +880,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: active ? Colors.white.withValues(alpha: 0.18) : Colors.white10,
+            color: active
+                ? Colors.white.withValues(alpha: 0.18)
+                : Colors.white10,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: active ? Colors.white60 : Colors.white24,
-            ),
+            border: Border.all(color: active ? Colors.white60 : Colors.white24),
           ),
           child: Center(child: icon),
         ),
@@ -1197,7 +1256,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _suggestionLaunchInProgress = false;
     _suggestionBurstActive = false;
     _botThinking = false;
-    _botTurnsPlayed = 0;
     _gameOutcome = null;
     _gameResultDialogVisible = false;
     _launchStart = null;
@@ -1205,6 +1263,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _topLines = [];
     _currentDepth = 0;
     _currentEval = 0.0;
+    _evalWhiteTurn = true;
     if (withIntro) {
       _introCompleted = false;
       _buttonUnlocked = false;
@@ -1343,7 +1402,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final d = RegExp(r'depth (\d+)').firstMatch(line);
     final pv = RegExp(r'multipv (\d+)').firstMatch(line);
     final m = RegExp(r'pv ([a-h][1-8][a-h][1-8][nbrq]?)').firstMatch(line);
-    final s = RegExp(r'score cp (-?\d+)').firstMatch(line);
+    final sCp = RegExp(r'score cp (-?\d+)').firstMatch(line);
+    final sMate = RegExp(r'score mate (-?\d+)').firstMatch(line);
 
     if (d != null && pv != null && m != null) {
       int depth = int.parse(d.group(1)!);
@@ -1360,7 +1420,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       if (!_isLegalUciMove(move)) {
         return;
       }
-      int cp = s != null ? int.parse(s.group(1)!) : 0;
+      int cp;
+      double normalizedEval;
+      if (sCp != null) {
+        cp = int.parse(sCp.group(1)!);
+        normalizedEval = cp / 100.0;
+      } else if (sMate != null) {
+        final mateScore = int.parse(sMate.group(1)!);
+        if (mateScore > 0) {
+          cp = 10000;
+          normalizedEval = 100.0;
+        } else if (mateScore < 0) {
+          cp = -10000;
+          normalizedEval = -100.0;
+        } else {
+          cp = 0;
+          normalizedEval = 0.0;
+        }
+      } else {
+        cp = 0;
+        normalizedEval = 0.0;
+      }
 
       if (activeSearch != null && !activeSearch.isCompleted) {
         // Recovery guard: if bot search state leaked, unblock normal analysis.
@@ -1377,7 +1457,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
       setState(() {
         _currentDepth = depth;
-        if (multiPv == 1) _currentEval = cp / 100.0;
+        if (multiPv == 1) {
+          _currentEval = normalizedEval;
+          _evalWhiteTurn = _isWhiteTurn;
+        }
         _topLines.removeWhere(
           (e) => e.multiPv == multiPv || e.multiPv > _multiPvCount,
         );
@@ -1394,22 +1477,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   int _botSearchDepth(BotCharacter bot) {
-    switch (bot.profile) {
-      case BotSkillProfile.baby:
-        return 5;
-      case BotSkillProfile.nephew:
-        return 7;
-      case BotSkillProfile.nerdyGirl:
-        return 10;
-      case BotSkillProfile.teenBoy:
-        return 12;
-      case BotSkillProfile.uncle:
-        return 14;
-      case BotSkillProfile.grandpa:
-        return 16;
-      case BotSkillProfile.interGm:
-        return 18;
+    return bot.searchDepth ?? 8;
+  }
+
+  int _botRequestTimeoutMs(BotCharacter bot) {
+    if (bot.moveTimeMs != null) {
+      return bot.moveTimeMs! + 450;
     }
+    return 2200;
   }
 
   Future<List<EngineLine>> _requestBotCandidates(BotCharacter bot) async {
@@ -1425,18 +1500,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _botSearchCompleter = completer;
 
     _send('stop');
-    _send('setoption name UCI_LimitStrength value true');
-    _send('setoption name UCI_Elo value ${bot.elo}');
+    _send('setoption name UCI_LimitStrength value ${bot.limitStrength}');
+    if (bot.limitStrength) {
+      _send('setoption name UCI_Elo value ${bot.elo}');
+    }
+    if (bot.skillLevel != null) {
+      _send('setoption name Skill Level value ${bot.skillLevel}');
+    }
     _send('setoption name Threads value ${bot.threads}');
     _send('setoption name Contempt value ${bot.contempt ?? 0}');
     _send('setoption name MultiPV value ${bot.multiPv}');
     _send('position fen ${_genFen()}');
-    _send('go depth ${_botSearchDepth(bot)}');
+    if (bot.moveTimeMs != null) {
+      _send('go movetime ${bot.moveTimeMs}');
+    } else {
+      _send('go depth ${_botSearchDepth(bot)}');
+    }
 
     late final List<EngineLine> lines;
     try {
       lines = await completer.future.timeout(
-        const Duration(milliseconds: 2200),
+        Duration(milliseconds: _botRequestTimeoutMs(bot)),
         onTimeout: _sortedBotSearchLines,
       );
     } finally {
@@ -1460,8 +1544,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final to = move.substring(2, 4);
     final piece = boardState[from];
     if (piece == null) return false;
-    final isTurnPiece =
-        _isWhiteTurn ? piece.endsWith('_w') : piece.endsWith('_b');
+    final isTurnPiece = _isWhiteTurn
+        ? piece.endsWith('_w')
+        : piece.endsWith('_b');
     if (!isTurnPiece) return false;
     if (!_legalMovesFrom(from).contains(to)) return false;
 
@@ -1475,7 +1560,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     for (final entry in boardState.entries) {
       final from = entry.key;
       final piece = entry.value;
-      final isTurnPiece = _isWhiteTurn ? piece.endsWith('_w') : piece.endsWith('_b');
+      final isTurnPiece = _isWhiteTurn
+          ? piece.endsWith('_w')
+          : piece.endsWith('_b');
       if (!isTurnPiece) continue;
       final targets = _legalMovesFrom(from);
       for (final to in targets) {
@@ -1487,6 +1574,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
     if (legalMoves.isEmpty) return null;
     return legalMoves[_rng.nextInt(legalMoves.length)];
+  }
+
+  String? _fallbackCaptureMove() {
+    final captureMoves = <String>[];
+    for (final entry in boardState.entries) {
+      final from = entry.key;
+      final piece = entry.value;
+      final isTurnPiece = _isWhiteTurn
+          ? piece.endsWith('_w')
+          : piece.endsWith('_b');
+      if (!isTurnPiece) continue;
+      final targets = _legalMovesFrom(from);
+      for (final to in targets) {
+        final move = _uciMoveForCandidate(from, to, piece);
+        if (_isCaptureMove(move) && _isLegalUciMove(move)) {
+          captureMoves.add(move);
+        }
+      }
+    }
+    if (captureMoves.isEmpty) return null;
+    return captureMoves[_rng.nextInt(captureMoves.length)];
   }
 
   EngineLine? _rankedCandidate(List<EngineLine> lines, int rank) {
@@ -1527,57 +1635,63 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return _isKingAttacked(nextState, !movingWhite);
   }
 
+  int _uncleComplexityScore(EngineLine line, int bestEval) {
+    final evalGap = (bestEval - line.eval).abs();
+    var score = 0;
+    if (evalGap <= 40) score += 3;
+    if (!_isCaptureMove(line.move)) score += 2;
+    if (!_isCheckingMove(line.move)) score += 1;
+    return score;
+  }
+
   String? _chooseBotMove(BotCharacter bot, List<EngineLine> lines) {
     if (lines.isEmpty) return null;
 
     switch (bot.profile) {
       case BotSkillProfile.baby:
-        // Baby should feel chaotic: mostly random legal moves.
-        if (_rng.nextDouble() < 0.9) {
-          return _fallbackBotMove();
+        final chaoticPool = lines.where((line) => line.multiPv >= 15).toList();
+        final pool = chaoticPool.isNotEmpty
+            ? chaoticPool
+            : lines.skip(max(0, lines.length - 6)).toList(growable: false);
+        if (pool.isNotEmpty) {
+          return pool[_rng.nextInt(pool.length)].move;
         }
-        final lowerTier = lines.skip(3).toList(growable: false);
-        if (lowerTier.isNotEmpty) {
-          return lowerTier[_rng.nextInt(lowerTier.length)].move;
-        }
-        return _fallbackBotMove() ?? _rankedCandidate(lines, lines.length)?.move;
+        return _fallbackBotMove();
       case BotSkillProfile.nephew:
-        final rank = _rng.nextBool() ? 4 : 5;
-        return _rankedCandidate(lines, rank)?.move ?? _rankedCandidate(lines, 1)?.move;
+        for (final line in lines) {
+          if (_isCaptureMove(line.move)) {
+            return line.move;
+          }
+        }
+        return _fallbackCaptureMove() ?? _rankedCandidate(lines, 1)?.move;
+      case BotSkillProfile.bestFriend:
+        final rank = _rng.nextBool() ? 2 : 3;
+        return _rankedCandidate(lines, rank)?.move ??
+            _rankedCandidate(lines, 1)?.move;
       case BotSkillProfile.nerdyGirl:
-        if (_moveHistory.length < 8) {
+        if (_moveHistory.length < 20) {
           return _rankedCandidate(lines, 1)?.move;
         }
-        return _rankedCandidate(lines, 2)?.move ?? _rankedCandidate(lines, 1)?.move;
+        return _rankedCandidate(lines, 3)?.move ??
+            _rankedCandidate(lines, 1)?.move;
       case BotSkillProfile.teenBoy:
-        for (final line in lines) {
-          if (_isCaptureMove(line.move) || _isCheckingMove(line.move)) {
-            return line.move;
-          }
-        }
         return _rankedCandidate(lines, 1)?.move;
       case BotSkillProfile.uncle:
-        if (_rng.nextBool()) {
-          return _rankedCandidate(lines, 2)?.move ?? _rankedCandidate(lines, 1)?.move;
-        }
-        return _rankedCandidate(lines, 1)?.move;
-      case BotSkillProfile.grandpa:
-        for (final line in lines) {
-          if (!_isCaptureMove(line.move)) {
-            return line.move;
+        final bestEval = lines.first.eval;
+        var bestLine = lines.first;
+        var bestScore = _uncleComplexityScore(bestLine, bestEval);
+        for (final line in lines.skip(1)) {
+          final score = _uncleComplexityScore(line, bestEval);
+          if (score > bestScore) {
+            bestLine = line;
+            bestScore = score;
           }
         }
+        return bestLine.move;
+      case BotSkillProfile.grandpa:
         return _rankedCandidate(lines, 1)?.move;
       case BotSkillProfile.interGm:
-        final best = _rankedCandidate(lines, 1)?.move;
-        final backup = _rankedCandidate(lines, 2)?.move;
-        if (_botTurnsPlayed > 0 && _botTurnsPlayed % 50 == 0 && backup != null) {
-          return backup;
-        }
-        if (_rng.nextDouble() < 0.98 || backup == null) {
-          return best;
-        }
-        return backup;
+        return _rankedCandidate(lines, 1)?.move;
     }
   }
 
@@ -1606,9 +1720,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
       final from = chosen.substring(0, 2);
       final to = chosen.substring(2, 4);
-      setState(() {
-        _botTurnsPlayed += 1;
-      });
       _onMove(from, to, promotion: chosen.length == 5 ? chosen[4] : null);
       _showLastBotMoveArrow(chosen);
     } finally {
@@ -1896,7 +2007,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: Padding(
-            padding: EdgeInsets.only(right: token.capturedPiece == null ? 4 : 0),
+            padding: EdgeInsets.only(
+              right: token.capturedPiece == null ? 4 : 0,
+            ),
             child: _pieceImage(
               token.movingPiece,
               width: iconSize,
@@ -1975,7 +2088,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     // In bot games the gauge stays anchored to the human player's side.
     // In analysis it follows the active viewing perspective.
-    final whiteEval = _isWhiteTurn ? _currentEval : -_currentEval;
+    final whiteEval = _evalWhiteTurn ? _currentEval : -_currentEval;
     return _isBlackPovActive ? -whiteEval : whiteEval;
   }
 
@@ -2025,8 +2138,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   bool _sideToMoveHasLegalMoves() {
     for (final entry in boardState.entries) {
       final piece = entry.value;
-      final isTurnPiece =
-          _isWhiteTurn ? piece.endsWith('_w') : piece.endsWith('_b');
+      final isTurnPiece = _isWhiteTurn
+          ? piece.endsWith('_w')
+          : piece.endsWith('_b');
       if (!isTurnPiece) continue;
       if (_legalMovesFrom(entry.key).isNotEmpty) {
         return true;
@@ -2036,6 +2150,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   GameOutcome? _detectCurrentGameOutcome() {
+    final whiteKingPresent = boardState.values.contains('k_w');
+    final blackKingPresent = boardState.values.contains('k_b');
+    if (!whiteKingPresent && !blackKingPresent) {
+      return GameOutcome.draw;
+    }
+    if (!whiteKingPresent) {
+      return GameOutcome.blackWin;
+    }
+    if (!blackKingPresent) {
+      return GameOutcome.whiteWin;
+    }
+
     if (_sideToMoveHasLegalMoves()) {
       return null;
     }
@@ -2124,6 +2250,144 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     if (!mounted || _gameResultDialogVisible) return;
 
     _gameResultDialogVisible = true;
+    if (!_playVsBot) {
+      final result = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          final isDraw = outcome == GameOutcome.draw;
+          final accent = isDraw
+              ? const Color(0xFFD8B640)
+              : const Color(0xFFE45C5C);
+          final title = isDraw ? 'Draw' : 'Checkmate';
+          final message = isDraw
+              ? 'No legal moves remain. Continue to explore or reset the board.'
+              : 'Checkmate has been reached. Continue to inspect, or reset to start over.';
+          final icon = isDraw
+              ? Icons.balance_rounded
+              : Icons.crisis_alert_rounded;
+
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 430),
+              padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF141B2A), Color(0xFF0C121D)],
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
+                boxShadow: [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.16),
+                    blurRadius: 34,
+                    spreadRadius: 1.5,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    blurRadius: 40,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          accent.withValues(alpha: 0.35),
+                          accent.withValues(alpha: 0.08),
+                        ],
+                      ),
+                      border: Border.all(color: accent.withValues(alpha: 0.45)),
+                    ),
+                    child: Icon(icon, color: accent, size: 33),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.78),
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: FilledButton.icon(
+                      onPressed: () =>
+                          Navigator.of(dialogContext).pop('continue'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2A6CF0),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.visibility_rounded, size: 18),
+                      label: const Text('Continue'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.of(dialogContext).pop('reset'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.replay_rounded, size: 18),
+                      label: const Text('Reset'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      _gameResultDialogVisible = false;
+      if (!mounted) return;
+
+      if (result == 'reset') {
+        setState(() {
+          _resetBoard(initialLaunch: false, withIntro: false);
+        });
+        _analyze();
+      }
+      return;
+    }
+
     final result = await showDialog<String>(
       context: context,
       barrierDismissible: false,
@@ -2261,10 +2525,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   width: double.infinity,
                   height: 44,
                   child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(dialogContext).pop('opponent'),
+                    onPressed: () =>
+                        Navigator.of(dialogContext).pop('opponent'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
-                      side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.16),
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -2311,7 +2578,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     _goToMenu();
   }
-
 
   void _showAllPossibleOpenings() {
     // Find all openings that could be played from the current position
@@ -2480,9 +2746,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   _buildMoveSequenceText(
                                     opening.normalizedMoves,
                                     fontSize: 11.5,
-                                    color: Colors.white.withValues(
-                                      alpha: 0.72,
-                                    ),
+                                    color: Colors.white.withValues(alpha: 0.72),
                                     fontWeight: FontWeight.w500,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -2768,11 +3032,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Future<void> _attemptMove(String from, String to, {String? forcedPromotion}) async {
+  Future<void> _attemptMove(
+    String from,
+    String to, {
+    String? forcedPromotion,
+  }) async {
     if (_gameOutcome != null) return;
     final piece = boardState[from];
     if (piece == null) return;
-    if (!_legalMovesFrom(from).contains(to)) return;
+    if (!_analysisEditMode && !_legalMovesFrom(from).contains(to)) return;
 
     var promotion = forcedPromotion;
     if (_isPromotionTarget(from, to, piece)) {
@@ -2780,6 +3048,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       if (promotion == null) return;
       if (promotion == 'r') {
         promotion = 't';
+      }
+    }
+
+    if (_analysisEditMode) {
+      final uciPromotion = promotion == null
+          ? null
+          : (promotion == 't' ? 'r' : promotion.toLowerCase());
+      final uciMove = uciPromotion == null
+          ? '$from$to'
+          : '$from$to$uciPromotion';
+      final nextState = _applyUciMove(
+        boardState,
+        uciMove,
+        enPassantTarget: _enPassantTarget,
+      );
+      final movingSideIsWhite = _isWhiteTurn;
+      if (_isKingAttacked(nextState, movingSideIsWhite)) {
+        _addLog(
+          'Illegal move blocked: ${movingSideIsWhite ? 'White' : 'Black'} king would remain in check.',
+        );
+        return;
       }
     }
 
@@ -2929,9 +3218,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   _buildMoveSequenceText(
                                     gambit.normalizedMoves,
                                     fontSize: 11.5,
-                                    color: Colors.white.withValues(
-                                      alpha: 0.72,
-                                    ),
+                                    color: Colors.white.withValues(alpha: 0.72),
                                     fontWeight: FontWeight.w500,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -3202,7 +3489,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final random = Random();
     final correctName = _quizOptions[_quizCorrectIndex];
     final correctMoves = _quizOptions[_quizCorrectIndex];
-    final typeWord = correctName.toLowerCase().contains('gambit') ? 'gambit' : 'opening';
+    final typeWord = correctName.toLowerCase().contains('gambit')
+        ? 'gambit'
+        : 'opening';
 
     if (_quizMode == GambitQuizMode.guessName) {
       if (isCorrect) {
@@ -3468,21 +3757,31 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
-  Widget _buildBotSetupCard(BotCharacter bot, int index) {
+  Widget _buildBotSetupCard(
+    BotCharacter bot,
+    int index, {
+    required bool compact,
+  }) {
     return AnimatedBuilder(
       animation: _botSetupPageController,
       child: GestureDetector(
-        onTap: () => _animateBotSetupTo(index),
+        onTap: () {
+          setState(() => _botSetupSelectedIndex = index);
+          unawaited(_startBotMatch(bot: bot, sideChoice: _botSideChoice));
+        },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: compact ? 6 : 10,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(18),
                 child: Container(
-                  width: 144,
-                  height: 144,
+                  width: compact ? 96 : 144,
+                  height: compact ? 96 : 144,
                   color: const Color(0xFF1E2A44),
                   child: bot.avatarAsset != null
                       ? Image.asset(bot.avatarAsset!, fit: BoxFit.cover)
@@ -3498,9 +3797,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: compact ? 8 : 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFD8B640).withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(999),
@@ -3509,43 +3811,34 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   ),
                 ),
                 child: Text(
-                  '#${bot.rank}  •  ${bot.elo} Elo',
-                  style: const TextStyle(
+                  '#${bot.rank}',
+                  style: TextStyle(
                     color: Color(0xFFFFE3A0),
-                    fontSize: 11,
+                    fontSize: compact ? 10 : 11,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: compact ? 8 : 12),
               Text(
                 bot.name,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
-                  fontSize: 18,
+                  fontSize: compact ? 15 : 18,
                   letterSpacing: 0.2,
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                'MultiPV ${bot.multiPv} • ${bot.threads} thread${bot.threads == 1 ? '' : 's'}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
+              SizedBox(height: compact ? 6 : 10),
               Text(
                 bot.description,
-                maxLines: 3,
+                maxLines: compact ? 2 : 3,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.60),
-                  fontSize: 11.6,
+                  fontSize: compact ? 10.5 : 11.6,
                   height: 1.25,
                 ),
               ),
@@ -3554,14 +3847,20 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         ),
       ),
       builder: (context, child) {
-        final page = _botSetupPageController.hasClients &&
+        final page =
+            _botSetupPageController.hasClients &&
                 _botSetupPageController.position.hasContentDimensions
-            ? (_botSetupPageController.page ?? _botSetupSelectedIndex.toDouble())
+            ? (_botSetupPageController.page ??
+                  _botSetupSelectedIndex.toDouble())
             : _botSetupSelectedIndex.toDouble();
         final delta = index - page;
         final distance = delta.abs().clamp(0.0, 1.8);
         final focus = (1.0 - (distance / 1.8)).clamp(0.0, 1.0);
-        final scale = ui.lerpDouble(0.72, 1.0, Curves.easeOut.transform(focus))!;
+        final scale = ui.lerpDouble(
+          0.72,
+          1.0,
+          Curves.easeOut.transform(focus),
+        )!;
         final opacity = ui.lerpDouble(0.28, 1.0, focus)!;
         final lift = ui.lerpDouble(26, 0, Curves.easeOut.transform(focus))!;
         final rotation = delta * -0.24;
@@ -3606,9 +3905,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF5AAEE8).withValues(
-                        alpha: 0.10 + (0.20 * focus),
-                      ),
+                      color: const Color(
+                        0xFF5AAEE8,
+                      ).withValues(alpha: 0.10 + (0.20 * focus)),
                       blurRadius: 14 + (24 * focus),
                       spreadRadius: focus > 0.8 ? 1.0 : 0,
                       offset: const Offset(0, 10),
@@ -3649,7 +3948,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _selectedBot = bot;
         _humanPlaysWhite = humanPlaysWhite;
         _botThinking = false;
-        _botTurnsPlayed = 0;
+        _analysisEditMode = false;
       });
 
       await _ensureEngineStarted();
@@ -3904,16 +4203,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         resolvedCorrect.moveTokens.length >= 2) {
       final first = resolvedCorrect.moveTokens[0];
       final second = resolvedCorrect.moveTokens[1];
-      final linePool = gambits
-          .where(
-            (entry) =>
-                entry.name != resolvedCorrect.name &&
-                entry.moveTokens.length >= 2 &&
-                entry.moveTokens[0] == first &&
-                entry.moveTokens[1] == second,
-          )
-          .toList()
-        ..shuffle(random);
+      final linePool =
+          gambits
+              .where(
+                (entry) =>
+                    entry.name != resolvedCorrect.name &&
+                    entry.moveTokens.length >= 2 &&
+                    entry.moveTokens[0] == first &&
+                    entry.moveTokens[1] == second,
+              )
+              .toList()
+            ..shuffle(random);
       final targetLineOptions = min(_quizOptionCount(), linePool.length + 1);
       for (final candidate in linePool) {
         if (options.length >= targetLineOptions) break;
@@ -3951,12 +4251,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizFlyPiece = null;
       _quizFlyProgress = 0.0;
       if (activeMode == GambitQuizMode.guessName) {
-        _quizPrompt = 'Name this gambit from the position and continuation.';
+        _quizPrompt = '';
         _quizPromptFocus = '';
         _quizOptions = options.map((entry) => entry.name).toList();
       } else {
-        _quizPrompt = 'Pick the correct continuation for';
-        _quizPromptFocus = resolvedCorrect.name;
+        _quizPrompt = '';
+        _quizPromptFocus = '';
         _quizOptions = options.map((entry) => entry.normalizedMoves).toList();
       }
     });
@@ -3980,7 +4280,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _startQuizPlayback() async {
-    if (!mounted || _quizContinuation.isEmpty || _quizBoardState.isEmpty) return;
+    if (!mounted || _quizContinuation.isEmpty || _quizBoardState.isEmpty) {
+      return;
+    }
     await Future.delayed(const Duration(milliseconds: 420));
     if (!mounted || !_quizAnswered) return;
 
@@ -4003,8 +4305,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final piece = board[from];
       if (piece == null) break;
 
-      final boardDuringFlight = Map<String, String>.from(board)
-        ..remove(from);
+      final boardDuringFlight = Map<String, String>.from(board)..remove(from);
       setState(() {
         _quizPlayBoard = boardDuringFlight;
         _quizFlyFrom = from;
@@ -4230,8 +4531,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 child: _activeSection == AppSection.menu
                     ? _buildStartMenu()
                     : _activeSection == AppSection.botSetup
-                        ? _buildBotSetupScreen()
-                        : _buildGambitQuizScreen(),
+                    ? _buildBotSetupScreen()
+                    : _buildGambitQuizScreen(),
               ),
             ),
           ),
@@ -4274,7 +4575,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
     final captureSquare = '${to[0]}${from[1]}';
     final captured = state[captureSquare];
-    if (captured == null || captured[0] != 'p' || captured.endsWith(piece.endsWith('_w') ? '_w' : '_b')) {
+    if (captured == null ||
+        captured[0] != 'p' ||
+        captured.endsWith(piece.endsWith('_w') ? '_w' : '_b')) {
       return null;
     }
     return captureSquare;
@@ -4305,7 +4608,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       case 'b':
         return absFile == absRank && _isPathClear(state, from, to);
       case 't':
-        return (deltaFile == 0 || deltaRank == 0) && _isPathClear(state, from, to);
+        return (deltaFile == 0 || deltaRank == 0) &&
+            _isPathClear(state, from, to);
       case 'q':
         return ((absFile == absRank) || deltaFile == 0 || deltaRank == 0) &&
             _isPathClear(state, from, to);
@@ -4316,7 +4620,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
-  bool _isSquareAttacked(Map<String, String> state, String square, bool byWhite) {
+  bool _isSquareAttacked(
+    Map<String, String> state,
+    String square,
+    bool byWhite,
+  ) {
     for (final entry in state.entries) {
       final piece = entry.value;
       if (piece.endsWith('_w') != byWhite) continue;
@@ -4334,11 +4642,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final targetSquare = whiteKing ? 'g1' : 'g8';
     final kingPiece = whiteKing ? 'k_w' : 'k_b';
     final rookPiece = whiteKing ? 't_w' : 't_b';
-    final rookMoved = whiteKing ? _whiteKingsideRookMoved : _blackKingsideRookMoved;
+    final rookMoved = whiteKing
+        ? _whiteKingsideRookMoved
+        : _blackKingsideRookMoved;
     final kingMoved = whiteKing ? _whiteKingMoved : _blackKingMoved;
 
     if (kingMoved || rookMoved) return false;
-    if (boardState[kingSquare] != kingPiece || boardState[rookSquare] != rookPiece) {
+    if (boardState[kingSquare] != kingPiece ||
+        boardState[rookSquare] != rookPiece) {
       return false;
     }
     if (boardState[throughSquare] != null || boardState[targetSquare] != null) {
@@ -4360,11 +4671,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final betweenSquare = whiteKing ? 'b1' : 'b8';
     final kingPiece = whiteKing ? 'k_w' : 'k_b';
     final rookPiece = whiteKing ? 't_w' : 't_b';
-    final rookMoved = whiteKing ? _whiteQueensideRookMoved : _blackQueensideRookMoved;
+    final rookMoved = whiteKing
+        ? _whiteQueensideRookMoved
+        : _blackQueensideRookMoved;
     final kingMoved = whiteKing ? _whiteKingMoved : _blackKingMoved;
 
     if (kingMoved || rookMoved) return false;
-    if (boardState[kingSquare] != kingPiece || boardState[rookSquare] != rookPiece) {
+    if (boardState[kingSquare] != kingPiece ||
+        boardState[rookSquare] != rookPiece) {
       return false;
     }
     if (boardState[throughSquare] != null ||
@@ -4440,7 +4754,46 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   void _handleHoldTap(String square) {
     if (_playVsBot && !_isHumanTurnInBotGame) return;
-    if (_openingMode != OpeningMode.off && !(_openingMode == OpeningMode.yellowGlow && _selectedGambit != null)) return;
+    if (_analysisEditMode && _openingMode != OpeningMode.yellowGlow) {
+      final tappedPiece = boardState[square];
+      if (_holdSelectedFrom == null) {
+        if (tappedPiece != null) {
+          setState(() {
+            _holdSelectedFrom = square;
+            _gambitSelectedFrom = null;
+            _legalTargets.clear();
+            _gambitAvailableTargets.clear();
+          });
+        }
+        return;
+      }
+
+      if (_holdSelectedFrom == square) {
+        setState(() {
+          _holdSelectedFrom = null;
+          _legalTargets.clear();
+          _gambitAvailableTargets.clear();
+        });
+        return;
+      }
+
+      if (tappedPiece != null) {
+        setState(() {
+          _holdSelectedFrom = square;
+          _legalTargets.clear();
+        });
+        return;
+      }
+
+      if (boardState[square] == null) {
+        final from = _holdSelectedFrom!;
+        unawaited(_attemptMove(from, square));
+      }
+      return;
+    }
+    if (_openingMode != OpeningMode.off &&
+        !(_openingMode == OpeningMode.yellowGlow && _selectedGambit != null))
+      return;
 
     final tappedPiece = boardState[square];
     if (_holdSelectedFrom == null) {
@@ -4863,6 +5216,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _refreshGambitPreview();
     });
 
+    unawaited(_playBoardMoveSound(isCapture: captured != null));
+
     if (_playVsBot && _isKingAttacked(boardState, _isWhiteTurn)) {
       unawaited(_checkHaptic());
     }
@@ -4947,20 +5302,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
 
     final castling = StringBuffer();
-    if (!_whiteKingMoved && !_whiteKingsideRookMoved &&
-        boardState['e1'] == 'k_w' && boardState['h1'] == 't_w') {
+    if (!_whiteKingMoved &&
+        !_whiteKingsideRookMoved &&
+        boardState['e1'] == 'k_w' &&
+        boardState['h1'] == 't_w') {
       castling.write('K');
     }
-    if (!_whiteKingMoved && !_whiteQueensideRookMoved &&
-        boardState['e1'] == 'k_w' && boardState['a1'] == 't_w') {
+    if (!_whiteKingMoved &&
+        !_whiteQueensideRookMoved &&
+        boardState['e1'] == 'k_w' &&
+        boardState['a1'] == 't_w') {
       castling.write('Q');
     }
-    if (!_blackKingMoved && !_blackKingsideRookMoved &&
-        boardState['e8'] == 'k_b' && boardState['h8'] == 't_b') {
+    if (!_blackKingMoved &&
+        !_blackKingsideRookMoved &&
+        boardState['e8'] == 'k_b' &&
+        boardState['h8'] == 't_b') {
       castling.write('k');
     }
-    if (!_blackKingMoved && !_blackQueensideRookMoved &&
-        boardState['e8'] == 'k_b' && boardState['a8'] == 't_b') {
+    if (!_blackKingMoved &&
+        !_blackQueensideRookMoved &&
+        boardState['e8'] == 'k_b' &&
+        boardState['a8'] == 't_b') {
       castling.write('q');
     }
 
@@ -4988,7 +5351,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return 0.86 + (((t - 0.62) / 0.28).clamp(0.0, 1.0) * 0.14);
   }
 
-    Offset _introBoardCenter(Size scene, {double topInsetCompensation = 0.0}) =>
+  Offset _introBoardCenter(Size scene, {double topInsetCompensation = 0.0}) =>
       Offset(scene.width / 2, (scene.height * 0.40) - topInsetCompensation);
 
   Offset? _suggestionButtonCenterInScene() {
@@ -5006,7 +5369,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Offset _introButtonCenter(Size scene) =>
-      _suggestionButtonCenterInScene() ?? Offset(scene.width / 2, scene.height - 52);
+      _suggestionButtonCenterInScene() ??
+      Offset(scene.width / 2, scene.height - 52);
 
   RenderBox? _renderBoxFromContext(BuildContext? context) {
     final obj = context?.findRenderObject();
@@ -5186,9 +5550,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     var col = square.codeUnitAt(0) - 97;
     var row = int.parse(square[1]) - 1;
     final reverse = _playVsBot
-      ? !_humanPlaysWhite
-      : (_perspective == BoardPerspective.black) ||
-        (_perspective == BoardPerspective.auto && !_isWhiteTurn);
+        ? !_humanPlaysWhite
+        : (_perspective == BoardPerspective.black) ||
+              (_perspective == BoardPerspective.auto && !_isWhiteTurn);
     if (reverse) {
       col = 7 - col;
     } else {
@@ -5757,380 +6121,451 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Widget _buildBotSetupScreen() {
     final selectedBot = _botCharacters[_botSetupSelectedIndex];
     final pulse = _pulseController.value;
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final compactLandscape = isLandscape && media.size.height <= 460;
+    final cardViewportHeight = compactLandscape
+        ? 248.0
+        : (isLandscape ? 292.0 : 372.0);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: _goToMenu,
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back to menu',
-              ),
-              const SizedBox(width: 4),
-              const Expanded(
-                child: Text(
-                  'Play Chess',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF111B31),
-                  Color(0xFF0C1424),
-                  Color(0xFF0A101C),
-                ],
-                stops: [0.0, 0.55, 1.0],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFF5AAEE8).withValues(alpha: 0.25),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF5AAEE8).withValues(
-                    alpha: 0.10 + (0.08 * (0.5 + 0.5 * sin(pulse * pi * 2))),
-                  ),
-                  blurRadius: 20,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: EdgeInsets.zero,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 6),
-                SizedBox(
-                  height: 372,
-                  child: Stack(
-                    alignment: Alignment.center,
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: _goToMenu,
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Back to menu',
+                    ),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Text(
+                        'Play Chess',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF111B31),
+                        Color(0xFF0C1424),
+                        Color(0xFF0A101C),
+                      ],
+                      stops: [0.0, 0.55, 1.0],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.25),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF5AAEE8).withValues(
+                          alpha:
+                              0.10 + (0.08 * (0.5 + 0.5 * sin(pulse * pi * 2))),
+                        ),
+                        blurRadius: 20,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Column(
                     children: [
-                      Positioned(
-                        left: 18 + (sin(pulse * pi * 2) * 8),
-                        top: 18 + (cos(pulse * pi * 2) * 6),
-                        child: Container(
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFF8FD0FF).withValues(alpha: 0.16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF8FD0FF).withValues(alpha: 0.28),
-                                blurRadius: 14,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 20 + (cos(pulse * pi * 2) * 9),
-                        bottom: 20 + (sin(pulse * pi * 2) * 7),
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFD8B640).withValues(alpha: 0.15),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFD8B640).withValues(alpha: 0.25),
-                                blurRadius: 12,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(24),
-                            gradient: RadialGradient(
-                              center: Alignment(
-                                sin(pulse * pi * 2) * 0.08,
-                                -0.12 + cos(pulse * pi * 2) * 0.05,
-                              ),
-                              radius: 0.95,
-                              colors: [
-                                const Color(0xFF5AAEE8).withValues(alpha: 0.18),
-                                const Color(0xFF5AAEE8).withValues(alpha: 0.0),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      PageView.builder(
-                        controller: _botSetupPageController,
-                        itemCount: _botCharacters.length,
-                        physics: const BouncingScrollPhysics(),
-                        allowImplicitScrolling: true,
-                        onPageChanged: (index) {
-                          setState(() => _botSetupSelectedIndex = index);
-                        },
-                        itemBuilder: (context, index) => _buildBotSetupCard(
-                          _botCharacters[index],
-                          index,
-                        ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: Container(
-                            width: 52,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                              gradient: LinearGradient(
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                                colors: [
-                                  const Color(0xFF0E1627).withValues(alpha: 0.95),
-                                  const Color(0xFF0E1627).withValues(alpha: 0.0),
-                                ],
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: cardViewportHeight,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned(
+                              left: 18 + (sin(pulse * pi * 2) * 8),
+                              top: 18 + (cos(pulse * pi * 2) * 6),
+                              child: Container(
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(
+                                    0xFF8FD0FF,
+                                  ).withValues(alpha: 0.16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF8FD0FF,
+                                      ).withValues(alpha: 0.28),
+                                      blurRadius: 14,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: Container(
-                            width: 52,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                              gradient: LinearGradient(
-                                begin: Alignment.centerRight,
-                                end: Alignment.centerLeft,
-                                colors: [
-                                  const Color(0xFF0E1627).withValues(alpha: 0.95),
-                                  const Color(0xFF0E1627).withValues(alpha: 0.0),
-                                ],
+                            Positioned(
+                              right: 20 + (cos(pulse * pi * 2) * 9),
+                              bottom: 20 + (sin(pulse * pi * 2) * 7),
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(
+                                    0xFFD8B640,
+                                  ).withValues(alpha: 0.15),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFFD8B640,
+                                      ).withValues(alpha: 0.25),
+                                      blurRadius: 12,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24),
+                                  gradient: RadialGradient(
+                                    center: Alignment(
+                                      sin(pulse * pi * 2) * 0.08,
+                                      -0.12 + cos(pulse * pi * 2) * 0.05,
+                                    ),
+                                    radius: 0.95,
+                                    colors: [
+                                      const Color(
+                                        0xFF5AAEE8,
+                                      ).withValues(alpha: 0.18),
+                                      const Color(
+                                        0xFF5AAEE8,
+                                      ).withValues(alpha: 0.0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            PageView.builder(
+                              controller: _botSetupPageController,
+                              itemCount: _botCharacters.length,
+                              physics: const BouncingScrollPhysics(),
+                              allowImplicitScrolling: true,
+                              onPageChanged: (index) {
+                                setState(() => _botSetupSelectedIndex = index);
+                              },
+                              itemBuilder: (context, index) =>
+                                  _buildBotSetupCard(
+                                    _botCharacters[index],
+                                    index,
+                                    compact: compactLandscape,
+                                  ),
+                            ),
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              child: IgnorePointer(
+                                child: Container(
+                                  width: 52,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(24),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                      colors: [
+                                        const Color(
+                                          0xFF0E1627,
+                                        ).withValues(alpha: 0.95),
+                                        const Color(
+                                          0xFF0E1627,
+                                        ).withValues(alpha: 0.0),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              bottom: 0,
+                              child: IgnorePointer(
+                                child: Container(
+                                  width: 52,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(24),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.centerRight,
+                                      end: Alignment.centerLeft,
+                                      colors: [
+                                        const Color(
+                                          0xFF0E1627,
+                                        ).withValues(alpha: 0.95),
+                                        const Color(
+                                          0xFF0E1627,
+                                        ).withValues(alpha: 0.0),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: _botSetupSelectedIndex == 0
+                                ? null
+                                : () => _animateBotSetupTo(
+                                    _botSetupSelectedIndex - 1,
+                                  ),
+                            icon: const Icon(Icons.chevron_left_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF101722),
+                              side: const BorderSide(color: Colors.white12),
+                            ),
+                          ),
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(_botCharacters.length, (
+                                index,
+                              ) {
+                                final active = index == _botSetupSelectedIndex;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeOutCubic,
+                                  width: active ? 22 : 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    color: active
+                                        ? const Color(0xFF7FC4FF)
+                                        : Colors.white24,
+                                    boxShadow: active
+                                        ? [
+                                            BoxShadow(
+                                              color: const Color(
+                                                0xFF5AAEE8,
+                                              ).withValues(alpha: 0.32),
+                                              blurRadius: 10,
+                                              spreadRadius: 1,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed:
+                                _botSetupSelectedIndex ==
+                                    _botCharacters.length - 1
+                                ? null
+                                : () => _animateBotSetupTo(
+                                    _botSetupSelectedIndex + 1,
+                                  ),
+                            icon: const Icon(Icons.chevron_right_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF101722),
+                              side: const BorderSide(color: Colors.white12),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _botSetupSelectedIndex == 0
-                          ? null
-                          : () => _animateBotSetupTo(_botSetupSelectedIndex - 1),
-                      icon: const Icon(Icons.chevron_left_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFF101722),
-                        side: const BorderSide(color: Colors.white12),
-                      ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF101722),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Center(
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        ChoiceChip(
+                          selected: _botSideChoice == BotSideChoice.white,
+                          selectedColor: const Color(0xFFDEE4EF),
+                          side: BorderSide(
+                            color: _botSideChoice == BotSideChoice.white
+                                ? const Color(0xFFEDEFF4)
+                                : Colors.white24,
+                          ),
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _pieceImage('p_w', width: 16, height: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'White',
+                                style: TextStyle(
+                                  color: _botSideChoice == BotSideChoice.white
+                                      ? const Color(0xFF1A2232)
+                                      : Colors.white70,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          onSelected: (_) {
+                            setState(
+                              () => _botSideChoice = BotSideChoice.white,
+                            );
+                          },
+                        ),
+                        ChoiceChip(
+                          selected: _botSideChoice == BotSideChoice.random,
+                          selectedColor: const Color(
+                            0xFF5AAEE8,
+                          ).withValues(alpha: 0.22),
+                          side: BorderSide(
+                            color: _botSideChoice == BotSideChoice.random
+                                ? const Color(0xFF5AAEE8)
+                                : Colors.white24,
+                          ),
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.shuffle_rounded,
+                                size: 16,
+                                color: _botSideChoice == BotSideChoice.random
+                                    ? const Color(0xFF8FD0FF)
+                                    : Colors.white70,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Random',
+                                style: TextStyle(
+                                  color: _botSideChoice == BotSideChoice.random
+                                      ? const Color(0xFF8FD0FF)
+                                      : Colors.white70,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          onSelected: (_) {
+                            setState(
+                              () => _botSideChoice = BotSideChoice.random,
+                            );
+                          },
+                        ),
+                        ChoiceChip(
+                          selected: _botSideChoice == BotSideChoice.black,
+                          selectedColor: const Color(0xFF222933),
+                          side: BorderSide(
+                            color: _botSideChoice == BotSideChoice.black
+                                ? const Color(0xFF49576B)
+                                : Colors.white24,
+                          ),
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _pieceImage('p_b', width: 16, height: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Black',
+                                style: TextStyle(
+                                  color: _botSideChoice == BotSideChoice.black
+                                      ? Colors.white
+                                      : Colors.white70,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          onSelected: (_) {
+                            setState(
+                              () => _botSideChoice = BotSideChoice.black,
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(_botCharacters.length, (index) {
-                          final active = index == _botSetupSelectedIndex;
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
-                            width: active ? 22 : 8,
-                            height: 8,
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(999),
-                              color: active
-                                  ? const Color(0xFF7FC4FF)
-                                  : Colors.white24,
-                              boxShadow: active
-                                  ? [
-                                      BoxShadow(
-                                        color: const Color(0xFF5AAEE8)
-                                            .withValues(alpha: 0.32),
-                                        blurRadius: 10,
-                                        spreadRadius: 1,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          );
-                        }),
-                      ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.smart_toy_outlined),
+                      label: Text('Start Vs ${selectedBot.name}'),
+                      onPressed: () {
+                        unawaited(
+                          _startBotMatch(
+                            bot: selectedBot,
+                            sideChoice: _botSideChoice,
+                          ),
+                        );
+                      },
                     ),
-                    IconButton(
-                      onPressed: _botSetupSelectedIndex == _botCharacters.length - 1
-                          ? null
-                          : () => _animateBotSetupTo(_botSetupSelectedIndex + 1),
-                      icon: const Icon(Icons.chevron_right_rounded),
-                      style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFF101722),
-                        side: const BorderSide(color: Colors.white12),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF101722),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Center(
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  ChoiceChip(
-                    selected: _botSideChoice == BotSideChoice.white,
-                    selectedColor: const Color(0xFFDEE4EF),
-                    side: BorderSide(
-                      color: _botSideChoice == BotSideChoice.white
-                          ? const Color(0xFFEDEFF4)
-                          : Colors.white24,
-                    ),
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _pieceImage('p_w', width: 16, height: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          'White',
-                          style: TextStyle(
-                            color: _botSideChoice == BotSideChoice.white
-                                ? const Color(0xFF1A2232)
-                                : Colors.white70,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    onSelected: (_) {
-                      setState(() => _botSideChoice = BotSideChoice.white);
-                    },
-                  ),
-                  ChoiceChip(
-                    selected: _botSideChoice == BotSideChoice.random,
-                    selectedColor:
-                        const Color(0xFF5AAEE8).withValues(alpha: 0.22),
-                    side: BorderSide(
-                      color: _botSideChoice == BotSideChoice.random
-                          ? const Color(0xFF5AAEE8)
-                          : Colors.white24,
-                    ),
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.shuffle_rounded,
-                          size: 16,
-                          color: _botSideChoice == BotSideChoice.random
-                              ? const Color(0xFF8FD0FF)
-                              : Colors.white70,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Random',
-                          style: TextStyle(
-                            color: _botSideChoice == BotSideChoice.random
-                                ? const Color(0xFF8FD0FF)
-                                : Colors.white70,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    onSelected: (_) {
-                      setState(() => _botSideChoice = BotSideChoice.random);
-                    },
-                  ),
-                  ChoiceChip(
-                    selected: _botSideChoice == BotSideChoice.black,
-                    selectedColor: const Color(0xFF222933),
-                    side: BorderSide(
-                      color: _botSideChoice == BotSideChoice.black
-                          ? const Color(0xFF49576B)
-                          : Colors.white24,
-                    ),
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _pieceImage('p_b', width: 16, height: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Black',
-                          style: TextStyle(
-                            color: _botSideChoice == BotSideChoice.black
-                                ? Colors.white
-                                : Colors.white70,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    onSelected: (_) {
-                      setState(() => _botSideChoice = BotSideChoice.black);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: FilledButton.icon(
-                icon: const Icon(Icons.smart_toy_outlined),
-                label: Text('Start Vs ${selectedBot.name}'),
-                onPressed: () {
-                  unawaited(
-                    _startBotMatch(
-                      bot: selectedBot,
-                      sideChoice: _botSideChoice,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildGambitQuizScreen() {
     final gambits = _uniqueGambits();
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final quizPadding = isLandscape
+        ? EdgeInsets.fromLTRB(
+            16 + media.padding.left,
+            12 + media.padding.top,
+            16 + media.padding.right,
+            16 + media.padding.bottom,
+          )
+        : const EdgeInsets.fromLTRB(16, 12, 16, 16);
     final hasQuizBoard =
         _quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty;
     final revealContinuation =
-      hasQuizBoard &&
-      (_quizMode == GambitQuizMode.guessName || _quizAnswered);
+        hasQuizBoard &&
+        (_quizMode == GambitQuizMode.guessName || _quizAnswered);
     final isCorrectAnswer =
         _quizAnswered && _quizSelectedIndex == _quizCorrectIndex;
+    final sideBySideLayout =
+        isLandscape && hasQuizBoard && media.size.width >= 700;
 
     if (!_quizSessionStarted) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        padding: quizPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -6143,7 +6578,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 ),
                 const SizedBox(width: 6),
                 const Text(
-                  'Gambit Puzzles',
+                  'Opening Puzzles',
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
                 ),
                 const Spacer(),
@@ -6256,61 +6691,102 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: QuizDifficulty.values.map((difficulty) {
-                      final selected = _quizDifficulty == difficulty;
-                      final color = _quizDifficultyColor(difficulty);
-                      return ChoiceChip(
-                        label: Text(_quizDifficultyLabel(difficulty)),
-                        selected: selected,
-                        selectedColor: color.withValues(alpha: 0.2),
-                        side: BorderSide(
-                          color: selected
-                              ? color.withValues(alpha: 0.9)
-                              : Colors.white24,
+                    children: [
+                      ...QuizDifficulty.values.map((difficulty) {
+                        final selected = _quizDifficulty == difficulty;
+                        final color = _quizDifficultyColor(difficulty);
+                        return ChoiceChip(
+                          label: Text(_quizDifficultyLabel(difficulty)),
+                          selected: selected,
+                          selectedColor: color.withValues(alpha: 0.2),
+                          side: BorderSide(
+                            color: selected
+                                ? color.withValues(alpha: 0.9)
+                                : Colors.white24,
+                          ),
+                          labelStyle: TextStyle(
+                            color: selected ? color : Colors.white70,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                          onSelected: (_) => _setQuizDifficulty(difficulty),
+                        );
+                      }),
+                      if (isLandscape) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 6,
+                          ),
+                          child: Text(
+                            'Questions',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                        labelStyle: TextStyle(
-                          color: selected ? color : Colors.white70,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                        onSelected: (_) => _setQuizDifficulty(difficulty),
-                      );
-                    }).toList(),
+                        ...[10, 15, 20].map((target) {
+                          final selected = _quizQuestionsTarget == target;
+                          return ChoiceChip(
+                            label: Text('$target'),
+                            selected: selected,
+                            selectedColor: const Color(
+                              0xFFD8B640,
+                            ).withValues(alpha: 0.20),
+                            side: BorderSide(
+                              color: selected
+                                  ? const Color(0xFFD8B640)
+                                  : Colors.white24,
+                            ),
+                            labelStyle: TextStyle(
+                              color: selected
+                                  ? const Color(0xFFE4CA79)
+                                  : Colors.white70,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            onSelected: (_) => _setQuizQuestionTarget(target),
+                          );
+                        }),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Questions',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontWeight: FontWeight.w600,
+                  if (!isLandscape) ...[
+                    const Text(
+                      'Questions',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  Wrap(
-                    spacing: 8,
-                    children: [10, 15, 20].map((target) {
-                      final selected = _quizQuestionsTarget == target;
-                      return ChoiceChip(
-                        label: Text('$target'),
-                        selected: selected,
-                        selectedColor: const Color(
-                          0xFFD8B640,
-                        ).withValues(alpha: 0.20),
-                        side: BorderSide(
-                          color: selected
-                              ? const Color(0xFFD8B640)
-                              : Colors.white24,
-                        ),
-                        labelStyle: TextStyle(
-                          color: selected
-                              ? const Color(0xFFE4CA79)
-                              : Colors.white70,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        onSelected: (_) => _setQuizQuestionTarget(target),
-                      );
-                    }).toList(),
-                  ),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 8,
+                      children: [10, 15, 20].map((target) {
+                        final selected = _quizQuestionsTarget == target;
+                        return ChoiceChip(
+                          label: Text('$target'),
+                          selected: selected,
+                          selectedColor: const Color(
+                            0xFFD8B640,
+                          ).withValues(alpha: 0.20),
+                          side: BorderSide(
+                            color: selected
+                                ? const Color(0xFFD8B640)
+                                : Colors.white24,
+                          ),
+                          labelStyle: TextStyle(
+                            color: selected
+                                ? const Color(0xFFE4CA79)
+                                : Colors.white70,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          onSelected: (_) => _setQuizQuestionTarget(target),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   Row(
                     children: [
@@ -6356,20 +6832,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       );
     }
 
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-
-    Widget buildQuizBoardCard() {
+    Widget buildQuizBoardCard({double? maxBoardSize}) {
       final reverse =
           _perspective == BoardPerspective.black ||
           (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
       final visibleArrows = !_quizAnswered
-        ? _quizContinuation
-        : _quizContinuation.take(
-          _quizPlayArrowCount == 0
-            ? _quizContinuation.length
-            : _quizPlayArrowCount,
-        ).toList();
+          ? _quizContinuation
+          : _quizContinuation
+                .take(
+                  _quizPlayArrowCount == 0
+                      ? _quizContinuation.length
+                      : _quizPlayArrowCount,
+                )
+                .toList();
 
       return Container(
         width: double.infinity,
@@ -6403,85 +6878,91 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               ],
             ),
             const SizedBox(height: 8),
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white10, width: 1.2),
-                ),
-                child: LayoutBuilder(
-                  builder: (context, bc) {
-                    final sqSize = bc.maxWidth / 8;
-                    final pieceSize = sqSize;
-                    Offset? flyFromPx, flyToPx;
-                    if (_quizFlyFrom != null && _quizFlyTo != null) {
-                      flyFromPx = _squareToGridOffset(
-                        _quizFlyFrom!,
-                        bc.maxWidth,
-                        reverse,
-                      );
-                      flyToPx = _squareToGridOffset(
-                        _quizFlyTo!,
-                        bc.maxWidth,
-                        reverse,
-                      );
-                    }
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _buildQuizBoard(),
-                        if (revealContinuation && visibleArrows.isNotEmpty)
-                          AnimatedBuilder(
-                            animation: _pulseController,
-                            builder: (context, child) => IgnorePointer(
-                              child: CustomPaint(
-                                size: Size.infinite,
-                                painter: EnergyArrowPainter(
-                                  lines: visibleArrows,
-                                  bestEval: 0,
-                                  progress: _pulseController.value,
-                                  reverse: reverse,
-                                  showSequenceNumbers: true,
-                                  overrideColor: const Color(0xFFB8BFC8),
-                                  staticArrowStyle: true,
+            Center(
+              child: SizedBox(
+                width: maxBoardSize,
+                height: maxBoardSize,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white10, width: 1.2),
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, bc) {
+                        final sqSize = bc.maxWidth / 8;
+                        final pieceSize = sqSize;
+                        Offset? flyFromPx, flyToPx;
+                        if (_quizFlyFrom != null && _quizFlyTo != null) {
+                          flyFromPx = _squareToGridOffset(
+                            _quizFlyFrom!,
+                            bc.maxWidth,
+                            reverse,
+                          );
+                          flyToPx = _squareToGridOffset(
+                            _quizFlyTo!,
+                            bc.maxWidth,
+                            reverse,
+                          );
+                        }
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _buildQuizBoard(),
+                            if (revealContinuation && visibleArrows.isNotEmpty)
+                              AnimatedBuilder(
+                                animation: _pulseController,
+                                builder: (context, child) => IgnorePointer(
+                                  child: CustomPaint(
+                                    size: Size.infinite,
+                                    painter: EnergyArrowPainter(
+                                      lines: visibleArrows,
+                                      bestEval: 0,
+                                      progress: _pulseController.value,
+                                      reverse: reverse,
+                                      showSequenceNumbers: true,
+                                      overrideColor: const Color(0xFFB8BFC8),
+                                      staticArrowStyle: true,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        if (flyFromPx != null &&
-                            flyToPx != null &&
-                            _quizFlyPiece != null)
-                          Positioned(
-                            left:
-                                ui.lerpDouble(
-                                  flyFromPx.dx,
-                                  flyToPx.dx,
-                                  _quizFlyProgress.clamp(0.0, 1.0),
-                                )! -
-                                (pieceSize / 2),
-                            top:
-                                ui.lerpDouble(
-                                  flyFromPx.dy,
-                                  flyToPx.dy,
-                                  _quizFlyProgress.clamp(0.0, 1.0),
-                                )! -
-                                (pieceSize / 2),
-                            width: pieceSize,
-                            height: pieceSize,
-                            child: IgnorePointer(
-                              child: Center(
-                                child: _pieceImage(
-                                  _quizFlyPiece!,
-                                  width: pieceSize,
-                                  height: pieceSize,
+                            if (flyFromPx != null &&
+                                flyToPx != null &&
+                                _quizFlyPiece != null)
+                              Positioned(
+                                left:
+                                    ui.lerpDouble(
+                                      flyFromPx.dx,
+                                      flyToPx.dx,
+                                      _quizFlyProgress.clamp(0.0, 1.0),
+                                    )! -
+                                    (pieceSize / 2),
+                                top:
+                                    ui.lerpDouble(
+                                      flyFromPx.dy,
+                                      flyToPx.dy,
+                                      _quizFlyProgress.clamp(0.0, 1.0),
+                                    )! -
+                                    (pieceSize / 2),
+                                width: pieceSize,
+                                height: pieceSize,
+                                child: IgnorePointer(
+                                  child: Center(
+                                    child: _pieceImage(
+                                      _quizFlyPiece!,
+                                      width: pieceSize,
+                                      height: pieceSize,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -6592,7 +7073,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      padding: quizPadding,
       child: Column(
         children: [
           Row(
@@ -6633,17 +7114,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final sideBySide =
-                    isLandscape && hasQuizBoard && constraints.maxWidth >= 700;
-
-                if (sideBySide) {
+                if (sideBySideLayout) {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
                         flex: 5,
-                        child: SingleChildScrollView(
-                          child: buildQuizBoardCard(),
+                        child: LayoutBuilder(
+                          builder: (context, leftConstraints) {
+                            const boardCardChromeHeight = 62.0;
+                            final boardSize = max(
+                              0.0,
+                              min(
+                                leftConstraints.maxWidth - 24,
+                                leftConstraints.maxHeight -
+                                    boardCardChromeHeight,
+                              ),
+                            );
+                            return buildQuizBoardCard(maxBoardSize: boardSize);
+                          },
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -6658,6 +7147,22 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 children: buildQuizOptionButtons(),
                               ),
                             ),
+                            if (_quizFeedback.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 2,
+                                  bottom: 8,
+                                ),
+                                child: Text(
+                                  _quizFeedback,
+                                  style: TextStyle(
+                                    color: isCorrectAnswer
+                                        ? const Color(0xFF7EDC8A)
+                                        : const Color(0xFFFFB26A),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -6676,7 +7181,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               },
             ),
           ),
-          if (_quizFeedback.isNotEmpty)
+          if (_quizFeedback.isNotEmpty && !sideBySideLayout)
             Padding(
               padding: const EdgeInsets.only(top: 2, bottom: 8),
               child: Text(
@@ -6880,8 +7385,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
     final boardState = _quizPlayBoard.isNotEmpty
-      ? _quizPlayBoard
-      : _quizBoardState;
+        ? _quizPlayBoard
+        : _quizBoardState;
     final reverse =
         _perspective == BoardPerspective.black ||
         (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
@@ -6909,9 +7414,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           decoration: BoxDecoration(
             color: isDark ? darkSquareColor : lightSquareColor,
           ),
-          child: piece == null
-              ? null
-              : Center(child: _pieceImage(piece)),
+          child: piece == null ? null : Center(child: _pieceImage(piece)),
         );
       },
     );
@@ -6919,9 +7422,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Widget _buildAnalysisBoardScaffold(BuildContext context) {
     bool reverse = _playVsBot
-      ? !_humanPlaysWhite
-      : (_perspective == BoardPerspective.black) ||
-        (_perspective == BoardPerspective.auto && !_isWhiteTurn);
+        ? !_humanPlaysWhite
+        : (_perspective == BoardPerspective.black) ||
+              (_perspective == BoardPerspective.auto && !_isWhiteTurn);
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
 
@@ -7018,10 +7521,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                 Expanded(
                                                   flex: 7,
                                                   child: LayoutBuilder(
-                                                    builder: (
-                                                      context,
-                                                      boardBox,
-                                                    ) {
+                                                    builder: (context, boardBox) {
                                                       final boardSize = max(
                                                         0.0,
                                                         min(
@@ -7063,56 +7563,78 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                 SizedBox(
                                                   width: sideWidth,
                                                   child: LayoutBuilder(
-                                                    builder: (
-                                                      context,
-                                                      sideConstraints,
-                                                    ) {
-                                                        final suggestionsHeight =
+                                                    builder: (context, sideConstraints) {
+                                                      final suggestionsHeight =
                                                           (sideConstraints
-                                                              .maxHeight *
-                                                            (_playVsBot
-                                                              ? 0.62
-                                                              : 0.46))
-                                                            .clamp(96.0, 250.0);
+                                                                      .maxHeight *
+                                                                  (_playVsBot
+                                                                      ? 0.62
+                                                                      : 0.46))
+                                                              .clamp(
+                                                                96.0,
+                                                                250.0,
+                                                              );
                                                       final historyHeight =
                                                           (sideConstraints
-                                                                  .maxHeight *
-                                                              0.16)
-                                                              .clamp(46.0, 72.0);
+                                                                      .maxHeight *
+                                                                  0.16)
+                                                              .clamp(
+                                                                46.0,
+                                                                72.0,
+                                                              );
                                                       return Column(
                                                         crossAxisAlignment:
-                                                            CrossAxisAlignment.start,
+                                                            CrossAxisAlignment
+                                                                .start,
                                                         children: [
-                                                          if (!_playVsBot && _selectedGambit != null)
+                                                          if (!_playVsBot &&
+                                                              _selectedGambit !=
+                                                                  null)
                                                             Padding(
-                                                              padding: const EdgeInsets.only(
-                                                                bottom: 6,
-                                                              ),
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    bottom: 6,
+                                                                  ),
                                                               child: Text(
-                                                                _selectedGambit!.name,
+                                                                _selectedGambit!
+                                                                    .name,
                                                                 style: const TextStyle(
                                                                   fontSize: 13,
-                                                                  fontWeight: FontWeight.w700,
-                                                                  color: Color(0xFFD8B640),
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                  color: Color(
+                                                                    0xFFD8B640,
+                                                                  ),
                                                                 ),
                                                                 maxLines: 2,
-                                                                overflow: TextOverflow.ellipsis,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
                                                               ),
                                                             )
-                                                          else if (!_playVsBot && _currentOpening.isNotEmpty)
+                                                          else if (!_playVsBot &&
+                                                              _currentOpening
+                                                                  .isNotEmpty)
                                                             Padding(
-                                                              padding: const EdgeInsets.only(
-                                                                bottom: 6,
-                                                              ),
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    bottom: 6,
+                                                                  ),
                                                               child: Text(
                                                                 _currentOpening,
                                                                 style: const TextStyle(
                                                                   fontSize: 13,
-                                                                  fontWeight: FontWeight.w700,
-                                                                  color: Colors.white70,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                  color: Colors
+                                                                      .white70,
                                                                 ),
                                                                 maxLines: 2,
-                                                                overflow: TextOverflow.ellipsis,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
                                                               ),
                                                             ),
                                                           _buildSuggestedMovesList(
@@ -7126,8 +7648,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                                     8,
                                                                   )
                                                                 : const EdgeInsets.symmetric(
-                                                                    vertical: 10,
-                                                                    horizontal: 20,
+                                                                    vertical:
+                                                                        10,
+                                                                    horizontal:
+                                                                        20,
                                                                   ),
                                                           ),
                                                           if (!_playVsBot)
@@ -7268,7 +7792,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               children: [
                 Padding(
                   padding: EdgeInsets.only(
-                    right: (_playVsBot && selectedBot != null) ? (46 * scale) : 0,
+                    right: (_playVsBot && selectedBot != null)
+                        ? (46 * scale)
+                        : 0,
                   ),
                   child: Align(
                     alignment: Alignment.centerLeft,
@@ -7317,7 +7843,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: const Color(0xFF9ED8FF).withValues(alpha: 0.38),
+                          color: const Color(
+                            0xFF9ED8FF,
+                          ).withValues(alpha: 0.38),
                         ),
                         boxShadow: [
                           BoxShadow(
@@ -7329,7 +7857,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       ),
                       child: ClipOval(
                         child: selectedBot.avatarAsset != null
-                            ? Image.asset(selectedBot.avatarAsset!, fit: BoxFit.cover)
+                            ? Image.asset(
+                                selectedBot.avatarAsset!,
+                                fit: BoxFit.cover,
+                              )
                             : Container(
                                 color: const Color(0xFF10182A),
                                 alignment: Alignment.center,
@@ -7383,6 +7914,35 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (!_playVsBot) ...[
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _analysisEditMode = !_analysisEditMode;
+                          _holdSelectedFrom = null;
+                          _gambitSelectedFrom = null;
+                          _legalTargets.clear();
+                          _gambitAvailableTargets.clear();
+                        });
+                      },
+                      icon: Text(
+                        _analysisEditMode ? '🛠️' : '🔒',
+                        style: TextStyle(fontSize: 14 * scale),
+                      ),
+                      tooltip: _analysisEditMode
+                          ? 'Edit mode on (any move allowed)'
+                          : 'Locked mode (legal moves only)',
+                      splashRadius: 14 * scale,
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints.tightFor(
+                        width: 20 * scale,
+                        height: 20 * scale,
+                      ),
+                    ),
+                    SizedBox(width: 4 * scale),
+                  ],
+                  SizedBox(width: 4 * scale),
                   Text(
                     'Depth $_currentDepth',
                     style: TextStyle(
@@ -7499,12 +8059,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           final isHoldSelected = _holdSelectedFrom == sq;
           final isLegalTarget = _legalTargets.contains(sq);
           final isGambitAvailableTarget = _gambitAvailableTargets.contains(sq);
+          final showYellowGambitDots =
+              _openingMode == OpeningMode.yellowGlow && isGambitAvailableTarget;
+          final showLockedLegalDots =
+              !_analysisEditMode && _openingMode != OpeningMode.yellowGlow;
+          final showTargetDot =
+              isLegalTarget && (showYellowGambitDots || showLockedLegalDots);
           final isCaptureTarget = isLegalTarget && p != null;
           const legalDotBase = Color(0xFF9EA8BA);
 
           return DragTarget<String>(
             onAcceptWithDetails: (d) {
-              if (_openingMode == OpeningMode.yellowGlow && _selectedGambit == null) {
+              if (_openingMode == OpeningMode.yellowGlow &&
+                  _selectedGambit == null) {
                 _handleGambitDragDrop(d.data, sq);
                 return;
               }
@@ -7519,24 +8086,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               ),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => (_openingMode == OpeningMode.yellowGlow && _selectedGambit == null)
+                onTap: () =>
+                    (_openingMode == OpeningMode.yellowGlow &&
+                        _selectedGambit == null)
                     ? _handleBoardTap(sq)
                     : _handleHoldTap(sq),
                 onLongPress: () {
                   if (_openingMode != OpeningMode.off) return;
-                  if (!_isCurrentTurnPiece(p)) return;
+                  if (!_analysisEditMode && !_isCurrentTurnPiece(p)) return;
                   setState(() {
                     _holdSelectedFrom = sq;
                     _gambitSelectedFrom = null;
                     _legalTargets
                       ..clear()
-                      ..addAll(_legalMovesFrom(sq));
+                      ..addAll(
+                        _analysisEditMode ? <String>{} : _legalMovesFrom(sq),
+                      );
                   });
                 },
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (isLegalTarget)
+                    if (showTargetDot)
                       Center(
                         child: Container(
                           width: isCaptureTarget ? 26 : 12,
@@ -7545,25 +8116,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             shape: BoxShape.circle,
                             color: isCaptureTarget
                                 ? Colors.transparent
-                                : (_openingMode != OpeningMode.off
-                                      ? (isGambitAvailableTarget
-                                            ? (_openingMode == OpeningMode.yellowGlow
-                                                  ? const Color(0xFFFFD166)
-                                                  : const Color(0xFF5AAEE8))
-                                                .withValues(alpha: 0.55)
-                                            : legalDotBase.withValues(
-                                                alpha: 0.6,
-                                              ))
+                                : (showYellowGambitDots
+                                      ? const Color(
+                                          0xFFFFD166,
+                                        ).withValues(alpha: 0.55)
                                       : legalDotBase.withValues(alpha: 0.6)),
                             border: isCaptureTarget
                                 ? Border.all(
-                                    color:
-                                        (_openingMode != OpeningMode.off &&
-                                            isGambitAvailableTarget)
-                                        ? (_openingMode == OpeningMode.yellowGlow
-                                              ? const Color(0xFFFFD166)
-                                              : const Color(0xFF5AAEE8))
-                                            .withValues(alpha: 0.75)
+                                    color: showYellowGambitDots
+                                        ? const Color(
+                                            0xFFFFD166,
+                                          ).withValues(alpha: 0.75)
                                         : legalDotBase.withValues(alpha: 0.8),
                                     width: 2,
                                   )
@@ -7577,7 +8140,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                           data: sq,
                           feedback: _buildPieceGlow(p),
                           onDragStarted: () {
-                            if (!_isCurrentTurnPiece(p)) return;
+                            if (_openingMode == OpeningMode.yellowGlow &&
+                                !_isCurrentTurnPiece(p)) {
+                              return;
+                            }
+                            if (_openingMode != OpeningMode.yellowGlow &&
+                                !_analysisEditMode &&
+                                !_isCurrentTurnPiece(p)) {
+                              return;
+                            }
                             setState(() {
                               if (_openingMode == OpeningMode.yellowGlow) {
                                 _selectGambitSource(sq);
@@ -7586,7 +8157,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 _gambitSelectedFrom = null;
                                 _legalTargets
                                   ..clear()
-                                  ..addAll(_legalMovesFrom(sq));
+                                  ..addAll(
+                                    _analysisEditMode
+                                        ? <String>{}
+                                        : _legalMovesFrom(sq),
+                                  );
                                 _gambitAvailableTargets.clear();
                               }
                             });
@@ -7664,9 +8239,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Widget _buildPieceGlow(String p) {
     final glowColor = _openingMode == OpeningMode.yellowGlow
-        ? const Color(0xFFFFD166)  // Yellow for gambit/opening selection
-        : const Color(0xFF5AAEE8);  // Blue for opening list mode
-    
+        ? const Color(0xFFFFD166) // Yellow for gambit/opening selection
+        : const Color(0xFF5AAEE8); // Blue for opening list mode
+
     return Container(
       width: 70,
       height: 70,
@@ -7701,11 +8276,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     if (selectedGlowColor == null) {
       return _pieceImage(piece);
     }
-    
+
     final glowColor = selectedGlowColor == 'yellow'
         ? const Color(0xFFFFD166)
         : const Color(0xFF5AAEE8);
-    
+
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -7942,10 +8517,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildActionArea({
-    double compactBottom = 20,
-    double horizontal = 20,
-  }) {
+  Widget _buildActionArea({double compactBottom = 20, double horizontal = 20}) {
     return Padding(
       padding: EdgeInsets.only(
         bottom: compactBottom,
@@ -7970,15 +8542,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   final Color activeColor = _openingButtonFlashRed
                       ? Colors.redAccent
                       : _openingMode == OpeningMode.yellowGlow
-                          ? const Color(0xFFFFD166)
-                          : const Color(0xFF5AAEE8);
+                      ? const Color(0xFFFFD166)
+                      : const Color(0xFF5AAEE8);
                   final bool isOn =
                       _openingButtonFlashRed || _openingMode != OpeningMode.off;
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isOn ? const Color(0xFF1A1B22) : Colors.transparent,
+                      color: isOn
+                          ? const Color(0xFF1A1B22)
+                          : Colors.transparent,
                       boxShadow: isOn
                           ? [
                               BoxShadow(
@@ -7998,10 +8572,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       color: _openingButtonFlashRed
                           ? (blink ? Colors.redAccent : Colors.white54)
                           : _openingMode == OpeningMode.yellowGlow
-                              ? const Color(0xFFFFD166)
-                              : _openingMode == OpeningMode.blueGlow
-                                  ? const Color(0xFF5AAEE8)
-                                  : Colors.white54,
+                          ? const Color(0xFFFFD166)
+                          : _openingMode == OpeningMode.blueGlow
+                          ? const Color(0xFF5AAEE8)
+                          : Colors.white54,
                     ),
                   );
                 },
@@ -8264,9 +8838,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             yellow = Offset(cos(angle) * orbit, sin(angle) * orbit);
             blue = Offset(cos(angle + pi) * orbit, sin(angle + pi) * orbit);
             coreIntensity = 0.9 + (0.2 * launchBurstWindow);
-            orbOpacity = 1.0 - Curves.easeIn.transform(
-              ((launchT - 0.06) / 0.18).clamp(0.0, 1.0),
-            );
+            orbOpacity =
+                1.0 -
+                Curves.easeIn.transform(
+                  ((launchT - 0.06) / 0.18).clamp(0.0, 1.0),
+                );
           }
 
           final ignition = Curves.easeOut.transform(
@@ -8536,7 +9112,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                               'ECO data (MIT)',
                             ),
                             _buildCreditRow('Platform', 'Flutter / Dart'),
-                            _buildCreditRow('Music', 'Created with Suno'),
+                            _buildCreditRow(
+                              'Main Menu Theme',
+                              'Created with Suno',
+                            ),
                             _buildCreditRow(
                               'Sound FX',
                               'Coin Drop by VSokorelos (Freesound)',
@@ -8544,6 +9123,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             _buildCreditRow(
                               'Sound FX',
                               'Coin and Money Bag 3 by Floraphonic',
+                            ),
+                            _buildCreditRow(
+                              'Sound FX',
+                              'Chess Pieces by simone_ds (Freesound)',
                             ),
                             const SizedBox(height: 12),
                             Container(
@@ -8734,7 +9317,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             backgroundColor: Colors.transparent,
             elevation: 0,
             child: Container(
-              constraints: BoxConstraints(maxWidth: 700, maxHeight: dialogHeight),
+              constraints: BoxConstraints(
+                maxWidth: 700,
+                maxHeight: dialogHeight,
+              ),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
@@ -8758,12 +9344,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                     decoration: BoxDecoration(
                       border: Border(
-                        bottom: BorderSide(color: accent.withValues(alpha: 0.24)),
+                        bottom: BorderSide(
+                          color: accent.withValues(alpha: 0.24),
+                        ),
                       ),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.description_outlined, color: accent, size: 18),
+                        Icon(
+                          Icons.description_outlined,
+                          color: accent,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -8864,11 +9456,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 );
                               }
 
-                              if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                              if (trimmed.startsWith('- ') ||
+                                  trimmed.startsWith('* ')) {
                                 return Padding(
-                                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                                  padding: const EdgeInsets.only(
+                                    left: 4,
+                                    bottom: 6,
+                                  ),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         '• ',
@@ -8882,7 +9479,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                         child: SelectableText(
                                           trimmed.substring(2),
                                           style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.88),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.88,
+                                            ),
                                             fontSize: 12.35,
                                             height: 1.42,
                                           ),
@@ -9357,8 +9956,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _perspectiveOption('White', BoardPerspective.white, setL),
-                        _perspectiveOption('Black', BoardPerspective.black, setL),
+                        _perspectiveOption(
+                          'White',
+                          BoardPerspective.white,
+                          setL,
+                        ),
+                        _perspectiveOption(
+                          'Black',
+                          BoardPerspective.black,
+                          setL,
+                        ),
                         _perspectiveOption('Auto', BoardPerspective.auto, setL),
                       ],
                     ),
@@ -9394,75 +10001,88 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                           .map((mode) => _pieceThemeOption(mode, setL))
                           .toList(),
                     ),
-                    if (_availableBoardThemes.length < BoardThemeMode.values.length ||
-                        _availablePieceThemes.length < PieceThemeMode.values.length) ...
-                      [
-                        const SizedBox(height: 14),
-                        InkWell(
-                          onTap: () {
-                            Navigator.of(ctx).pop();
-                            Future.microtask(
-                              () => _openStore(initialSection: StoreSection.themes),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(14),
-                          child: Ink(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                    if (_availableBoardThemes.length <
+                            BoardThemeMode.values.length ||
+                        _availablePieceThemes.length <
+                            PieceThemeMode.values.length) ...[
+                      const SizedBox(height: 14),
+                      InkWell(
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          Future.microtask(
+                            () =>
+                                _openStore(initialSection: StoreSection.themes),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: Ink(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF2D6EF2), Color(0xFF1F56C8)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
                             ),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF2D6EF2), Color(0xFF1F56C8)],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF89AEFF,
+                              ).withValues(alpha: 0.5),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF2A6CF0,
+                                ).withValues(alpha: 0.35),
+                                blurRadius: 14,
+                                offset: const Offset(0, 5),
                               ),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: const Color(0xFF89AEFF).withValues(alpha: 0.5),
+                            ],
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 18,
+                                color: Colors.white,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF2A6CF0).withValues(alpha: 0.35),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.auto_awesome_rounded, size: 18, color: Colors.white),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Get More Themes',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Get More Themes',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
                                       ),
-                                      SizedBox(height: 1),
-                                      Text(
-                                        'Open Theme Store',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 11,
-                                        ),
+                                    ),
+                                    SizedBox(height: 1),
+                                    Text(
+                                      'Open Theme Store',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                                Icon(Icons.chevron_right_rounded, color: Colors.white),
-                              ],
-                            ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: Colors.white,
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -9766,10 +10386,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         _applySuggestionCount(v.toInt());
                         setL(() {});
                       },
-                      onChangeEnd: (v) => _applySuggestionCount(
-                        v.toInt(),
-                        persist: true,
-                      ),
+                      onChangeEnd: (v) =>
+                          _applySuggestionCount(v.toInt(), persist: true),
                     ),
                   ],
                 ),
@@ -10069,7 +10687,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         builder: (ctx, setL) => SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
             20,
-            12,
+            12 + MediaQuery.of(ctx).padding.top,
             20,
             MediaQuery.of(ctx).viewInsets.bottom + 20,
           ),
@@ -10744,10 +11362,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       return tinted;
     }
 
-    final outlineWidth =
-        width == null ? null : width + blackOutlineOverflowPx;
-    final outlineHeight =
-        height == null ? null : height + blackOutlineOverflowPx;
+    final outlineWidth = width == null ? null : width + blackOutlineOverflowPx;
+    final outlineHeight = height == null
+        ? null
+        : height + blackOutlineOverflowPx;
     final outlineCenterShift = Offset(
       -blackOutlineOverflowPx / 2,
       -blackOutlineOverflowPx / 2,
@@ -10870,6 +11488,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _introAudioPlayer.dispose();
     _menuAudioPlayer.dispose();
     _sfxAudioPlayer.dispose();
+    for (final player in _boardSfxPlayers) {
+      player.dispose();
+    }
     super.dispose();
   }
 }
@@ -10903,6 +11524,16 @@ class EnergyArrowPainter extends CustomPainter {
     return Colors.redAccent;
   }
 
+  Color _darkenColor(Color color, double amount) {
+    final factor = (1.0 - amount).clamp(0.0, 1.0);
+    return Color.fromARGB(
+      color.alpha,
+      (color.red * factor).round().clamp(0, 255),
+      (color.green * factor).round().clamp(0, 255),
+      (color.blue * factor).round().clamp(0, 255),
+    );
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     const double boardInset = 2.0;
@@ -10919,33 +11550,44 @@ class EnergyArrowPainter extends CustomPainter {
       final unitY = dy / distance;
       final lineEnd = Offset(end.dx - unitX * 8, end.dy - unitY * 8);
 
-        final bool isGambitMode = showSequenceNumbers;
-        final bool isFirstArrow = l.multiPv == 1;
-        final bool useStaticStyle = staticArrowStyle && isGambitMode;
-        final Color baseColor =
+      final bool isGambitMode = showSequenceNumbers;
+      final bool isFirstArrow = l.multiPv == 1;
+      final bool useStaticStyle = staticArrowStyle && isGambitMode;
+      final Color baseColor =
           overrideColor ?? _getRelativeColor(l.eval, l.multiPv);
 
       // Opacity fades with sequence depth in gambit mode
-        final double alphaScale = useStaticStyle
+      final double alphaScale = useStaticStyle
           ? 0.92
           : (isGambitMode
-            ? (isFirstArrow
-                ? 1.0
-                : max(0.45, 1.0 - (l.multiPv - 1) * 0.10))
-            : 1.0);
+                ? (isFirstArrow ? 1.0 : max(0.45, 1.0 - (l.multiPv - 1) * 0.10))
+                : 1.0);
 
-        final double baseStrokeWidth = useStaticStyle
+      final double baseStrokeWidth = useStaticStyle
           ? 4.8
           : (isGambitMode
-            ? (isFirstArrow ? 9.0 : (l.multiPv == 2 ? 5.5 : 4.5))
-            : 4.6);
-        final double strokeWidth = (!useStaticStyle && !isGambitMode && isFirstArrow)
+                ? (isFirstArrow ? 9.0 : (l.multiPv == 2 ? 5.5 : 4.5))
+                : 4.6);
+      final double strokeWidth =
+          (!useStaticStyle && !isGambitMode && isFirstArrow)
           ? (baseStrokeWidth * 1.30)
           : baseStrokeWidth;
 
       final path = Path()
         ..moveTo(start.dx, start.dy)
         ..lineTo(lineEnd.dx, lineEnd.dy);
+
+      final outlineStrokeWidth = strokeWidth + (useStaticStyle ? 1.8 : 1.6);
+      final outlineColor = _darkenColor(
+        baseColor,
+        0.15,
+      ).withValues(alpha: useStaticStyle ? 0.72 : 0.45 * alphaScale);
+      final outlinePaint = Paint()
+        ..strokeWidth = outlineStrokeWidth
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke
+        ..color = outlineColor;
+      canvas.drawPath(path, outlinePaint);
 
       // Base line (solid-ish, always readable)
       final basePaint = Paint()
@@ -11023,9 +11665,9 @@ class EnergyArrowPainter extends CustomPainter {
       canvas.drawPath(
         headPath,
         Paint()
-          ..color = solidHeadColor
+          ..color = _darkenColor(solidHeadColor, 0.15)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2
+          ..strokeWidth = 1.4
           ..strokeJoin = StrokeJoin.round,
       );
 
@@ -11077,13 +11719,13 @@ class EnergyArrowPainter extends CustomPainter {
           markerCenter,
           badgeRadius,
           Paint()
-          ..color = useStaticStyle
-            ? baseColor
-            : (isFirstArrow
-                ? const Color(0xFFFFD700)
-                : baseColor.withValues(alpha: alphaScale))
+            ..color = useStaticStyle
+                ? baseColor
+                : (isFirstArrow
+                      ? const Color(0xFFFFD700)
+                      : baseColor.withValues(alpha: alphaScale))
             ..style = PaintingStyle.stroke
-          ..strokeWidth = useStaticStyle ? 1.8 : (isFirstArrow ? 2.5 : 1.5),
+            ..strokeWidth = useStaticStyle ? 1.8 : (isFirstArrow ? 2.5 : 1.5),
         );
 
         final textPainter = TextPainter(

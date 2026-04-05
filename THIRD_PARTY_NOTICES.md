@@ -10,9 +10,9 @@ This project is designed to support the Stockfish chess engine for local analysi
 - Website: https://stockfishchess.org/
 - Source code: https://github.com/official-stockfish/Stockfish
 - License: GNU General Public License v3.0 (GPL-3.0)
-- Project integration: Optional local engine binary expected at `engine/stockfish.exe` for native analysis workflows
+- Project integration: Optional local Stockfish mechanism may be used for native analysis workflows (for example, platform-specific integrations/build artifacts).
 
-This repository does not currently distribute `engine/stockfish.exe`.
+This repository does not distribute the Stockfish mechanism/binaries.
 
 ## 2. Opening Database Files
 
@@ -52,6 +52,8 @@ Each third-party package remains licensed under its own terms. For complete and 
 
 ## 4. Audio Asset Attribution
 
+- Main menu theme music: Created with Suno.
+
 This project includes third-party audio assets used for coin and rewards feedback.
 
 - Asset: `assets/sounds/coin.mp3`
@@ -65,3 +67,9 @@ This project includes third-party audio assets used for coin and rewards feedbac
 - Creator: Floraphonic
 - License / usage note: Free for use. Royalty Free Audio
 - Source website: https://www.floraphonic.com/
+
+- Assets: `assets/sounds/move1.mp3` – `move8.mp3`, `assets/sounds/take1.mp3`
+- Title: `Chess-pieces, Owi, Boardgames`
+- Creator: simone_ds
+- Source platform: Freesound
+- Description / usage note: Chess pieces sound effects. Free for use.
