@@ -56,6 +56,12 @@ Each third-party package remains licensed under its own terms. For complete and 
 
 This project includes third-party audio assets used for coin and rewards feedback.
 
+- Assets: `assets/sounds/move1.mp3` – `move8.mp3`, `assets/sounds/take1.mp3`
+- Title: `Chess-pieces, Owi, Boardgames`
+- Creator: simone_ds
+- Source platform: Freesound
+- Description / usage note: Chess pieces sound effects. Free for use.
+
 - Asset: `assets/sounds/coin.mp3`
 - Title: `Coin Drop`
 - Creator: VSokorelos
@@ -67,9 +73,3 @@ This project includes third-party audio assets used for coin and rewards feedbac
 - Creator: Floraphonic
 - License / usage note: Free for use. Royalty Free Audio
 - Source website: https://www.floraphonic.com/
-
-- Assets: `assets/sounds/move1.mp3` – `move8.mp3`, `assets/sounds/take1.mp3`
-- Title: `Chess-pieces, Owi, Boardgames`
-- Creator: simone_ds
-- Source platform: Freesound
-- Description / usage note: Chess pieces sound effects. Free for use.

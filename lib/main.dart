@@ -1,14 +1,20 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'dart:math';
-import 'dart:ui' as ui;
-import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+import 'dart:ui' as ui;
+
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'puzzle_academy/providers/puzzle_academy_provider.dart';
+import 'puzzle_academy/screens/puzzle_map_screen.dart';
+import 'theme/app_theme_provider.dart';
+import 'widgets/universal_settings_sheet.dart';
 
 // --- Engine Service Abstraction ------------------------------------------------
 
@@ -30,7 +36,6 @@ class _NullEngineService extends _EngineService {
   Future<void> stop() async {}
 }
 
-/// Desktop: launches stockfish.exe as a subprocess via dart:io Process.
 class _DesktopEngineService extends _EngineService {
   Process? _process;
   StreamSubscription<String>? _sub;
@@ -57,11 +62,10 @@ class _DesktopEngineService extends _EngineService {
   }
 }
 
-/// iOS: communicates with native Swift bridge via platform channels.
 class _IosEngineService extends _EngineService {
   static const _method = MethodChannel('com.chessiq/stockfish');
   static const _event = EventChannel('com.chessiq/stockfish_output');
-  StreamSubscription? _sub;
+  StreamSubscription<dynamic>? _sub;
 
   @override
   Future<void> start(void Function(String line) onOutput) async {
@@ -70,7 +74,9 @@ class _IosEngineService extends _EngineService {
   }
 
   @override
-  void send(String cmd) => _method.invokeMethod<void>('send', cmd);
+  void send(String cmd) {
+    unawaited(_method.invokeMethod<void>('send', cmd));
+  }
 
   @override
   Future<void> stop() async {
@@ -99,7 +105,7 @@ enum PieceThemeMode { classic, ember, frost }
 
 enum StoreSection { general, themes }
 
-enum AppSection { menu, analysis, gambitQuiz, botSetup }
+enum AppSection { menu, analysis, gambitQuiz, botSetup, puzzleAcademy }
 
 enum GambitQuizMode { guessName, guessLine }
 
@@ -176,36 +182,30 @@ class ChessIQApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = ThemeData.dark();
-    final textTheme = GoogleFonts.plusJakartaSansTextTheme(base.textTheme)
-        .copyWith(
-          headlineSmall: GoogleFonts.cormorantGaramond(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-          ),
-          titleLarge: GoogleFonts.cormorantGaramond(
-            fontWeight: FontWeight.w700,
-          ),
-        );
-
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: base.copyWith(
-        scaffoldBackgroundColor: const Color(0xFF090B12),
-        textTheme: textTheme,
-        colorScheme: base.colorScheme.copyWith(
-          primary: const Color(0xFFB9A46A),
-          secondary: const Color(0xFF3F6ED8),
-          surface: const Color(0xFF10131D),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppThemeProvider>(
+          create: (_) => AppThemeProvider()..load(),
         ),
-        iconTheme: const IconThemeData(color: Color(0xFFC7CBD6)),
+        ChangeNotifierProvider<PuzzleAcademyProvider>(
+          create: (_) => PuzzleAcademyProvider()..initialize(),
+        ),
+      ],
+      child: Consumer<AppThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: themeProvider.buildTheme(Brightness.light),
+            darkTheme: themeProvider.buildTheme(Brightness.dark),
+            themeMode: themeProvider.themeMode,
+            home: const ChessAnalysisPage(),
+          );
+        },
       ),
-      home: const ChessAnalysisPage(),
     );
   }
 }
 
-// --- Enhanced Data Models ---
 class MoveRecord {
   final String notation;
   final String pieceMoved;
@@ -243,6 +243,20 @@ class EngineLine {
   final int multiPv;
 
   EngineLine(this.move, this.eval, this.depth, this.multiPv);
+
+  Map<String, dynamic> toMap() {
+    return {'move': move, 'eval': eval, 'depth': depth, 'multiPv': multiPv};
+  }
+
+  static EngineLine? fromMap(Map<dynamic, dynamic> data) {
+    final move = data['move']?.toString();
+    final eval = (data['eval'] as num?)?.toInt();
+    final depth = (data['depth'] as num?)?.toInt();
+    final multiPv = (data['multiPv'] as num?)?.toInt();
+    if (move == null || move.length < 4) return null;
+    if (eval == null || depth == null || multiPv == null) return null;
+    return EngineLine(move, eval, depth, multiPv);
+  }
 }
 
 class EcoLine {
@@ -270,6 +284,36 @@ class QuizBoardSnapshot {
     required this.whiteToMove,
     required this.shownPly,
     required this.continuation,
+  });
+}
+
+class _QuizRoundReview {
+  final GambitQuizMode mode;
+  final String prompt;
+  final String promptFocus;
+  final List<String> options;
+  final int correctIndex;
+  final int selectedIndex;
+  final String feedback;
+  final Map<String, String> boardState;
+  final List<EngineLine> continuation;
+  final bool whiteToMove;
+  final int shownPly;
+  final bool skipped;
+
+  const _QuizRoundReview({
+    required this.mode,
+    required this.prompt,
+    required this.promptFocus,
+    required this.options,
+    required this.correctIndex,
+    required this.selectedIndex,
+    required this.feedback,
+    required this.boardState,
+    required this.continuation,
+    required this.whiteToMove,
+    required this.shownPly,
+    required this.skipped,
   });
 }
 
@@ -303,7 +347,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   static const String _viewedGambitsKey = 'viewed_gambits_v1';
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
+  static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
   static const String _quizStatsKey = 'quiz_stats_v1';
+  static const String _storeRewardAdLastWatchKey =
+      'store_reward_ad_last_watch_v1';
 
   late Map<String, String> boardState;
   _EngineService? _engine;
@@ -484,6 +531,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   bool _themePackOwned = false;
   bool _piecePackOwned = false;
   bool _adFreeOwned = false;
+  DateTime? _lastStoreRewardAdAt;
   bool _introCompleted = true;
   bool _suggestionsEnabled = false;
   bool _suggestionLaunchInProgress = false;
@@ -498,7 +546,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   bool _menuReady = false;
   bool _muteSounds = false;
   bool _hapticsEnabled = true;
-  bool _analysisEditMode = true;
+  bool _isCinematicThemeEnabled = false;
+  final ValueNotifier<bool> _cinematicThemeNotifier = ValueNotifier<bool>(
+    false,
+  );
+  bool _analysisEditMode = false;
+  Timer? _editModeHintTimer;
+  String? _editModeHintText;
   final Set<String> _viewedGambits = <String>{};
   String _quizPrompt = '';
   String _quizPromptFocus = '';
@@ -519,6 +573,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   double _quizFlyProgress = 0.0;
   bool _quizAnswered = false;
   int _quizSelectedIndex = -1;
+  final List<_QuizRoundReview> _quizReviewHistory = <_QuizRoundReview>[];
+  int? _quizReviewIndex;
   QuizDifficulty _quizDifficulty = QuizDifficulty.medium;
   int _quizStreak = 0;
   int _quizBestStreak = 0;
@@ -546,12 +602,22 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     });
   }
 
+  void _scheduleEditModeHintHide() {
+    _editModeHintTimer?.cancel();
+    _editModeHintTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      setState(() {
+        _editModeHintText = null;
+      });
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1600),
     )..repeat();
     _introController =
         AnimationController(
@@ -723,6 +789,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final prefs = await SharedPreferences.getInstance();
       _muteSounds = prefs.getBool(_muteSoundsKey) ?? false;
       _hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
+      _isCinematicThemeEnabled =
+          prefs.getBool(_cinematicThemeEnabledKey) ?? false;
+      _cinematicThemeNotifier.value = _isCinematicThemeEnabled;
+      if (mounted) {
+        unawaited(
+          context.read<AppThemeProvider>().syncLegacySettings(
+            cinematicEnabled: _isCinematicThemeEnabled,
+            boardThemeIndex: _boardThemeMode.index,
+            pieceThemeIndex: _pieceThemeMode.index,
+            notify: false,
+          ),
+        );
+      }
       final viewed = prefs.getStringList(_viewedGambitsKey) ?? const <String>[];
       _viewedGambits
         ..clear()
@@ -856,6 +935,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     await prefs.setBool(_hapticsEnabledKey, value);
   }
 
+  Future<void> _setCinematicThemeEnabled(bool value) async {
+    setState(() => _isCinematicThemeEnabled = value);
+    _cinematicThemeNotifier.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_cinematicThemeEnabledKey, value);
+    if (mounted) {
+      await context.read<AppThemeProvider>().setThemeStyle(
+        value ? AppThemeStyle.monochrome : AppThemeStyle.standard,
+      );
+    }
+  }
+
   Future<void> _lightHaptic() async {
     if (!_hapticsEnabled) return;
     await HapticFeedback.lightImpact();
@@ -864,105 +955,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Future<void> _checkHaptic() async {
     if (!_hapticsEnabled) return;
     await HapticFeedback.selectionClick();
-  }
-
-  Widget _feedbackIconButton({
-    required bool active,
-    required VoidCallback onTap,
-    required Widget icon,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Ink(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: active
-                ? Colors.white.withValues(alpha: 0.18)
-                : Colors.white10,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: active ? Colors.white60 : Colors.white24),
-          ),
-          child: Center(child: icon),
-        ),
-      ),
-    );
-  }
-
-  Widget _hapticsToggleIcon() {
-    return SizedBox(
-      width: 22,
-      height: 22,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          const Icon(Icons.vibration, size: 20, color: Colors.white),
-          if (!_hapticsEnabled)
-            const Text(
-              '⊘',
-              style: TextStyle(
-                color: Color(0xFFE53935),
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeedbackToggleButtons(StateSetter setL) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _feedbackIconButton(
-          active: !_muteSounds,
-          onTap: () async {
-            await _setMute(!_muteSounds);
-            setL(() {});
-          },
-          icon: Icon(
-            _muteSounds ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-            size: 22,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(width: 8),
-        _feedbackIconButton(
-          active: _hapticsEnabled,
-          onTap: () async {
-            await _setHapticsEnabled(!_hapticsEnabled);
-            setL(() {});
-          },
-          icon: _hapticsToggleIcon(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsHeader(String title, StateSetter setL) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: _buildFeedbackToggleButtons(setL),
-        ),
-      ],
-    );
   }
 
   int get _maxDepthAllowed {
@@ -980,6 +972,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   int get _maxSuggestionsAllowed =>
       (2 + _extraSuggestionPurchases).clamp(2, 10);
+
+  int get _effectiveMultiPvCount => max(1, _multiPvCount);
 
   bool _isBoardThemeUnlocked(BoardThemeMode mode) {
     switch (mode) {
@@ -1023,10 +1017,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Future<void> _loadStoreState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final lastWatchMs = prefs.getInt(_storeRewardAdLastWatchKey);
+      _lastStoreRewardAdAt = lastWatchMs == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(lastWatchMs);
       final raw = prefs.getString(_storeStateKey);
       if (raw == null || raw.isEmpty) {
         _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
-        _multiPvCount = _multiPvCount.clamp(1, _maxSuggestionsAllowed);
+        _multiPvCount = _multiPvCount.clamp(0, _maxSuggestionsAllowed);
         return;
       }
       final decoded = jsonDecode(raw);
@@ -1051,7 +1049,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       if (adFree is bool) _adFreeOwned = adFree;
 
       _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
-      _multiPvCount = _multiPvCount.clamp(1, _maxSuggestionsAllowed);
+      _multiPvCount = _multiPvCount.clamp(0, _maxSuggestionsAllowed);
       _normalizeUnlockedThemes();
     } catch (e) {
       debugPrint('Failed to load store state: $e');
@@ -1069,6 +1067,37 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       'adFreeOwned': _adFreeOwned,
     };
     await prefs.setString(_storeStateKey, jsonEncode(payload));
+    if (!mounted) return;
+    final academy = context.read<PuzzleAcademyProvider>();
+    if (academy.initialized) {
+      await academy.syncCoinsFromStoreState(notify: true);
+    }
+  }
+
+  Duration _storeRewardAdRemainingCooldown() {
+    final lastWatch = _lastStoreRewardAdAt;
+    if (lastWatch == null) {
+      return Duration.zero;
+    }
+    final nextReadyAt = lastWatch.add(const Duration(minutes: 30));
+    final remaining = nextReadyAt.difference(DateTime.now());
+    if (remaining.isNegative) {
+      return Duration.zero;
+    }
+    return remaining;
+  }
+
+  String _storeRewardAdCountdownLabel(Duration remaining) {
+    final totalMinutes = max(
+      1,
+      remaining.inMinutes + (remaining.inSeconds % 60 == 0 ? 0 : 1),
+    );
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
   }
 
   Future<void> _loadSavedDefaultSnapshot() async {
@@ -1094,6 +1123,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final savedHistory = decoded['moveHistory'];
       final savedHistoryIndex = decoded['historyIndex'];
       final savedSuggestionsEnabled = decoded['suggestionsEnabled'];
+      final savedTopLines = decoded['topLines'];
+      final savedGambitPreviewLines = decoded['gambitPreviewLines'];
+      final savedCurrentEval = decoded['currentEval'];
+      final savedCurrentDepth = decoded['currentDepth'];
+      final savedEvalWhiteTurn = decoded['evalWhiteTurn'];
+      final savedCurrentOpening = decoded['currentOpening'];
       final savedWhiteKingMoved = decoded['whiteKingMoved'];
       final savedBlackKingMoved = decoded['blackKingMoved'];
       final savedWhiteKingsideRookMoved = decoded['whiteKingsideRookMoved'];
@@ -1117,17 +1152,35 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           savedPieceTheme < PieceThemeMode.values.length) {
         _pieceThemeMode = PieceThemeMode.values[savedPieceTheme];
       }
+      if (mounted) {
+        unawaited(
+          context.read<AppThemeProvider>().syncLegacySettings(
+            boardThemeIndex: _boardThemeMode.index,
+            pieceThemeIndex: _pieceThemeMode.index,
+            notify: false,
+          ),
+        );
+      }
       if (savedDepth is int) {
         _engineDepth = savedDepth.clamp(10, _maxDepthAllowed);
       }
       if (savedMultiPv is int) {
-        _multiPvCount = savedMultiPv.clamp(1, _maxSuggestionsAllowed);
+        _multiPvCount = savedMultiPv.clamp(0, _maxSuggestionsAllowed);
       }
       if (savedWhiteTurn is bool) {
         _isWhiteTurn = savedWhiteTurn;
       }
       if (savedSuggestionsEnabled is bool) {
         _suggestionsEnabled = savedSuggestionsEnabled;
+      }
+      if (savedCurrentEval is num) {
+        _currentEval = savedCurrentEval.toDouble();
+      }
+      if (savedCurrentDepth is int) {
+        _currentDepth = max(0, savedCurrentDepth);
+      }
+      if (savedEvalWhiteTurn is bool) {
+        _evalWhiteTurn = savedEvalWhiteTurn;
       }
       if (savedWhiteKingMoved is bool) _whiteKingMoved = savedWhiteKingMoved;
       if (savedBlackKingMoved is bool) _blackKingMoved = savedBlackKingMoved;
@@ -1173,13 +1226,35 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _historyIndex = _moveHistory.isEmpty ? -1 : _moveHistory.length - 1;
       }
 
-      _currentOpening = '';
+      _topLines = <EngineLine>[];
+      if (savedTopLines is List) {
+        for (final item in savedTopLines) {
+          if (item is! Map) continue;
+          final restored = EngineLine.fromMap(item);
+          if (restored == null || restored.multiPv > _multiPvCount) continue;
+          _topLines.add(restored);
+        }
+        _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      }
+
+      _gambitPreviewLines = <EngineLine>[];
+      if (savedGambitPreviewLines is List) {
+        for (final item in savedGambitPreviewLines) {
+          if (item is! Map) continue;
+          final restored = EngineLine.fromMap(item);
+          if (restored == null) continue;
+          _gambitPreviewLines.add(restored);
+        }
+      }
+
+      _currentOpening = savedCurrentOpening is String
+          ? savedCurrentOpening
+          : '';
       _gambitSelectedFrom = null;
       _holdSelectedFrom = null;
       _legalTargets.clear();
       _gambitAvailableTargets.clear();
       _selectedGambit = null;
-      _gambitPreviewLines = [];
       _normalizeUnlockedThemes();
     } catch (e) {
       debugPrint('Failed to load saved default snapshot: $e');
@@ -1188,6 +1263,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   void _persistCurrentSettings() {
     unawaited(_saveCurrentAsDefaultSnapshot(logChange: false));
+  }
+
+  void _persistAnalysisSnapshotIfNeeded() {
+    if (_playVsBot || _activeSection != AppSection.analysis) return;
+    _persistCurrentSettings();
   }
 
   Map<String, dynamic> _moveRecordToMap(MoveRecord move) {
@@ -1299,7 +1379,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _engine = _createEngineService();
       await _engine!.start(_parseOutput);
       _engine!.send('uci');
-      _engine!.send('setoption name MultiPV value $_multiPvCount');
+      _engine!.send('setoption name MultiPV value $_effectiveMultiPvCount');
       if (_suggestionsEnabled) {
         _analyze();
       }
@@ -1328,7 +1408,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   void _analyze() {
-    if (!_suggestionsEnabled || (_playVsBot && !_isHumanTurnInBotGame)) {
+    if (!_suggestionsEnabled ||
+        _multiPvCount <= 0 ||
+        (_playVsBot && !_isHumanTurnInBotGame)) {
       _send('stop');
       setState(() {
         _topLines = [];
@@ -1341,25 +1423,34 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _topLines = [];
       _currentDepth = 0;
     });
-    _send('setoption name MultiPV value $_multiPvCount');
+    _send('setoption name MultiPV value $_effectiveMultiPvCount');
     _send('position fen ${_genFen()}');
     _send('go depth $_engineDepth');
   }
 
   void _applySuggestionCount(int count, {bool persist = false}) {
-    final nextCount = count.clamp(1, _maxSuggestionsAllowed);
+    final nextCount = count.clamp(0, _maxSuggestionsAllowed);
     final changed = nextCount != _multiPvCount;
 
     setState(() {
       _multiPvCount = nextCount;
-      _topLines = _topLines.where((line) => line.multiPv <= nextCount).toList()
-        ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      _suggestionsEnabled = _suggestionsEnabled && nextCount > 0;
+      if (nextCount <= 0) {
+        _topLines = [];
+        _currentDepth = 0;
+      } else {
+        _topLines =
+            _topLines.where((line) => line.multiPv <= nextCount).toList()
+              ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      }
     });
 
     if (changed) {
       _send('stop');
-      _send('setoption name MultiPV value $nextCount');
-      if (_suggestionsEnabled) {
+      if (nextCount > 0) {
+        _send('setoption name MultiPV value ${max(1, nextCount)}');
+      }
+      if (_suggestionsEnabled && nextCount > 0) {
         _analyze();
       }
     }
@@ -3685,6 +3776,58 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     });
   }
 
+  void _appendQuizReviewEntry({
+    required int selectedIndex,
+    required String feedback,
+    required bool skipped,
+  }) {
+    if (_quizOptions.isEmpty ||
+        _quizBoardState.isEmpty ||
+        _quizContinuation.isEmpty) {
+      return;
+    }
+
+    _quizReviewHistory.add(
+      _QuizRoundReview(
+        mode: _quizMode,
+        prompt: _quizPrompt,
+        promptFocus: _quizPromptFocus,
+        options: List<String>.from(_quizOptions),
+        correctIndex: _quizCorrectIndex,
+        selectedIndex: selectedIndex,
+        feedback: feedback,
+        boardState: Map<String, String>.from(_quizBoardState),
+        continuation: List<EngineLine>.from(_quizContinuation),
+        whiteToMove: _quizWhiteToMove,
+        shownPly: _quizShownPly,
+        skipped: skipped,
+      ),
+    );
+  }
+
+  void _openPreviousQuizReview() {
+    if (_quizReviewHistory.isEmpty) return;
+
+    setState(() {
+      final nextIndex = _quizReviewIndex == null
+          ? _quizReviewHistory.length - 1
+          : max(0, _quizReviewIndex! - 1);
+      _quizReviewIndex = nextIndex;
+      _quizPlayActive = false;
+      _quizPlayBoard = <String, String>{};
+      _quizPlayArrowCount = 0;
+      _quizFlyFrom = null;
+      _quizFlyTo = null;
+      _quizFlyPiece = null;
+      _quizFlyProgress = 0.0;
+    });
+  }
+
+  void _exitQuizReviewMode() {
+    if (_quizReviewIndex == null) return;
+    setState(() => _quizReviewIndex = null);
+  }
+
   void _clearQuizRoundState() {
     _quizPrompt = '';
     _quizPromptFocus = '';
@@ -3703,12 +3846,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _quizFlyTo = null;
     _quizFlyPiece = null;
     _quizFlyProgress = 0.0;
+    _quizReviewIndex = null;
   }
 
   void _resetQuizToSetupState() {
     _quizSessionStarted = false;
     _quizSessionAnswered = 0;
     _quizSessionCorrect = 0;
+    _quizReviewHistory.clear();
     _clearQuizRoundState();
   }
 
@@ -3723,6 +3868,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _botThinking = false;
       _resetQuizToSetupState();
       _activeSection = AppSection.gambitQuiz;
+    });
+  }
+
+  void _openPuzzleAcademyFromMenu() {
+    setState(() {
+      _playVsBot = false;
+      _selectedBot = null;
+      _botThinking = false;
+      _gameOutcome = null;
+      _activeSection = AppSection.puzzleAcademy;
     });
   }
 
@@ -3762,6 +3917,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     int index, {
     required bool compact,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+
     return AnimatedBuilder(
       animation: _botSetupPageController,
       child: GestureDetector(
@@ -3782,14 +3944,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 child: Container(
                   width: compact ? 96 : 144,
                   height: compact ? 96 : 144,
-                  color: const Color(0xFF1E2A44),
+                  color: Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
+                    scheme.surface,
+                  ),
                   child: bot.avatarAsset != null
                       ? Image.asset(bot.avatarAsset!, fit: BoxFit.cover)
                       : Center(
                           child: Text(
                             '#${bot.rank}',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: scheme.onSurface,
                               fontWeight: FontWeight.w800,
                               fontSize: 30,
                             ),
@@ -3804,16 +3969,20 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD8B640).withValues(alpha: 0.16),
+                  color: useMonochrome
+                      ? scheme.outline.withValues(alpha: 0.24)
+                      : const Color(0xFFD8B640).withValues(alpha: 0.20),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
-                    color: const Color(0xFFD8B640).withValues(alpha: 0.35),
+                    color: useMonochrome
+                        ? scheme.outline.withValues(alpha: 0.42)
+                        : const Color(0xFFD8B640).withValues(alpha: 0.35),
                   ),
                 ),
                 child: Text(
                   '#${bot.rank}',
                   style: TextStyle(
-                    color: Color(0xFFFFE3A0),
+                    color: scheme.onSurface,
                     fontSize: compact ? 10 : 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -3824,7 +3993,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 bot.name,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: scheme.onSurface,
                   fontWeight: FontWeight.w800,
                   fontSize: compact ? 15 : 18,
                   letterSpacing: 0.2,
@@ -3837,7 +4006,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.60),
+                  color: scheme.onSurface.withValues(alpha: 0.66),
                   fontSize: compact ? 10.5 : 11.6,
                   height: 1.25,
                 ),
@@ -3883,13 +4052,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     end: Alignment.bottomRight,
                     colors: [
                       Color.lerp(
-                        const Color(0xFF12233E),
-                        const Color(0xFF1F4F7B),
+                        Color.alphaBlend(
+                          scheme.primary.withValues(alpha: 0.10),
+                          scheme.surface,
+                        ),
+                        Color.alphaBlend(
+                          scheme.secondary.withValues(alpha: 0.22),
+                          scheme.surface,
+                        ),
                         focus,
                       )!,
                       Color.lerp(
-                        const Color(0xFF0E1625),
-                        const Color(0xFF132740),
+                        Color.alphaBlend(
+                          scheme.primary.withValues(alpha: 0.06),
+                          scheme.surface,
+                        ),
+                        Color.alphaBlend(
+                          scheme.secondary.withValues(alpha: 0.14),
+                          scheme.surface,
+                        ),
                         focus,
                       )!,
                     ],
@@ -3897,7 +4078,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: Color.lerp(
-                      Colors.white12,
+                      scheme.outline.withValues(alpha: 0.28),
                       const Color(0xFF7FC4FF),
                       focus,
                     )!,
@@ -3975,6 +4156,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizFeedback = '';
       _quizAnswered = false;
       _quizSelectedIndex = -1;
+      _quizReviewHistory.clear();
+      _quizReviewIndex = null;
     });
     _startQuizRound(mode: _quizMode);
   }
@@ -4011,6 +4194,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _handleQuizPrimaryAction() async {
+    if (_quizReviewIndex != null) {
+      _exitQuizReviewMode();
+      return;
+    }
     if (!_quizSessionStarted) {
       _startQuizSession();
       return;
@@ -4018,6 +4205,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     if (_quizAnswered && _quizSessionAnswered >= _quizQuestionsTarget) {
       await _finishQuizSession();
       return;
+    }
+    if (!_quizAnswered) {
+      _appendQuizReviewEntry(
+        selectedIndex: -1,
+        feedback: 'Skipped. Review the position and continue when ready.',
+        skipped: true,
+      );
     }
     _startQuizRound();
   }
@@ -4250,6 +4444,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizFlyTo = null;
       _quizFlyPiece = null;
       _quizFlyProgress = 0.0;
+      _quizReviewIndex = null;
       if (activeMode == GambitQuizMode.guessName) {
         _quizPrompt = '';
         _quizPromptFocus = '';
@@ -4367,6 +4562,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       isPerfectSession: isPerfectSession,
     );
 
+    _appendQuizReviewEntry(
+      selectedIndex: index,
+      feedback: feedback,
+      skipped: false,
+    );
+
     setState(() {
       _quizSelectedIndex = index;
       _quizAnswered = true;
@@ -4411,8 +4612,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _botThinking = false;
       });
       unawaited(_ensureEngineStarted());
-      _resetBoard(initialLaunch: true, withIntro: true);
-      _analyze();
+      if (_suggestionsEnabled && _multiPvCount > 0 && _topLines.isEmpty) {
+        _analyze();
+      }
     } catch (e) {
       _addLog('Enter analysis failed: $e');
       debugPrint('Enter analysis failed: $e');
@@ -4445,9 +4647,22 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       return;
     }
 
+    if (_activeSection == AppSection.puzzleAcademy) {
+      setState(() {
+        _playVsBot = false;
+        _selectedBot = null;
+        _botThinking = false;
+        _gameOutcome = null;
+        _activeSection = AppSection.menu;
+      });
+      return;
+    }
+
     final wasBotGame = _playVsBot;
     if (wasBotGame) {
       _send('stop');
+    } else {
+      _persistAnalysisSnapshotIfNeeded();
     }
 
     _menuExitAnimationController.reset();
@@ -4532,6 +4747,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     ? _buildStartMenu()
                     : _activeSection == AppSection.botSetup
                     ? _buildBotSetupScreen()
+                    : _activeSection == AppSection.puzzleAcademy
+                    ? PuzzleMapScreen(
+                        onBack: _goToMenu,
+                        cinematicThemeEnabled: _isCinematicThemeEnabled,
+                      )
                     : _buildGambitQuizScreen(),
               ),
             ),
@@ -4792,8 +5012,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       return;
     }
     if (_openingMode != OpeningMode.off &&
-        !(_openingMode == OpeningMode.yellowGlow && _selectedGambit != null))
+        !(_openingMode == OpeningMode.yellowGlow && _selectedGambit != null)) {
       return;
+    }
 
     final tappedPiece = boardState[square];
     if (_holdSelectedFrom == null) {
@@ -5239,10 +5460,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _gameOutcome = gameOutcome;
         _botThinking = false;
       });
+      _persistAnalysisSnapshotIfNeeded();
       unawaited(_showGameResultDialog(gameOutcome));
       return;
     }
 
+    _persistAnalysisSnapshotIfNeeded();
     _analyze();
     if (_playVsBot) {
       unawaited(_maybeTriggerBotMove());
@@ -5271,6 +5494,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _currentDepth = 0;
       _currentEval = 0.0;
     });
+    _persistAnalysisSnapshotIfNeeded();
     _analyze();
   }
 
@@ -5739,11 +5963,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
+  String _menuLogoAsset(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.light
+        ? 'assets/logo2.png'
+        : 'assets/logo.png';
+  }
+
   // --- UI Sections ---
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final menuTopColor = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
+      scheme.surface,
+    );
+    final menuBottomColor = Color.alphaBlend(
+      scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+      scheme.surface,
+    );
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
@@ -5758,15 +5999,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ? _buildAnalysisBoardScaffold(context)
           : Scaffold(
               body: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF0B0F19),
-                      Color(0xFF080A12),
-                      Color(0xFF101624),
-                    ],
+                    colors: [menuTopColor, scheme.surface, menuBottomColor],
                     stops: [0.0, 0.55, 1.0],
                   ),
                 ),
@@ -5780,7 +6017,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                     curve: Curves.easeOutCubic,
                                   ),
                                   child: Image.asset(
-                                    'assets/logo.png',
+                                    _menuLogoAsset(context),
                                     width: 220,
                                     fit: BoxFit.contain,
                                   ),
@@ -5802,7 +6039,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   curve: Curves.easeOutCubic,
                                 ),
                                 child: Image.asset(
-                                  'assets/logo.png',
+                                  _menuLogoAsset(context),
                                   width: 220,
                                   fit: BoxFit.contain,
                                 ),
@@ -5832,35 +6069,61 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, _) {
+        final appTheme = context.watch<AppThemeProvider>();
         final t = _pulseController.value;
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final isMono = appTheme.isMonochrome || _isCinematicThemeEnabled;
+        final controlSurface = Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.16 : 0.06),
+          scheme.surface,
+        );
+        final menuTopColor = Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
+          scheme.surface,
+        );
+        final menuBottomColor = Color.alphaBlend(
+          scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+          scheme.surface,
+        );
+        final blueBlob = isMono
+            ? (isDark ? const Color(0xFF334B80) : const Color(0xFFDEE8FB))
+            : coreBlue;
+        final goldBlob = isMono
+            ? (isDark ? const Color(0xFF6E6540) : const Color(0xFFF3EBCF))
+            : coreGold;
+        final greenBlob = isMono
+            ? (isDark ? const Color(0xFF4C6A53) : const Color(0xFFE1F3E6))
+            : fusionGreen;
         final blueOrb = Alignment(
-          -0.66 + 0.05 * sin(t * pi * 2),
-          -0.24 + 0.03 * cos(t * pi * 2),
+          -0.68 + 0.08 * sin(t * pi * 2),
+          -0.22 + 0.05 * cos(t * pi * 2),
         );
         final goldOrb = Alignment(
-          0.66 + 0.05 * cos(t * pi * 2),
-          -0.24 + 0.03 * sin(t * pi * 2),
+          0.68 + 0.07 * cos(t * pi * 2),
+          -0.28 + 0.05 * sin(t * pi * 2),
         );
-        final fusionPulse = 0.22 + 0.13 * (0.5 + 0.5 * sin(t * pi * 2));
+        final greenOrb = Alignment(
+          0.02 + 0.04 * sin(t * pi * 2),
+          -0.18 + 0.07 * cos(t * pi * 2),
+        );
+        final fusionPulse = 0.28 + 0.16 * (0.5 + 0.5 * sin(t * pi * 2));
 
         return Stack(
           children: [
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xFF060912),
-                      Color(0xFF0B1022),
-                      Color(0xFF12102A),
-                    ],
-                    stops: [0.0, 0.55, 1.0],
+                    colors: [menuTopColor, scheme.surface, menuBottomColor],
+                    stops: const [0.0, 0.55, 1.0],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: coreBlue.withValues(alpha: 0.2),
+                      color: blueBlob.withValues(alpha: isDark ? 0.2 : 0.09),
                       blurRadius: 120,
                       spreadRadius: 10,
                     ),
@@ -5875,15 +6138,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     Align(
                       alignment: blueOrb,
                       child: Container(
-                        width: 170,
-                        height: 170,
+                        width: 192,
+                        height: 192,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: coreBlue.withValues(alpha: 0.16),
+                          color: blueBlob.withValues(
+                            alpha: isDark ? 0.22 : 0.15,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: coreBlue.withValues(alpha: 0.55),
-                              blurRadius: 60,
+                              color: blueBlob.withValues(
+                                alpha: isDark ? 0.56 : 0.26,
+                              ),
+                              blurRadius: 72,
                             ),
                           ],
                         ),
@@ -5892,32 +6159,42 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     Align(
                       alignment: goldOrb,
                       child: Container(
-                        width: 160,
-                        height: 160,
+                        width: 180,
+                        height: 180,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: coreGold.withValues(alpha: 0.15),
+                          color: goldBlob.withValues(
+                            alpha: isDark ? 0.20 : 0.14,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: coreGold.withValues(alpha: 0.5),
-                              blurRadius: 56,
+                              color: goldBlob.withValues(
+                                alpha: isDark ? 0.50 : 0.22,
+                              ),
+                              blurRadius: 66,
                             ),
                           ],
                         ),
                       ),
                     ),
                     Align(
-                      alignment: const Alignment(0, -0.22),
+                      alignment: greenOrb,
                       child: Container(
-                        width: 130,
-                        height: 130,
+                        width: 148,
+                        height: 148,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: fusionGreen.withValues(alpha: fusionPulse),
+                          color: greenBlob.withValues(
+                            alpha: isDark
+                                ? fusionPulse
+                                : (0.11 + (fusionPulse * 0.40)),
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: fusionGreen.withValues(alpha: 0.7),
-                              blurRadius: 70,
+                              color: greenBlob.withValues(
+                                alpha: isDark ? 0.72 : 0.26,
+                              ),
+                              blurRadius: 80,
                             ),
                           ],
                         ),
@@ -5934,7 +6211,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   if (showMenuLogo)
                     Center(
                       child: Image.asset(
-                        'assets/logo.png',
+                        _menuLogoAsset(context),
                         width: 220,
                         fit: BoxFit.contain,
                       ),
@@ -5956,7 +6233,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: Colors.white24,
+                                  color: scheme.outline.withValues(alpha: 0.38),
                                   width: 2,
                                 ),
                               ),
@@ -5967,7 +6244,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.18),
+                                  color: scheme.outline.withValues(alpha: 0.30),
                                   width: 1.5,
                                 ),
                               ),
@@ -5979,13 +6256,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 vertical: 16,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF0D1020,
-                                ).withValues(alpha: 0.7),
+                                color: controlSurface.withValues(alpha: 0.86),
                                 borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: const Color(0x66D8B640),
-                                ),
+                                border: Border.all(color: scheme.outline),
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -5993,32 +6266,60 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   _menuGlyphButton(
                                     label: 'PLAY CHESS',
                                     icon: Icons.smart_toy_outlined,
-                                    accent: const Color(0xFF5AAEE8),
+                                    accent: isMono
+                                        ? scheme.onSurface.withValues(
+                                            alpha: 0.88,
+                                          )
+                                        : const Color(0xFF5AAEE8),
                                     onTap: _openBotSetupFromMenu,
                                   ),
                                   _menuGlyphButton(
                                     label: 'ANALYSIS',
                                     icon: Icons.analytics_outlined,
-                                    accent: coreGold,
+                                    accent: isMono
+                                        ? scheme.onSurface.withValues(
+                                            alpha: 0.82,
+                                          )
+                                        : coreGold,
                                     onTap: () =>
                                         unawaited(_enterAnalysisBoard()),
                                   ),
                                   _menuGlyphButton(
                                     label: 'OPENING QUIZ',
                                     icon: Icons.extension_outlined,
-                                    accent: coreBlue,
+                                    accent: isMono
+                                        ? scheme.onSurface.withValues(
+                                            alpha: 0.78,
+                                          )
+                                        : coreBlue,
                                     onTap: _openGambitQuizFromMenu,
+                                  ),
+                                  _menuGlyphButton(
+                                    label: 'PUZZLE ACADEMY',
+                                    icon: Icons.auto_stories_outlined,
+                                    accent: isMono
+                                        ? scheme.onSurface.withValues(
+                                            alpha: 0.76,
+                                          )
+                                        : const Color(0xFF6FE7FF),
+                                    onTap: _openPuzzleAcademyFromMenu,
                                   ),
                                   _menuGlyphButton(
                                     label: 'STORE',
                                     icon: Icons.storefront_outlined,
-                                    accent: fusionGreen,
+                                    accent: isMono
+                                        ? scheme.onSurface.withValues(
+                                            alpha: 0.74,
+                                          )
+                                        : fusionGreen,
                                     onTap: _openStore,
                                   ),
                                   _menuGlyphButton(
                                     label: 'CREDITS',
                                     icon: Icons.info_outline,
-                                    accent: Colors.white70,
+                                    accent: scheme.onSurface.withValues(
+                                      alpha: 0.86,
+                                    ),
                                     onTap: _showCreditsDialog,
                                   ),
                                 ],
@@ -6041,18 +6342,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         ),
                         label: Text(_muteSounds ? 'Muted' : 'Sound On'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF10172A),
-                          foregroundColor: Colors.white70,
+                          backgroundColor: controlSurface,
+                          foregroundColor: scheme.onSurface,
                         ),
                       ),
                       const SizedBox(width: 10),
                       FilledButton.icon(
-                        onPressed: _openSettings,
+                        onPressed: () => _openSettings(),
                         icon: const Icon(Icons.settings_outlined),
                         label: const Text('Settings'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF10172A),
-                          foregroundColor: Colors.white70,
+                          backgroundColor: controlSurface,
+                          foregroundColor: scheme.onSurface,
                         ),
                       ),
                     ],
@@ -6072,6 +6373,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     required Color accent,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    final labelColor = isLight ? scheme.onSurface : accent;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
@@ -6082,26 +6388,34 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: accent.withValues(alpha: 0.45)),
+            border: Border.all(
+              color: isLight
+                  ? scheme.outline.withValues(alpha: 0.45)
+                  : accent.withValues(alpha: 0.45),
+            ),
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                accent.withValues(alpha: 0.14),
-                const Color(0x14000000),
-                accent.withValues(alpha: 0.08),
+                accent.withValues(alpha: isLight ? 0.08 : 0.14),
+                scheme.surface.withValues(alpha: isLight ? 0.56 : 0.08),
+                accent.withValues(alpha: isLight ? 0.05 : 0.08),
               ],
             ),
           ),
           child: Row(
             children: [
-              Icon(icon, color: accent, size: 18),
+              Icon(
+                icon,
+                color: isLight ? accent.withValues(alpha: 0.78) : accent,
+                size: 18,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: accent,
+                    color: labelColor,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.9,
                   ),
@@ -6122,418 +6436,510 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final selectedBot = _botCharacters[_botSetupSelectedIndex];
     final pulse = _pulseController.value;
     final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
     final isLandscape = media.orientation == Orientation.landscape;
+    final pageBackground = useMonochrome
+        ? (isDark ? const Color(0xFF050505) : Colors.white)
+        : scheme.surface;
+    final lightHeaderColor = isDark ? scheme.onSurface : Colors.black;
     final compactLandscape = isLandscape && media.size.height <= 460;
     final cardViewportHeight = compactLandscape
         ? 248.0
         : (isLandscape ? 292.0 : 372.0);
 
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        padding: EdgeInsets.zero,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _goToMenu,
-                      icon: const Icon(Icons.arrow_back),
-                      tooltip: 'Back to menu',
-                    ),
-                    const SizedBox(width: 4),
-                    const Expanded(
-                      child: Text(
-                        'Play Chess',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
+    return Container(
+      color: pageBackground,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: EdgeInsets.zero,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: _goToMenu,
+                        color: lightHeaderColor,
+                        icon: const Icon(Icons.arrow_back),
+                        tooltip: 'Back to menu',
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          'Play Chess',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            color: lightHeaderColor,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF111B31),
-                        Color(0xFF0C1424),
-                        Color(0xFF0A101C),
-                      ],
-                      stops: [0.0, 0.55, 1.0],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.25),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF5AAEE8).withValues(
-                          alpha:
-                              0.10 + (0.08 * (0.5 + 0.5 * sin(pulse * pi * 2))),
-                        ),
-                        blurRadius: 20,
-                        spreadRadius: 1,
+                      IconButton(
+                        onPressed: () => _openSettings(),
+                        color: lightHeaderColor,
+                        icon: const Icon(Icons.settings_outlined),
+                        tooltip: 'Settings',
                       ),
                     ],
                   ),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: cardViewportHeight,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Positioned(
-                              left: 18 + (sin(pulse * pi * 2) * 8),
-                              top: 18 + (cos(pulse * pi * 2) * 6),
-                              child: Container(
-                                width: 26,
-                                height: 26,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(
-                                    0xFF8FD0FF,
-                                  ).withValues(alpha: 0.16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF8FD0FF,
-                                      ).withValues(alpha: 0.28),
-                                      blurRadius: 14,
-                                    ),
-                                  ],
-                                ),
-                              ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color.alphaBlend(
+                            scheme.primary.withValues(
+                              alpha: isDark ? 0.16 : 0.06,
                             ),
-                            Positioned(
-                              right: 20 + (cos(pulse * pi * 2) * 9),
-                              bottom: 20 + (sin(pulse * pi * 2) * 7),
-                              child: Container(
-                                width: 22,
-                                height: 22,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(
-                                    0xFFD8B640,
-                                  ).withValues(alpha: 0.15),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFFD8B640,
-                                      ).withValues(alpha: 0.25),
-                                      blurRadius: 12,
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            scheme.surface,
+                          ),
+                          Color.alphaBlend(
+                            scheme.secondary.withValues(
+                              alpha: isDark ? 0.10 : 0.04,
                             ),
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(24),
-                                  gradient: RadialGradient(
-                                    center: Alignment(
-                                      sin(pulse * pi * 2) * 0.08,
-                                      -0.12 + cos(pulse * pi * 2) * 0.05,
-                                    ),
-                                    radius: 0.95,
-                                    colors: [
-                                      const Color(
-                                        0xFF5AAEE8,
-                                      ).withValues(alpha: 0.18),
-                                      const Color(
-                                        0xFF5AAEE8,
-                                      ).withValues(alpha: 0.0),
+                            scheme.surface,
+                          ),
+                          scheme.surface,
+                        ],
+                        stops: const [0.0, 0.55, 1.0],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFF5AAEE8).withValues(alpha: 0.25),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF5AAEE8).withValues(
+                            alpha:
+                                0.10 +
+                                (0.08 * (0.5 + 0.5 * sin(pulse * pi * 2))),
+                          ),
+                          blurRadius: 20,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          height: cardViewportHeight,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Positioned(
+                                left: 18 + (sin(pulse * pi * 2) * 8),
+                                top: 18 + (cos(pulse * pi * 2) * 6),
+                                child: Container(
+                                  width: 26,
+                                  height: 26,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        (useMonochrome
+                                                ? scheme.outline
+                                                : const Color(0xFF8FD0FF))
+                                            .withValues(
+                                              alpha: useMonochrome
+                                                  ? 0.12
+                                                  : 0.16,
+                                            ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            (useMonochrome
+                                                    ? scheme.outline
+                                                    : const Color(0xFF8FD0FF))
+                                                .withValues(
+                                                  alpha: useMonochrome
+                                                      ? 0.18
+                                                      : 0.28,
+                                                ),
+                                        blurRadius: 14,
+                                      ),
                                     ],
                                   ),
                                 ),
                               ),
-                            ),
-                            PageView.builder(
-                              controller: _botSetupPageController,
-                              itemCount: _botCharacters.length,
-                              physics: const BouncingScrollPhysics(),
-                              allowImplicitScrolling: true,
-                              onPageChanged: (index) {
-                                setState(() => _botSetupSelectedIndex = index);
-                              },
-                              itemBuilder: (context, index) =>
-                                  _buildBotSetupCard(
-                                    _botCharacters[index],
-                                    index,
-                                    compact: compactLandscape,
-                                  ),
-                            ),
-                            Positioned(
-                              left: 0,
-                              top: 0,
-                              bottom: 0,
-                              child: IgnorePointer(
+                              Positioned(
+                                right: 20 + (cos(pulse * pi * 2) * 9),
+                                bottom: 20 + (sin(pulse * pi * 2) * 7),
                                 child: Container(
-                                  width: 52,
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        (useMonochrome
+                                                ? scheme.outline
+                                                : const Color(0xFFD8B640))
+                                            .withValues(
+                                              alpha: useMonochrome
+                                                  ? 0.10
+                                                  : 0.15,
+                                            ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            (useMonochrome
+                                                    ? scheme.outline
+                                                    : const Color(0xFFD8B640))
+                                                .withValues(
+                                                  alpha: useMonochrome
+                                                      ? 0.16
+                                                      : 0.25,
+                                                ),
+                                        blurRadius: 12,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: Container(
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(24),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.centerLeft,
-                                      end: Alignment.centerRight,
+                                    gradient: RadialGradient(
+                                      center: Alignment(
+                                        sin(pulse * pi * 2) * 0.08,
+                                        -0.12 + cos(pulse * pi * 2) * 0.05,
+                                      ),
+                                      radius: 0.95,
                                       colors: [
-                                        const Color(
-                                          0xFF0E1627,
-                                        ).withValues(alpha: 0.95),
-                                        const Color(
-                                          0xFF0E1627,
-                                        ).withValues(alpha: 0.0),
+                                        (useMonochrome
+                                                ? scheme.outline
+                                                : const Color(0xFF5AAEE8))
+                                            .withValues(
+                                              alpha: useMonochrome
+                                                  ? 0.10
+                                                  : 0.18,
+                                            ),
+                                        (useMonochrome
+                                                ? scheme.outline
+                                                : const Color(0xFF5AAEE8))
+                                            .withValues(alpha: 0.0),
                                       ],
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              child: IgnorePointer(
-                                child: Container(
-                                  width: 52,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(24),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.centerRight,
-                                      end: Alignment.centerLeft,
-                                      colors: [
-                                        const Color(
-                                          0xFF0E1627,
-                                        ).withValues(alpha: 0.95),
-                                        const Color(
-                                          0xFF0E1627,
-                                        ).withValues(alpha: 0.0),
-                                      ],
+                              PageView.builder(
+                                controller: _botSetupPageController,
+                                itemCount: _botCharacters.length,
+                                physics: const BouncingScrollPhysics(),
+                                allowImplicitScrolling: true,
+                                onPageChanged: (index) {
+                                  setState(
+                                    () => _botSetupSelectedIndex = index,
+                                  );
+                                },
+                                itemBuilder: (context, index) =>
+                                    _buildBotSetupCard(
+                                      _botCharacters[index],
+                                      index,
+                                      compact: compactLandscape,
+                                    ),
+                              ),
+                              Positioned(
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: 52,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.centerLeft,
+                                        end: Alignment.centerRight,
+                                        colors: [
+                                          scheme.surface.withValues(
+                                            alpha: isDark ? 0.95 : 0.82,
+                                          ),
+                                          scheme.surface.withValues(alpha: 0.0),
+                                        ],
+                                      ),
                                     ),
                                   ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: 52,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.centerRight,
+                                        end: Alignment.centerLeft,
+                                        colors: [
+                                          scheme.surface.withValues(
+                                            alpha: isDark ? 0.95 : 0.82,
+                                          ),
+                                          scheme.surface.withValues(alpha: 0.0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: _botSetupSelectedIndex == 0
+                                  ? null
+                                  : () => _animateBotSetupTo(
+                                      _botSetupSelectedIndex - 1,
+                                    ),
+                              icon: const Icon(Icons.chevron_left_rounded),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Color.alphaBlend(
+                                  scheme.primary.withValues(
+                                    alpha: isDark ? 0.12 : 0.05,
+                                  ),
+                                  scheme.surface,
+                                ),
+                                side: BorderSide(
+                                  color: scheme.outline.withValues(alpha: 0.32),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(_botCharacters.length, (
+                                  index,
+                                ) {
+                                  final active =
+                                      index == _botSetupSelectedIndex;
+                                  return AnimatedContainer(
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeOutCubic,
+                                    width: active ? 22 : 8,
+                                    height: 8,
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(999),
+                                      color: active
+                                          ? const Color(0xFF7FC4FF)
+                                          : Colors.white24,
+                                      boxShadow: active
+                                          ? [
+                                              BoxShadow(
+                                                color: const Color(
+                                                  0xFF5AAEE8,
+                                                ).withValues(alpha: 0.32),
+                                                blurRadius: 10,
+                                                spreadRadius: 1,
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed:
+                                  _botSetupSelectedIndex ==
+                                      _botCharacters.length - 1
+                                  ? null
+                                  : () => _animateBotSetupTo(
+                                      _botSetupSelectedIndex + 1,
+                                    ),
+                              icon: const Icon(Icons.chevron_right_rounded),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Color.alphaBlend(
+                                  scheme.primary.withValues(
+                                    alpha: isDark ? 0.12 : 0.05,
+                                  ),
+                                  scheme.surface,
+                                ),
+                                side: BorderSide(
+                                  color: scheme.outline.withValues(alpha: 0.32),
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: _botSetupSelectedIndex == 0
-                                ? null
-                                : () => _animateBotSetupTo(
-                                    _botSetupSelectedIndex - 1,
-                                  ),
-                            icon: const Icon(Icons.chevron_left_rounded),
-                            style: IconButton.styleFrom(
-                              backgroundColor: const Color(0xFF101722),
-                              side: const BorderSide(color: Colors.white12),
-                            ),
-                          ),
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(_botCharacters.length, (
-                                index,
-                              ) {
-                                final active = index == _botSetupSelectedIndex;
-                                return AnimatedContainer(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOutCubic,
-                                  width: active ? 22 : 8,
-                                  height: 8,
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    color: active
-                                        ? const Color(0xFF7FC4FF)
-                                        : Colors.white24,
-                                    boxShadow: active
-                                        ? [
-                                            BoxShadow(
-                                              color: const Color(
-                                                0xFF5AAEE8,
-                                              ).withValues(alpha: 0.32),
-                                              blurRadius: 10,
-                                              spreadRadius: 1,
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed:
-                                _botSetupSelectedIndex ==
-                                    _botCharacters.length - 1
-                                ? null
-                                : () => _animateBotSetupTo(
-                                    _botSetupSelectedIndex + 1,
-                                  ),
-                            icon: const Icon(Icons.chevron_right_rounded),
-                            style: IconButton.styleFrom(
-                              backgroundColor: const Color(0xFF101722),
-                              side: const BorderSide(color: Colors.white12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF101722),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Center(
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        ChoiceChip(
-                          selected: _botSideChoice == BotSideChoice.white,
-                          selectedColor: const Color(0xFFDEE4EF),
-                          side: BorderSide(
-                            color: _botSideChoice == BotSideChoice.white
-                                ? const Color(0xFFEDEFF4)
-                                : Colors.white24,
-                          ),
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _pieceImage('p_w', width: 16, height: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                'White',
-                                style: TextStyle(
-                                  color: _botSideChoice == BotSideChoice.white
-                                      ? const Color(0xFF1A2232)
-                                      : Colors.white70,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          onSelected: (_) {
-                            setState(
-                              () => _botSideChoice = BotSideChoice.white,
-                            );
-                          },
-                        ),
-                        ChoiceChip(
-                          selected: _botSideChoice == BotSideChoice.random,
-                          selectedColor: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: 0.22),
-                          side: BorderSide(
-                            color: _botSideChoice == BotSideChoice.random
-                                ? const Color(0xFF5AAEE8)
-                                : Colors.white24,
-                          ),
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.shuffle_rounded,
-                                size: 16,
-                                color: _botSideChoice == BotSideChoice.random
-                                    ? const Color(0xFF8FD0FF)
-                                    : Colors.white70,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Random',
-                                style: TextStyle(
-                                  color: _botSideChoice == BotSideChoice.random
-                                      ? const Color(0xFF8FD0FF)
-                                      : Colors.white70,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          onSelected: (_) {
-                            setState(
-                              () => _botSideChoice = BotSideChoice.random,
-                            );
-                          },
-                        ),
-                        ChoiceChip(
-                          selected: _botSideChoice == BotSideChoice.black,
-                          selectedColor: const Color(0xFF222933),
-                          side: BorderSide(
-                            color: _botSideChoice == BotSideChoice.black
-                                ? const Color(0xFF49576B)
-                                : Colors.white24,
-                          ),
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _pieceImage('p_b', width: 16, height: 16),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Black',
-                                style: TextStyle(
-                                  color: _botSideChoice == BotSideChoice.black
-                                      ? Colors.white
-                                      : Colors.white70,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          onSelected: (_) {
-                            setState(
-                              () => _botSideChoice = BotSideChoice.black,
-                            );
-                          },
-                        ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.smart_toy_outlined),
-                      label: Text('Start Vs ${selectedBot.name}'),
-                      onPressed: () {
-                        unawaited(
-                          _startBotMatch(
-                            bot: selectedBot,
-                            sideChoice: _botSideChoice,
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                        scheme.primary.withValues(alpha: isDark ? 0.12 : 0.05),
+                        scheme.surface,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: scheme.outline.withValues(alpha: 0.32),
+                      ),
+                    ),
+                    child: Center(
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          ChoiceChip(
+                            selected: _botSideChoice == BotSideChoice.white,
+                            checkmarkColor: const Color(0xFF1A2232),
+                            selectedColor: const Color(0xFFDEE4EF),
+                            side: BorderSide(
+                              color: _botSideChoice == BotSideChoice.white
+                                  ? const Color(0xFFEDEFF4)
+                                  : scheme.outline.withValues(alpha: 0.34),
+                            ),
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _pieceImage('p_w', width: 16, height: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'White',
+                                  style: TextStyle(
+                                    color: _botSideChoice == BotSideChoice.white
+                                        ? const Color(0xFF1A2232)
+                                        : scheme.onSurface.withValues(
+                                            alpha: 0.82,
+                                          ),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            onSelected: (_) {
+                              setState(
+                                () => _botSideChoice = BotSideChoice.white,
+                              );
+                            },
                           ),
-                        );
-                      },
+                          ChoiceChip(
+                            selected: _botSideChoice == BotSideChoice.random,
+                            checkmarkColor: const Color(0xFF8FD0FF),
+                            selectedColor: const Color(
+                              0xFF5AAEE8,
+                            ).withValues(alpha: 0.22),
+                            side: BorderSide(
+                              color: _botSideChoice == BotSideChoice.random
+                                  ? const Color(0xFF5AAEE8)
+                                  : scheme.outline.withValues(alpha: 0.34),
+                            ),
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.shuffle_rounded,
+                                  size: 16,
+                                  color: _botSideChoice == BotSideChoice.random
+                                      ? const Color(0xFF8FD0FF)
+                                      : scheme.onSurface.withValues(
+                                          alpha: 0.82,
+                                        ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Random',
+                                  style: TextStyle(
+                                    color:
+                                        _botSideChoice == BotSideChoice.random
+                                        ? const Color(0xFF8FD0FF)
+                                        : scheme.onSurface.withValues(
+                                            alpha: 0.82,
+                                          ),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            onSelected: (_) {
+                              setState(
+                                () => _botSideChoice = BotSideChoice.random,
+                              );
+                            },
+                          ),
+                          ChoiceChip(
+                            selected: _botSideChoice == BotSideChoice.black,
+                            checkmarkColor: Colors.white,
+                            selectedColor: const Color(0xFF222933),
+                            side: BorderSide(
+                              color: _botSideChoice == BotSideChoice.black
+                                  ? const Color(0xFF49576B)
+                                  : scheme.outline.withValues(alpha: 0.34),
+                            ),
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _pieceImage('p_b', width: 16, height: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Black',
+                                  style: TextStyle(
+                                    color: _botSideChoice == BotSideChoice.black
+                                        ? Colors.white
+                                        : scheme.onSurface.withValues(
+                                            alpha: 0.82,
+                                          ),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            onSelected: (_) {
+                              setState(
+                                () => _botSideChoice = BotSideChoice.black,
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.smart_toy_outlined),
+                        label: Text('Start Vs ${selectedBot.name}'),
+                        onPressed: () {
+                          unawaited(
+                            _startBotMatch(
+                              bot: selectedBot,
+                              sideChoice: _botSideChoice,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -6544,6 +6950,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Widget _buildGambitQuizScreen() {
     final gambits = _uniqueGambits();
     final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
     final isLandscape = media.orientation == Orientation.landscape;
     final quizPadding = isLandscape
         ? EdgeInsets.fromLTRB(
@@ -6553,180 +6965,259 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             16 + media.padding.bottom,
           )
         : const EdgeInsets.fromLTRB(16, 12, 16, 16);
+    final reviewEntry = _quizReviewIndex == null
+        ? null
+        : _quizReviewHistory[_quizReviewIndex!];
+    final reviewMode = reviewEntry != null;
+    final displayedQuizMode = reviewEntry?.mode ?? _quizMode;
+    final displayedPrompt = reviewEntry?.prompt ?? _quizPrompt;
+    final displayedPromptFocus = reviewEntry?.promptFocus ?? _quizPromptFocus;
+    final displayedOptions = reviewEntry?.options ?? _quizOptions;
+    final displayedCorrectIndex =
+        reviewEntry?.correctIndex ?? _quizCorrectIndex;
+    final displayedSelectedIndex =
+        reviewEntry?.selectedIndex ?? _quizSelectedIndex;
+    final displayedFeedback = reviewEntry?.feedback ?? _quizFeedback;
+    final displayedContinuation =
+        reviewEntry?.continuation ?? _quizContinuation;
+    final displayedWhiteToMove = reviewEntry?.whiteToMove ?? _quizWhiteToMove;
+    final displayedShownPly = reviewEntry?.shownPly ?? _quizShownPly;
+    final displayedBoardState = reviewMode
+        ? reviewEntry.boardState
+        : (_quizPlayBoard.isNotEmpty ? _quizPlayBoard : _quizBoardState);
+    final answersLocked = reviewMode || _quizAnswered;
     final hasQuizBoard =
-        _quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty;
+        displayedBoardState.isNotEmpty && displayedContinuation.isNotEmpty;
     final revealContinuation =
         hasQuizBoard &&
-        (_quizMode == GambitQuizMode.guessName || _quizAnswered);
+        (displayedQuizMode == GambitQuizMode.guessName || answersLocked);
     final isCorrectAnswer =
-        _quizAnswered && _quizSelectedIndex == _quizCorrectIndex;
+        answersLocked && displayedSelectedIndex == displayedCorrectIndex;
     final sideBySideLayout =
         isLandscape && hasQuizBoard && media.size.width >= 700;
+    final panelSurface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
+      scheme.surface,
+    );
+    final panelSurfaceAlt = Color.alphaBlend(
+      scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+      scheme.surface,
+    );
+    final quizBackground = useMonochrome
+        ? (isDark ? const Color(0xFF06080D) : Colors.white)
+        : scheme.surface;
+    final chipBorderColor = scheme.outline.withValues(alpha: 0.34);
+    final lightHeaderColor = isDark ? scheme.onSurface : Colors.black;
+    final chipUnselectedText = isDark
+        ? scheme.onSurface.withValues(alpha: 0.82)
+        : Colors.black;
 
     if (!_quizSessionStarted) {
-      return Padding(
-        padding: quizPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  onPressed: _goToMenu,
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Back to menu',
-                ),
-                const SizedBox(width: 6),
-                const Text(
-                  'Opening Puzzles',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: _openAppearanceSettings,
-                  icon: const Icon(Icons.palette_outlined),
-                  tooltip: 'Board & Pieces',
-                ),
-                IconButton(
-                  onPressed: _openQuizStatsSheet,
-                  icon: const Icon(Icons.insights_outlined),
-                  tooltip: 'Performance Stats',
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF121B2E),
-                    Color(0xFF0F1626),
-                    Color(0xFF0B111E),
-                  ],
-                  stops: [0.0, 0.55, 1.0],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
+      return Container(
+        color: quizBackground,
+        child: Padding(
+          padding: quizPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _goToMenu,
+                    color: lightHeaderColor,
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Back to menu',
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Opening Puzzles',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 20,
+                      color: lightHeaderColor,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _openAppearanceSettings,
+                    color: lightHeaderColor,
+                    icon: const Icon(Icons.palette_outlined),
+                    tooltip: 'Board & Pieces',
+                  ),
+                  IconButton(
+                    onPressed: _openQuizStatsSheet,
+                    color: lightHeaderColor,
+                    icon: const Icon(Icons.insights_outlined),
+                    tooltip: 'Performance Stats',
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Mode',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [panelSurface, panelSurfaceAlt, scheme.surface],
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Guess Opening Name'),
-                        selected: _quizMode == GambitQuizMode.guessName,
-                        selectedColor: const Color(
-                          0xFF5AAEE8,
-                        ).withValues(alpha: 0.20),
-                        side: BorderSide(
-                          color: _quizMode == GambitQuizMode.guessName
-                              ? const Color(0xFF5AAEE8)
-                              : Colors.white24,
-                        ),
-                        labelStyle: TextStyle(
-                          color: _quizMode == GambitQuizMode.guessName
-                              ? const Color(0xFF8FD0FF)
-                              : Colors.white70,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        onSelected: (_) => setState(
-                          () => _quizMode = GambitQuizMode.guessName,
-                        ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mode',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.66),
+                        fontWeight: FontWeight.w600,
                       ),
-                      ChoiceChip(
-                        label: const Text('Guess Opening Line'),
-                        selected: _quizMode == GambitQuizMode.guessLine,
-                        selectedColor: const Color(
-                          0xFF5AAEE8,
-                        ).withValues(alpha: 0.20),
-                        side: BorderSide(
-                          color: _quizMode == GambitQuizMode.guessLine
-                              ? const Color(0xFF5AAEE8)
-                              : Colors.white24,
-                        ),
-                        labelStyle: TextStyle(
-                          color: _quizMode == GambitQuizMode.guessLine
-                              ? const Color(0xFF8FD0FF)
-                              : Colors.white70,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        onSelected: (_) => setState(
-                          () => _quizMode = GambitQuizMode.guessLine,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Difficulty',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontWeight: FontWeight.w600,
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ...QuizDifficulty.values.map((difficulty) {
-                        final selected = _quizDifficulty == difficulty;
-                        final color = _quizDifficultyColor(difficulty);
-                        return ChoiceChip(
-                          label: Text(_quizDifficultyLabel(difficulty)),
-                          selected: selected,
-                          selectedColor: color.withValues(alpha: 0.2),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Guess Opening Name'),
+                          selected: _quizMode == GambitQuizMode.guessName,
+                          selectedColor: const Color(
+                            0xFF5AAEE8,
+                          ).withValues(alpha: 0.20),
                           side: BorderSide(
-                            color: selected
-                                ? color.withValues(alpha: 0.9)
-                                : Colors.white24,
+                            color: _quizMode == GambitQuizMode.guessName
+                                ? const Color(0xFF5AAEE8)
+                                : chipBorderColor,
                           ),
                           labelStyle: TextStyle(
-                            color: selected ? color : Colors.white70,
+                            color: _quizMode == GambitQuizMode.guessName
+                                ? const Color(0xFF8FD0FF)
+                                : chipUnselectedText,
                             fontWeight: FontWeight.w700,
-                            fontSize: 12,
                           ),
-                          onSelected: (_) => _setQuizDifficulty(difficulty),
-                        );
-                      }),
-                      if (isLandscape) ...[
-                        const Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 2,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            'Questions',
-                            style: TextStyle(
-                              color: Colors.white60,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          onSelected: (_) => setState(
+                            () => _quizMode = GambitQuizMode.guessName,
                           ),
                         ),
-                        ...[10, 15, 20].map((target) {
+                        ChoiceChip(
+                          label: const Text('Guess Opening Line'),
+                          selected: _quizMode == GambitQuizMode.guessLine,
+                          selectedColor: const Color(
+                            0xFF5AAEE8,
+                          ).withValues(alpha: 0.20),
+                          side: BorderSide(
+                            color: _quizMode == GambitQuizMode.guessLine
+                                ? const Color(0xFF5AAEE8)
+                                : chipBorderColor,
+                          ),
+                          labelStyle: TextStyle(
+                            color: _quizMode == GambitQuizMode.guessLine
+                                ? const Color(0xFF8FD0FF)
+                                : chipUnselectedText,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          onSelected: (_) => setState(
+                            () => _quizMode = GambitQuizMode.guessLine,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Difficulty',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.66),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ...QuizDifficulty.values.map((difficulty) {
+                          final selected = _quizDifficulty == difficulty;
+                          final color = _quizDifficultyColor(difficulty);
+                          return ChoiceChip(
+                            label: Text(_quizDifficultyLabel(difficulty)),
+                            selected: selected,
+                            selectedColor: color.withValues(alpha: 0.2),
+                            side: BorderSide(
+                              color: selected
+                                  ? color.withValues(alpha: 0.9)
+                                  : chipBorderColor,
+                            ),
+                            labelStyle: TextStyle(
+                              color: selected ? color : chipUnselectedText,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                            onSelected: (_) => _setQuizDifficulty(difficulty),
+                          );
+                        }),
+                        if (isLandscape) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              'Questions',
+                              style: TextStyle(
+                                color: scheme.onSurface.withValues(alpha: 0.66),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          ...[10, 15, 20].map((target) {
+                            final selected = _quizQuestionsTarget == target;
+                            return ChoiceChip(
+                              label: Text('$target'),
+                              selected: selected,
+                              selectedColor: const Color(
+                                0xFFD8B640,
+                              ).withValues(alpha: 0.20),
+                              side: BorderSide(
+                                color: selected
+                                    ? const Color(0xFFD8B640)
+                                    : chipBorderColor,
+                              ),
+                              labelStyle: TextStyle(
+                                color: selected
+                                    ? const Color(0xFFE4CA79)
+                                    : chipUnselectedText,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              onSelected: (_) => _setQuizQuestionTarget(target),
+                            );
+                          }),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (!isLandscape) ...[
+                      Text(
+                        'Questions',
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.66),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 8,
+                        children: [10, 15, 20].map((target) {
                           final selected = _quizQuestionsTarget == target;
                           return ChoiceChip(
                             label: Text('$target'),
@@ -6737,97 +7228,64 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             side: BorderSide(
                               color: selected
                                   ? const Color(0xFFD8B640)
-                                  : Colors.white24,
+                                  : chipBorderColor,
                             ),
                             labelStyle: TextStyle(
                               color: selected
                                   ? const Color(0xFFE4CA79)
-                                  : Colors.white70,
+                                  : chipUnselectedText,
                               fontWeight: FontWeight.w700,
                             ),
                             onSelected: (_) => _setQuizQuestionTarget(target),
                           );
-                        }),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  if (!isLandscape) ...[
-                    const Text(
-                      'Questions',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontWeight: FontWeight.w600,
+                        }).toList(),
                       ),
-                    ),
-                    const SizedBox(height: 7),
-                    Wrap(
-                      spacing: 8,
-                      children: [10, 15, 20].map((target) {
-                        final selected = _quizQuestionsTarget == target;
-                        return ChoiceChip(
-                          label: Text('$target'),
-                          selected: selected,
-                          selectedColor: const Color(
-                            0xFFD8B640,
-                          ).withValues(alpha: 0.20),
-                          side: BorderSide(
-                            color: selected
-                                ? const Color(0xFFD8B640)
-                                : Colors.white24,
+                    ],
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _openQuizStatsSheet,
+                            icon: const Icon(Icons.insights_outlined),
+                            label: const Text('View Stats'),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                color: const Color(
+                                  0xFF5AAEE8,
+                                ).withValues(alpha: 0.45),
+                              ),
+                              foregroundColor: const Color(0xFF8FD0FF),
+                            ),
                           ),
-                          labelStyle: TextStyle(
-                            color: selected
-                                ? const Color(0xFFE4CA79)
-                                : Colors.white70,
-                            fontWeight: FontWeight.w700,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _startQuizSession,
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('Start Quiz'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF5AAEE8),
+                              foregroundColor: const Color(0xFF07131F),
+                            ),
                           ),
-                          onSelected: (_) => _setQuizQuestionTarget(target),
-                        );
-                      }).toList(),
+                        ),
+                      ],
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _openQuizStatsSheet,
-                          icon: const Icon(Icons.insights_outlined),
-                          label: const Text('View Stats'),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                              color: const Color(
-                                0xFF5AAEE8,
-                              ).withValues(alpha: 0.45),
-                            ),
-                            foregroundColor: const Color(0xFF8FD0FF),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _startQuizSession,
-                          icon: const Icon(Icons.play_arrow_rounded),
-                          label: const Text('Start Quiz'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF5AAEE8),
-                            foregroundColor: const Color(0xFF07131F),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '${_viewedGambits.length}/${gambits.length} gambits viewed',
-              style: const TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Text(
+                '${_viewedGambits.length}/${gambits.length} gambits viewed',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.52),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -6835,47 +7293,95 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     Widget buildQuizBoardCard({double? maxBoardSize}) {
       final reverse =
           _perspective == BoardPerspective.black ||
-          (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
-      final visibleArrows = !_quizAnswered
-          ? _quizContinuation
-          : _quizContinuation
+          (_perspective == BoardPerspective.auto && !displayedWhiteToMove);
+      final visibleArrows = !answersLocked
+          ? displayedContinuation
+          : reviewMode
+          ? displayedContinuation
+          : displayedContinuation
                 .take(
                   _quizPlayArrowCount == 0
-                      ? _quizContinuation.length
+                      ? displayedContinuation.length
                       : _quizPlayArrowCount,
                 )
                 .toList();
+      final canOpenHistory = reviewMode
+          ? (_quizReviewIndex ?? 0) > 0
+          : _quizReviewHistory.isNotEmpty;
 
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F1420).withValues(alpha: 0.94),
+          color: Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
+            scheme.surface,
+          ).withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFFB9A46A).withValues(alpha: 0.20),
-          ),
+          border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Position after $_quizShownPly ply',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11.5,
+            SizedBox(
+              height: 34,
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: canOpenHistory
+                          ? _openPreviousQuizReview
+                          : null,
+                      tooltip: 'Review previous question',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      icon: const Icon(Icons.arrow_back),
                     ),
                   ),
-                ),
-                Text(
-                  _quizWhiteToMove ? 'White to move' : 'Black to move',
-                  style: const TextStyle(color: Colors.white54, fontSize: 10),
-                ),
-              ],
+                  Align(
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Position after $displayedShownPly ply',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: reviewMode
+                        ? TextButton(
+                            onPressed: _exitQuizReviewMode,
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF8FD0FF),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                              minimumSize: const Size(0, 32),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Current'),
+                          )
+                        : Text(
+                            displayedWhiteToMove
+                                ? 'White to move'
+                                : 'Black to move',
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.62),
+                              fontSize: 10,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
             Center(
@@ -6887,7 +7393,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   child: Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white10, width: 1.2),
+                      border: Border.all(
+                        color: scheme.outline.withValues(alpha: 0.34),
+                        width: 1.2,
+                      ),
                     ),
                     child: LayoutBuilder(
                       builder: (context, bc) {
@@ -6909,7 +7418,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         return Stack(
                           fit: StackFit.expand,
                           children: [
-                            _buildQuizBoard(),
+                            _buildQuizBoard(
+                              boardState: displayedBoardState,
+                              whiteToMove: displayedWhiteToMove,
+                            ),
                             if (revealContinuation && visibleArrows.isNotEmpty)
                               AnimatedBuilder(
                                 animation: _pulseController,
@@ -6928,7 +7440,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   ),
                                 ),
                               ),
-                            if (flyFromPx != null &&
+                            if (!reviewMode &&
+                                flyFromPx != null &&
                                 flyToPx != null &&
                                 _quizFlyPiece != null)
                               Positioned(
@@ -6973,56 +7486,56 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     List<Widget> buildQuizOptionButtons() {
       return [
-        for (int i = 0; i < _quizOptions.length; i++)
+        for (int i = 0; i < displayedOptions.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: _quizAnswered ? null : () => _submitQuizAnswer(i),
-                icon: _quizAnswered
+                onPressed: answersLocked ? null : () => _submitQuizAnswer(i),
+                icon: answersLocked
                     ? Icon(
-                        i == _quizCorrectIndex
+                        i == displayedCorrectIndex
                             ? Icons.check_circle
-                            : (i == _quizSelectedIndex
+                            : (i == displayedSelectedIndex
                                   ? Icons.cancel
                                   : Icons.radio_button_unchecked),
                         size: 18,
-                        color: i == _quizCorrectIndex
+                        color: i == displayedCorrectIndex
                             ? const Color(0xFF7EDC8A)
-                            : (i == _quizSelectedIndex
+                            : (i == displayedSelectedIndex
                                   ? const Color(0xFFFF8A80)
-                                  : Colors.white30),
+                                  : scheme.onSurface.withValues(alpha: 0.36)),
                       )
-                    : const Icon(
+                    : Icon(
                         Icons.help_outline,
                         size: 17,
-                        color: Colors.white38,
+                        color: scheme.onSurface.withValues(alpha: 0.48),
                       ),
                 style: OutlinedButton.styleFrom(
                   alignment: Alignment.centerLeft,
                   side: BorderSide(
-                    color: _quizAnswered && i == _quizCorrectIndex
+                    color: answersLocked && i == displayedCorrectIndex
                         ? const Color(0xFF7EDC8A).withValues(alpha: 0.7)
-                        : Colors.white24,
+                        : chipBorderColor,
                   ),
-                  backgroundColor: _quizAnswered && i == _quizCorrectIndex
+                  backgroundColor: answersLocked && i == displayedCorrectIndex
                       ? const Color(0xFF7EDC8A).withValues(alpha: 0.12)
-                      : (_quizAnswered && i == _quizSelectedIndex
+                      : (answersLocked && i == displayedSelectedIndex
                             ? const Color(0xFFFF8A80).withValues(alpha: 0.08)
                             : null),
                 ),
-                label: _quizMode == GambitQuizMode.guessLine
+                label: displayedQuizMode == GambitQuizMode.guessLine
                     ? _buildMoveSequenceText(
-                        _quizOptions[i],
+                        displayedOptions[i],
                         fontSize: 14,
-                        color: Colors.white.withValues(alpha: 0.88),
+                        color: scheme.onSurface.withValues(alpha: 0.90),
                         fontWeight: FontWeight.w600,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       )
                     : Text(
-                        _quizOptions[i],
+                        displayedOptions[i],
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -7033,7 +7546,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
 
     Widget buildQuizPromptBlock() {
-      if (_quizPrompt.isEmpty) {
+      if (displayedPrompt.isEmpty) {
         return const SizedBox.shrink();
       }
       return Container(
@@ -7041,25 +7554,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
         decoration: BoxDecoration(
-          color: const Color(0xFF0E1627).withValues(alpha: 0.82),
+          color: Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+            scheme.surface,
+          ).withValues(alpha: 0.90),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _quizPrompt,
-              style: const TextStyle(
-                color: Colors.white70,
+              displayedPrompt,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.74),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            if (_quizPromptFocus.isNotEmpty) ...[
+            if (displayedPromptFocus.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
-                _quizPromptFocus,
+                displayedPromptFocus,
                 style: const TextStyle(
                   color: Color(0xFFFFD88A),
                   fontSize: 14,
@@ -7072,147 +7588,168 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       );
     }
 
-    return Padding(
-      padding: quizPadding,
-      child: Column(
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: _returnToQuizSetup,
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back to Setup',
-              ),
-              Expanded(
-                child: Text(
-                  '${_quizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    Widget buildQuizPrimaryActionButton() {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: reviewMode
+            ? OutlinedButton.icon(
+                onPressed: _exitQuizReviewMode,
+                icon: const Icon(Icons.history_toggle_off_rounded),
+                label: const Text('Return to Current'),
+              )
+            : FilledButton.icon(
+                onPressed: _handleQuizPrimaryAction,
+                icon: Icon(
+                  _quizAnswered && _quizSessionAnswered >= _quizQuestionsTarget
+                      ? Icons.flag_rounded
+                      : Icons.navigate_next_rounded,
+                ),
+                label: Text(
+                  _quizAnswered
+                      ? (_quizSessionAnswered >= _quizQuestionsTarget
+                            ? 'Finish Session'
+                            : 'Next Puzzle')
+                      : 'Skip Puzzle',
                 ),
               ),
-              IconButton(
-                onPressed: _openAppearanceSettings,
-                icon: const Icon(Icons.palette_outlined),
-                tooltip: 'Board & Pieces',
-              ),
-              IconButton(
-                onPressed: _openQuizStatsSheet,
-                icon: const Icon(Icons.insights_outlined),
-                tooltip: 'Performance Stats',
-              ),
-              Text(
-                'Q ${min(_quizSessionAnswered + (_quizAnswered ? 0 : 1), _quizQuestionsTarget)}/$_quizQuestionsTarget',
-                style: const TextStyle(color: Colors.white60),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (sideBySideLayout) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: LayoutBuilder(
-                          builder: (context, leftConstraints) {
-                            const boardCardChromeHeight = 62.0;
-                            final boardSize = max(
-                              0.0,
-                              min(
-                                leftConstraints.maxWidth - 24,
-                                leftConstraints.maxHeight -
-                                    boardCardChromeHeight,
-                              ),
-                            );
-                            return buildQuizBoardCard(maxBoardSize: boardSize);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        flex: 6,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            buildQuizPromptBlock(),
-                            Expanded(
-                              child: ListView(
-                                children: buildQuizOptionButtons(),
-                              ),
-                            ),
-                            if (_quizFeedback.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 2,
-                                  bottom: 8,
+      );
+    }
+
+    return Container(
+      color: quizBackground,
+      child: Padding(
+        padding: quizPadding,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _returnToQuizSetup,
+                  color: lightHeaderColor,
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back to Setup',
+                ),
+                Expanded(
+                  child: Text(
+                    '${displayedQuizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _openAppearanceSettings,
+                  color: lightHeaderColor,
+                  icon: const Icon(Icons.palette_outlined),
+                  tooltip: 'Board & Pieces',
+                ),
+                IconButton(
+                  onPressed: _openQuizStatsSheet,
+                  color: lightHeaderColor,
+                  icon: const Icon(Icons.insights_outlined),
+                  tooltip: 'Performance Stats',
+                ),
+                Text(
+                  'Q ${min(_quizSessionAnswered + (_quizAnswered ? 0 : 1), _quizQuestionsTarget)}/$_quizQuestionsTarget',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.66),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (sideBySideLayout) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: LayoutBuilder(
+                            builder: (context, leftConstraints) {
+                              const boardCardChromeHeight = 62.0;
+                              final boardSize = max(
+                                0.0,
+                                min(
+                                  leftConstraints.maxWidth - 24,
+                                  leftConstraints.maxHeight -
+                                      boardCardChromeHeight,
                                 ),
-                                child: Text(
-                                  _quizFeedback,
-                                  style: TextStyle(
-                                    color: isCorrectAnswer
-                                        ? const Color(0xFF7EDC8A)
-                                        : const Color(0xFFFFB26A),
-                                    fontWeight: FontWeight.w600,
+                              );
+                              return buildQuizBoardCard(
+                                maxBoardSize: boardSize,
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 6,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              buildQuizPromptBlock(),
+                              Expanded(
+                                child: ListView(
+                                  children: buildQuizOptionButtons(),
+                                ),
+                              ),
+                              if (displayedFeedback.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 2,
+                                    bottom: 8,
+                                  ),
+                                  child: Text(
+                                    displayedFeedback,
+                                    style: TextStyle(
+                                      color: isCorrectAnswer
+                                          ? const Color(0xFF7EDC8A)
+                                          : const Color(0xFFFFB26A),
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                              buildQuizPrimaryActionButton(),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
+                    );
+                  }
+
+                  return ListView(
+                    children: [
+                      if (hasQuizBoard) buildQuizBoardCard(),
+                      if (hasQuizBoard) const SizedBox(height: 8),
+                      buildQuizPromptBlock(),
+                      ...buildQuizOptionButtons(),
                     ],
                   );
-                }
-
-                return ListView(
-                  children: [
-                    if (hasQuizBoard) buildQuizBoardCard(),
-                    if (hasQuizBoard) const SizedBox(height: 8),
-                    buildQuizPromptBlock(),
-                    ...buildQuizOptionButtons(),
-                  ],
-                );
-              },
+                },
+              ),
             ),
-          ),
-          if (_quizFeedback.isNotEmpty && !sideBySideLayout)
-            Padding(
-              padding: const EdgeInsets.only(top: 2, bottom: 8),
-              child: Text(
-                _quizFeedback,
-                style: TextStyle(
-                  color: isCorrectAnswer
-                      ? const Color(0xFF7EDC8A)
-                      : const Color(0xFFFFB26A),
-                  fontWeight: FontWeight.w600,
+            if (displayedFeedback.isNotEmpty && !sideBySideLayout)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 8),
+                child: Text(
+                  displayedFeedback,
+                  style: TextStyle(
+                    color: isCorrectAnswer
+                        ? const Color(0xFF7EDC8A)
+                        : const Color(0xFFFFB26A),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: _handleQuizPrimaryAction,
-              icon: Icon(
-                _quizAnswered && _quizSessionAnswered >= _quizQuestionsTarget
-                    ? Icons.flag_rounded
-                    : Icons.navigate_next_rounded,
-              ),
-              label: Text(
-                _quizAnswered
-                    ? (_quizSessionAnswered >= _quizQuestionsTarget
-                          ? 'Finish Session'
-                          : 'Next Puzzle')
-                    : 'Skip Puzzle',
-              ),
-            ),
-          ),
-        ],
+            if (!sideBySideLayout) buildQuizPrimaryActionButton(),
+          ],
+        ),
       ),
     );
   }
@@ -7221,6 +7758,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     required QuizTrendFilter filter,
     required ValueChanged<QuizTrendFilter> onFilterChanged,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final accuracy = _quizAccuracy();
     final series = _buildQuizAccuracySeries(filter, days: 10);
     final latest = series.isEmpty ? null : series.last.value;
@@ -7229,27 +7769,35 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF131D31), Color(0xFF0F1728), Color(0xFF0A1220)],
-          stops: [0.0, 0.58, 1.0],
+          colors: [
+            Color.alphaBlend(
+              scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
+              scheme.surface,
+            ),
+            Color.alphaBlend(
+              scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+              scheme.surface,
+            ),
+            scheme.surface,
+          ],
+          stops: const [0.0, 0.58, 1.0],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFF5AAEE8).withValues(alpha: 0.28),
-        ),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Quiz Performance',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: scheme.onSurface,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -7304,10 +7852,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 selected: selected,
                 selectedColor: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
                 side: BorderSide(
-                  color: selected ? const Color(0xFF5AAEE8) : Colors.white24,
+                  color: selected
+                      ? const Color(0xFF5AAEE8)
+                      : scheme.outline.withValues(alpha: 0.34),
                 ),
                 labelStyle: TextStyle(
-                  color: selected ? const Color(0xFF8FD0FF) : Colors.white70,
+                  color: selected
+                      ? const Color(0xFF8FD0FF)
+                      : scheme.onSurface.withValues(alpha: 0.82),
                   fontWeight: FontWeight.w700,
                   fontSize: 11.5,
                 ),
@@ -7317,17 +7869,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 10),
           if (series.isEmpty)
-            const Text(
+            Text(
               'Play puzzles in this mode to build your accuracy trend.',
-              style: TextStyle(color: Colors.white54, fontSize: 11.5),
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.62),
+                fontSize: 11.5,
+              ),
             )
           else
             Container(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0A1220).withValues(alpha: 0.70),
+                color: Color.alphaBlend(
+                  scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+                  scheme.surface,
+                ).withValues(alpha: 0.90),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.30),
+                ),
               ),
               child: Column(
                 children: [
@@ -7346,8 +7906,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                           child: Text(
                             point.dayLabel,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white38,
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.50),
                               fontSize: 9.5,
                             ),
                           ),
@@ -7363,6 +7923,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _quizMetricChip(String label, String value, Color accent) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
@@ -7373,7 +7935,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       child: Text(
         '$label: $value',
         style: TextStyle(
-          color: accent,
+          color: scheme.onSurface,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
@@ -7381,15 +7943,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildQuizBoard() {
+  Widget _buildQuizBoard({
+    required Map<String, String> boardState,
+    required bool whiteToMove,
+  }) {
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
-    final boardState = _quizPlayBoard.isNotEmpty
-        ? _quizPlayBoard
-        : _quizBoardState;
     final reverse =
         _perspective == BoardPerspective.black ||
-        (_perspective == BoardPerspective.auto && !_quizWhiteToMove);
+        (_perspective == BoardPerspective.auto && !whiteToMove);
 
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
@@ -7421,21 +7983,42 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildAnalysisBoardScaffold(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
     bool reverse = _playVsBot
         ? !_humanPlaysWhite
         : (_perspective == BoardPerspective.black) ||
               (_perspective == BoardPerspective.auto && !_isWhiteTurn);
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+    final pageBackground = scheme.surface;
+    final bgTop = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
+      scheme.surface,
+    );
+    final bgBottom = Color.alphaBlend(
+      scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+      scheme.surface,
+    );
+    final leftBlob = useMonochrome
+        ? (isDark ? const Color(0xFF334B80) : const Color(0xFFDEE8FB))
+        : const Color(0xFF3F6ED8);
+    final rightBlob = useMonochrome
+        ? (isDark ? const Color(0xFF6E6540) : const Color(0xFFF3EBCF))
+        : const Color(0xFFB9A46A);
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0B0F19), Color(0xFF080A12), Color(0xFF101624)],
-            stops: [0.0, 0.55, 1.0],
+            colors: [bgTop, pageBackground, bgBottom],
+            stops: const [0.0, 0.55, 1.0],
           ),
         ),
         child: Stack(
@@ -7448,7 +8031,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 height: 280,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF3F6ED8).withValues(alpha: 0.16),
+                  color: leftBlob.withValues(alpha: isDark ? 0.16 : 0.09),
                 ),
               ),
             ),
@@ -7460,7 +8043,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 height: 260,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFB9A46A).withValues(alpha: 0.12),
+                  color: rightBlob.withValues(alpha: isDark ? 0.12 : 0.08),
                 ),
               ),
             ),
@@ -7567,9 +8150,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                       final suggestionsHeight =
                                                           (sideConstraints
                                                                       .maxHeight *
-                                                                  (_playVsBot
-                                                                      ? 0.62
-                                                                      : 0.46))
+                                                                  0.46)
                                                               .clamp(
                                                                 96.0,
                                                                 250.0,
@@ -7598,14 +8179,20 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                               child: Text(
                                                                 _selectedGambit!
                                                                     .name,
-                                                                style: const TextStyle(
+                                                                style: TextStyle(
                                                                   fontSize: 13,
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .w700,
-                                                                  color: Color(
-                                                                    0xFFD8B640,
-                                                                  ),
+                                                                  color:
+                                                                      useMonochrome
+                                                                      ? scheme.onSurface.withValues(
+                                                                          alpha:
+                                                                              0.86,
+                                                                        )
+                                                                      : const Color(
+                                                                          0xFFD8B640,
+                                                                        ),
                                                                 ),
                                                                 maxLines: 2,
                                                                 overflow:
@@ -7623,13 +8210,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                                   ),
                                                               child: Text(
                                                                 _currentOpening,
-                                                                style: const TextStyle(
+                                                                style: TextStyle(
                                                                   fontSize: 13,
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .w700,
-                                                                  color: Colors
-                                                                      .white70,
+                                                                  color: scheme
+                                                                      .onSurface
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.72,
+                                                                      ),
                                                                 ),
                                                                 maxLines: 2,
                                                                 overflow:
@@ -7760,6 +8351,52 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         ),
                         if (!_introCompleted)
                           _buildPremiumIntroOverlay(Size(width, height)),
+                        if (_editModeHintText != null)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF0C1018,
+                                    ).withValues(alpha: 0.92),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: _analysisEditMode
+                                          ? const Color(
+                                              0xFFFFD166,
+                                            ).withValues(alpha: 0.42)
+                                          : Colors.white24,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    _editModeHintText!,
+                                    style: TextStyle(
+                                      color: _analysisEditMode
+                                          ? const Color(0xFFFFD166)
+                                          : Colors.white70,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         _buildSuggestionLaunchOverlay(),
                         _buildButtonRippleOverlay(),
                       ],
@@ -7775,8 +8412,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildHeader(double scale) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final isLightMono = useMonochrome && !isDark;
     final displayedEval = _displayEvalForPov();
-    final displayedEvalColor = _evalColorForUi(displayedEval);
+    final displayedEvalColor = isLightMono
+        ? Colors.black
+        : useMonochrome
+        ? (_isWinningOutcomeForPov
+              ? const Color(0xFFE6E6E6)
+              : (_isLosingOutcomeForPov
+                    ? const Color(0xFF111111)
+                    : (displayedEval >= 0
+                          ? const Color(0xFFCFCFCF)
+                          : const Color(0xFF3A3A3A))))
+        : _evalColorForUi(displayedEval);
     final selectedBot = _selectedBot;
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -7824,7 +8478,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             'Engine: Stockfish 18',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Colors.white38,
+                              color: scheme.onSurface.withValues(alpha: 0.54),
                               fontSize: 10 * scale,
                               letterSpacing: 0.4,
                             ),
@@ -7849,7 +8503,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.24),
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.24 : 0.10,
+                            ),
                             blurRadius: 10 * scale,
                             offset: const Offset(0, 3),
                           ),
@@ -7862,7 +8518,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 fit: BoxFit.cover,
                               )
                             : Container(
-                                color: const Color(0xFF10182A),
+                                color: Color.alphaBlend(
+                                  scheme.primary.withValues(alpha: 0.08),
+                                  scheme.surface,
+                                ),
                                 alignment: Alignment.center,
                                 child: Icon(
                                   Icons.smart_toy_outlined,
@@ -7884,14 +8543,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   vertical: 6 * scale,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF111723).withValues(alpha: 0.88),
+                  color: isLightMono
+                      ? Colors.white
+                      : Color.alphaBlend(
+                          scheme.primary.withValues(
+                            alpha: isDark ? 0.14 : 0.05,
+                          ),
+                          scheme.surface,
+                        ).withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: const Color(0xFFB9A46A).withValues(alpha: 0.25),
+                    color: isLightMono
+                        ? Colors.black
+                        : scheme.outline.withValues(alpha: 0.34),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.30 : 0.10,
+                      ),
                       blurRadius: 14,
                       offset: const Offset(0, 4),
                     ),
@@ -7923,7 +8593,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                           _gambitSelectedFrom = null;
                           _legalTargets.clear();
                           _gambitAvailableTargets.clear();
+                          _editModeHintText = _analysisEditMode
+                              ? 'Edit mode on'
+                              : 'Edit mode off';
                         });
+                        _scheduleEditModeHintHide();
                       },
                       icon: Text(
                         _analysisEditMode ? '🛠️' : '🔒',
@@ -7931,7 +8605,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       ),
                       tooltip: _analysisEditMode
                           ? 'Edit mode on (any move allowed)'
-                          : 'Locked mode (legal moves only)',
+                          : 'Edit mode off (legal moves only)',
                       splashRadius: 14 * scale,
                       visualDensity: VisualDensity.compact,
                       padding: EdgeInsets.zero,
@@ -7946,7 +8620,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   Text(
                     'Depth $_currentDepth',
                     style: TextStyle(
-                      color: Colors.white30,
+                      color: scheme.onSurface.withValues(alpha: 0.54),
                       fontSize: 11 * scale,
                     ),
                   ),
@@ -7955,7 +8629,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     onPressed: _showLogsDialog,
                     icon: Icon(
                       Icons.bug_report_outlined,
-                      color: Colors.white38,
+                      color: scheme.onSurface.withValues(alpha: 0.56),
                       size: 16 * scale,
                     ),
                     splashRadius: 14 * scale,
@@ -7976,8 +8650,21 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildEvalBarHorizontal(double scale) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final isLightMono = useMonochrome && !isDark;
     final displayedEval = _displayEvalForPov();
-    final displayedEvalColor = _evalColorForUi(displayedEval);
+    final displayedEvalColor = isLightMono
+        ? Colors.black
+        : useMonochrome
+        ? (displayedEval >= 0
+              ? const Color(0xFFD8D8D8)
+              : const Color(0xFF181818))
+        : _evalColorForUi(displayedEval);
     final showWinningAura = _isWinningOutcomeForPov || displayedEval > 5.0;
     final fill = _evalFillForUi(displayedEval);
     return Container(
@@ -7985,8 +8672,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       width: double.infinity,
       margin: EdgeInsets.symmetric(horizontal: 18 * scale, vertical: 4 * scale),
       decoration: BoxDecoration(
-        color: Colors.white10,
+        color: isLightMono
+            ? Colors.white
+            : scheme.outline.withValues(alpha: 0.24),
         borderRadius: BorderRadius.circular(2 * scale),
+        border: isLightMono ? Border.all(color: Colors.black) : null,
       ),
       child: FractionallySizedBox(
         alignment: Alignment.centerLeft,
@@ -7998,7 +8688,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             boxShadow: [
               BoxShadow(
                 color:
-                    (showWinningAura
+                    (showWinningAura && !useMonochrome
                             ? const Color(0xFFD8B640)
                             : displayedEvalColor)
                         .withValues(alpha: 0.65),
@@ -8013,6 +8703,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildOpeningLabel(double scale) {
+    final scheme = Theme.of(context).colorScheme;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
     final label = _selectedGambit?.name ?? _currentOpening;
     if (label.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -8024,9 +8718,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         label,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: _selectedGambit != null
-              ? const Color(0xFFD8B640)
-              : Colors.white70,
+          color: useMonochrome
+              ? scheme.onSurface.withValues(alpha: 0.86)
+              : (_selectedGambit != null
+                    ? const Color(0xFFD8B640)
+                    : scheme.onSurface.withValues(alpha: 0.72)),
           fontSize: _selectedGambit != null ? (13 * scale) : (12 * scale),
           fontWeight: FontWeight.w600,
         ),
@@ -8518,6 +9214,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildActionArea({double compactBottom = 20, double horizontal = 20}) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: compactBottom,
@@ -8546,13 +9246,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       : const Color(0xFF5AAEE8);
                   final bool isOn =
                       _openingButtonFlashRed || _openingMode != OpeningMode.off;
+                  final idleBackground = Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isLight ? 0.10 : 0.05),
+                    scheme.surface,
+                  );
+                  final idleIconColor = scheme.onSurface.withValues(
+                    alpha: isLight ? 0.78 : 0.54,
+                  );
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isOn
-                          ? const Color(0xFF1A1B22)
-                          : Colors.transparent,
+                          ? Color.alphaBlend(
+                              activeColor.withValues(alpha: isLight ? 0.18 : 0.10),
+                              scheme.surface,
+                            )
+                          : idleBackground,
+                      border: Border.all(
+                        color: isOn
+                            ? activeColor.withValues(alpha: isLight ? 0.56 : 0.36)
+                            : scheme.outline.withValues(alpha: isLight ? 0.38 : 0.24),
+                      ),
                       boxShadow: isOn
                           ? [
                               BoxShadow(
@@ -8570,12 +9285,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     child: Icon(
                       Icons.auto_awesome,
                       color: _openingButtonFlashRed
-                          ? (blink ? Colors.redAccent : Colors.white54)
+                          ? (blink ? Colors.redAccent : idleIconColor)
                           : _openingMode == OpeningMode.yellowGlow
                           ? const Color(0xFFFFD166)
                           : _openingMode == OpeningMode.blueGlow
                           ? const Color(0xFF5AAEE8)
-                          : Colors.white54,
+                          : idleIconColor,
                     ),
                   );
                 },
@@ -8583,7 +9298,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             )
           else
             _buildBotUndoButton(),
-          _iconBtn(Icons.settings_outlined, _openSettings),
+          _iconBtn(Icons.settings_outlined, () => _openSettings()),
         ],
       ),
     );
@@ -8679,6 +9394,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       onTap: (!_buttonUnlocked || _suggestionLaunchInProgress)
           ? null
           : () async {
+              if (_multiPvCount <= 0) {
+                _addLog(
+                  'Set Suggested Moves above 0 in Settings to enable suggestions.',
+                );
+                return;
+              }
               if (_playVsBot) {
                 setState(() {
                   _suggestionsEnabled = true;
@@ -8950,12 +9671,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _marketplaceBtn() {
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       onPressed: _openStore,
-      icon: const Icon(Icons.storefront_outlined, color: Color(0xFFC7CBD6)),
+      icon: Icon(Icons.storefront_outlined, color: scheme.onSurface),
       style: IconButton.styleFrom(
-        backgroundColor: const Color(0xFF121724).withValues(alpha: 0.78),
-        side: const BorderSide(color: Colors.white12),
+        backgroundColor: Color.alphaBlend(
+          scheme.primary.withValues(alpha: 0.07),
+          scheme.surface,
+        ),
+        side: BorderSide(color: scheme.outline.withValues(alpha: 0.36)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
@@ -8963,10 +9688,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Widget _iconBtn(IconData i, VoidCallback fn) => IconButton(
     onPressed: fn,
-    icon: Icon(i, color: const Color(0xFFC7CBD6)),
+    icon: Icon(i, color: Theme.of(context).colorScheme.onSurface),
     style: IconButton.styleFrom(
-      backgroundColor: const Color(0xFF121724).withValues(alpha: 0.78),
-      side: const BorderSide(color: Colors.white12),
+      backgroundColor: Color.alphaBlend(
+        Theme.of(context).colorScheme.primary.withValues(alpha: 0.07),
+        Theme.of(context).colorScheme.surface,
+      ),
+      side: BorderSide(
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.36),
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
   );
@@ -9902,500 +10632,150 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   void _openAppearanceSettings() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF10131B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setL) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            12 + MediaQuery.of(ctx).padding.top,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSettingsHeader('Board & Pieces', setL),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  border: Border.all(color: Colors.white12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'BOARD PERSPECTIVE',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.8,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _perspectiveOption(
-                          'White',
-                          BoardPerspective.white,
-                          setL,
-                        ),
-                        _perspectiveOption(
-                          'Black',
-                          BoardPerspective.black,
-                          setL,
-                        ),
-                        _perspectiveOption('Auto', BoardPerspective.auto, setL),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  border: Border.all(color: Colors.white12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 2),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      alignment: WrapAlignment.center,
-                      children: _availableBoardThemes
-                          .map((mode) => _boardThemeOption(mode, setL))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 14),
-                    const SizedBox(height: 2),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      alignment: WrapAlignment.center,
-                      children: _availablePieceThemes
-                          .map((mode) => _pieceThemeOption(mode, setL))
-                          .toList(),
-                    ),
-                    if (_availableBoardThemes.length <
-                            BoardThemeMode.values.length ||
-                        _availablePieceThemes.length <
-                            PieceThemeMode.values.length) ...[
-                      const SizedBox(height: 14),
-                      InkWell(
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          Future.microtask(
-                            () =>
-                                _openStore(initialSection: StoreSection.themes),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(14),
-                        child: Ink(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF2D6EF2), Color(0xFF1F56C8)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(
-                                0xFF89AEFF,
-                              ).withValues(alpha: 0.5),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF2A6CF0,
-                                ).withValues(alpha: 0.35),
-                                blurRadius: 14,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.auto_awesome_rounded,
-                                size: 18,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Get More Themes',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    SizedBox(height: 1),
-                                    Text(
-                                      'Open Theme Store',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: Colors.white,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    _openSettings();
   }
 
-  void _openSettings() {
-    showModalBottomSheet(
+  Future<void> _openSettings({bool isAcademyMode = false}) async {
+    final themeProvider = context.read<AppThemeProvider>();
+    final isBoardAnalysisPage =
+        _activeSection == AppSection.analysis && !_playVsBot;
+    final isVsBotPage = _playVsBot;
+    final showBoardPerspectiveSection = !isAcademyMode && isBoardAnalysisPage;
+    final showEngineControlsSection =
+        !isAcademyMode && (isBoardAnalysisPage || isVsBotPage);
+
+    await showUniversalSettingsSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF10131B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setL) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            12 + MediaQuery.of(ctx).padding.top,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(999),
+      title: 'Settings',
+      isAcademyMode: isAcademyMode,
+      themeMode: themeProvider.themeMode,
+      themeStyle: themeProvider.themeStyle,
+      onThemeModeChanged: (mode) async {
+        await themeProvider.setThemeMode(mode);
+      },
+      onThemeStyleChanged: (style) async {
+        await _setCinematicThemeEnabled(style == AppThemeStyle.monochrome);
+      },
+      soundEnabled: !_muteSounds,
+      hapticsEnabled: _hapticsEnabled,
+      onSoundEnabledChanged: (enabled) async {
+        await _setMute(!enabled);
+      },
+      onHapticsEnabledChanged: (enabled) async {
+        await _setHapticsEnabled(enabled);
+      },
+      boardThemeSelectorBuilder: (setSheetState) {
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          alignment: WrapAlignment.center,
+          children: _availableBoardThemes
+              .map((mode) => _boardThemeOption(mode, setSheetState))
+              .toList(),
+        );
+      },
+      pieceThemeSelectorBuilder: (setSheetState) {
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          alignment: WrapAlignment.center,
+          children: _availablePieceThemes
+              .map((mode) => _pieceThemeOption(mode, setSheetState))
+              .toList(),
+        );
+      },
+      showBoardPerspectiveSection: showBoardPerspectiveSection,
+      boardPerspectiveSectionBuilder: showBoardPerspectiveSection
+          ? (setSheetState) {
+              final theme = Theme.of(context);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Board Perspective',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSettingsHeader('Settings', setL),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  border: Border.all(color: Colors.white12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      "BOARD PERSPECTIVE",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.8,
-                        fontSize: 12,
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _perspectiveOption(
+                        'White',
+                        BoardPerspective.white,
+                        setSheetState,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _perspectiveOption(
-                          "White",
-                          BoardPerspective.white,
-                          setL,
-                        ),
-                        _perspectiveOption(
-                          "Black",
-                          BoardPerspective.black,
-                          setL,
-                        ),
-                        _perspectiveOption("Auto", BoardPerspective.auto, setL),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  border: Border.all(color: Colors.white12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 2),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      alignment: WrapAlignment.center,
-                      children: _availableBoardThemes
-                          .map((mode) => _boardThemeOption(mode, setL))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 14),
-                    const SizedBox(height: 2),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      alignment: WrapAlignment.center,
-                      children: _availablePieceThemes
-                          .map((mode) => _pieceThemeOption(mode, setL))
-                          .toList(),
-                    ),
-                    if (_availableBoardThemes.length <
-                            BoardThemeMode.values.length ||
-                        _availablePieceThemes.length <
-                            PieceThemeMode.values.length) ...[
-                      const SizedBox(height: 14),
-                      InkWell(
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          Future.microtask(
-                            () =>
-                                _openStore(initialSection: StoreSection.themes),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(14),
-                        child: Ink(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF2D6EF2), Color(0xFF1F56C8)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(
-                                0xFF89AEFF,
-                              ).withValues(alpha: 0.5),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF2A6CF0,
-                                ).withValues(alpha: 0.35),
-                                blurRadius: 14,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.auto_awesome_rounded,
-                                size: 18,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Get More Themes',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    SizedBox(height: 1),
-                                    Text(
-                                      'Open Theme Store',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: Colors.white,
-                              ),
-                            ],
-                          ),
-                        ),
+                      _perspectiveOption(
+                        'Black',
+                        BoardPerspective.black,
+                        setSheetState,
+                      ),
+                      _perspectiveOption(
+                        'Auto',
+                        BoardPerspective.auto,
+                        setSheetState,
                       ),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  border: Border.all(color: Colors.white12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          "SEARCH DEPTH",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$_engineDepth',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF00FF88),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Slider(
-                      value: _engineDepth.toDouble(),
-                      min: 10,
-                      max: _maxDepthAllowed.toDouble(),
-                      divisions: _maxDepthAllowed - 10,
-                      onChanged: (v) {
-                        setState(() => _engineDepth = v.toInt());
-                        setL(() {});
-                        _analyze();
-                      },
-                      onChangeEnd: (_) => _persistCurrentSettings(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  border: Border.all(color: Colors.white12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          "SUGGESTED MOVES",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$_multiPvCount',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF00FF88),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Slider(
-                      value: _multiPvCount.toDouble(),
-                      min: 1,
-                      max: _maxSuggestionsAllowed.toDouble(),
-                      divisions: _maxSuggestionsAllowed - 1,
-                      onChanged: (v) {
-                        _applySuggestionCount(v.toInt());
-                        setL(() {});
-                      },
-                      onChangeEnd: (v) =>
-                          _applySuggestionCount(v.toInt(), persist: true),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            }
+          : null,
+      showEngineControlsSection: showEngineControlsSection,
+      engineDepth: _engineDepth,
+      maxEngineDepth: _maxDepthAllowed,
+      suggestedMoves: _multiPvCount,
+      maxSuggestedMoves: _maxSuggestionsAllowed,
+      onEngineDepthChanged: (value) {
+        setState(() => _engineDepth = value);
+        _analyze();
+      },
+      onEngineDepthChangeEnd: (value) {
+        setState(() => _engineDepth = value);
+        _persistCurrentSettings();
+      },
+      onSuggestedMovesChanged: (value) {
+        _applySuggestionCount(value);
+      },
+      onSuggestedMovesChangeEnd: (value) {
+        _applySuggestionCount(value, persist: true);
+      },
+      extraSectionsBuilder: (sheetContext, setSheetState) {
+        final theme = Theme.of(sheetContext);
+        final scheme = theme.colorScheme;
+        final sectionColor = Color.alphaBlend(
+          scheme.primary.withValues(alpha: 0.06),
+          scheme.surface,
+        );
+        final borderColor = scheme.outline.withValues(alpha: 0.24);
+
+        if (_availableBoardThemes.length >= BoardThemeMode.values.length &&
+            _availablePieceThemes.length >= PieceThemeMode.values.length) {
+          return const <Widget>[];
+        }
+
+        return <Widget>[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: sectionColor,
+              border: Border.all(color: borderColor),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: FilledButton.icon(
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                Future.microtask(
+                  () => _openStore(initialSection: StoreSection.themes),
+                );
+              },
+              icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+              label: const Text('Open Theme Store'),
+            ),
           ),
-        ),
-      ),
+        ];
+      },
     );
   }
 
@@ -10416,9 +10796,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       'blackQueensideRookMoved': _blackQueensideRookMoved,
       'enPassantTarget': _enPassantTarget,
       'suggestionsEnabled': _suggestionsEnabled,
+      'currentEval': _currentEval,
+      'currentDepth': _currentDepth,
+      'evalWhiteTurn': _evalWhiteTurn,
+      'currentOpening': _selectedGambit?.name ?? _currentOpening,
       'boardState': boardState,
       'historyIndex': _historyIndex,
       'moveHistory': _moveHistory.map(_moveRecordToMap).toList(),
+      'topLines': _topLines.map((line) => line.toMap()).toList(),
+      'gambitPreviewLines': _gambitPreviewLines
+          .map((line) => line.toMap())
+          .toList(),
     };
     await prefs.setString(_savedDefaultSnapshotKey, jsonEncode(payload));
     if (logChange) {
@@ -10518,7 +10906,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _playResetRewardAdIfNeeded() async {
-    const reward = 90;
+    const rewardOptions = <int>[45, 50, 55, 60, 65, 70, 75, 80, 100];
+    final reward = rewardOptions[Random().nextInt(rewardOptions.length)];
     if (!mounted) return;
 
     unawaited(_playCoinRewardSound());
@@ -10544,10 +10933,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Ad played. You earned +90 coins.',
+              Text(
+                'Ad played. You earned +$reward coins.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70),
+                style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 14),
               FilledButton(
@@ -10574,12 +10963,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _resetBoard();
       _analyze();
     });
+    _persistAnalysisSnapshotIfNeeded();
     unawaited(_maybeTriggerBotMove());
   }
 
   Future<void> _watchRewardAdFromStore() async {
     const reward = 120;
     if (!mounted) return;
+    if (_storeRewardAdRemainingCooldown() > Duration.zero) {
+      return;
+    }
 
     unawaited(_playCoinRewardSound());
 
@@ -10621,7 +11014,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     setState(() {
       _storeCoins += reward;
+      _lastStoreRewardAdAt = DateTime.now();
     });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _storeRewardAdLastWatchKey,
+      _lastStoreRewardAdAt!.millisecondsSinceEpoch,
+    );
     await _saveStoreState();
     _addLog('Reward ad claimed (+$reward coins)');
   }
@@ -10658,10 +11057,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _boardThemeMode = _defaultBoardTheme;
       _pieceThemeMode = _defaultPieceTheme;
       _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
-      _multiPvCount = _multiPvCount.clamp(1, _maxSuggestionsAllowed);
+      _multiPvCount = _multiPvCount.clamp(0, _maxSuggestionsAllowed);
       if (_multiPvCount >
-          _defaultMultiPvCount.clamp(1, _maxSuggestionsAllowed)) {
-        _multiPvCount = _defaultMultiPvCount.clamp(1, _maxSuggestionsAllowed);
+          _defaultMultiPvCount.clamp(0, _maxSuggestionsAllowed)) {
+        _multiPvCount = _defaultMultiPvCount.clamp(0, _maxSuggestionsAllowed);
       }
     });
 
@@ -10669,268 +11068,356 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     await prefs.remove(_storeStateKey);
     await prefs.remove(_savedDefaultSnapshotKey);
     await _saveStoreState();
-    _send('setoption name MultiPV value $_multiPvCount');
+    _send('setoption name MultiPV value $_effectiveMultiPvCount');
     _analyze();
     _addLog('Store purchases and saved settings reset');
   }
 
-  void _openStore({StoreSection initialSection = StoreSection.general}) {
-    showModalBottomSheet<void>(
+  Future<void> _openStore({
+    StoreSection initialSection = StoreSection.general,
+  }) async {
+    await _loadStoreState();
+    if (!mounted) return;
+
+    Timer? rewardCooldownTicker;
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF10131B),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       clipBehavior: Clip.antiAlias,
       builder: (_) => StatefulBuilder(
-        builder: (ctx, setL) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            12 + MediaQuery.of(ctx).padding.top,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
+        builder: (ctx, setL) {
+          rewardCooldownTicker ??= Timer.periodic(const Duration(seconds: 1), (
+            _,
+          ) {
+            if (!ctx.mounted) {
+              rewardCooldownTicker?.cancel();
+              return;
+            }
+            setL(() {});
+          });
+          final theme = Theme.of(ctx);
+          final scheme = theme.colorScheme;
+          final isDark = theme.brightness == Brightness.dark;
+          final useMonochrome =
+              ctx.watch<AppThemeProvider>().isMonochrome ||
+              _isCinematicThemeEnabled;
+          final rewardAdRemaining = _storeRewardAdRemainingCooldown();
+          final canWatchRewardAd = rewardAdRemaining == Duration.zero;
+          final sheetSurface = useMonochrome
+              ? (isDark ? const Color(0xFF050505) : Colors.white)
+              : scheme.surface;
+          final pillSurface = Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+            sheetSurface,
+          );
+
+          return ColoredBox(
+            color: sheetSurface,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12 + MediaQuery.of(ctx).padding.top,
+                20,
+                MediaQuery.of(ctx).viewInsets.bottom + 20,
               ),
-              const SizedBox(height: 12),
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Text(
-                      initialSection == StoreSection.themes
-                          ? 'Store · Themes'
-                          : 'Store',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: scheme.outline.withValues(alpha: 0.32),
+                        borderRadius: BorderRadius.circular(999),
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E2330),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: Text(
-                      'Coins: $_storeCoins',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFFFD166),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Store',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                            if (initialSection == StoreSection.themes)
+                              Text(
+                                'Themes',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.62,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: pillSurface,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: scheme.outline.withValues(alpha: 0.24),
+                          ),
+                        ),
+                        child: Text(
+                          'Coins: $_storeCoins',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? const Color(0xFFFFD166)
+                                : const Color(0xFF8A6700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () async {
+                          await _openSettings();
+                          if (!ctx.mounted) return;
+                          setL(() {});
+                        },
+                        color: scheme.onSurface,
+                        icon: const Icon(Icons.settings_outlined),
+                        tooltip: 'Settings',
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(ctx).maybePop(),
+                        color: scheme.onSurface,
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Close store',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _storeSectionHeader(
+                    'Essentials',
+                    'Coins, unlocks, and analysis upgrades',
+                  ),
+                  _storeItemCard(
+                    icon: Icons.ondemand_video_outlined,
+                    title: 'Watch Ad For Coins',
+                    subtitle: canWatchRewardAd
+                        ? 'Watch and earn +120 coins'
+                        : 'Cooldown active. Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}.',
+                    priceLabel: 'Free',
+                    enabled: canWatchRewardAd,
+                    actionLabel: canWatchRewardAd
+                        ? 'Watch'
+                        : 'Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}',
+                    actionColor: canWatchRewardAd
+                        ? const Color(0xFF5AAEE8)
+                        : const Color(0xFF6B7280),
+                    onTap: () async {
+                      await _watchRewardAdFromStore();
+                      setL(() {});
+                    },
+                  ),
+                  _storeItemCard(
+                    icon: Icons.monetization_on_outlined,
+                    title: 'Coin Pack S',
+                    subtitle: '+1,500 coins',
+                    priceLabel: '\$4.99',
+                    enabled: true,
+                    actionLabel: 'Buy',
+                    actionColor: const Color(0xFF7EDC8A),
+                    onTap: () async {
+                      await _buyCoinPack(1500, 'Coin Pack S');
+                      setL(() {});
+                    },
+                  ),
+                  _storeItemCard(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Coin Pack L',
+                    subtitle: '+5,000 coins',
+                    priceLabel: '\$9.99',
+                    enabled: true,
+                    actionLabel: 'Buy',
+                    actionColor: const Color(0xFF7EDC8A),
+                    onTap: () async {
+                      await _buyCoinPack(5000, 'Coin Pack L');
+                      setL(() {});
+                    },
+                  ),
+                  _storeItemCard(
+                    icon: Icons.block_outlined,
+                    title: 'Ad-Free Pass',
+                    subtitle: _adFreeOwned
+                        ? 'Owned (skips reset ads)'
+                        : 'Skips ads when pressing reset',
+                    priceLabel: '\$6.99',
+                    enabled: !_adFreeOwned,
+                    actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
+                    actionColor: const Color(0xFF7EDC8A),
+                    onTap: () async {
+                      await _buyAdFree();
+                      setL(() {});
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _storeSectionHeader(
+                    'Themes',
+                    'Owned themes live here, and new ones unlock below',
+                  ),
+                  _buildThemeVaultCard(setL),
+                  _storeItemCard(
+                    icon: Icons.palette_outlined,
+                    title: 'Board Theme Pack',
+                    subtitle: _themePackOwned
+                        ? 'Owned · unlocks Ember and Sea boards'
+                        : 'Unlock Ember and Sea board palettes',
+                    priceLabel: '900 c',
+                    enabled: !_themePackOwned,
+                    actionLabel: _themePackOwned ? 'Owned' : 'Buy',
+                    actionColor: const Color(0xFFD8B640),
+                    preview: _themePackPreview(),
+                    onTap: () async {
+                      await _purchaseThemePack();
+                      setL(() {});
+                    },
+                  ),
+                  _storeItemCard(
+                    icon: Icons.extension_outlined,
+                    title: 'Piece Set Pack',
+                    subtitle: _piecePackOwned
+                        ? 'Owned · unlocks Ember and Frost pieces'
+                        : 'Unlock Ember and Frost piece styles',
+                    priceLabel: '1400 c',
+                    enabled: !_piecePackOwned,
+                    actionLabel: _piecePackOwned ? 'Owned' : 'Buy',
+                    actionColor: const Color(0xFFD8B640),
+                    preview: _piecePackPreview(),
+                    onTap: () async {
+                      await _purchasePiecePack();
+                      setL(() {});
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _storeSectionHeader(
+                    'Analysis Upgrades',
+                    'Depth, suggestions, and long-run unlocks',
+                  ),
+                  _storeItemCard(
+                    icon: Icons.auto_graph,
+                    title: 'Pro Mode',
+                    subtitle: _depthTier >= 1
+                        ? 'Unlocked (max ply depth 27)'
+                        : 'Unlock ply depth 25-27',
+                    priceLabel: '1800 c',
+                    enabled: _depthTier == 0,
+                    actionLabel: _depthTier >= 1 ? 'Owned' : 'Unlock',
+                    actionColor: const Color(0xFF5AAEE8),
+                    onTap: () async {
+                      await _purchaseDepthTier(1);
+                      setL(() {});
+                    },
+                  ),
+                  _storeItemCard(
+                    icon: Icons.psychology_alt_outlined,
+                    title: 'Expert Mode',
+                    subtitle: _depthTier >= 2
+                        ? 'Unlocked (max ply depth 29)'
+                        : 'Unlock ply depth 28-29',
+                    priceLabel: '2600 c',
+                    enabled: _depthTier == 1,
+                    actionLabel: _depthTier >= 2
+                        ? 'Owned'
+                        : (_depthTier == 1 ? 'Unlock' : 'Locked'),
+                    actionColor: const Color(0xFF5AAEE8),
+                    onTap: () async {
+                      await _purchaseDepthTier(2);
+                      setL(() {});
+                    },
+                  ),
+                  _storeItemCard(
+                    icon: Icons.workspace_premium_outlined,
+                    title: 'Grandmaster Mode',
+                    subtitle: _depthTier >= 3
+                        ? 'Unlocked (max ply depth 32)'
+                        : 'Unlock ply depth 30-32',
+                    priceLabel: '4200 c',
+                    enabled: _depthTier == 2,
+                    actionLabel: _depthTier >= 3
+                        ? 'Owned'
+                        : (_depthTier == 2 ? 'Unlock' : 'Locked'),
+                    actionColor: const Color(0xFF5AAEE8),
+                    onTap: () async {
+                      await _purchaseDepthTier(3);
+                      setL(() {});
+                    },
+                  ),
+                  _storeItemCard(
+                    icon: Icons.add_circle_outline,
+                    title: '+1 Suggested Move',
+                    subtitle:
+                        'Current max suggestions: $_maxSuggestionsAllowed / 10',
+                    priceLabel: '${500 + (_extraSuggestionPurchases * 120)} c',
+                    enabled: _maxSuggestionsAllowed < 10,
+                    actionLabel: _maxSuggestionsAllowed < 10
+                        ? 'Buy +1'
+                        : 'Maxed',
+                    actionColor: const Color(0xFF8FD0FF),
+                    onTap: () async {
+                      await _purchaseExtraSuggestion();
+                      setL(() {});
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await _resetPurchases();
+                        if (!ctx.mounted) return;
+                        setL(() {});
+                      },
+                      icon: const Icon(Icons.restart_alt, size: 18),
+                      label: const Text('Reset Purchases'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: scheme.onSurface.withValues(
+                          alpha: 0.64,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _openSettings,
-                    icon: const Icon(Icons.settings_outlined),
-                    tooltip: 'Settings',
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(ctx).maybePop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Close store',
+                  const SizedBox(height: 8),
+                  Text(
+                    'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowed',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.64),
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _storeSectionHeader(
-                'Essentials',
-                'Coins, unlocks, and analysis upgrades',
-              ),
-              _storeItemCard(
-                icon: Icons.ondemand_video_outlined,
-                title: 'Watch Ad For Coins',
-                subtitle: 'Watch and earn +120 coins',
-                priceLabel: 'Free',
-                enabled: true,
-                actionLabel: 'Watch',
-                onTap: () async {
-                  await _watchRewardAdFromStore();
-                  setL(() {});
-                },
-              ),
-              _storeItemCard(
-                icon: Icons.monetization_on_outlined,
-                title: 'Coin Pack S',
-                subtitle: '+1,500 coins',
-                priceLabel: '\$4.99',
-                enabled: true,
-                actionLabel: 'Buy',
-                onTap: () async {
-                  await _buyCoinPack(1500, 'Coin Pack S');
-                  setL(() {});
-                },
-              ),
-              _storeItemCard(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'Coin Pack L',
-                subtitle: '+5,000 coins',
-                priceLabel: '\$9.99',
-                enabled: true,
-                actionLabel: 'Buy',
-                onTap: () async {
-                  await _buyCoinPack(5000, 'Coin Pack L');
-                  setL(() {});
-                },
-              ),
-              _storeItemCard(
-                icon: Icons.block_outlined,
-                title: 'Ad-Free Pass',
-                subtitle: _adFreeOwned
-                    ? 'Owned (skips reset ads)'
-                    : 'Skips ads when pressing reset',
-                priceLabel: '\$6.99',
-                enabled: !_adFreeOwned,
-                actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
-                onTap: () async {
-                  await _buyAdFree();
-                  setL(() {});
-                },
-              ),
-              const SizedBox(height: 10),
-              _storeSectionHeader(
-                'Themes',
-                'Owned themes live here, and new ones unlock below',
-              ),
-              _buildThemeVaultCard(setL),
-              _storeItemCard(
-                icon: Icons.palette_outlined,
-                title: 'Board Theme Pack',
-                subtitle: _themePackOwned
-                    ? 'Owned · unlocks Ember and Aurora boards'
-                    : 'Unlock Ember and Aurora board palettes',
-                priceLabel: '900 c',
-                enabled: !_themePackOwned,
-                actionLabel: _themePackOwned ? 'Owned' : 'Buy',
-                preview: _themePackPreview(),
-                onTap: () async {
-                  await _purchaseThemePack();
-                  setL(() {});
-                },
-              ),
-              _storeItemCard(
-                icon: Icons.extension_outlined,
-                title: 'Piece Set Pack',
-                subtitle: _piecePackOwned
-                    ? 'Owned · unlocks Ember and Frost pieces'
-                    : 'Unlock Ember and Frost piece styles',
-                priceLabel: '1400 c',
-                enabled: !_piecePackOwned,
-                actionLabel: _piecePackOwned ? 'Owned' : 'Buy',
-                preview: _piecePackPreview(),
-                onTap: () async {
-                  await _purchasePiecePack();
-                  setL(() {});
-                },
-              ),
-              const SizedBox(height: 10),
-              _storeSectionHeader(
-                'Analysis Upgrades',
-                'Depth, suggestions, and long-run unlocks',
-              ),
-              _storeItemCard(
-                icon: Icons.auto_graph,
-                title: 'Pro Mode',
-                subtitle: _depthTier >= 1
-                    ? 'Unlocked (max ply depth 27)'
-                    : 'Unlock ply depth 25-27',
-                priceLabel: '1800 c',
-                enabled: _depthTier == 0,
-                actionLabel: _depthTier >= 1 ? 'Owned' : 'Unlock',
-                onTap: () async {
-                  await _purchaseDepthTier(1);
-                  setL(() {});
-                },
-              ),
-              _storeItemCard(
-                icon: Icons.psychology_alt_outlined,
-                title: 'Expert Mode',
-                subtitle: _depthTier >= 2
-                    ? 'Unlocked (max ply depth 29)'
-                    : 'Unlock ply depth 28-29',
-                priceLabel: '2600 c',
-                enabled: _depthTier == 1,
-                actionLabel: _depthTier >= 2
-                    ? 'Owned'
-                    : (_depthTier == 1 ? 'Unlock' : 'Locked'),
-                onTap: () async {
-                  await _purchaseDepthTier(2);
-                  setL(() {});
-                },
-              ),
-              _storeItemCard(
-                icon: Icons.workspace_premium_outlined,
-                title: 'Grandmaster Mode',
-                subtitle: _depthTier >= 3
-                    ? 'Unlocked (max ply depth 32)'
-                    : 'Unlock ply depth 30-32',
-                priceLabel: '4200 c',
-                enabled: _depthTier == 2,
-                actionLabel: _depthTier >= 3
-                    ? 'Owned'
-                    : (_depthTier == 2 ? 'Unlock' : 'Locked'),
-                onTap: () async {
-                  await _purchaseDepthTier(3);
-                  setL(() {});
-                },
-              ),
-              _storeItemCard(
-                icon: Icons.add_circle_outline,
-                title: '+1 Suggested Move',
-                subtitle:
-                    'Current max suggestions: $_maxSuggestionsAllowed / 10',
-                priceLabel: '${500 + (_extraSuggestionPurchases * 120)} c',
-                enabled: _maxSuggestionsAllowed < 10,
-                actionLabel: _maxSuggestionsAllowed < 10 ? 'Buy +1' : 'Maxed',
-                onTap: () async {
-                  await _purchaseExtraSuggestion();
-                  setL(() {});
-                },
-              ),
-              const SizedBox(height: 6),
-              Center(
-                child: TextButton.icon(
-                  onPressed: () async {
-                    await _resetPurchases();
-                    if (!ctx.mounted) return;
-                    setL(() {});
-                  },
-                  icon: const Icon(Icons.restart_alt, size: 18),
-                  label: const Text('Reset Purchases'),
-                  style: TextButton.styleFrom(foregroundColor: Colors.white60),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowed',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
+    rewardCooldownTicker?.cancel();
   }
 
   Widget _storeSectionHeader(String title, String subtitle) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 4, 2, 10),
       child: Column(
@@ -10938,12 +11425,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.64),
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -10951,81 +11445,286 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildThemeVaultCard(Function setL) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+          scheme.surface,
+        ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Theme Vault',
-            style: TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)}',
-            style: const TextStyle(color: Colors.white60, fontSize: 12),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Board Themes',
+            'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
             style: TextStyle(
-              color: Colors.white70,
+              color: scheme.onSurface.withValues(alpha: 0.64),
               fontSize: 12,
-              fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(height: 12),
+          _storeThemeCategoryHeader('Board Themes'),
           const SizedBox(height: 8),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _availableBoardThemes
-                .map(
-                  (mode) => _themeVaultChip(
-                    label: _boardThemeLabel(mode),
-                    selected: _boardThemeMode == mode,
-                    leading: _boardThemeSwatch(mode),
-                    onTap: () {
-                      setState(() => _boardThemeMode = mode);
-                      setL(() {});
-                      _persistCurrentSettings();
-                    },
-                  ),
-                )
-                .toList(),
+            spacing: 10,
+            runSpacing: 10,
+            children: BoardThemeMode.values
+                .map((mode) => _buildStoreBoardThemeCard(mode, setL))
+                .toList(growable: false),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Piece Themes',
+          const SizedBox(height: 14),
+          _storeThemeCategoryHeader('Piece Themes'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: PieceThemeMode.values
+                .map((mode) => _buildStorePieceThemeCard(mode, setL))
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 14),
+          _storeThemeCategoryHeader('UI Themes'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildStoreUiThemeCard(AppThemeStyle.standard, setL),
+              _buildStoreUiThemeCard(AppThemeStyle.monochrome, setL),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _storeThemeCategoryHeader(String label) {
+    final scheme = Theme.of(context).colorScheme;
+    return Text(
+      label,
+      style: TextStyle(
+        color: scheme.onSurface.withValues(alpha: 0.72),
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+  Widget _buildStoreBoardThemeCard(BoardThemeMode mode, Function setL) {
+    final unlocked = _isBoardThemeUnlocked(mode);
+    final selected = _boardThemeMode == mode;
+    return _storeThemeChoiceCard(
+      label: _boardThemeLabel(mode),
+      preview: _boardThemeSwatch(mode),
+      selected: selected,
+      locked: !unlocked,
+      actionLabel: selected
+          ? 'Selected'
+          : unlocked
+          ? 'Select'
+          : 'Unlock',
+      onTap: selected
+          ? null
+          : () async {
+              if (!unlocked) {
+                await _purchaseThemePack();
+              } else {
+                setState(() => _boardThemeMode = mode);
+                _persistCurrentSettings();
+                unawaited(
+                  context.read<AppThemeProvider>().setBoardThemeIndex(
+                    mode.index,
+                  ),
+                );
+              }
+              setL(() {});
+            },
+    );
+  }
+
+  Widget _buildStorePieceThemeCard(PieceThemeMode mode, Function setL) {
+    final unlocked = _isPieceThemeUnlocked(mode);
+    final selected = _pieceThemeMode == mode;
+    return _storeThemeChoiceCard(
+      label: _pieceThemeLabel(mode),
+      preview: _pieceThemePreview(mode),
+      selected: selected,
+      locked: !unlocked,
+      actionLabel: selected
+          ? 'Selected'
+          : unlocked
+          ? 'Select'
+          : 'Unlock',
+      onTap: selected
+          ? null
+          : () async {
+              if (!unlocked) {
+                await _purchasePiecePack();
+              } else {
+                setState(() => _pieceThemeMode = mode);
+                _persistCurrentSettings();
+                unawaited(
+                  context.read<AppThemeProvider>().setPieceThemeIndex(
+                    mode.index,
+                  ),
+                );
+              }
+              setL(() {});
+            },
+    );
+  }
+
+  Widget _buildStoreUiThemeCard(AppThemeStyle style, Function setL) {
+    final selected =
+        (_isCinematicThemeEnabled
+            ? AppThemeStyle.monochrome
+            : AppThemeStyle.standard) ==
+        style;
+    final preview = style == AppThemeStyle.monochrome
+        ? Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 16, height: 16, color: Colors.black),
+              const SizedBox(width: 4),
+              Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.white24),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Container(width: 16, height: 16, color: const Color(0xFF808080)),
+            ],
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 16, height: 16, color: const Color(0xFFD8B640)),
+              const SizedBox(width: 4),
+              Container(width: 16, height: 16, color: const Color(0xFF3F6ED8)),
+              const SizedBox(width: 4),
+              Container(width: 16, height: 16, color: const Color(0xFF5CCB8A)),
+            ],
+          );
+    return _storeThemeChoiceCard(
+      label: style == AppThemeStyle.monochrome ? 'Mono' : 'Neon',
+      preview: preview,
+      selected: selected,
+      locked: false,
+      actionLabel: selected ? 'Selected' : 'Select',
+      onTap: selected
+          ? null
+          : () async {
+              await _setCinematicThemeEnabled(
+                style == AppThemeStyle.monochrome,
+              );
+              setL(() {});
+            },
+    );
+  }
+
+  Widget _storeThemeChoiceCard({
+    required String label,
+    required Widget preview,
+    required bool selected,
+    required bool locked,
+    required String actionLabel,
+    required Future<void> Function()? onTap,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final idleSurface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
+      scheme.surface,
+    );
+    final selectedSurface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.18 : 0.10),
+      scheme.surface,
+    );
+    final lockedAccent = const Color(0xFFD8B640);
+    final readyAccent = const Color(0xFF5AAEE8);
+    final selectedAccent = const Color(0xFF7EDC8A);
+    final actionAccent = selected
+        ? selectedAccent
+        : locked
+        ? lockedAccent
+        : readyAccent;
+    final actionForeground = actionAccent.computeLuminance() > 0.45
+        ? const Color(0xFF07131F)
+        : Colors.white;
+
+    return Container(
+      width: 154,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: selected ? selectedSurface : idleSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.72)
+              : scheme.outline.withValues(alpha: 0.24),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: 46, child: Center(child: preview)),
+          const SizedBox(height: 10),
+          Text(
+            label,
             style: TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _availablePieceThemes
-                .map(
-                  (mode) => _themeVaultChip(
-                    label: _pieceThemeLabel(mode),
-                    selected: _pieceThemeMode == mode,
-                    leading: _pieceThemePreview(mode),
-                    onTap: () {
-                      setState(() => _pieceThemeMode = mode);
-                      setL(() {});
-                      _persistCurrentSettings();
-                    },
-                  ),
-                )
-                .toList(),
+          const SizedBox(height: 4),
+          Text(
+            selected
+                ? 'Active now'
+                : locked
+                ? 'Locked in store'
+                : 'Ready to equip',
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.64),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onTap == null ? null : () => onTap(),
+              style: FilledButton.styleFrom(
+                backgroundColor: actionAccent,
+                foregroundColor: actionForeground,
+                disabledBackgroundColor: scheme.outline.withValues(alpha: 0.18),
+                disabledForegroundColor: scheme.onSurface.withValues(
+                  alpha: 0.38,
+                ),
+              ),
+              child: Text(actionLabel),
+            ),
           ),
         ],
       ),
@@ -11038,6 +11737,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     required Widget leading,
     VoidCallback? onTap,
   }) {
+    final scheme = Theme.of(context).colorScheme;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
@@ -11045,16 +11746,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF2A6CF0).withValues(alpha: 0.22)
-              : Colors.white10,
+              ? scheme.primary.withValues(alpha: 0.20)
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.05),
+                  scheme.surface,
+                ),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: selected ? const Color(0xFF2A6CF0) : Colors.white12,
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.72)
+                : scheme.outline.withValues(alpha: 0.24),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [leading, const SizedBox(width: 7), Text(label)],
+          children: [
+            leading,
+            const SizedBox(width: 7),
+            Text(label, style: TextStyle(color: scheme.onSurface)),
+          ],
         ),
       ),
     );
@@ -11067,16 +11777,29 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     required String priceLabel,
     required bool enabled,
     required String actionLabel,
+    Color? actionColor,
     Widget? preview,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final cardSurface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
+      scheme.surface,
+    );
+    final resolvedActionColor = actionColor ?? scheme.primary;
+    final actionForeground = resolvedActionColor.computeLuminance() > 0.45
+        ? const Color(0xFF07131F)
+        : Colors.white;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: cardSurface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
       ),
       child: Row(
         children: [
@@ -11084,10 +11807,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: Colors.white10,
+              color: Color.alphaBlend(
+                scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
+                scheme.surface,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 18, color: Colors.white70),
+            child: Icon(
+              icon,
+              size: 18,
+              color: scheme.onSurface.withValues(alpha: 0.72),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -11096,12 +11826,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.64),
+                    fontSize: 12,
+                  ),
                 ),
                 if (preview != null) ...[const SizedBox(height: 8), preview],
               ],
@@ -11113,8 +11849,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             children: [
               Text(
                 priceLabel,
-                style: const TextStyle(
-                  color: Color(0xFFFFD166),
+                style: TextStyle(
+                  color: isDark
+                      ? const Color(0xFFFFD166)
+                      : const Color(0xFF8A6700),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -11126,9 +11864,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   onPressed: enabled ? onTap : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: enabled
-                        ? const Color(0xFF2A6CF0)
-                        : Colors.white24,
-                    disabledBackgroundColor: Colors.white10,
+                        ? resolvedActionColor
+                        : scheme.outline.withValues(alpha: 0.18),
+                    foregroundColor: enabled
+                        ? actionForeground
+                        : scheme.onSurface.withValues(alpha: 0.38),
+                    disabledBackgroundColor: scheme.outline.withValues(
+                      alpha: 0.18,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -11137,6 +11880,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   child: Text(
                     actionLabel,
                     style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -11148,7 +11892,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _perspectiveOption(String label, BoardPerspective p, Function setL) {
-    bool sel = _perspective == p;
+    final sel = _perspective == p;
+    final scheme = Theme.of(context).colorScheme;
     Widget kingWidget;
     if (p == BoardPerspective.white) {
       kingWidget = _pieceImage('k_w', width: 20, height: 20);
@@ -11159,7 +11904,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         mainAxisSize: MainAxisSize.min,
         children: [
           _pieceImage('k_w', width: 15, height: 15),
-          const Icon(Icons.sync, size: 11, color: Colors.white70),
+          Icon(
+            Icons.sync,
+            size: 11,
+            color: scheme.onSurface.withValues(alpha: 0.7),
+          ),
           _pieceImage('k_b', width: 15, height: 15),
         ],
       );
@@ -11173,12 +11922,26 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: sel ? Colors.blue : Colors.white10,
+          color: sel
+              ? scheme.primary.withValues(alpha: 0.20)
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.05),
+                  scheme.surface,
+                ),
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: sel
+                ? scheme.primary.withValues(alpha: 0.62)
+                : scheme.outline.withValues(alpha: 0.30),
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [kingWidget, const SizedBox(width: 5), Text(label)],
+          children: [
+            kingWidget,
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(color: scheme.onSurface)),
+          ],
         ),
       ),
     );
@@ -11186,22 +11949,31 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Widget _boardThemeOption(BoardThemeMode mode, Function setL) {
     final selected = _boardThemeMode == mode;
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () {
         setState(() => _boardThemeMode = mode);
         setL(() {});
         _persistCurrentSettings();
+        unawaited(
+          context.read<AppThemeProvider>().setBoardThemeIndex(mode.index),
+        );
       },
       child: Container(
         width: 62,
         height: 62,
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF3B82F6).withValues(alpha: 0.25)
-              : Colors.white10,
+              ? scheme.primary.withValues(alpha: 0.24)
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.05),
+                  scheme.surface,
+                ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? const Color(0xFF8CB9FF) : Colors.white24,
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.70)
+                : scheme.outline.withValues(alpha: 0.32),
           ),
         ),
         child: Center(child: _boardThemeSwatch(mode)),
@@ -11211,22 +11983,31 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Widget _pieceThemeOption(PieceThemeMode mode, Function setL) {
     final selected = _pieceThemeMode == mode;
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () {
         setState(() => _pieceThemeMode = mode);
         setL(() {});
         _persistCurrentSettings();
+        unawaited(
+          context.read<AppThemeProvider>().setPieceThemeIndex(mode.index),
+        );
       },
       child: Container(
         width: 62,
         height: 62,
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF3B82F6).withValues(alpha: 0.25)
-              : Colors.white10,
+              ? scheme.primary.withValues(alpha: 0.24)
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.05),
+                  scheme.surface,
+                ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? const Color(0xFF8CB9FF) : Colors.white24,
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.70)
+                : scheme.outline.withValues(alpha: 0.32),
           ),
         ),
         child: Center(child: _pieceThemePreview(mode)),
@@ -11304,7 +12085,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           leading: _boardThemeSwatch(BoardThemeMode.ember),
         ),
         _themeVaultChip(
-          label: 'Aurora',
+          label: 'Sea',
           selected: false,
           leading: _boardThemeSwatch(BoardThemeMode.aurora),
         ),
@@ -11417,15 +12198,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   String _boardThemeLabel(BoardThemeMode mode) {
     switch (mode) {
       case BoardThemeMode.dark:
-        return 'Dark';
+        return 'Neon';
       case BoardThemeMode.light:
-        return 'Light';
+        return 'Classic';
       case BoardThemeMode.monochrome:
-        return 'B&W';
+        return 'Mono';
       case BoardThemeMode.ember:
         return 'Ember';
       case BoardThemeMode.aurora:
-        return 'Aurora';
+        return 'Sea';
     }
   }
 
@@ -11473,6 +12254,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   @override
   void dispose() {
+    _editModeHintTimer?.cancel();
     _clearBotGhostArrows();
     _engine?.stop();
     _pulseController.dispose();
@@ -11488,6 +12270,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _introAudioPlayer.dispose();
     _menuAudioPlayer.dispose();
     _sfxAudioPlayer.dispose();
+    _cinematicThemeNotifier.dispose();
     for (final player in _boardSfxPlayers) {
       player.dispose();
     }
@@ -11527,9 +12310,13 @@ class EnergyArrowPainter extends CustomPainter {
   Color _darkenColor(Color color, double amount) {
     final factor = (1.0 - amount).clamp(0.0, 1.0);
     return Color.fromARGB(
+      // ignore: deprecated_member_use
       color.alpha,
+      // ignore: deprecated_member_use
       (color.red * factor).round().clamp(0, 255),
+      // ignore: deprecated_member_use
       (color.green * factor).round().clamp(0, 255),
+      // ignore: deprecated_member_use
       (color.blue * factor).round().clamp(0, 255),
     );
   }
@@ -11673,11 +12460,8 @@ class EnergyArrowPainter extends CustomPainter {
 
       // Sequence number badge
       if (isGambitMode) {
-        final double badgeRadius = isFirstArrow ? 14.0 : 10.5;
-        final markerCenter = Offset(
-          start.dx + (end.dx - start.dx) * 0.68,
-          start.dy + (end.dy - start.dy) * 0.68,
-        );
+        const double badgeRadius = 9.2;
+        final markerCenter = Offset.lerp(start, lineEnd, 0.5)!;
 
         if (useStaticStyle) {
           canvas.drawCircle(
@@ -11733,7 +12517,7 @@ class EnergyArrowPainter extends CustomPainter {
             text: l.multiPv.toString(),
             style: TextStyle(
               color: Colors.white,
-              fontSize: isFirstArrow ? 13.5 : 11.0,
+              fontSize: 10.0,
               fontWeight: FontWeight.w900,
             ),
           ),

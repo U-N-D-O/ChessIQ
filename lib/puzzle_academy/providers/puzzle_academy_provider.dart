@@ -1,0 +1,1055 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:chess/chess.dart' as chess;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/puzzle_progress_model.dart';
+
+const String _basePuzzleAssetPath = 'assets/puzzles/base_puzzles.json';
+final RegExp _ratingPattern = RegExp(r'"Rating"\s*:\s*(\d+)');
+
+String _nodeKeyForRating(int rating) {
+  final start = (rating ~/ 50) * 50;
+  final end = start + 50;
+  return '${start}_$end';
+}
+
+Iterable<String> _iterateJsonObjects(String rawJson) sync* {
+  var depth = 0;
+  var inString = false;
+  var escaped = false;
+  int? objectStart;
+
+  for (var index = 0; index < rawJson.length; index++) {
+    final char = rawJson[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char == '\\') {
+        escaped = true;
+      } else if (char == '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char == '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char == '{') {
+      if (depth == 0) {
+        objectStart = index;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (char == '}') {
+      if (depth == 0) {
+        continue;
+      }
+      depth -= 1;
+      if (depth == 0 && objectStart != null) {
+        yield rawJson.substring(objectStart, index + 1);
+        objectStart = null;
+      }
+    }
+  }
+}
+
+List<Map<String, dynamic>> _decodePuzzleMaps(String rawJson) {
+  final decoded = jsonDecode(rawJson);
+  if (decoded is! List) return const <Map<String, dynamic>>[];
+
+  final items = <Map<String, dynamic>>[];
+  for (final raw in decoded) {
+    if (raw is! Map) continue;
+    final map = raw.cast<String, dynamic>();
+    final item = PuzzleItem.fromMap(map);
+    if (_validatePuzzle(item)) {
+      items.add(map);
+    }
+  }
+  return items;
+}
+
+bool _validatePuzzle(PuzzleItem item) {
+  if (item.puzzleId.isEmpty || item.fen.isEmpty || item.moves.isEmpty) {
+    return false;
+  }
+
+  if (!chess.Chess.validate_fen(item.fen)['valid']) {
+    return false;
+  }
+
+  final game = chess.Chess.fromFEN(item.fen);
+  for (final move in item.moves) {
+    if (move.length < 4) return false;
+    final from = move.substring(0, 2);
+    final to = move.substring(2, 4);
+    final payload = <String, String>{'from': from, 'to': to};
+    if (move.length == 5) {
+      payload['promotion'] = move[4];
+    }
+    final ok = game.move(payload);
+    if (ok == false) return false;
+  }
+
+  return true;
+}
+
+enum PuzzleGridTileState { solved, skipped, nextAvailable, replayable, locked }
+
+class PuzzleSolveResult {
+  final bool countedAsNewSolve;
+  final bool beatGhostTime;
+  final bool earnedSpeedDemon;
+  final bool earnedGoldCrown;
+  final bool brilliant;
+  final int? previousBestMs;
+
+  const PuzzleSolveResult({
+    required this.countedAsNewSolve,
+    required this.beatGhostTime,
+    required this.earnedSpeedDemon,
+    required this.earnedGoldCrown,
+    required this.brilliant,
+    required this.previousBestMs,
+  });
+}
+
+class PuzzleAcademyProvider extends ChangeNotifier {
+  static const String _progressKey = 'puzzle_academy_progress_v2';
+  static const String _sharedStoreStateKey = 'store_state_v1';
+  static const int _coinsPerAdWatch = 10;
+  static const int _dailyPuzzleReward = 40;
+  static const int _gridPuzzleCount = 500;
+
+  final List<SemesterRange> semesters = const <SemesterRange>[
+    SemesterRange(
+      id: 'novice',
+      title: 'Novice Semester',
+      minElo: 450,
+      maxElo: 950,
+      intro:
+          'Checks, captures, and forcing lines. Build fast tactical habits before the clock becomes a weapon against you.',
+    ),
+    SemesterRange(
+      id: 'tactician',
+      title: 'Tactician Semester',
+      minElo: 1000,
+      maxElo: 1450,
+      intro:
+          'Now the combinations deepen. You are expected to calculate cleanly through distractions and tactical noise.',
+    ),
+    SemesterRange(
+      id: 'strategist',
+      title: 'Strategist Semester',
+      minElo: 1500,
+      maxElo: 2050,
+      intro:
+          'Winning ideas are quieter now. Improve your pattern memory, piece coordination, and patience under tension.',
+    ),
+    SemesterRange(
+      id: 'master',
+      title: 'Master Semester',
+      minElo: 2100,
+      maxElo: 2950,
+      intro:
+          'Elite tactical positions demand restraint. Precision matters more than speed, until speed matters more than everything.',
+    ),
+    SemesterRange(
+      id: 'oracle',
+      title: 'Oracle Semester',
+      minElo: 3000,
+      maxElo: 3999,
+      intro:
+          'The final ascent. Neural constraints begin to dissolve here. Complete this tier and Analysis Mode changes permanently.',
+    ),
+  ];
+
+  final List<LeaderboardEntry> dailyLeaderboard = const <LeaderboardEntry>[
+    LeaderboardEntry(rank: 1, handle: 'Qh8+', score: 14820, title: 'Oracle'),
+    LeaderboardEntry(
+      rank: 2,
+      handle: 'FianchettoFox',
+      score: 14110,
+      title: 'Master',
+    ),
+    LeaderboardEntry(
+      rank: 3,
+      handle: 'KnightVision',
+      score: 13870,
+      title: 'Strategist',
+    ),
+    LeaderboardEntry(
+      rank: 4,
+      handle: 'TempoDrip',
+      score: 13480,
+      title: 'Master',
+    ),
+    LeaderboardEntry(
+      rank: 5,
+      handle: 'Zwischenzug',
+      score: 13120,
+      title: 'Oracle',
+    ),
+    LeaderboardEntry(
+      rank: 6,
+      handle: 'RookLift',
+      score: 12730,
+      title: 'Tactician',
+    ),
+    LeaderboardEntry(
+      rank: 7,
+      handle: 'IceVariation',
+      score: 12560,
+      title: 'Strategist',
+    ),
+    LeaderboardEntry(
+      rank: 8,
+      handle: 'BlueBishop',
+      score: 12105,
+      title: 'Tactician',
+    ),
+    LeaderboardEntry(
+      rank: 9,
+      handle: 'EndgameFiend',
+      score: 11890,
+      title: 'Master',
+    ),
+    LeaderboardEntry(
+      rank: 10,
+      handle: 'PawnScout',
+      score: 11640,
+      title: 'Novice',
+    ),
+  ];
+
+  PuzzleProgressModel? _progress;
+  Map<String, int> _basePuzzleCountsByNode = const <String, int>{};
+  final Map<String, List<PuzzleItem>> _basePuzzleCacheByNode =
+      <String, List<PuzzleItem>>{};
+  final Map<String, Future<void>> _nodePuzzleLoadFutures =
+      <String, Future<void>>{};
+  List<PuzzleItem> _dailyPuzzles = const <PuzzleItem>[];
+  List<String> _dailyPuzzleAssetPaths = const <String>[];
+  PuzzleItem? _todayDailyPuzzle;
+  String? _todayDailyPuzzleAssetPath;
+
+  bool _initialized = false;
+  bool _isLoading = false;
+  bool _shouldShowBrainBreak = false;
+  bool _shouldShowGrandmasterOracle = false;
+  String? _celebrationNodeKey;
+
+  bool get initialized => _initialized;
+  bool get isLoading => _isLoading;
+  bool get shouldShowBrainBreak => _shouldShowBrainBreak;
+  bool get shouldShowGrandmasterOracle => _shouldShowGrandmasterOracle;
+  String? get celebrationNodeKey => _celebrationNodeKey;
+  List<PuzzleItem> get dailyPuzzles => _dailyPuzzles;
+  List<PuzzleItem> get basePuzzles => _basePuzzleCacheByNode.values
+      .expand((items) => items)
+      .toList(growable: false);
+  PuzzleItem? get todayDailyPuzzle => _todayDailyPuzzle;
+  bool get hasTodayDailyPuzzle => _todayDailyPuzzle != null;
+  int get unresolvedSkippedPuzzleCount => progress.skippedPuzzleIds.length;
+  int get completedTodayDailyCount => _dailyPuzzles
+      .where(
+        (puzzle) => progress.completedDailyPuzzleIds.contains(puzzle.puzzleId),
+      )
+      .length;
+
+  PuzzleProgressModel get progress {
+    final value = _progress;
+    if (value == null) {
+      throw StateError('PuzzleAcademyProvider used before initialization');
+    }
+    return value;
+  }
+
+  List<EloNodeProgress> get orderedNodes {
+    final value = progress.nodes.values.toList(growable: false)
+      ..sort((a, b) => a.startElo.compareTo(b.startElo));
+    return value;
+  }
+
+  int get highestUnlockedElo {
+    var highest = 450;
+    for (final node in orderedNodes.where((n) => n.unlocked)) {
+      highest = max(highest, node.endElo);
+    }
+    return highest;
+  }
+
+  String get currentTitle {
+    final elo = highestUnlockedElo;
+    if (elo >= 3000) return 'Grandmaster Oracle';
+    if (elo >= 2800) return 'Grandmaster Candidate';
+    if (elo >= 2200) return 'Master of Tactics';
+    if (elo >= 1500) return 'Tactical Sergeant';
+    if (elo >= 1000) return 'Knight Captain';
+    if (elo >= 700) return 'Pawn Scout';
+    return 'Board Initiate';
+  }
+
+  int get totalSolved => progress.solvedPuzzleIds.length;
+  int get masteredNodeCount => orderedNodes.where((n) => n.goldCrown).length;
+
+  double get overallMasteryProgress {
+    final nodes = orderedNodes;
+    if (nodes.isEmpty) return 0.0;
+    final sum = nodes.fold<double>(
+      0.0,
+      (acc, node) => acc + node.masteryProgress,
+    );
+    return (sum / nodes.length).clamp(0.0, 1.0);
+  }
+
+  Future<void> initialize() async {
+    if (_initialized || _isLoading) return;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _basePuzzleCountsByNode = await _loadBasePuzzleCounts();
+      _dailyPuzzleAssetPaths = await _loadDailyAssetPaths();
+      await _refreshTodayDailyPuzzle(notify: false);
+
+      final fallbackNodes = _buildInitialNodes(_basePuzzleCountsByNode);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_progressKey);
+
+      if (raw == null || raw.trim().isEmpty) {
+        _progress = PuzzleProgressModel.initial(nodes: fallbackNodes);
+      } else {
+        _progress = PuzzleProgressModel.fromJson(
+          raw,
+          fallbackNodes: fallbackNodes,
+        );
+      }
+
+      _normalizeUnlockState();
+      await _ensureNodePuzzlesLoaded(
+        orderedNodes
+            .where((node) => node.unlocked)
+            .map((node) => node.key)
+            .toSet(),
+      );
+      await syncCoinsFromStoreState(notify: false);
+      await _saveProgress();
+      _initialized = true;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshDailyPuzzle() async {
+    await _refreshTodayDailyPuzzle(notify: true);
+  }
+
+  Future<PuzzleSolveResult> recordPuzzleSolve({
+    required PuzzleItem puzzle,
+    required Duration solveTime,
+    bool daily = false,
+    bool brilliant = false,
+  }) async {
+    final previouslyUnlocked = progress.nodes.values
+        .where((node) => node.unlocked)
+        .map((node) => node.key)
+        .toSet();
+    final nodeKey = keyForRating(puzzle.rating);
+    final node = progress.nodes[nodeKey];
+    if (node == null) {
+      return const PuzzleSolveResult(
+        countedAsNewSolve: false,
+        beatGhostTime: false,
+        earnedSpeedDemon: false,
+        earnedGoldCrown: false,
+        brilliant: false,
+        previousBestMs: null,
+      );
+    }
+
+    final wasSolved = isPuzzleSolved(puzzle.puzzleId);
+    final previousBestMs = progress.bestSolveTimeMsByPuzzleId[puzzle.puzzleId];
+    final solveMs = max(1, solveTime.inMilliseconds);
+    final beatGhostTime = previousBestMs != null && solveMs < previousBestMs;
+
+    final solvedPuzzleIds = Set<String>.from(progress.solvedPuzzleIds)
+      ..add(puzzle.puzzleId);
+    final skippedPuzzleIds = Set<String>.from(progress.skippedPuzzleIds)
+      ..remove(puzzle.puzzleId);
+
+    final bestTimes = Map<String, int>.from(progress.bestSolveTimeMsByPuzzleId)
+      ..update(
+        puzzle.puzzleId,
+        (value) => min(value, solveMs),
+        ifAbsent: () => solveMs,
+      );
+
+    final speedDemonNodes = Set<String>.from(progress.speedDemonNodeKeys);
+    var earnedSpeedDemon = false;
+    if (beatGhostTime && !speedDemonNodes.contains(nodeKey)) {
+      speedDemonNodes.add(nodeKey);
+      earnedSpeedDemon = true;
+    }
+
+    final completedDaily = Set<String>.from(progress.completedDailyPuzzleIds);
+    var coins = progress.coins;
+    if (daily && completedDaily.add(puzzle.puzzleId)) {
+      coins += _dailyPuzzleReward;
+    }
+
+    var streak = progress.streak + 1;
+    var freeHints = progress.freeHints;
+    var freeSkips = progress.freeSkips;
+    if (streak % 3 == 0) {
+      freeHints += 1;
+    }
+    if (streak % 7 == 0) {
+      freeSkips += 1;
+    }
+
+    var adCounter = progress.adCounter;
+    if (!wasSolved) {
+      adCounter += 1;
+      if (adCounter >= 10) {
+        _shouldShowBrainBreak = true;
+        adCounter = 0;
+      }
+    }
+
+    final solvedCount = wasSolved ? node.solvedCount : node.solvedCount + 1;
+    final updatedNodes = Map<String, EloNodeProgress>.from(progress.nodes)
+      ..[nodeKey] = node.copyWith(
+        attempts: node.attempts + 1,
+        solvedCount: solvedCount,
+        speedDemon: speedDemonNodes.contains(nodeKey),
+      );
+
+    final earnedGoldCrown =
+        !node.goldCrown && solvedCount >= updatedNodes[nodeKey]!.masteryTarget;
+
+    var updated = progress.copyWith(
+      coins: coins,
+      nodes: updatedNodes,
+      streak: streak,
+      freeHints: freeHints,
+      freeSkips: freeSkips,
+      adCounter: adCounter,
+      completedDailyPuzzleIds: completedDaily,
+      solvedPuzzleIds: solvedPuzzleIds,
+      skippedPuzzleIds: skippedPuzzleIds,
+      speedDemonNodeKeys: speedDemonNodes,
+      bestSolveTimeMsByPuzzleId: bestTimes,
+    );
+
+    updated = _applyUnlockingAndRewards(updated);
+    _progress = updated;
+    await _saveProgress();
+    final unlockedNow = updated.nodes.values
+        .where((candidate) => candidate.unlocked)
+        .map((candidate) => candidate.key)
+        .toSet();
+    final newlyUnlocked = unlockedNow.difference(previouslyUnlocked);
+    if (newlyUnlocked.isNotEmpty) {
+      await _ensureNodePuzzlesLoaded(newlyUnlocked);
+    }
+    notifyListeners();
+
+    return PuzzleSolveResult(
+      countedAsNewSolve: !wasSolved,
+      beatGhostTime: beatGhostTime,
+      earnedSpeedDemon: earnedSpeedDemon,
+      earnedGoldCrown: earnedGoldCrown,
+      brilliant: brilliant,
+      previousBestMs: previousBestMs,
+    );
+  }
+
+  Future<void> recordPuzzleMiss({required int rating}) async {
+    final nodeKey = keyForRating(rating);
+    final node = progress.nodes[nodeKey];
+    if (node == null) return;
+
+    _progress = progress.copyWith(
+      streak: 0,
+      nodes: Map<String, EloNodeProgress>.from(progress.nodes)
+        ..[nodeKey] = node.copyWith(attempts: node.attempts + 1),
+    );
+
+    await _saveProgress();
+    notifyListeners();
+  }
+
+  Future<bool> skipPuzzle(PuzzleItem puzzle) async {
+    if (isPuzzleSolved(puzzle.puzzleId) || isPuzzleSkipped(puzzle.puzzleId)) {
+      return false;
+    }
+    if (progress.freeSkips <= 0) return false;
+
+    final skipped = Set<String>.from(progress.skippedPuzzleIds)
+      ..add(puzzle.puzzleId);
+    _progress = progress.copyWith(
+      freeSkips: progress.freeSkips - 1,
+      skippedPuzzleIds: skipped,
+      streak: 0,
+    );
+    await _saveProgress();
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> completeDailyPuzzle(String puzzleId) async {
+    if (progress.completedDailyPuzzleIds.contains(puzzleId)) return;
+
+    final completed = Set<String>.from(progress.completedDailyPuzzleIds)
+      ..add(puzzleId);
+
+    _progress = progress.copyWith(
+      completedDailyPuzzleIds: completed,
+      coins: progress.coins + _dailyPuzzleReward,
+    );
+
+    await _saveProgress();
+    notifyListeners();
+  }
+
+  Future<void> watchRewardedAd() async {
+    _progress = progress.copyWith(coins: progress.coins + _coinsPerAdWatch);
+    await _saveProgress();
+    notifyListeners();
+  }
+
+  Future<bool> buyHintPack({int amount = 3, int cost = 25}) async {
+    if (progress.coins < cost) return false;
+    _progress = progress.copyWith(
+      coins: progress.coins - cost,
+      freeHints: progress.freeHints + amount,
+    );
+    await _saveProgress();
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> buySkipPack({int amount = 2, int cost = 35}) async {
+    if (progress.coins < cost) return false;
+    _progress = progress.copyWith(
+      coins: progress.coins - cost,
+      freeSkips: progress.freeSkips + amount,
+    );
+    await _saveProgress();
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> consumeHint() async {
+    if (progress.freeHints <= 0) return false;
+    _progress = progress.copyWith(freeHints: progress.freeHints - 1);
+    await _saveProgress();
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> consumeSkip() async {
+    if (progress.freeSkips <= 0) return false;
+    _progress = progress.copyWith(freeSkips: progress.freeSkips - 1);
+    await _saveProgress();
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> markSemesterSeen(String semesterId) async {
+    if (progress.seenSemesters.contains(semesterId)) return;
+    final seen = Set<String>.from(progress.seenSemesters)..add(semesterId);
+    _progress = progress.copyWith(seenSemesters: seen);
+    await _saveProgress();
+    notifyListeners();
+  }
+
+  bool isNodeUnlocked(String nodeKey) =>
+      progress.nodes[nodeKey]?.unlocked == true;
+  bool isPuzzleSolved(String puzzleId) =>
+      progress.solvedPuzzleIds.contains(puzzleId);
+  bool isPuzzleSkipped(String puzzleId) =>
+      progress.skippedPuzzleIds.contains(puzzleId);
+  bool hasSpeedDemonBadge(String nodeKey) =>
+      progress.speedDemonNodeKeys.contains(nodeKey);
+  int? bestSolveTimeFor(String puzzleId) =>
+      progress.bestSolveTimeMsByPuzzleId[puzzleId];
+  bool shouldShowSemesterIntro(String semesterId) =>
+      !progress.seenSemesters.contains(semesterId);
+
+  SemesterRange semesterForNode(EloNodeProgress node) {
+    return semesters.firstWhere(
+      (semester) => semester.includes(node.startElo),
+      orElse: () => semesters.last,
+    );
+  }
+
+  double semesterProgress(SemesterRange semester) {
+    final list = orderedNodes
+        .where((node) => semester.includes(node.startElo))
+        .toList(growable: false);
+    if (list.isEmpty) return 0.0;
+    final sum = list.fold<double>(
+      0.0,
+      (acc, node) => acc + node.masteryProgress,
+    );
+    return (sum / list.length).clamp(0.0, 1.0);
+  }
+
+  String heroTagForNode(EloNodeProgress node) =>
+      'puzzle-node-badge-${node.key}';
+
+  String keyForRating(int rating) {
+    return _nodeKeyForRating(rating);
+  }
+
+  PuzzleItem? featuredPuzzleForNode(EloNodeProgress node) {
+    final next = nextAvailablePuzzleForNode(node);
+    if (next != null) return next;
+    final nodePuzzles = puzzlesForNode(node);
+    if (nodePuzzles.isEmpty) return null;
+    return nodePuzzles.first;
+  }
+
+  List<PuzzleItem> puzzlesForNode(EloNodeProgress node) {
+    return _basePuzzleCacheByNode[node.key] ?? const <PuzzleItem>[];
+  }
+
+  int gridPuzzleCountForNode(EloNodeProgress node) {
+    return min(_gridPuzzleCount, max(node.masteryTarget, node.totalPuzzles));
+  }
+
+  PuzzleItem? puzzleForNodeIndex(EloNodeProgress node, int index) {
+    final nodePuzzles = puzzlesForNode(node);
+    final maxReachableIndex = min(_gridPuzzleCount, node.totalPuzzles);
+    if (index < 0 ||
+        index >= maxReachableIndex ||
+        index >= nodePuzzles.length) {
+      return null;
+    }
+    return nodePuzzles[index];
+  }
+
+  int indexOfPuzzleInNode(EloNodeProgress node, String puzzleId) {
+    final nodePuzzles = puzzlesForNode(node);
+    return nodePuzzles.indexWhere((puzzle) => puzzle.puzzleId == puzzleId);
+  }
+
+  int frontierPuzzleIndexForNode(EloNodeProgress node) {
+    final nodePuzzles = puzzlesForNode(node);
+    if (nodePuzzles.isEmpty) return 0;
+    for (
+      var index = 0;
+      index < min(nodePuzzles.length, _gridPuzzleCount);
+      index++
+    ) {
+      final puzzle = nodePuzzles[index];
+      if (isPuzzleSolved(puzzle.puzzleId) || isPuzzleSkipped(puzzle.puzzleId)) {
+        continue;
+      }
+      return index;
+    }
+    return min(nodePuzzles.length, _gridPuzzleCount) - 1;
+  }
+
+  PuzzleItem? nextAvailablePuzzleForNode(EloNodeProgress node) {
+    final index = frontierPuzzleIndexForNode(node);
+    return puzzleForNodeIndex(node, index);
+  }
+
+  Future<void> ensureNodePuzzlesLoadedForNode(EloNodeProgress node) async {
+    await _ensureNodePuzzlesLoaded(<String>{node.key});
+  }
+
+  PuzzleGridTileState tileStateForNodeIndex(EloNodeProgress node, int index) {
+    final puzzle = puzzleForNodeIndex(node, index);
+    if (puzzle == null) return PuzzleGridTileState.locked;
+    if (isPuzzleSolved(puzzle.puzzleId)) return PuzzleGridTileState.solved;
+    if (isPuzzleSkipped(puzzle.puzzleId)) return PuzzleGridTileState.skipped;
+    final frontier = frontierPuzzleIndexForNode(node);
+    if (index == frontier) return PuzzleGridTileState.nextAvailable;
+    if (index < frontier) return PuzzleGridTileState.replayable;
+    return PuzzleGridTileState.locked;
+  }
+
+  bool canOpenGridIndex(EloNodeProgress node, int index) {
+    final state = tileStateForNodeIndex(node, index);
+    return state != PuzzleGridTileState.locked;
+  }
+
+  void consumeBrainBreakTrigger() {
+    if (!_shouldShowBrainBreak) return;
+    _shouldShowBrainBreak = false;
+    notifyListeners();
+  }
+
+  void consumeGrandmasterOracleTrigger() {
+    if (!_shouldShowGrandmasterOracle) return;
+    _shouldShowGrandmasterOracle = false;
+    notifyListeners();
+  }
+
+  void consumeCelebrationNode() {
+    if (_celebrationNodeKey == null) return;
+    _celebrationNodeKey = null;
+    notifyListeners();
+  }
+
+  Future<void> syncCoinsFromStoreState({bool notify = true}) async {
+    if (_progress == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_sharedStoreStateKey);
+    if (raw == null || raw.trim().isEmpty) {
+      await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
+      return;
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
+        return;
+      }
+
+      final storeCoins = (decoded['coins'] as num?)?.toInt();
+      if (storeCoins == null) {
+        await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
+        return;
+      }
+
+      final normalizedCoins = max(0, storeCoins);
+      if (normalizedCoins == progress.coins) {
+        return;
+      }
+
+      _progress = progress.copyWith(coins: normalizedCoins);
+      await _saveProgress(mirrorStoreCoins: false);
+      if (notify) {
+        notifyListeners();
+      }
+    } catch (_) {
+      await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
+    }
+  }
+
+  Future<void> _saveProgress({bool mirrorStoreCoins = true}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_progressKey, progress.toJson());
+    if (mirrorStoreCoins) {
+      await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
+    }
+  }
+
+  Future<void> _mirrorCoinsToStoreState(
+    int coins, {
+    SharedPreferences? prefs,
+  }) async {
+    final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
+    final raw = resolvedPrefs.getString(_sharedStoreStateKey);
+
+    Map<String, dynamic> payload = <String, dynamic>{};
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          payload = decoded.map(
+            (key, value) => MapEntry(key.toString(), value),
+          );
+        }
+      } catch (_) {
+        payload = <String, dynamic>{};
+      }
+    }
+
+    payload['coins'] = max(0, coins);
+    await resolvedPrefs.setString(_sharedStoreStateKey, jsonEncode(payload));
+  }
+
+  void _normalizeUnlockState() {
+    final nodes = orderedNodes;
+    if (nodes.isEmpty) return;
+
+    final updated = <String, EloNodeProgress>{};
+    for (var index = 0; index < nodes.length; index++) {
+      final node = nodes[index];
+      var unlocked = node.unlocked;
+
+      if (index == 0) {
+        unlocked = true;
+      } else {
+        final previous = updated[nodes[index - 1].key] ?? nodes[index - 1];
+        if (previous.solvedCount >= previous.unlockTarget) {
+          unlocked = true;
+        }
+      }
+
+      updated[node.key] = node.copyWith(
+        unlocked: unlocked,
+        speedDemon: progress.speedDemonNodeKeys.contains(node.key),
+      );
+    }
+
+    _progress = progress.copyWith(nodes: updated);
+  }
+
+  PuzzleProgressModel _applyUnlockingAndRewards(PuzzleProgressModel current) {
+    final nodes = current.nodes.values.toList(growable: false)
+      ..sort((a, b) => a.startElo.compareTo(b.startElo));
+    final updated = Map<String, EloNodeProgress>.from(current.nodes);
+    var unlockedRewards = Set<String>.from(current.unlockedThemeRewards);
+    var depthUnlocked = current.depth33To35Unlocked;
+    var oracleTriggered = current.grandmasterOracleTriggered;
+
+    for (var index = 0; index < nodes.length; index++) {
+      final node = updated[nodes[index].key] ?? nodes[index];
+
+      if (node.solvedCount >= node.unlockTarget && index < nodes.length - 1) {
+        final nextNode = updated[nodes[index + 1].key] ?? nodes[index + 1];
+        if (!nextNode.unlocked) {
+          updated[nextNode.key] = nextNode.copyWith(unlocked: true);
+        }
+      }
+
+      final crownAchieved = node.solvedCount >= node.masteryTarget;
+      if (crownAchieved && !node.goldCrown) {
+        _celebrationNodeKey = node.key;
+        updated[node.key] = (updated[node.key] ?? node).copyWith(
+          goldCrown: true,
+        );
+      }
+
+      if (crownAchieved && !(updated[node.key]?.themeRewardUnlocked ?? false)) {
+        final rewardId = 'theme_${node.startElo}_${node.endElo}';
+        unlockedRewards.add(rewardId);
+        updated[node.key] = (updated[node.key] ?? node).copyWith(
+          themeRewardUnlocked: true,
+        );
+      }
+
+      final isFinalTier = node.startElo >= 3000;
+      if (isFinalTier && node.solvedCount >= node.masteryTarget) {
+        depthUnlocked = true;
+        if (!oracleTriggered) {
+          _shouldShowGrandmasterOracle = true;
+          oracleTriggered = true;
+        }
+      }
+    }
+
+    return current.copyWith(
+      nodes: updated,
+      unlockedThemeRewards: unlockedRewards,
+      depth33To35Unlocked: depthUnlocked,
+      grandmasterOracleTriggered: oracleTriggered,
+    );
+  }
+
+  Map<String, EloNodeProgress> _buildInitialNodes(Map<String, int> counts) {
+    if (counts.isEmpty) {
+      return <String, EloNodeProgress>{
+        '450_500': const EloNodeProgress(
+          startElo: 450,
+          endElo: 500,
+          totalPuzzles: 0,
+          solvedCount: 0,
+          attempts: 0,
+          unlocked: true,
+          goldCrown: false,
+          themeRewardUnlocked: false,
+          speedDemon: false,
+        ),
+      };
+    }
+
+    final sortedKeys = counts.keys.toList(growable: false)
+      ..sort((a, b) {
+        final aStart = int.parse(a.split('_').first);
+        final bStart = int.parse(b.split('_').first);
+        return aStart.compareTo(bStart);
+      });
+
+    final result = <String, EloNodeProgress>{};
+    for (var index = 0; index < sortedKeys.length; index++) {
+      final key = sortedKeys[index];
+      final parts = key.split('_');
+      final start = int.parse(parts.first);
+      final end = int.parse(parts.last);
+      final total = counts[key] ?? 0;
+      result[key] = EloNodeProgress(
+        startElo: start,
+        endElo: end,
+        totalPuzzles: total,
+        solvedCount: 0,
+        attempts: 0,
+        unlocked: index == 0,
+        goldCrown: false,
+        themeRewardUnlocked: false,
+        speedDemon: false,
+        finalTierTarget: start >= 3000 ? 26 : 500,
+      );
+    }
+
+    return result;
+  }
+
+  Future<Map<String, int>> _loadBasePuzzleCounts() async {
+    final raw = await rootBundle.loadString(_basePuzzleAssetPath);
+    final counts = <String, int>{};
+    for (final match in _ratingPattern.allMatches(raw)) {
+      final rating = int.tryParse(match.group(1) ?? '');
+      if (rating == null) {
+        continue;
+      }
+      final key = _nodeKeyForRating(rating);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Future<void> _ensureNodePuzzlesLoaded(Set<String> nodeKeys) async {
+    if (nodeKeys.isEmpty) return;
+
+    final pending = <Future<void>>[];
+    final missing = <String>{};
+
+    for (final key in nodeKeys) {
+      if (_basePuzzleCacheByNode.containsKey(key)) {
+        continue;
+      }
+      final existingLoad = _nodePuzzleLoadFutures[key];
+      if (existingLoad != null) {
+        pending.add(existingLoad);
+        continue;
+      }
+      missing.add(key);
+    }
+
+    if (missing.isNotEmpty) {
+      final loadFuture = _loadNodePuzzles(missing);
+      for (final key in missing) {
+        _nodePuzzleLoadFutures[key] = loadFuture;
+      }
+      pending.add(loadFuture);
+    }
+
+    if (pending.isEmpty) return;
+    await Future.wait(pending);
+  }
+
+  Future<void> _loadNodePuzzles(Set<String> nodeKeys) async {
+    try {
+      final raw = await rootBundle.loadString(_basePuzzleAssetPath);
+      final loaded = <String, List<PuzzleItem>>{};
+      var processed = 0;
+
+      for (final objectSlice in _iterateJsonObjects(raw)) {
+        processed += 1;
+        if (processed % 250 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
+
+        try {
+          final decoded = jsonDecode(objectSlice);
+          if (decoded is! Map) {
+            continue;
+          }
+
+          final map = decoded.cast<String, dynamic>();
+          final rating = int.tryParse(map['Rating']?.toString() ?? '');
+          if (rating == null) {
+            continue;
+          }
+
+          final key = _nodeKeyForRating(rating);
+          if (!nodeKeys.contains(key)) {
+            continue;
+          }
+
+          final item = PuzzleItem.fromMap(map);
+          if (!_validatePuzzle(item)) {
+            continue;
+          }
+
+          (loaded[key] ??= <PuzzleItem>[]).add(item);
+        } catch (_) {
+          continue;
+        }
+      }
+
+      for (final key in nodeKeys) {
+        final items = loaded[key] ?? <PuzzleItem>[];
+        items.sort((a, b) {
+          final ratingCompare = a.rating.compareTo(b.rating);
+          if (ratingCompare != 0) return ratingCompare;
+          return a.puzzleId.compareTo(b.puzzleId);
+        });
+        _basePuzzleCacheByNode[key] = items;
+      }
+    } finally {
+      for (final key in nodeKeys) {
+        _nodePuzzleLoadFutures.remove(key);
+      }
+    }
+  }
+
+  Future<List<PuzzleItem>> _loadPuzzleList(String assetPath) async {
+    final text = await rootBundle.loadString(assetPath);
+    final decoded = await compute(_decodePuzzleMaps, text);
+    return decoded.map(PuzzleItem.fromMap).toList(growable: false);
+  }
+
+  Future<List<String>> _loadDailyAssetPaths() async {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final dailyPaths =
+        manifest
+            .listAssets()
+            .where(
+              (path) =>
+                  path.startsWith('assets/puzzles/daily_puzzles_') &&
+                  path.endsWith('.json'),
+            )
+            .toList(growable: false)
+          ..sort();
+    return dailyPaths;
+  }
+
+  Future<void> _refreshTodayDailyPuzzle({required bool notify}) async {
+    final todayStamp = _dateStamp(DateTime.now());
+    final matchedPath = _dailyPuzzleAssetPaths.lastWhere(
+      (path) => path.contains('daily_puzzles_${todayStamp}_'),
+      orElse: () => '',
+    );
+    _todayDailyPuzzleAssetPath = matchedPath.isEmpty ? null : matchedPath;
+    if (_todayDailyPuzzleAssetPath == null) {
+      _todayDailyPuzzle = null;
+      _dailyPuzzles = const <PuzzleItem>[];
+      if (notify) notifyListeners();
+      return;
+    }
+
+    final puzzles = await _loadPuzzleList(_todayDailyPuzzleAssetPath!);
+    _dailyPuzzles = puzzles.take(20).toList(growable: false);
+    _todayDailyPuzzle = _dailyPuzzles.isEmpty ? null : _dailyPuzzles.first;
+    if (notify) notifyListeners();
+  }
+
+  String _dateStamp(DateTime value) {
+    final year = value.year.toString().padLeft(4, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '$year$month$day';
+  }
+}
