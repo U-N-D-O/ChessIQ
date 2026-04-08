@@ -9,7 +9,7 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/services/puzzle_engine_service.dart';
-import 'package:chessiq/shared/widgets/universal_settings_sheet.dart';
+import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -1395,122 +1395,18 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
 
     if (!mounted) return;
-    await showUniversalSettingsSheet(
+    await showAcademyThemeSettingsSheet(
       context: context,
-      title: 'Settings',
-      isAcademyMode: true,
-      showBoardPerspectiveSection: false,
-      showEngineControlsSection: false,
-      themeMode: themeProvider.themeMode,
-      themeStyle: themeProvider.themeStyle,
+      themeProvider: themeProvider,
       soundEnabled: soundEnabled,
       hapticsEnabled: hapticsEnabled,
-      onThemeModeChanged: (mode) async {
-        await themeProvider.setThemeMode(mode);
-      },
-      onThemeStyleChanged: (style) async {
-        await themeProvider.setThemeStyle(style);
-      },
       onSoundEnabledChanged: (enabled) async {
         await prefs.setBool(_muteSoundsKey, !enabled);
       },
       onHapticsEnabledChanged: (enabled) async {
         await prefs.setBool(_hapticsEnabledKey, enabled);
       },
-      boardThemeSelectorBuilder: (setSheetState) {
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: List<Widget>.generate(5, (index) {
-            final selected = themeProvider.boardThemeIndex == index;
-            final palette = _boardPaletteForIndex(index);
-            return _ThemeSelectorPill(
-              selected: selected,
-              label: _boardThemeLabel(index),
-              onTap: () {
-                unawaited(themeProvider.setBoardThemeIndex(index));
-                setSheetState(() {});
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _MiniSquare(color: palette.darkSquare),
-                  const SizedBox(width: 4),
-                  _MiniSquare(color: palette.lightSquare),
-                ],
-              ),
-            );
-          }),
-        );
-      },
-      pieceThemeSelectorBuilder: (setSheetState) {
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: List<Widget>.generate(3, (index) {
-            final selected = themeProvider.pieceThemeIndex == index;
-            return _ThemeSelectorPill(
-              selected: selected,
-              label: _pieceThemeLabel(index),
-              onTap: () {
-                unawaited(themeProvider.setPieceThemeIndex(index));
-                setSheetState(() {});
-              },
-              child: Icon(
-                Icons.workspace_premium_rounded,
-                size: 18,
-                color: themeProvider.pieceTintColor(index == 0 ? 'q_w' : 'q_b'),
-              ),
-            );
-          }),
-        );
-      },
     );
-  }
-
-  AppBoardPalette _boardPaletteForIndex(int index) {
-    return switch (index) {
-      1 => const AppBoardPalette(
-        darkSquare: Color(0xFFB58863),
-        lightSquare: Color(0xFFF0D9B5),
-      ),
-      2 => const AppBoardPalette(
-        darkSquare: Color(0xFF1A1A1A),
-        lightSquare: Color(0xFFF0F0F0),
-      ),
-      3 => const AppBoardPalette(
-        darkSquare: Color(0xFF6B2D1A),
-        lightSquare: Color(0xFFF2C08D),
-      ),
-      4 => const AppBoardPalette(
-        darkSquare: Color(0xFF1E5F74),
-        lightSquare: Color(0xFFBFE6D8),
-      ),
-      _ => const AppBoardPalette(
-        darkSquare: Color(0xFF2C3E50),
-        lightSquare: Color(0xFF95A5A6),
-      ),
-    };
-  }
-
-  String _boardThemeLabel(int index) {
-    return switch (index) {
-      1 => 'Classic',
-      2 => 'Mono',
-      3 => 'Walnut',
-      4 => 'Sea',
-      _ => 'Neon',
-    };
-  }
-
-  String _pieceThemeLabel(int index) {
-    return switch (index) {
-      1 => 'Ember',
-      2 => 'Frost',
-      _ => 'Classic',
-    };
   }
 
   Widget _buildBoardCard(AppThemeProvider theme, {required bool monochrome}) {

@@ -13,11 +13,56 @@ class AppBoardPalette {
   const AppBoardPalette({required this.darkSquare, required this.lightSquare});
 }
 
+class AppThemeUnlockState {
+  final bool themePackOwned;
+  final bool piecePackOwned;
+
+  const AppThemeUnlockState({
+    this.themePackOwned = false,
+    this.piecePackOwned = false,
+  });
+}
+
 class AppThemeProvider extends ChangeNotifier {
   static const String _themeModeKey = 'app_theme_mode_v1';
   static const String _themeStyleKey = 'app_theme_style_v1';
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
   static const String _legacyCinematicThemeKey = 'cinematic_theme_enabled_v1';
+  static const String _sharedStoreStateKey = 'store_state_v1';
+  static const List<AppBoardPalette> _boardPalettes = <AppBoardPalette>[
+    AppBoardPalette(
+      darkSquare: Color(0xFF2C3E50),
+      lightSquare: Color(0x3395A5A6),
+    ),
+    AppBoardPalette(
+      darkSquare: Color(0xFFB58863),
+      lightSquare: Color(0xFFF0D9B5),
+    ),
+    AppBoardPalette(
+      darkSquare: Color(0xFF1A1A1A),
+      lightSquare: Color(0xFFF0F0F0),
+    ),
+    AppBoardPalette(
+      darkSquare: Color(0xFF6B2D1A),
+      lightSquare: Color(0xFFF2C08D),
+    ),
+    AppBoardPalette(
+      darkSquare: Color(0xFF1E5F74),
+      lightSquare: Color(0xFFBFE6D8),
+    ),
+  ];
+  static const List<String> _boardThemeLabels = <String>[
+    'Neon',
+    'Classic',
+    'Mono',
+    'Ember',
+    'Sea',
+  ];
+  static const List<String> _pieceThemeLabels = <String>[
+    'Classic',
+    'Ember',
+    'Frost',
+  ];
 
   ThemeMode _themeMode = ThemeMode.dark;
   AppThemeStyle _themeStyle = AppThemeStyle.standard;
@@ -31,6 +76,83 @@ class AppThemeProvider extends ChangeNotifier {
   int get pieceThemeIndex => _pieceThemeIndex;
   bool get isLoaded => _loaded;
   bool get isMonochrome => _themeStyle == AppThemeStyle.monochrome;
+
+  static int get boardThemeCount => _boardPalettes.length;
+  static int get pieceThemeCount => _pieceThemeLabels.length;
+
+  static AppBoardPalette boardPaletteForIndex(int index) {
+    if (index < 0 || index >= _boardPalettes.length) {
+      return _boardPalettes.first;
+    }
+    return _boardPalettes[index];
+  }
+
+  static String boardThemeLabelForIndex(int index) {
+    if (index < 0 || index >= _boardThemeLabels.length) {
+      return _boardThemeLabels.first;
+    }
+    return _boardThemeLabels[index];
+  }
+
+  static String pieceThemeLabelForIndex(int index) {
+    if (index < 0 || index >= _pieceThemeLabels.length) {
+      return _pieceThemeLabels.first;
+    }
+    return _pieceThemeLabels[index];
+  }
+
+  static bool isBoardThemeIndexUnlocked(
+    int index, {
+    required bool themePackOwned,
+  }) {
+    return switch (index) {
+      0 || 1 || 2 => true,
+      3 || 4 => themePackOwned,
+      _ => false,
+    };
+  }
+
+  static bool isPieceThemeIndexUnlocked(
+    int index, {
+    required bool piecePackOwned,
+  }) {
+    return switch (index) {
+      0 => true,
+      1 || 2 => piecePackOwned,
+      _ => false,
+    };
+  }
+
+  static List<int> availableBoardThemeIndices({required bool themePackOwned}) {
+    return List<int>.generate(boardThemeCount, (index) => index)
+        .where(
+          (index) =>
+              isBoardThemeIndexUnlocked(index, themePackOwned: themePackOwned),
+        )
+        .toList(growable: false);
+  }
+
+  static List<int> availablePieceThemeIndices({required bool piecePackOwned}) {
+    return List<int>.generate(pieceThemeCount, (index) => index)
+        .where(
+          (index) =>
+              isPieceThemeIndexUnlocked(index, piecePackOwned: piecePackOwned),
+        )
+        .toList(growable: false);
+  }
+
+  static Color pieceTintColorForIndex(int pieceThemeIndex, String piece) {
+    final isWhitePiece = piece.endsWith('_w');
+    return switch (pieceThemeIndex) {
+      1 => isWhitePiece ? const Color(0xFFFFD38A) : const Color(0xFF8B3A1B),
+      2 => isWhitePiece ? const Color(0xFFDDF7FF) : const Color(0xFF4D6F94),
+      _ => Colors.white,
+    };
+  }
+
+  static bool useClassicPiecesForIndex(int pieceThemeIndex) {
+    return pieceThemeIndex == 0;
+  }
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -58,10 +180,10 @@ class AppThemeProvider extends ChangeNotifier {
           final boardTheme = decoded['boardTheme'];
           final pieceTheme = decoded['pieceTheme'];
           if (boardTheme is int) {
-            _boardThemeIndex = boardTheme.clamp(0, 4);
+            _boardThemeIndex = boardTheme.clamp(0, boardThemeCount - 1);
           }
           if (pieceTheme is int) {
-            _pieceThemeIndex = pieceTheme.clamp(0, 2);
+            _pieceThemeIndex = pieceTheme.clamp(0, pieceThemeCount - 1);
           }
         }
       } catch (_) {}
@@ -97,15 +219,36 @@ class AppThemeProvider extends ChangeNotifier {
   }
 
   Future<void> setBoardThemeIndex(int value) async {
-    _boardThemeIndex = value.clamp(0, 4);
+    _boardThemeIndex = value.clamp(0, boardThemeCount - 1);
     await _persistSnapshotThemeIndices();
     notifyListeners();
   }
 
   Future<void> setPieceThemeIndex(int value) async {
-    _pieceThemeIndex = value.clamp(0, 2);
+    _pieceThemeIndex = value.clamp(0, pieceThemeCount - 1);
     await _persistSnapshotThemeIndices();
     notifyListeners();
+  }
+
+  Future<AppThemeUnlockState> loadThemeUnlockState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_sharedStoreStateKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const AppThemeUnlockState();
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return const AppThemeUnlockState();
+      }
+      return AppThemeUnlockState(
+        themePackOwned: decoded['themePackOwned'] == true,
+        piecePackOwned: decoded['piecePackOwned'] == true,
+      );
+    } catch (_) {
+      return const AppThemeUnlockState();
+    }
   }
 
   Future<void> syncLegacySettings({
@@ -125,11 +268,11 @@ class AppThemeProvider extends ChangeNotifier {
       }
     }
     if (boardThemeIndex != null && _boardThemeIndex != boardThemeIndex) {
-      _boardThemeIndex = boardThemeIndex.clamp(0, 4);
+      _boardThemeIndex = boardThemeIndex.clamp(0, boardThemeCount - 1);
       changed = true;
     }
     if (pieceThemeIndex != null && _pieceThemeIndex != pieceThemeIndex) {
-      _pieceThemeIndex = pieceThemeIndex.clamp(0, 2);
+      _pieceThemeIndex = pieceThemeIndex.clamp(0, pieceThemeCount - 1);
       changed = true;
     }
     if (!changed) return;
@@ -297,38 +440,12 @@ class AppThemeProvider extends ChangeNotifier {
   }
 
   AppBoardPalette boardPalette() {
-    return switch (_boardThemeIndex) {
-      1 => const AppBoardPalette(
-        darkSquare: Color(0xFFB58863),
-        lightSquare: Color(0xFFF0D9B5),
-      ),
-      2 => const AppBoardPalette(
-        darkSquare: Color(0xFF1A1A1A),
-        lightSquare: Color(0xFFF0F0F0),
-      ),
-      3 => const AppBoardPalette(
-        darkSquare: Color(0xFF6B2D1A),
-        lightSquare: Color(0xFFF2C08D),
-      ),
-      4 => const AppBoardPalette(
-        darkSquare: Color(0xFF1E5F74),
-        lightSquare: Color(0xFFBFE6D8),
-      ),
-      _ => const AppBoardPalette(
-        darkSquare: Color(0xFF2C3E50),
-        lightSquare: Color(0xFF95A5A6),
-      ),
-    };
+    return boardPaletteForIndex(_boardThemeIndex);
   }
 
   Color pieceTintColor(String piece) {
-    final isWhitePiece = piece.endsWith('_w');
-    return switch (_pieceThemeIndex) {
-      1 => isWhitePiece ? const Color(0xFFFFD38A) : const Color(0xFF8B3A1B),
-      2 => isWhitePiece ? const Color(0xFFDDF7FF) : const Color(0xFF4D6F94),
-      _ => Colors.white,
-    };
+    return pieceTintColorForIndex(_pieceThemeIndex, piece);
   }
 
-  bool get useClassicPieces => _pieceThemeIndex == 0;
+  bool get useClassicPieces => useClassicPiecesForIndex(_pieceThemeIndex);
 }

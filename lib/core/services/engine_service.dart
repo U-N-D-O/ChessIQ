@@ -13,7 +13,7 @@ abstract class EngineService {
   Future<void> stop();
 }
 
-abstract class _EngineBackend {
+abstract class _EngineBackend implements EngineService {
   @override
   Future<void> start(EngineOutputCallback onOutput);
 

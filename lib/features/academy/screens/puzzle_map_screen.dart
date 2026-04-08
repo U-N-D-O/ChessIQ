@@ -9,7 +9,7 @@ import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_grid_screen.dart';
 import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
-import 'package:chessiq/shared/widgets/universal_settings_sheet.dart';
+import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -990,22 +990,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     final hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
 
     if (!mounted) return;
-    await showUniversalSettingsSheet(
+    await showAcademyThemeSettingsSheet(
       context: context,
-      title: 'Settings',
-      isAcademyMode: true,
-      showBoardPerspectiveSection: false,
-      showEngineControlsSection: false,
-      themeMode: theme.themeMode,
-      themeStyle: theme.themeStyle,
+      themeProvider: theme,
       soundEnabled: soundEnabled,
       hapticsEnabled: hapticsEnabled,
-      onThemeModeChanged: (mode) async {
-        await theme.setThemeMode(mode);
-      },
-      onThemeStyleChanged: (style) async {
-        await theme.setThemeStyle(style);
-      },
       onSoundEnabledChanged: (enabled) async {
         await prefs.setBool(_muteSoundsKey, !enabled);
       },

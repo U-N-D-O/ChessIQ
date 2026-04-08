@@ -16,6 +16,7 @@ import 'package:chessiq/features/quiz/models/quiz_models.dart';
 import 'package:chessiq/features/quiz/painters/quiz_accuracy_trend_painter.dart';
 import 'package:chessiq/features/store/models/store_models.dart';
 import 'package:chessiq/features/vs_bot/models/vs_bot_models.dart';
+import 'package:chessiq/shared/widgets/theme_selector_tiles.dart';
 import 'package:chessiq/shared/widgets/universal_settings_sheet.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -732,25 +733,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   bool get _shouldKeepEvalActive => _isEngineActive;
 
   bool _isBoardThemeUnlocked(BoardThemeMode mode) {
-    switch (mode) {
-      case BoardThemeMode.dark:
-      case BoardThemeMode.light:
-      case BoardThemeMode.monochrome:
-        return true;
-      case BoardThemeMode.ember:
-      case BoardThemeMode.aurora:
-        return _themePackOwned;
-    }
+    return AppThemeProvider.isBoardThemeIndexUnlocked(
+      mode.index,
+      themePackOwned: _themePackOwned,
+    );
   }
 
   bool _isPieceThemeUnlocked(PieceThemeMode mode) {
-    switch (mode) {
-      case PieceThemeMode.classic:
-        return true;
-      case PieceThemeMode.ember:
-      case PieceThemeMode.frost:
-        return _piecePackOwned;
-    }
+    return AppThemeProvider.isPieceThemeIndexUnlocked(
+      mode.index,
+      piecePackOwned: _piecePackOwned,
+    );
   }
 
   List<BoardThemeMode> get _availableBoardThemes => BoardThemeMode.values
@@ -8097,7 +8090,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                               inner.maxWidth,
                                               inner.maxHeight,
                                             );
-                                            return Center(
+                                            return Align(
+                                              alignment: Alignment.topCenter,
                                               child: SizedBox(
                                                 key: _boardKey,
                                                 width: boardSize,
@@ -8448,10 +8442,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildEvalBarHorizontal(double scale) {
-    if (!_isEngineActive) {
-      return const SizedBox.shrink();
-    }
-
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -8459,45 +8449,104 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
     final isLightMono = useMonochrome && !isDark;
+    final showEvalBar = _shouldKeepEvalActive;
     final displayedEval = _displayEvalForPov();
-    final displayedEvalColor = isLightMono
-        ? Colors.black
-        : useMonochrome
-        ? (displayedEval >= 0
-              ? const Color(0xFFD8D8D8)
-              : const Color(0xFF181818))
-        : _evalColorForUi(displayedEval);
-    final showWinningAura = _isWinningOutcomeForPov || displayedEval > 5.0;
-    final fill = _evalFillForUi(displayedEval);
-    return Container(
-      height: 6 * scale,
-      width: double.infinity,
-      margin: EdgeInsets.symmetric(horizontal: 18 * scale, vertical: 4 * scale),
-      decoration: BoxDecoration(
-        color: isLightMono
-            ? Colors.white
-            : scheme.outline.withValues(alpha: 0.24),
-        borderRadius: BorderRadius.circular(2 * scale),
-        border: isLightMono ? Border.all(color: Colors.black) : null,
-      ),
-      child: FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: fill,
+
+    if (!useMonochrome) {
+      final displayedEvalColor = _evalColorForUi(displayedEval);
+      final showWinningAura = _isWinningOutcomeForPov || displayedEval > 5.0;
+      final fill = _evalFillForUi(displayedEval);
+      return Visibility(
+        visible: showEvalBar,
+        maintainAnimation: true,
+        maintainSize: true,
+        maintainState: true,
         child: Container(
+          height: 6 * scale,
+          width: double.infinity,
+          margin: EdgeInsets.symmetric(
+            horizontal: 18 * scale,
+            vertical: 4 * scale,
+          ),
           decoration: BoxDecoration(
-            color: displayedEvalColor,
+            color: scheme.outline.withValues(alpha: 0.24),
             borderRadius: BorderRadius.circular(2 * scale),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    (showWinningAura && !useMonochrome
-                            ? const Color(0xFFD8B640)
-                            : displayedEvalColor)
-                        .withValues(alpha: 0.65),
-                blurRadius: showWinningAura ? 10 * scale : 4 * scale,
-                spreadRadius: showWinningAura ? 1.2 : 0,
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: fill,
+            child: Container(
+              decoration: BoxDecoration(
+                color: displayedEvalColor,
+                borderRadius: BorderRadius.circular(2 * scale),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        (showWinningAura
+                                ? const Color(0xFFD8B640)
+                                : displayedEvalColor)
+                            .withValues(alpha: 0.65),
+                    blurRadius: showWinningAura ? 10 * scale : 4 * scale,
+                    spreadRadius: showWinningAura ? 1.2 : 0,
+                  ),
+                ],
               ),
-            ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final Color whiteSegmentColor = isLightMono
+        ? Colors.white
+        : const Color(0xFFF7F7F7);
+    final Color blackSegmentColor = isLightMono
+        ? Colors.black
+        : const Color(0xFF13161C);
+    final Color trackBorderColor = Colors.black;
+    final bool leftSideIsWhite = !_isBlackPovActive;
+    final Color leftColor = leftSideIsWhite
+        ? whiteSegmentColor
+        : blackSegmentColor;
+    final Color rightColor = leftSideIsWhite
+        ? blackSegmentColor
+        : whiteSegmentColor;
+    final double leftShare = _evalFillForUi(displayedEval);
+    final bool turnMatchesLeft = _isWhiteTurn == leftSideIsWhite;
+    final Alignment overlayAlignment = turnMatchesLeft
+        ? Alignment.centerLeft
+        : Alignment.centerRight;
+    final double overlayWidthFactor = turnMatchesLeft
+        ? leftShare
+        : (1.0 - leftShare);
+    final Color baseColor = turnMatchesLeft ? rightColor : leftColor;
+    final Color overlayColor = turnMatchesLeft ? leftColor : rightColor;
+
+    return Visibility(
+      visible: showEvalBar,
+      maintainAnimation: true,
+      maintainSize: true,
+      maintainState: true,
+      child: Container(
+        height: 6 * scale,
+        width: double.infinity,
+        margin: EdgeInsets.symmetric(
+          horizontal: 18 * scale,
+          vertical: 4 * scale,
+        ),
+        decoration: BoxDecoration(
+          color: baseColor,
+          borderRadius: BorderRadius.circular(2 * scale),
+          border: isLightMono ? Border.all(color: trackBorderColor) : null,
+        ),
+        child: FractionallySizedBox(
+          alignment: overlayAlignment,
+          widthFactor: overlayWidthFactor,
+          child: Container(
+            decoration: BoxDecoration(
+              color: overlayColor,
+              borderRadius: BorderRadius.circular(2 * scale),
+            ),
           ),
         ),
       ),
@@ -8510,23 +8559,31 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
     final label = _selectedGambit?.name ?? _currentOpening;
-    if (label.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 14 * scale,
-        vertical: 4 * scale,
-      ),
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: useMonochrome
-              ? scheme.onSurface.withValues(alpha: 0.86)
-              : (_selectedGambit != null
-                    ? const Color(0xFFD8B640)
-                    : scheme.onSurface.withValues(alpha: 0.72)),
-          fontSize: _selectedGambit != null ? (13 * scale) : (12 * scale),
-          fontWeight: FontWeight.w600,
+    return SizedBox(
+      height: 24 * scale,
+      child: Visibility(
+        visible: label.isNotEmpty,
+        maintainAnimation: true,
+        maintainSize: true,
+        maintainState: true,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 14 * scale,
+            vertical: 4 * scale,
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: useMonochrome
+                  ? scheme.onSurface.withValues(alpha: 0.86)
+                  : (_selectedGambit != null
+                        ? const Color(0xFFD8B640)
+                        : scheme.onSurface.withValues(alpha: 0.72)),
+              fontSize: _selectedGambit != null ? (13 * scale) : (12 * scale),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );
@@ -8846,67 +8903,68 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       horizontal: 20,
     ),
   }) {
-    if (!_shouldShowVisualSuggestions || _topLines.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    final showSuggestions =
+        _shouldShowVisualSuggestions && _topLines.isNotEmpty;
 
     return SizedBox(
       height: height,
-      child: SingleChildScrollView(
-        padding: padding,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _topLines.map((l) {
-            String from = l.move.substring(0, 2);
-            String to = l.move.substring(2, 4);
-            String? movingPiece = boardState[from];
-            if (movingPiece == null) return const SizedBox.shrink();
-            String? capturedPiece = boardState[to];
-            bool isCapture = capturedPiece != null;
-            String pieceLetter = movingPiece.startsWith('p')
-                ? ''
-                : movingPiece[0].toUpperCase();
-            String notation = pieceLetter + (isCapture ? 'x' : '') + to;
-            Color color = _getRelativeColorForWidget(l.eval, l.multiPv);
-            double eval = l.eval / 100.0;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _pieceImage(movingPiece, width: 24, height: 24),
-                  const SizedBox(width: 8),
-                  Text(
-                    notation,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 16,
-                      fontWeight: l.multiPv == 1
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+      child: showSuggestions
+          ? SingleChildScrollView(
+              padding: padding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _topLines.map((l) {
+                  String from = l.move.substring(0, 2);
+                  String to = l.move.substring(2, 4);
+                  String? movingPiece = boardState[from];
+                  if (movingPiece == null) return const SizedBox.shrink();
+                  String? capturedPiece = boardState[to];
+                  bool isCapture = capturedPiece != null;
+                  String pieceLetter = movingPiece.startsWith('p')
+                      ? ''
+                      : movingPiece[0].toUpperCase();
+                  String notation = pieceLetter + (isCapture ? 'x' : '') + to;
+                  Color color = _getRelativeColorForWidget(l.eval, l.multiPv);
+                  double eval = l.eval / 100.0;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _pieceImage(movingPiece, width: 24, height: 24),
+                        const SizedBox(width: 8),
+                        Text(
+                          notation,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 16,
+                            fontWeight: l.multiPv == 1
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        if (isCapture) ...[
+                          const SizedBox(width: 8),
+                          _pieceImage(capturedPiece, width: 20, height: 20),
+                        ],
+                        const SizedBox(width: 8),
+                        Text(
+                          eval >= 0
+                              ? '+${eval.toStringAsFixed(2)}'
+                              : eval.toStringAsFixed(2),
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  if (isCapture) ...[
-                    const SizedBox(width: 8),
-                    _pieceImage(capturedPiece, width: 20, height: 20),
-                  ],
-                  const SizedBox(width: 8),
-                  Text(
-                    eval >= 0
-                        ? '+${eval.toStringAsFixed(2)}'
-                        : eval.toStringAsFixed(2),
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+                  );
+                }).toList(),
               ),
-            );
-          }).toList(),
-        ),
-      ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 
@@ -9108,7 +9166,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             )
           else
             _buildBotUndoButton(),
-          _iconBtn(Icons.settings_outlined, () => _openSettings()),
+          _iconBtn(
+            Icons.settings_outlined,
+            () => _openSettings(fromAnalysisMode: !_playVsBot),
+          ),
         ],
       ),
     );
@@ -10423,15 +10484,21 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   void _openAppearanceSettings() {
-    _openSettings();
+    _openSettings(
+      fromAnalysisMode: _activeSection == AppSection.analysis && !_playVsBot,
+    );
   }
 
-  Future<void> _openSettings({bool isAcademyMode = false}) async {
+  Future<void> _openSettings({
+    bool isAcademyMode = false,
+    bool fromAnalysisMode = false,
+  }) async {
     final themeProvider = context.read<AppThemeProvider>();
     final isBoardAnalysisPage =
         _activeSection == AppSection.analysis && !_playVsBot;
     final isVsBotPage = _playVsBot;
-    final showBoardPerspectiveSection = !isAcademyMode && isBoardAnalysisPage;
+    final showBoardPerspectiveSection =
+        !isAcademyMode && fromAnalysisMode && isBoardAnalysisPage;
     final showEngineControlsSection =
         !isAcademyMode && (isBoardAnalysisPage || isVsBotPage);
 
@@ -10804,6 +10871,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -10841,6 +10909,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           return ColoredBox(
             color: sheetSurface,
             child: SafeArea(
+              top: false,
               bottom: false,
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
@@ -11732,8 +11801,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Widget _boardThemeOption(BoardThemeMode mode, Function setL) {
     final selected = _boardThemeMode == mode;
-    final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return ThemeSelectorTile(
+      selected: selected,
       onTap: () {
         setState(() => _boardThemeMode = mode);
         setL(() {});
@@ -11742,32 +11811,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           context.read<AppThemeProvider>().setBoardThemeIndex(mode.index),
         );
       },
-      child: Container(
-        width: 62,
-        height: 62,
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary.withValues(alpha: 0.24)
-              : Color.alphaBlend(
-                  scheme.primary.withValues(alpha: 0.05),
-                  scheme.surface,
-                ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? scheme.primary.withValues(alpha: 0.70)
-                : scheme.outline.withValues(alpha: 0.32),
-          ),
-        ),
-        child: Center(child: _boardThemeSwatch(mode)),
-      ),
+      child: _boardThemeSwatch(mode),
     );
   }
 
   Widget _pieceThemeOption(PieceThemeMode mode, Function setL) {
     final selected = _pieceThemeMode == mode;
-    final scheme = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return ThemeSelectorTile(
+      selected: selected,
       onTap: () {
         setState(() => _pieceThemeMode = mode);
         setL(() {});
@@ -11776,85 +11827,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           context.read<AppThemeProvider>().setPieceThemeIndex(mode.index),
         );
       },
-      child: Container(
-        width: 62,
-        height: 62,
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary.withValues(alpha: 0.24)
-              : Color.alphaBlend(
-                  scheme.primary.withValues(alpha: 0.05),
-                  scheme.surface,
-                ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? scheme.primary.withValues(alpha: 0.70)
-                : scheme.outline.withValues(alpha: 0.32),
-          ),
-        ),
-        child: Center(child: _pieceThemePreview(mode)),
-      ),
+      child: _pieceThemePreview(mode),
     );
   }
 
   Widget _boardThemeSwatch(BoardThemeMode mode) {
-    final Color dark, light;
-    switch (mode) {
-      case BoardThemeMode.dark:
-        dark = const Color(0xFF2C3E50);
-        light = const Color(0xFF95A5A6);
-      case BoardThemeMode.light:
-        dark = const Color(0xFFB58863);
-        light = const Color(0xFFF0D9B5);
-      case BoardThemeMode.monochrome:
-        dark = const Color(0xFF1A1A1A);
-        light = const Color(0xFFF0F0F0);
-      case BoardThemeMode.ember:
-        dark = const Color(0xFF6B2D1A);
-        light = const Color(0xFFF2C08D);
-      case BoardThemeMode.aurora:
-        dark = const Color(0xFF1E5F74);
-        light = const Color(0xFFBFE6D8);
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
-      child: SizedBox(
-        width: 27,
-        height: 27,
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(width: 13.5, height: 13.5, color: dark),
-                Container(width: 13.5, height: 13.5, color: light),
-              ],
-            ),
-            Row(
-              children: [
-                Container(width: 13.5, height: 13.5, color: light),
-                Container(width: 13.5, height: 13.5, color: dark),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return BoardThemeSwatchPreview(
+      palette: AppThemeProvider.boardPaletteForIndex(mode.index),
     );
   }
 
   Widget _pieceThemePreview(PieceThemeMode mode) {
-    return SizedBox(
-      width: 42,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _pieceImage('k_w', width: 18, height: 18, theme: mode),
-          const SizedBox(width: 3),
-          _pieceImage('k_b', width: 18, height: 18, theme: mode),
-        ],
-      ),
-    );
+    return PieceThemePreviewTile(pieceThemeIndex: mode.index);
   }
 
   Widget _themePackPreview() {
@@ -11967,15 +11951,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Color _pieceTintColor(String piece, PieceThemeMode theme) {
-    final isWhitePiece = piece.endsWith('_w');
-    switch (theme) {
-      case PieceThemeMode.classic:
-        return Colors.white;
-      case PieceThemeMode.ember:
-        return isWhitePiece ? const Color(0xFFFFD38A) : const Color(0xFF8B3A1B);
-      case PieceThemeMode.frost:
-        return isWhitePiece ? const Color(0xFFDDF7FF) : const Color(0xFF4D6F94);
-    }
+    return AppThemeProvider.pieceTintColorForIndex(theme.index, piece);
   }
 
   String _boardThemeLabel(BoardThemeMode mode) {
@@ -12005,34 +11981,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Color _darkSquareColorForTheme() {
-    switch (_boardThemeMode) {
-      case BoardThemeMode.light:
-        return const Color(0xFFB58863);
-      case BoardThemeMode.monochrome:
-        // High-contrast black square, roughly +80% contrast feel.
-        return Colors.black.withValues(alpha: 0.9);
-      case BoardThemeMode.dark:
-        return const Color(0xFF2C3E50);
-      case BoardThemeMode.ember:
-        return const Color(0xFF6B2D1A);
-      case BoardThemeMode.aurora:
-        return const Color(0xFF1E5F74);
-    }
+    return AppThemeProvider.boardPaletteForIndex(
+      _boardThemeMode.index,
+    ).darkSquare;
   }
 
   Color _lightSquareColorForTheme() {
-    switch (_boardThemeMode) {
-      case BoardThemeMode.light:
-        return const Color(0xFFF0D9B5);
-      case BoardThemeMode.monochrome:
-        return Colors.white.withValues(alpha: 0.9);
-      case BoardThemeMode.dark:
-        return const Color(0xFF95A5A6).withValues(alpha: 0.2);
-      case BoardThemeMode.ember:
-        return const Color(0xFFF2C08D);
-      case BoardThemeMode.aurora:
-        return const Color(0xFFBFE6D8);
-    }
+    return AppThemeProvider.boardPaletteForIndex(
+      _boardThemeMode.index,
+    ).lightSquare;
   }
 
   @override
