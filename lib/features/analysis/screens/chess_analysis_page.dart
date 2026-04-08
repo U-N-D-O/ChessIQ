@@ -5,9 +5,10 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/services/engine_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
-import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_map_screen.dart';
 import 'package:chessiq/features/analysis/models/analysis_models.dart';
 import 'package:chessiq/features/analysis/painters/energy_arrow_painter.dart';
@@ -92,11 +93,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
   static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
   static const String _quizStatsKey = 'quiz_stats_v1';
-  static const String _storeRewardAdLastWatchKey =
-      'store_reward_ad_last_watch_v1';
+  static const String _analysisEngineOwner = 'analysis.board';
+  static const String _vsBotEngineOwner = 'analysis.vsbot';
 
   late Map<String, String> boardState;
   EngineService? _engine;
+  String? _engineOwner;
   late AnimationController _pulseController;
   late AnimationController _introController;
   late AnimationController _menuRevealController;
@@ -275,13 +277,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     ),
   ];
 
-  int _storeCoins = 0;
   int _depthTier = 0; // 0=base,1=pro,2=expert,3=grandmaster
   int _extraSuggestionPurchases = 0; // each +1 up to max 10 suggestions
   bool _themePackOwned = false;
   bool _piecePackOwned = false;
   bool _adFreeOwned = false;
-  DateTime? _lastStoreRewardAdAt;
   bool _introCompleted = true;
   bool _suggestionsEnabled = false;
   bool _suggestionLaunchInProgress = false;
@@ -725,6 +725,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   int get _effectiveMultiPvCount => max(1, _multiPvCount);
 
+  bool get _isEngineActive => _suggestionsEnabled;
+
+  bool get _shouldShowVisualSuggestions => _isEngineActive && _multiPvCount > 0;
+
+  bool get _shouldKeepEvalActive => _isEngineActive;
+
   bool _isBoardThemeUnlocked(BoardThemeMode mode) {
     switch (mode) {
       case BoardThemeMode.dark:
@@ -766,11 +772,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Future<void> _loadStoreState() async {
     try {
+      await context.read<EconomyProvider>().refresh(notify: false);
       final prefs = await SharedPreferences.getInstance();
-      final lastWatchMs = prefs.getInt(_storeRewardAdLastWatchKey);
-      _lastStoreRewardAdAt = lastWatchMs == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(lastWatchMs);
       final raw = prefs.getString(_storeStateKey);
       if (raw == null || raw.isEmpty) {
         _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
@@ -782,14 +785,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return;
       }
 
-      final coins = decoded['coins'];
       final tier = decoded['depthTier'];
       final extraSuggestions = decoded['extraSuggestions'];
       final themePack = decoded['themePackOwned'];
       final piecePack = decoded['piecePackOwned'];
       final adFree = decoded['adFreeOwned'];
 
-      if (coins is int) _storeCoins = max(0, coins);
       if (tier is int) _depthTier = tier.clamp(0, 3);
       if (extraSuggestions is int) {
         _extraSuggestionPurchases = extraSuggestions.clamp(0, 8);
@@ -807,9 +808,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _saveStoreState() async {
+    final economy = context.read<EconomyProvider>();
     final prefs = await SharedPreferences.getInstance();
     final payload = {
-      'coins': _storeCoins,
+      'coins': economy.coins,
       'depthTier': _depthTier,
       'extraSuggestions': _extraSuggestionPurchases,
       'themePackOwned': _themePackOwned,
@@ -817,24 +819,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       'adFreeOwned': _adFreeOwned,
     };
     await prefs.setString(_storeStateKey, jsonEncode(payload));
-    if (!mounted) return;
-    final academy = context.read<PuzzleAcademyProvider>();
-    if (academy.initialized) {
-      await academy.syncCoinsFromStoreState(notify: true);
-    }
-  }
-
-  Duration _storeRewardAdRemainingCooldown() {
-    final lastWatch = _lastStoreRewardAdAt;
-    if (lastWatch == null) {
-      return Duration.zero;
-    }
-    final nextReadyAt = lastWatch.add(const Duration(minutes: 30));
-    final remaining = nextReadyAt.difference(DateTime.now());
-    if (remaining.isNegative) {
-      return Duration.zero;
-    }
-    return remaining;
   }
 
   String _storeRewardAdCountdownLabel(Duration remaining) {
@@ -1020,6 +1004,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _persistCurrentSettings();
   }
 
+  Future<void> _restoreAnalysisWorkspace() async {
+    _resetBoard(withIntro: false);
+    await _loadSavedDefaultSnapshot();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _releaseEngineSession() async {
+    _engineStartFuture = null;
+    final engine = _engine;
+    _engine = null;
+    _engineOwner = null;
+    if (engine == null) return;
+    try {
+      await engine.stop();
+    } catch (e) {
+      _addLog('Engine release failed: $e');
+      debugPrint('Engine release failed: $e');
+    }
+  }
+
   Map<String, dynamic> _moveRecordToMap(MoveRecord move) {
     return {
       'notation': move.notation,
@@ -1120,21 +1125,33 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   // --- Engine Logic ---
   Future<void> _startEngine() async {
-    if (_engine != null) return;
     if (kIsWeb) {
       _addLog('Engine unavailable on web; running without Stockfish process.');
       return;
     }
+    final desiredOwner = _playVsBot ? _vsBotEngineOwner : _analysisEngineOwner;
+    if (_engine != null && _engineOwner == desiredOwner) return;
+
+    if (_engine != null && _engineOwner != desiredOwner) {
+      await _releaseEngineSession();
+    }
+
+    final nextEngine = createEngineService(owner: desiredOwner);
+    _engine = nextEngine;
+    _engineOwner = desiredOwner;
+
     try {
-      _engine = createEngineService();
-      await _engine!.start(_parseOutput);
-      _engine!.send('uci');
-      _engine!.send('setoption name MultiPV value $_effectiveMultiPvCount');
-      if (_suggestionsEnabled) {
+      await nextEngine.start(_parseOutput);
+      nextEngine.send('uci');
+      nextEngine.send('setoption name MultiPV value $_effectiveMultiPvCount');
+      if (_shouldKeepEvalActive || _shouldShowVisualSuggestions) {
         _analyze();
       }
     } catch (e) {
-      _engine = null;
+      if (identical(_engine, nextEngine)) {
+        _engine = null;
+        _engineOwner = null;
+      }
       _addLog('Engine start failed: $e');
       debugPrint('Engine start failed: $e');
     }
@@ -1158,9 +1175,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   void _analyze() {
-    if (!_suggestionsEnabled ||
-        _multiPvCount <= 0 ||
-        (_playVsBot && !_isHumanTurnInBotGame)) {
+    final shouldShowVisualSuggestions = _shouldShowVisualSuggestions;
+    if ((_playVsBot && !_isHumanTurnInBotGame) ||
+        (!_shouldKeepEvalActive && !shouldShowVisualSuggestions)) {
       _send('stop');
       setState(() {
         _topLines = [];
@@ -1173,7 +1190,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _topLines = [];
       _currentDepth = 0;
     });
-    _send('setoption name MultiPV value $_effectiveMultiPvCount');
+    _send(
+      'setoption name MultiPV value ${shouldShowVisualSuggestions ? _effectiveMultiPvCount : 1}',
+    );
     _send('position fen ${_genFen()}');
     _send('go depth $_engineDepth');
   }
@@ -1184,7 +1203,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     setState(() {
       _multiPvCount = nextCount;
-      _suggestionsEnabled = _suggestionsEnabled && nextCount > 0;
       if (nextCount <= 0) {
         _topLines = [];
         _currentDepth = 0;
@@ -1197,10 +1215,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     if (changed) {
       _send('stop');
-      if (nextCount > 0) {
-        _send('setoption name MultiPV value ${max(1, nextCount)}');
-      }
-      if (_suggestionsEnabled && nextCount > 0) {
+      _send('setoption name MultiPV value ${max(1, nextCount)}');
+      if (_shouldKeepEvalActive || (_suggestionsEnabled && nextCount > 0)) {
         _analyze();
       }
     }
@@ -1234,10 +1250,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
 
     if (!line.startsWith('info depth')) return;
-    if (!_suggestionsEnabled || (_playVsBot && !_isHumanTurnInBotGame)) {
+    final activeSearch = _botSearchCompleter;
+    final botSearchActive = activeSearch != null && !activeSearch.isCompleted;
+    final shouldShowVisualSuggestions =
+        _shouldShowVisualSuggestions && (!_playVsBot || _isHumanTurnInBotGame);
+    if (!botSearchActive &&
+        !shouldShowVisualSuggestions &&
+        !_shouldKeepEvalActive) {
       return;
     }
-    if (_gameOutcome != null) {
+    if (_gameOutcome != null && !botSearchActive) {
       return;
     }
     final d = RegExp(r'depth (\d+)').firstMatch(line);
@@ -1249,11 +1271,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     if (d != null && pv != null && m != null) {
       int depth = int.parse(d.group(1)!);
       int multiPv = int.parse(pv.group(1)!);
-      final activeSearch = _botSearchCompleter;
-      final maxMultiPvAllowed =
-          (activeSearch != null && !activeSearch.isCompleted)
+      final maxMultiPvAllowed = botSearchActive
           ? _botSearchMultiPv
-          : _multiPvCount;
+          : (shouldShowVisualSuggestions ? _multiPvCount : 1);
       if (multiPv > maxMultiPvAllowed) {
         return;
       }
@@ -1283,7 +1303,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         normalizedEval = 0.0;
       }
 
-      if (activeSearch != null && !activeSearch.isCompleted) {
+      if (botSearchActive) {
         // Recovery guard: if bot search state leaked, unblock normal analysis.
         if (!_playVsBot || !_botThinking) {
           _botSearchCompleter = null;
@@ -1297,16 +1317,22 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       }
 
       setState(() {
-        _currentDepth = depth;
-        if (multiPv == 1) {
-          _currentEval = normalizedEval;
-          _evalWhiteTurn = _isWhiteTurn;
+        if (_shouldKeepEvalActive) {
+          _currentDepth = depth;
+          if (multiPv == 1) {
+            _currentEval = normalizedEval;
+            _evalWhiteTurn = _isWhiteTurn;
+          }
         }
-        _topLines.removeWhere(
-          (e) => e.multiPv == multiPv || e.multiPv > _multiPvCount,
-        );
-        _topLines.add(EngineLine(move, cp, depth, multiPv));
-        _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+        if (shouldShowVisualSuggestions) {
+          _topLines.removeWhere(
+            (e) => e.multiPv == multiPv || e.multiPv > _multiPvCount,
+          );
+          _topLines.add(EngineLine(move, cp, depth, multiPv));
+          _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+        } else if (_topLines.isNotEmpty && multiPv == 1) {
+          _topLines = [];
+        }
       });
     }
   }
@@ -1366,7 +1392,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       );
     } finally {
       _botSearchCompleter = null;
-      _send('setoption name MultiPV value $_multiPvCount');
+      _send('setoption name MultiPV value $_effectiveMultiPvCount');
     }
 
     final legal = <EngineLine>[];
@@ -1573,7 +1599,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final from = chosen.substring(0, 2);
       final to = chosen.substring(2, 4);
       await Future<void>.delayed(_botPersonaMoveDelay(bot));
-      if (!mounted || !_playVsBot || _selectedBot == null || _isHumanTurnInBotGame) {
+      if (!mounted ||
+          !_playVsBot ||
+          _selectedBot == null ||
+          _isHumanTurnInBotGame) {
         return;
       }
       _onMove(from, to, promotion: chosen.length == 5 ? chosen[4] : null);
@@ -3882,6 +3911,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       unawaited(_stopMenuMusic(fadeOut: true));
       if (!mounted) return;
 
+      if (_activeSection == AppSection.analysis && !_playVsBot) {
+        _persistAnalysisSnapshotIfNeeded();
+      }
+
       final humanPlaysWhite = switch (sideChoice) {
         BotSideChoice.white => true,
         BotSideChoice.black => false,
@@ -4376,10 +4409,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _selectedBot = null;
         _botThinking = false;
       });
+      await _restoreAnalysisWorkspace();
       unawaited(_ensureEngineStarted());
-      if (_suggestionsEnabled && _multiPvCount > 0 && _topLines.isEmpty) {
-        _analyze();
-      }
+      _analyze();
     } catch (e) {
       _addLog('Enter analysis failed: $e');
       debugPrint('Enter analysis failed: $e');
@@ -4429,6 +4461,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     } else {
       _persistAnalysisSnapshotIfNeeded();
     }
+    unawaited(_releaseEngineSession());
 
     _menuExitAnimationController.reset();
     _sectionTransitionController.reset();
@@ -4459,6 +4492,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       await _stopMenuMusic(fadeOut: false);
       await _introAudioPlayer.stop();
       _send('stop');
+      await _releaseEngineSession();
 
       if (!mounted) return;
       setState(() {
@@ -5743,11 +5777,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final menuTopColor = Color.alphaBlend(
-      scheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
+      Color.lerp(
+        scheme.primary,
+        scheme.secondary,
+        0.32,
+      )!.withValues(alpha: isDark ? 0.12 : 0.05),
       scheme.surface,
     );
     final menuBottomColor = Color.alphaBlend(
-      scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+      scheme.tertiary.withValues(alpha: isDark ? 0.08 : 0.04),
       scheme.surface,
     );
     return Focus(
@@ -5766,10 +5804,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               body: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                     colors: [menuTopColor, scheme.surface, menuBottomColor],
-                    stops: [0.0, 0.55, 1.0],
+                    stops: [0.0, 0.72, 1.0],
                   ),
                 ),
                 child: (!isLandscape)
@@ -5841,15 +5879,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         final isDark = theme.brightness == Brightness.dark;
         final isMono = appTheme.isMonochrome || _isCinematicThemeEnabled;
         final controlSurface = Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.16 : 0.06),
+          scheme.primary.withValues(alpha: isDark ? 0.11 : 0.07),
           scheme.surface,
         );
         final menuTopColor = Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.16 : 0.05),
+          Color.lerp(
+            scheme.primary,
+            scheme.secondary,
+            0.28,
+          )!.withValues(alpha: isDark ? 0.11 : 0.05),
           scheme.surface,
         );
         final menuBottomColor = Color.alphaBlend(
-          scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+          scheme.tertiary.withValues(alpha: isDark ? 0.08 : 0.04),
           scheme.surface,
         );
         final blueBlob = isMono
@@ -5884,13 +5926,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [menuTopColor, scheme.surface, menuBottomColor],
-                    stops: const [0.0, 0.55, 1.0],
+                    stops: const [0.0, 0.72, 1.0],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: blueBlob.withValues(alpha: isDark ? 0.2 : 0.09),
-                      blurRadius: 120,
-                      spreadRadius: 10,
+                      color: blueBlob.withValues(alpha: isDark ? 0.14 : 0.06),
+                      blurRadius: 140,
+                      spreadRadius: 4,
                     ),
                   ],
                 ),
@@ -5908,12 +5950,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: blueBlob.withValues(
-                            alpha: isDark ? 0.22 : 0.15,
+                            alpha: isDark ? 0.16 : 0.11,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: blueBlob.withValues(
-                                alpha: isDark ? 0.56 : 0.26,
+                                alpha: isDark ? 0.40 : 0.18,
                               ),
                               blurRadius: 72,
                             ),
@@ -5929,12 +5971,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: goldBlob.withValues(
-                            alpha: isDark ? 0.20 : 0.14,
+                            alpha: isDark ? 0.15 : 0.10,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: goldBlob.withValues(
-                                alpha: isDark ? 0.50 : 0.22,
+                                alpha: isDark ? 0.34 : 0.14,
                               ),
                               blurRadius: 66,
                             ),
@@ -5951,13 +5993,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                           shape: BoxShape.circle,
                           color: greenBlob.withValues(
                             alpha: isDark
-                                ? fusionPulse
-                                : (0.11 + (fusionPulse * 0.40)),
+                                ? (fusionPulse * 0.70)
+                                : (0.08 + (fusionPulse * 0.28)),
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: greenBlob.withValues(
-                                alpha: isDark ? 0.72 : 0.26,
+                                alpha: isDark ? 0.46 : 0.18,
                               ),
                               blurRadius: 80,
                             ),
@@ -8041,16 +8083,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   children: [
                                     _buildHeader(scale),
                                     _buildEvalBarHorizontal(scale),
-                                    SizedBox(
-                                      height: 0,
-                                      child: OverflowBox(
-                                        maxHeight: 32 * scale,
-                                        alignment: Alignment.topCenter,
-                                        child: _playVsBot
-                                            ? const SizedBox.shrink()
-                                            : _buildOpeningLabel(scale),
-                                      ),
-                                    ),
                                     Expanded(
                                       child: Padding(
                                         padding: EdgeInsets.fromLTRB(
@@ -8095,6 +8127,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                         ),
                                       ),
                                     ),
+                                    if (!_playVsBot) _buildOpeningLabel(scale),
                                     _buildSuggestedMovesList(
                                       height: _playVsBot ? 168 : 130,
                                       padding: _playVsBot
@@ -8415,6 +8448,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildEvalBarHorizontal(double scale) {
+    if (!_isEngineActive) {
+      return const SizedBox.shrink();
+    }
+
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -8809,65 +8846,67 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       horizontal: 20,
     ),
   }) {
+    if (!_shouldShowVisualSuggestions || _topLines.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return SizedBox(
       height: height,
-      child: _topLines.isEmpty
-          ? const SizedBox.shrink()
-          : SingleChildScrollView(
-              padding: padding,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: _topLines.map((l) {
-                  String from = l.move.substring(0, 2);
-                  String to = l.move.substring(2, 4);
-                  String? movingPiece = boardState[from];
-                  if (movingPiece == null) return const SizedBox.shrink();
-                  String? capturedPiece = boardState[to];
-                  bool isCapture = capturedPiece != null;
-                  String pieceLetter = movingPiece.startsWith('p')
-                      ? ''
-                      : movingPiece[0].toUpperCase();
-                  String notation = pieceLetter + (isCapture ? 'x' : '') + to;
-                  Color color = _getRelativeColorForWidget(l.eval, l.multiPv);
-                  double eval = l.eval / 100.0;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _pieceImage(movingPiece, width: 24, height: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          notation,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 16,
-                            fontWeight: l.multiPv == 1
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        if (isCapture) ...[
-                          const SizedBox(width: 8),
-                          _pieceImage(capturedPiece, width: 20, height: 20),
-                        ],
-                        const SizedBox(width: 8),
-                        Text(
-                          eval >= 0
-                              ? '+${eval.toStringAsFixed(2)}'
-                              : eval.toStringAsFixed(2),
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+      child: SingleChildScrollView(
+        padding: padding,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _topLines.map((l) {
+            String from = l.move.substring(0, 2);
+            String to = l.move.substring(2, 4);
+            String? movingPiece = boardState[from];
+            if (movingPiece == null) return const SizedBox.shrink();
+            String? capturedPiece = boardState[to];
+            bool isCapture = capturedPiece != null;
+            String pieceLetter = movingPiece.startsWith('p')
+                ? ''
+                : movingPiece[0].toUpperCase();
+            String notation = pieceLetter + (isCapture ? 'x' : '') + to;
+            Color color = _getRelativeColorForWidget(l.eval, l.multiPv);
+            double eval = l.eval / 100.0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _pieceImage(movingPiece, width: 24, height: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    notation,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 16,
+                      fontWeight: l.multiPv == 1
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
-                  );
-                }).toList(),
+                  ),
+                  if (isCapture) ...[
+                    const SizedBox(width: 8),
+                    _pieceImage(capturedPiece, width: 20, height: 20),
+                  ],
+                  const SizedBox(width: 8),
+                  Text(
+                    eval >= 0
+                        ? '+${eval.toStringAsFixed(2)}'
+                        : eval.toStringAsFixed(2),
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-            ),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
@@ -9076,7 +9115,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildSuggestionTriggerButton() {
-    if (_playVsBot && _suggestionsEnabled) {
+    if (_isEngineActive) {
       return GestureDetector(
         key: _suggestionButtonKey,
         onTap: () {
@@ -9087,6 +9126,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           });
           _send('stop');
         },
+        onLongPress: _playVsBot
+            ? null
+            : () {
+                setState(() {
+                  _isWhiteTurn = !_isWhiteTurn;
+                });
+                _analyze();
+              },
         child: Container(
           width: 56,
           height: 56,
@@ -9114,68 +9161,21 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       );
     }
 
-    if (_suggestionsEnabled) {
-      final turnPiece = _isWhiteTurn ? 'p_w' : 'p_b';
-      const turnPieceSize = 48.0;
-      return GestureDetector(
-        key: _suggestionButtonKey,
-        onTap: () => setState(() {
-          if (_playVsBot) {
-            _suggestionsEnabled = false;
-            _analyze();
-            return;
-          }
-          _isWhiteTurn = !_isWhiteTurn;
-          _analyze();
-        }),
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _isWhiteTurn
-                ? const Color(0xFFEDEFF4)
-                : const Color(0xFF111319),
-            border: Border.all(
-              color: const Color(0xFFB9A46A).withValues(alpha: 0.42),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Center(
-            child: _pieceImage(
-              turnPiece,
-              width: turnPieceSize,
-              height: turnPieceSize,
-              applyBlackOutline: true,
-            ),
-          ),
-        ),
-      );
-    }
-
     return GestureDetector(
       key: _suggestionButtonKey,
       onTap: (!_buttonUnlocked || _suggestionLaunchInProgress)
           ? null
           : () async {
-              if (_multiPvCount <= 0) {
-                _addLog(
-                  'Set Suggested Moves above 0 in Settings to enable suggestions.',
-                );
-                return;
-              }
               if (_playVsBot) {
                 setState(() {
                   _suggestionsEnabled = true;
                 });
                 _analyze();
+                _addLog(
+                  _multiPvCount > 0
+                      ? 'Stockfish suggestions activated'
+                      : 'Stockfish evaluation activated',
+                );
                 return;
               }
               if (kIsWeb) {
@@ -9218,7 +9218,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 _suggestionsEnabled = true;
               });
               _analyze();
-              _addLog('Suggestions started');
+              _addLog(
+                _multiPvCount > 0
+                    ? 'Stockfish suggestions activated'
+                    : 'Stockfish evaluation activated',
+              );
             },
       child: AnimatedBuilder(
         animation: Listenable.merge([
@@ -9512,6 +9516,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       context: context,
       builder: (context) {
         final openedFromAnalysis = _activeSection == AppSection.analysis;
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final dialogSurface = Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+          scheme.surface,
+        );
+        final dialogAccent = Color.alphaBlend(
+          scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.05),
+          scheme.surface,
+        );
         final dialogHeight = min(
           MediaQuery.of(context).size.height * 0.82,
           700.0,
@@ -9523,16 +9538,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             constraints: BoxConstraints(maxWidth: 560, maxHeight: dialogHeight),
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF04122A), Color(0xFF030C1C)],
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [dialogSurface, dialogAccent],
               ),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
+                  color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
                   blurRadius: 28,
                   offset: const Offset(0, 12),
                 ),
@@ -9549,7 +9564,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         const Spacer(),
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close, color: Colors.white70),
+                          icon: Icon(
+                            Icons.close,
+                            color: scheme.onSurface.withValues(alpha: 0.72),
+                          ),
                           tooltip: 'Close credits',
                         ),
                       ],
@@ -9562,21 +9580,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: const Color(0xFF9ED8FF).withValues(alpha: 0.2),
+                          color: scheme.outline.withValues(alpha: 0.22),
                         ),
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            const Color(0xFF2A6CF0).withValues(alpha: 0.08),
-                            const Color(0xFF16D3E7).withValues(alpha: 0.06),
+                            scheme.primary.withValues(alpha: 0.10),
+                            scheme.secondary.withValues(alpha: 0.05),
                           ],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFF6FCBFF,
-                            ).withValues(alpha: 0.18),
+                            color: scheme.primary.withValues(alpha: 0.12),
                             blurRadius: 18,
                             spreadRadius: 1,
                           ),
@@ -9590,10 +9606,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Credits & Attribution',
+                      'Credits, Data & Legal',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white.withValues(alpha: 0.75),
+                        color: scheme.onSurface.withValues(alpha: 0.74),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -9602,33 +9618,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            _buildCreditRow('Creative Direction', 'QILA modus'),
-                            _buildCreditRow('App Engineering', 'QILA modus'),
+                            _buildCreditRow(
+                              'Product & Direction',
+                              'QILA modus',
+                            ),
+                            _buildCreditRow(
+                              'Engineering & Design',
+                              'QILA modus',
+                            ),
                             _buildCreditRow(
                               'Chess Engine',
                               'Stockfish (GPL-3.0)',
                             ),
                             _buildCreditRow(
-                              'Opening Database',
-                              'ECO data (MIT)',
+                              'Puzzle Data',
+                              'Lichess puzzle database (CC0)',
+                            ),
+                            _buildCreditRow('Opening Data', 'ECO data (MIT)'),
+                            _buildCreditRow(
+                              'Audio',
+                              'Suno theme plus Freesound and Floraphonic effects',
                             ),
                             _buildCreditRow('Platform', 'Flutter / Dart'),
-                            _buildCreditRow(
-                              'Main Menu Theme',
-                              'Created with Suno',
-                            ),
-                            _buildCreditRow(
-                              'Sound FX',
-                              'Coin Drop by VSokorelos (Freesound)',
-                            ),
-                            _buildCreditRow(
-                              'Sound FX',
-                              'Coin and Money Bag 3 by Floraphonic',
-                            ),
-                            _buildCreditRow(
-                              'Sound FX',
-                              'Chess Pieces by simone_ds (Freesound)',
-                            ),
                             const SizedBox(height: 12),
                             Container(
                               width: double.infinity,
@@ -9643,23 +9654,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: [
-                                    const Color(
-                                      0xFF0E1B34,
-                                    ).withValues(alpha: 0.92),
-                                    const Color(
-                                      0xFF091527,
-                                    ).withValues(alpha: 0.9),
+                                    Color.alphaBlend(
+                                      scheme.primary.withValues(alpha: 0.10),
+                                      scheme.surface,
+                                    ),
+                                    Color.alphaBlend(
+                                      scheme.secondary.withValues(alpha: 0.06),
+                                      scheme.surface,
+                                    ),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: const Color(
-                                    0xFF16D3E7,
-                                  ).withValues(alpha: 0.24),
+                                  color: scheme.outline.withValues(alpha: 0.26),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.28),
+                                    color: Colors.black.withValues(
+                                      alpha: isDark ? 0.18 : 0.06,
+                                    ),
                                     blurRadius: 16,
                                     offset: const Offset(0, 6),
                                   ),
@@ -9673,18 +9686,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                       Icon(
                                         Icons.verified_outlined,
                                         size: 16,
-                                        color: const Color(
-                                          0xFF16D3E7,
-                                        ).withValues(alpha: 0.95),
+                                        color: scheme.secondary.withValues(
+                                          alpha: 0.92,
+                                        ),
                                       ),
                                       const SizedBox(width: 8),
-                                      const Text(
+                                      Text(
                                         'Ownership & Legal',
                                         style: TextStyle(
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.w700,
                                           letterSpacing: 0.2,
-                                          color: Color(0xFF16D3E7),
+                                          color: scheme.secondary,
                                         ),
                                       ),
                                     ],
@@ -9694,7 +9707,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                     'ChessIQ is developed by QILA modus (a division of Qila). Original code, design, and project-specific assets are owned by Qila (CVR no. 42666297).',
                                     style: TextStyle(
                                       fontSize: 12.2,
-                                      color: Colors.white.withValues(
+                                      color: scheme.onSurface.withValues(
                                         alpha: 0.86,
                                       ),
                                       height: 1.35,
@@ -9702,10 +9715,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Full legal notices are available in COPYRIGHT.md and THIRD_PARTY_NOTICES.md.',
+                                    'Full attribution details and license notices are available in COPYRIGHT.md and THIRD_PARTY_NOTICES.md.',
                                     style: TextStyle(
                                       fontSize: 11.6,
-                                      color: Colors.white.withValues(
+                                      color: scheme.onSurface.withValues(
                                         alpha: 0.68,
                                       ),
                                       height: 1.32,
@@ -9719,27 +9732,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                       _buildLegalNoticeLink(
                                         label: 'Copyright Notice',
                                         icon: Icons.copyright_rounded,
-                                        accent: const Color(0xFF16D3E7),
+                                        accent: scheme.secondary,
                                         onTap: () => _showLegalNoticeDialog(
                                           title: 'COPYRIGHT.md',
                                           assetPath: 'COPYRIGHT.md',
-                                          accent: const Color(0xFF16D3E7),
+                                          accent: scheme.secondary,
                                         ),
                                       ),
                                       _buildLegalNoticeLink(
                                         label: 'Third-Party Notices',
                                         icon: Icons.policy_outlined,
-                                        accent: const Color(0xFF9ED8FF),
+                                        accent: scheme.primary,
                                         onTap: () => _showLegalNoticeDialog(
                                           title: 'THIRD_PARTY_NOTICES.md',
                                           assetPath: 'THIRD_PARTY_NOTICES.md',
-                                          accent: const Color(0xFF9ED8FF),
+                                          accent: scheme.primary,
                                         ),
                                       ),
                                       _buildLegalNoticeLink(
                                         label: 'License',
                                         icon: Icons.gavel_rounded,
-                                        accent: const Color(0xFFFFD88A),
+                                        accent: const Color(0xFFD8B640),
                                         onTap: () => _showLegalNoticeDialog(
                                           title: 'LICENSE',
                                           assetPath: 'LICENSE',
@@ -10059,143 +10072,148 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildCreditsDynamicBackdrop() {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
         final t = _pulseController.value;
-        final yellow = Offset(
-          0.33 + 0.19 * sin(t * pi * 2),
-          0.26 + 0.10 * cos(t * pi * 2),
-        );
-        final blue = Offset(
-          0.67 + 0.19 * cos(t * pi * 2),
-          0.26 + 0.10 * sin(t * pi * 2),
-        );
-        final dx = yellow.dx - blue.dx;
-        final dy = yellow.dy - blue.dy;
-        final dist = sqrt(dx * dx + dy * dy);
-        final collision = (1.0 - (dist / 0.20)).clamp(0.0, 1.0);
-        final fusion = Offset(
-          (yellow.dx + blue.dx) / 2,
-          (yellow.dy + blue.dy) / 2,
-        );
+        final coreNodes = <({double x, double y, Color color})>[
+          (x: 0.16 + 0.02 * sin(t * pi * 2), y: 0.22, color: scheme.primary),
+          (x: 0.34, y: 0.35 + 0.02 * cos(t * pi * 2), color: scheme.secondary),
+          (x: 0.58 + 0.015 * cos(t * pi * 2), y: 0.24, color: scheme.primary),
+          (x: 0.78, y: 0.38 + 0.02 * sin(t * pi * 2), color: scheme.tertiary),
+          (x: 0.28, y: 0.68, color: scheme.secondary),
+          (x: 0.56 + 0.02 * sin(t * pi * 2), y: 0.58, color: scheme.primary),
+          (x: 0.82, y: 0.70, color: scheme.tertiary),
+        ];
 
         return ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: Stack(
             children: [
               Positioned.fill(
-                child: Container(
-                  decoration: const BoxDecoration(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Color(0x220C1732),
-                        Color(0x140A1124),
-                        Color(0x220E1A34),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: Align(
-                  alignment: Alignment(yellow.dx * 2 - 1, yellow.dy * 2 - 1),
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFD8B640).withValues(alpha: 0.22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFFD8B640,
-                          ).withValues(alpha: 0.55),
-                          blurRadius: 36,
-                          spreadRadius: 8,
+                        scheme.primary.withValues(alpha: isDark ? 0.08 : 0.05),
+                        scheme.surface.withValues(alpha: 0.94),
+                        scheme.secondary.withValues(
+                          alpha: isDark ? 0.08 : 0.04,
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-              Positioned.fill(
-                child: Align(
-                  alignment: Alignment(blue.dx * 2 - 1, blue.dy * 2 - 1),
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF3F6ED8).withValues(alpha: 0.22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF3F6ED8,
-                          ).withValues(alpha: 0.55),
-                          blurRadius: 36,
-                          spreadRadius: 8,
-                        ),
-                      ],
+              for (final line
+                  in <
+                    ({
+                      Alignment alignment,
+                      double width,
+                      double rotation,
+                      Color color,
+                    })
+                  >[
+                    (
+                      alignment: const Alignment(-0.18, -0.26),
+                      width: 150,
+                      rotation: -0.18,
+                      color: scheme.primary,
                     ),
-                  ),
-                ),
-              ),
-              if (collision > 0)
+                    (
+                      alignment: const Alignment(0.22, -0.06),
+                      width: 170,
+                      rotation: 0.12,
+                      color: scheme.secondary,
+                    ),
+                    (
+                      alignment: const Alignment(-0.04, 0.28),
+                      width: 140,
+                      rotation: -0.42,
+                      color: scheme.tertiary,
+                    ),
+                    (
+                      alignment: const Alignment(0.38, 0.34),
+                      width: 128,
+                      rotation: 0.36,
+                      color: scheme.primary,
+                    ),
+                  ])
                 Positioned.fill(
                   child: Align(
-                    alignment: Alignment(fusion.dx * 2 - 1, fusion.dy * 2 - 1),
-                    child: Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(
-                          0xFF7EDC8A,
-                        ).withValues(alpha: 0.14 + 0.24 * collision),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF7EDC8A,
-                            ).withValues(alpha: 0.40 * collision),
-                            blurRadius: 30,
-                            spreadRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              for (int i = 0; i < 7; i++)
-                if (collision > 0.05)
-                  Positioned.fill(
-                    child: Align(
-                      alignment: Alignment(
-                        (fusion.dx + 0.08 * cos(t * pi * 2 * (i + 1))) * 2 - 1,
-                        (fusion.dy + 0.08 * sin(t * pi * 2 * (i + 1))) * 2 - 1,
-                      ),
+                    alignment: line.alignment,
+                    child: Transform.rotate(
+                      angle: line.rotation,
                       child: Container(
-                        width: 3 + (i % 2),
-                        height: 3 + (i % 2),
+                        width: line.width,
+                        height: 1.2,
                         decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF7EDC8A,
-                          ).withValues(alpha: 0.45 * collision),
-                          shape: BoxShape.circle,
+                          color: line.color.withValues(
+                            alpha: isDark ? 0.18 : 0.10,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(
-                                0xFF7EDC8A,
-                              ).withValues(alpha: 0.65 * collision),
-                              blurRadius: 6,
+                              color: line.color.withValues(
+                                alpha: isDark ? 0.12 : 0.06,
+                              ),
+                              blurRadius: 10,
                             ),
                           ],
                         ),
                       ),
                     ),
                   ),
+                ),
+              for (final node in coreNodes)
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment(node.x * 2 - 1, node.y * 2 - 1),
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: node.color.withValues(
+                              alpha: isDark ? 0.18 : 0.10,
+                            ),
+                            blurRadius: 16,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: node.color.withValues(alpha: 0.92),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        scheme.surface.withValues(alpha: 0.02),
+                        scheme.surface.withValues(alpha: isDark ? 0.14 : 0.08),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -10204,6 +10222,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildCreditRow(String role, String name) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -10214,8 +10234,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             child: Text(
               role,
               textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: Color(0xFF16D3E7),
+              style: TextStyle(
+                color: scheme.secondary,
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
@@ -10225,10 +10245,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           Expanded(
             child: Text(
               name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: scheme.onSurface,
               ),
             ),
           ),
@@ -10610,13 +10630,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _addLog('Unlock tiers in order: Pro -> Expert -> Grandmaster');
       return;
     }
-    if (_storeCoins < price) {
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
       _addLog('Not enough coins for ${_depthTierLabel()} upgrade');
       return;
     }
 
     setState(() {
-      _storeCoins -= price;
       _depthTier = targetTier;
       _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
     });
@@ -10633,13 +10653,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       return;
     }
     final price = 500 + (_extraSuggestionPurchases * 120);
-    if (_storeCoins < price) {
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
       _addLog('Not enough coins for +1 suggestion');
       return;
     }
 
     setState(() {
-      _storeCoins -= price;
       _extraSuggestionPurchases += 1;
     });
     await _saveStoreState();
@@ -10649,12 +10669,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Future<void> _purchaseThemePack() async {
     const price = 900;
     if (_themePackOwned) return;
-    if (_storeCoins < price) {
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
       _addLog('Not enough coins for Theme Pack');
       return;
     }
     setState(() {
-      _storeCoins -= price;
       _themePackOwned = true;
     });
     await _saveStoreState();
@@ -10664,71 +10684,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Future<void> _purchasePiecePack() async {
     const price = 1400;
     if (_piecePackOwned) return;
-    if (_storeCoins < price) {
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
       _addLog('Not enough coins for Piece Set Pack');
       return;
     }
     setState(() {
-      _storeCoins -= price;
       _piecePackOwned = true;
     });
     await _saveStoreState();
     _addLog('Piece Set Pack unlocked (Ember and Frost styles available)');
   }
 
-  Future<void> _playResetRewardAdIfNeeded() async {
-    const rewardOptions = <int>[45, 50, 55, 60, 65, 70, 75, 80, 100];
-    final reward = rewardOptions[Random().nextInt(rewardOptions.length)];
-    if (!mounted) return;
-
-    unawaited(_playCoinRewardSound());
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF151722),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.ondemand_video,
-                color: Color(0xFFFFD166),
-                size: 30,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Sponsored Break',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Ad played. You earned +$reward coins.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 14),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Continue'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    setState(() {
-      _storeCoins += reward;
-    });
-    await _saveStoreState();
-    _addLog('Reset ad reward claimed (+$reward coins)');
-  }
-
   Future<void> _performResetWithSponsoredBreak() async {
-    await _playResetRewardAdIfNeeded();
+    final adService = AdService.instance;
+    final shouldAttemptAd =
+        !_adFreeOwned && adService.boardResetCooldownRemaining == Duration.zero;
+    if (shouldAttemptAd) {
+      final shown = await adService.maybeShowBoardResetInterstitial();
+      if (!shown) {
+        _addLog('Reset interstitial unavailable; continuing without ad');
+      }
+    }
     if (!mounted) return;
     setState(() {
       _resetBoard();
@@ -10739,67 +10716,40 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _watchRewardAdFromStore() async {
-    const reward = 120;
     if (!mounted) return;
-    if (_storeRewardAdRemainingCooldown() > Duration.zero) {
+    final economy = context.read<EconomyProvider>();
+    if (!economy.canClaimStoreReward) {
       return;
     }
 
-    unawaited(_playCoinRewardSound());
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF151722),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.play_circle_outline,
-                color: Color(0xFFFFD166),
-                size: 30,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Reward Ad',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Watched! +120 coins added.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 14),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Claim'),
-              ),
-            ],
+    final rewardEarned = await AdService.instance.showRewardedAd();
+    if (!mounted) return;
+    if (!rewardEarned) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Rewarded ad unavailable or not completed.'),
           ),
-        ),
-      ),
-    );
+        );
+      _addLog('Rewarded store ad unavailable or not completed');
+      return;
+    }
 
-    setState(() {
-      _storeCoins += reward;
-      _lastStoreRewardAdAt = DateTime.now();
-    });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(
-      _storeRewardAdLastWatchKey,
-      _lastStoreRewardAdAt!.millisecondsSinceEpoch,
-    );
+    final claimed = await economy.claimStoreRewardAd();
+    if (!claimed) {
+      return;
+    }
+
+    setState(() {});
+    unawaited(_playCoinRewardSound());
     await _saveStoreState();
-    _addLog('Reward ad claimed (+$reward coins)');
+    _addLog('Reward ad claimed (+120 coins)');
   }
 
   Future<void> _buyCoinPack(int amount, String label) async {
-    setState(() {
-      _storeCoins += amount;
-    });
+    final economy = context.read<EconomyProvider>();
+    await economy.addCoins(amount);
     unawaited(_playCoinBagSound());
     await _saveStoreState();
     _addLog('Purchased $label (+$amount coins)');
@@ -10817,8 +10767,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Future<void> _resetPurchases() async {
+    final economy = context.read<EconomyProvider>();
     setState(() {
-      _storeCoins = 0;
       _depthTier = 0;
       _extraSuggestionPurchases = 0;
       _themePackOwned = false;
@@ -10836,8 +10786,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     });
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_storeStateKey);
     await prefs.remove(_savedDefaultSnapshotKey);
+    await economy.reset(clearStoreRewardCooldown: true, notify: false);
     await _saveStoreState();
     _send('setoption name MultiPV value $_effectiveMultiPvCount');
     _analyze();
@@ -10873,11 +10823,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           final theme = Theme.of(ctx);
           final scheme = theme.colorScheme;
           final isDark = theme.brightness == Brightness.dark;
+          final economy = ctx.watch<EconomyProvider>();
           final useMonochrome =
               ctx.watch<AppThemeProvider>().isMonochrome ||
               _isCinematicThemeEnabled;
-          final rewardAdRemaining = _storeRewardAdRemainingCooldown();
-          final canWatchRewardAd = rewardAdRemaining == Duration.zero;
+          final rewardAdRemaining = economy.remainingStoreRewardCooldown;
+          final canWatchRewardAd = economy.canClaimStoreReward;
+          final storeCoins = economy.coins;
           final sheetSurface = useMonochrome
               ? (isDark ? const Color(0xFF050505) : Colors.white)
               : scheme.surface;
@@ -10888,296 +10840,306 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
           return ColoredBox(
             color: sheetSurface,
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                12 + MediaQuery.of(ctx).padding.top,
-                20,
-                MediaQuery.of(ctx).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 44,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: scheme.outline.withValues(alpha: 0.32),
-                        borderRadius: BorderRadius.circular(999),
+            child: SafeArea(
+              bottom: false,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  12,
+                  20,
+                  MediaQuery.of(ctx).viewInsets.bottom + 20,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: scheme.outline.withValues(alpha: 0.32),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Store',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: scheme.onSurface,
-                              ),
-                            ),
-                            if (initialSection == StoreSection.themes)
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                'Themes',
+                                'Store',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: scheme.onSurface.withValues(
-                                    alpha: 0.62,
-                                  ),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: scheme.onSurface,
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: pillSurface,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: scheme.outline.withValues(alpha: 0.24),
+                              if (initialSection == StoreSection.themes)
+                                Text(
+                                  'Themes',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: scheme.onSurface.withValues(
+                                      alpha: 0.62,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        child: Text(
-                          'Coins: $_storeCoins',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? const Color(0xFFFFD166)
-                                : const Color(0xFF8A6700),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: pillSurface,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: scheme.outline.withValues(alpha: 0.24),
+                            ),
+                          ),
+                          child: Text(
+                            'Coins: $storeCoins',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? const Color(0xFFFFD166)
+                                  : const Color(0xFF8A6700),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: () async {
+                            await _openSettings();
+                            if (!ctx.mounted) return;
+                            setL(() {});
+                          },
+                          color: scheme.onSurface,
+                          icon: const Icon(Icons.settings_outlined),
+                          tooltip: 'Settings',
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(ctx).maybePop(),
+                          color: scheme.onSurface,
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Close store',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _storeSectionHeader(
+                      'Essentials',
+                      'Coins, unlocks, and analysis upgrades',
+                    ),
+                    _storeItemCard(
+                      icon: Icons.ondemand_video_outlined,
+                      title: 'Watch Ad For Coins',
+                      subtitle: canWatchRewardAd
+                          ? 'Watch and earn +120 coins'
+                          : 'Cooldown active. Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}.',
+                      priceLabel: 'Free',
+                      enabled: canWatchRewardAd,
+                      preview: canWatchRewardAd
+                          ? null
+                          : _buildStoreRewardCooldownPreview(
+                              rewardAdRemaining,
+                              useMonochrome: useMonochrome,
+                            ),
+                      actionLabel: canWatchRewardAd
+                          ? 'Watch'
+                          : 'Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}',
+                      actionColor: canWatchRewardAd
+                          ? const Color(0xFF5AAEE8)
+                          : const Color(0xFF6B7280),
+                      onTap: () async {
+                        await _watchRewardAdFromStore();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.monetization_on_outlined,
+                      title: 'Coin Pack S',
+                      subtitle: '+1,500 coins',
+                      priceLabel: '\$4.99',
+                      enabled: true,
+                      actionLabel: 'Buy',
+                      actionColor: const Color(0xFF7EDC8A),
+                      onTap: () async {
+                        await _buyCoinPack(1500, 'Coin Pack S');
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Coin Pack L',
+                      subtitle: '+5,000 coins',
+                      priceLabel: '\$9.99',
+                      enabled: true,
+                      actionLabel: 'Buy',
+                      actionColor: const Color(0xFF7EDC8A),
+                      onTap: () async {
+                        await _buyCoinPack(5000, 'Coin Pack L');
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.block_outlined,
+                      title: 'Ad-Free Pass',
+                      subtitle: _adFreeOwned
+                          ? 'Owned (skips reset ads)'
+                          : 'Skips ads when pressing reset',
+                      priceLabel: '\$6.99',
+                      enabled: !_adFreeOwned,
+                      actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFF7EDC8A),
+                      onTap: () async {
+                        await _buyAdFree();
+                        setL(() {});
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _storeSectionHeader(
+                      'Themes',
+                      'Owned themes live here, and new ones unlock below',
+                    ),
+                    _buildThemeVaultCard(setL),
+                    _storeItemCard(
+                      icon: Icons.palette_outlined,
+                      title: 'Board Theme Pack',
+                      subtitle: _themePackOwned
+                          ? 'Owned · unlocks Ember and Sea boards'
+                          : 'Unlock Ember and Sea board palettes',
+                      priceLabel: '900 c',
+                      enabled: !_themePackOwned,
+                      actionLabel: _themePackOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: _themePackPreview(),
+                      onTap: () async {
+                        await _purchaseThemePack();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.extension_outlined,
+                      title: 'Piece Set Pack',
+                      subtitle: _piecePackOwned
+                          ? 'Owned · unlocks Ember and Frost pieces'
+                          : 'Unlock Ember and Frost piece styles',
+                      priceLabel: '1400 c',
+                      enabled: !_piecePackOwned,
+                      actionLabel: _piecePackOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: _piecePackPreview(),
+                      onTap: () async {
+                        await _purchasePiecePack();
+                        setL(() {});
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _storeSectionHeader(
+                      'Analysis Upgrades',
+                      'Depth, suggestions, and long-run unlocks',
+                    ),
+                    _storeItemCard(
+                      icon: Icons.auto_graph,
+                      title: 'Pro Mode',
+                      subtitle: _depthTier >= 1
+                          ? 'Unlocked (max ply depth 27)'
+                          : 'Unlock ply depth 25-27',
+                      priceLabel: '1800 c',
+                      enabled: _depthTier == 0,
+                      actionLabel: _depthTier >= 1 ? 'Owned' : 'Unlock',
+                      actionColor: const Color(0xFF5AAEE8),
+                      onTap: () async {
+                        await _purchaseDepthTier(1);
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.psychology_alt_outlined,
+                      title: 'Expert Mode',
+                      subtitle: _depthTier >= 2
+                          ? 'Unlocked (max ply depth 29)'
+                          : 'Unlock ply depth 28-29',
+                      priceLabel: '2600 c',
+                      enabled: _depthTier == 1,
+                      actionLabel: _depthTier >= 2
+                          ? 'Owned'
+                          : (_depthTier == 1 ? 'Unlock' : 'Locked'),
+                      actionColor: const Color(0xFF5AAEE8),
+                      onTap: () async {
+                        await _purchaseDepthTier(2);
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.workspace_premium_outlined,
+                      title: 'Grandmaster Mode',
+                      subtitle: _depthTier >= 3
+                          ? 'Unlocked (max ply depth 32)'
+                          : 'Unlock ply depth 30-32',
+                      priceLabel: '4200 c',
+                      enabled: _depthTier == 2,
+                      actionLabel: _depthTier >= 3
+                          ? 'Owned'
+                          : (_depthTier == 2 ? 'Unlock' : 'Locked'),
+                      actionColor: const Color(0xFF5AAEE8),
+                      onTap: () async {
+                        await _purchaseDepthTier(3);
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.add_circle_outline,
+                      title: '+1 Suggested Move',
+                      subtitle:
+                          'Current max suggestions: $_maxSuggestionsAllowed / 10',
+                      priceLabel:
+                          '${500 + (_extraSuggestionPurchases * 120)} c',
+                      enabled: _maxSuggestionsAllowed < 10,
+                      actionLabel: _maxSuggestionsAllowed < 10
+                          ? 'Buy +1'
+                          : 'Maxed',
+                      actionColor: const Color(0xFF8FD0FF),
+                      onTap: () async {
+                        await _purchaseExtraSuggestion();
+                        setL(() {});
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    Center(
+                      child: TextButton.icon(
                         onPressed: () async {
-                          await _openSettings();
+                          await _resetPurchases();
                           if (!ctx.mounted) return;
                           setL(() {});
                         },
-                        color: scheme.onSurface,
-                        icon: const Icon(Icons.settings_outlined),
-                        tooltip: 'Settings',
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(ctx).maybePop(),
-                        color: scheme.onSurface,
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Close store',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _storeSectionHeader(
-                    'Essentials',
-                    'Coins, unlocks, and analysis upgrades',
-                  ),
-                  _storeItemCard(
-                    icon: Icons.ondemand_video_outlined,
-                    title: 'Watch Ad For Coins',
-                    subtitle: canWatchRewardAd
-                        ? 'Watch and earn +120 coins'
-                        : 'Cooldown active. Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}.',
-                    priceLabel: 'Free',
-                    enabled: canWatchRewardAd,
-                    actionLabel: canWatchRewardAd
-                        ? 'Watch'
-                        : 'Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}',
-                    actionColor: canWatchRewardAd
-                        ? const Color(0xFF5AAEE8)
-                        : const Color(0xFF6B7280),
-                    onTap: () async {
-                      await _watchRewardAdFromStore();
-                      setL(() {});
-                    },
-                  ),
-                  _storeItemCard(
-                    icon: Icons.monetization_on_outlined,
-                    title: 'Coin Pack S',
-                    subtitle: '+1,500 coins',
-                    priceLabel: '\$4.99',
-                    enabled: true,
-                    actionLabel: 'Buy',
-                    actionColor: const Color(0xFF7EDC8A),
-                    onTap: () async {
-                      await _buyCoinPack(1500, 'Coin Pack S');
-                      setL(() {});
-                    },
-                  ),
-                  _storeItemCard(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'Coin Pack L',
-                    subtitle: '+5,000 coins',
-                    priceLabel: '\$9.99',
-                    enabled: true,
-                    actionLabel: 'Buy',
-                    actionColor: const Color(0xFF7EDC8A),
-                    onTap: () async {
-                      await _buyCoinPack(5000, 'Coin Pack L');
-                      setL(() {});
-                    },
-                  ),
-                  _storeItemCard(
-                    icon: Icons.block_outlined,
-                    title: 'Ad-Free Pass',
-                    subtitle: _adFreeOwned
-                        ? 'Owned (skips reset ads)'
-                        : 'Skips ads when pressing reset',
-                    priceLabel: '\$6.99',
-                    enabled: !_adFreeOwned,
-                    actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
-                    actionColor: const Color(0xFF7EDC8A),
-                    onTap: () async {
-                      await _buyAdFree();
-                      setL(() {});
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _storeSectionHeader(
-                    'Themes',
-                    'Owned themes live here, and new ones unlock below',
-                  ),
-                  _buildThemeVaultCard(setL),
-                  _storeItemCard(
-                    icon: Icons.palette_outlined,
-                    title: 'Board Theme Pack',
-                    subtitle: _themePackOwned
-                        ? 'Owned · unlocks Ember and Sea boards'
-                        : 'Unlock Ember and Sea board palettes',
-                    priceLabel: '900 c',
-                    enabled: !_themePackOwned,
-                    actionLabel: _themePackOwned ? 'Owned' : 'Buy',
-                    actionColor: const Color(0xFFD8B640),
-                    preview: _themePackPreview(),
-                    onTap: () async {
-                      await _purchaseThemePack();
-                      setL(() {});
-                    },
-                  ),
-                  _storeItemCard(
-                    icon: Icons.extension_outlined,
-                    title: 'Piece Set Pack',
-                    subtitle: _piecePackOwned
-                        ? 'Owned · unlocks Ember and Frost pieces'
-                        : 'Unlock Ember and Frost piece styles',
-                    priceLabel: '1400 c',
-                    enabled: !_piecePackOwned,
-                    actionLabel: _piecePackOwned ? 'Owned' : 'Buy',
-                    actionColor: const Color(0xFFD8B640),
-                    preview: _piecePackPreview(),
-                    onTap: () async {
-                      await _purchasePiecePack();
-                      setL(() {});
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _storeSectionHeader(
-                    'Analysis Upgrades',
-                    'Depth, suggestions, and long-run unlocks',
-                  ),
-                  _storeItemCard(
-                    icon: Icons.auto_graph,
-                    title: 'Pro Mode',
-                    subtitle: _depthTier >= 1
-                        ? 'Unlocked (max ply depth 27)'
-                        : 'Unlock ply depth 25-27',
-                    priceLabel: '1800 c',
-                    enabled: _depthTier == 0,
-                    actionLabel: _depthTier >= 1 ? 'Owned' : 'Unlock',
-                    actionColor: const Color(0xFF5AAEE8),
-                    onTap: () async {
-                      await _purchaseDepthTier(1);
-                      setL(() {});
-                    },
-                  ),
-                  _storeItemCard(
-                    icon: Icons.psychology_alt_outlined,
-                    title: 'Expert Mode',
-                    subtitle: _depthTier >= 2
-                        ? 'Unlocked (max ply depth 29)'
-                        : 'Unlock ply depth 28-29',
-                    priceLabel: '2600 c',
-                    enabled: _depthTier == 1,
-                    actionLabel: _depthTier >= 2
-                        ? 'Owned'
-                        : (_depthTier == 1 ? 'Unlock' : 'Locked'),
-                    actionColor: const Color(0xFF5AAEE8),
-                    onTap: () async {
-                      await _purchaseDepthTier(2);
-                      setL(() {});
-                    },
-                  ),
-                  _storeItemCard(
-                    icon: Icons.workspace_premium_outlined,
-                    title: 'Grandmaster Mode',
-                    subtitle: _depthTier >= 3
-                        ? 'Unlocked (max ply depth 32)'
-                        : 'Unlock ply depth 30-32',
-                    priceLabel: '4200 c',
-                    enabled: _depthTier == 2,
-                    actionLabel: _depthTier >= 3
-                        ? 'Owned'
-                        : (_depthTier == 2 ? 'Unlock' : 'Locked'),
-                    actionColor: const Color(0xFF5AAEE8),
-                    onTap: () async {
-                      await _purchaseDepthTier(3);
-                      setL(() {});
-                    },
-                  ),
-                  _storeItemCard(
-                    icon: Icons.add_circle_outline,
-                    title: '+1 Suggested Move',
-                    subtitle:
-                        'Current max suggestions: $_maxSuggestionsAllowed / 10',
-                    priceLabel: '${500 + (_extraSuggestionPurchases * 120)} c',
-                    enabled: _maxSuggestionsAllowed < 10,
-                    actionLabel: _maxSuggestionsAllowed < 10
-                        ? 'Buy +1'
-                        : 'Maxed',
-                    actionColor: const Color(0xFF8FD0FF),
-                    onTap: () async {
-                      await _purchaseExtraSuggestion();
-                      setL(() {});
-                    },
-                  ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        await _resetPurchases();
-                        if (!ctx.mounted) return;
-                        setL(() {});
-                      },
-                      icon: const Icon(Icons.restart_alt, size: 18),
-                      label: const Text('Reset Purchases'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: scheme.onSurface.withValues(
-                          alpha: 0.64,
+                        icon: const Icon(Icons.restart_alt, size: 18),
+                        label: const Text('Reset Purchases'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: scheme.onSurface.withValues(
+                            alpha: 0.64,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowed',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.64),
-                      fontSize: 12,
+                    const SizedBox(height: 8),
+                    Text(
+                      'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowed',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.64),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -11212,6 +11174,56 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStoreRewardCooldownPreview(
+    Duration remaining, {
+    required bool useMonochrome,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final totalSeconds = EconomyProvider.storeRewardCooldown.inSeconds;
+    final clampedRemainingSeconds = remaining.inSeconds.clamp(0, totalSeconds);
+    final progress =
+        1 - (clampedRemainingSeconds / totalSeconds.clamp(1, totalSeconds));
+    final accent = useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.78)
+        : const Color(0xFF5AAEE8);
+    final track = Color.alphaBlend(
+      accent.withValues(alpha: 0.18),
+      scheme.surface,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.timer_outlined, size: 14, color: accent),
+            const SizedBox(width: 6),
+            Text(
+              'Cooldown live · ${_storeRewardAdCountdownLabel(remaining)} remaining',
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.72),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            minHeight: 7,
+            backgroundColor: track,
+            valueColor: AlwaysStoppedAnimation<Color>(accent),
+          ),
+        ),
+      ],
     );
   }
 
@@ -12027,7 +12039,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   void dispose() {
     _editModeHintTimer?.cancel();
     _clearBotGhostArrows();
-    _engine?.stop();
+    unawaited(_engine?.stop());
     _pulseController.dispose();
     _introController.dispose();
     _menuRevealController.dispose();
@@ -12048,4 +12060,3 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     super.dispose();
   }
 }
-

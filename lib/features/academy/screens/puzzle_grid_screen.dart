@@ -1,13 +1,13 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:chessiq/core/theme/app_theme_provider.dart';
+import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
+import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
+import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../theme/app_theme_provider.dart';
-import '../models/puzzle_progress_model.dart';
-import '../providers/puzzle_academy_provider.dart';
-import 'puzzle_node_screen.dart';
 
 class PuzzleGridScreen extends StatelessWidget {
   const PuzzleGridScreen({

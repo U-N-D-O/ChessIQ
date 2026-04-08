@@ -29,7 +29,18 @@ Acknowledgements referenced in upstream project materials include Ömur Yanıko�
 
 These ECO files are collated datasets and may contain source markers within entries, including `eco_tsv`, `scid`, `eco_wikip`, `ct`, `chessGraph`, and `icsbot`.
 
-## 3. Flutter, Dart, and Pub Packages
+## 3. Puzzle Data
+
+This project uses chess puzzle data sourced from the public Lichess puzzle database for Academy and related puzzle workflows.
+
+- Source: Lichess puzzle database
+- Website: https://database.lichess.org/#puzzles
+- Provider: Lichess.org
+- License: Creative Commons CC0 1.0 Universal
+- License URL: https://creativecommons.org/publicdomain/zero/1.0/
+- Usage note: Puzzle records may be transformed, filtered, or reorganized for in-app Academy progression, daily challenge selection, and exam flows.
+
+## 4. Flutter, Dart, and Pub Packages
 
 This application is built with the Flutter and Dart ecosystems and depends on third-party packages from pub.dev.
 
@@ -50,7 +61,7 @@ Direct pub dependencies used by this app include:
 
 Each third-party package remains licensed under its own terms. For complete and current licensing details, refer to each package page on pub.dev and bundled license metadata where applicable.
 
-## 4. Audio Asset Attribution
+## 5. Audio Asset Attribution
 
 - Main menu theme music: Created with Suno.
 

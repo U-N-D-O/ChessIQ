@@ -3,6 +3,8 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:chess/chess.dart' as chess;
+import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
@@ -22,6 +24,10 @@ class PuzzleNodeScreen extends StatefulWidget {
     required this.heroTag,
     this.initialPuzzle,
     this.initialPuzzleIndex,
+    this.puzzleSequence,
+    this.sequenceTitle,
+    this.examMode = false,
+    this.examDuration = const Duration(hours: 1),
     this.initialReviewMode = false,
     this.cinematicThemeEnabled = false,
     this.onExitToMap,
@@ -31,6 +37,10 @@ class PuzzleNodeScreen extends StatefulWidget {
   final String heroTag;
   final PuzzleItem? initialPuzzle;
   final int? initialPuzzleIndex;
+  final List<PuzzleItem>? puzzleSequence;
+  final String? sequenceTitle;
+  final bool examMode;
+  final Duration examDuration;
   final bool initialReviewMode;
   final bool cinematicThemeEnabled;
   final VoidCallback? onExitToMap;
@@ -48,6 +58,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   final Stopwatch _stopwatch = Stopwatch();
 
   late final AnimationController _arrowFadeController;
+  Timer? _examTicker;
 
   PuzzleItem? _puzzle;
   int _puzzleIndex = 0;
@@ -68,8 +79,18 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   String? _dragFromSquare;
   String? _greyArrowFrom;
   String? _greyArrowTo;
+  Duration _examRemaining = Duration.zero;
+  DateTime? _examStartedAt;
+  int _examCorrectCount = 0;
+  int _examCompletedCount = 0;
+  bool _examFinished = false;
 
   late chess.Chess _game;
+
+  bool get _usesCustomSequence => (widget.puzzleSequence?.isNotEmpty ?? false);
+  List<PuzzleItem> get _activeSequence => widget.puzzleSequence ?? const [];
+  bool get _isExamMode => widget.examMode;
+  bool get _isDailySequence => _usesCustomSequence && !_isExamMode;
 
   bool get _canMove =>
       !_busy &&
@@ -86,6 +107,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       duration: const Duration(milliseconds: 700),
       value: 1.0,
     );
+    _examRemaining = widget.examDuration;
   }
 
   @override
@@ -96,25 +118,30 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     final puzzle =
         widget.initialPuzzle ??
-        provider.nextAvailablePuzzleForNode(widget.node);
+        (_usesCustomSequence
+            ? (_activeSequence.isEmpty ? null : _activeSequence.first)
+            : provider.nextAvailablePuzzleForNode(widget.node));
     if (puzzle == null) {
       _status = 'No puzzle found for this level yet.';
       return;
     }
 
-    final fallbackIndex = provider.indexOfPuzzleInNode(
-      widget.node,
-      puzzle.puzzleId,
-    );
+    final fallbackIndex = _usesCustomSequence
+        ? _activeSequence.indexWhere(
+            (candidate) => candidate.puzzleId == puzzle.puzzleId,
+          )
+        : provider.indexOfPuzzleInNode(widget.node, puzzle.puzzleId);
     _loadPuzzle(
       puzzle,
       widget.initialPuzzleIndex ?? fallbackIndex,
       historicalView: widget.initialReviewMode,
     );
+    _startExamClockIfNeeded();
   }
 
   @override
   void dispose() {
+    _examTicker?.cancel();
     _stopwatch.stop();
     _arrowFadeController.dispose();
     _engine.dispose();
@@ -174,6 +201,153 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     await _analyzePosition();
   }
 
+  void _startExamClockIfNeeded() {
+    if (!_isExamMode || _examStartedAt != null || _examFinished) {
+      return;
+    }
+
+    _examStartedAt = DateTime.now();
+    _examRemaining = widget.examDuration;
+    _examTicker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final startedAt = _examStartedAt;
+      if (!mounted || startedAt == null || _examFinished) {
+        timer.cancel();
+        return;
+      }
+
+      final elapsed = DateTime.now().difference(startedAt);
+      final remaining = widget.examDuration - elapsed;
+      if (remaining <= Duration.zero) {
+        timer.cancel();
+        setState(() => _examRemaining = Duration.zero);
+        unawaited(_finishExam(timedOut: true));
+        return;
+      }
+
+      setState(() => _examRemaining = remaining);
+    });
+  }
+
+  Future<void> _completeExamPuzzle({required bool correct}) async {
+    if (_examFinished) return;
+
+    setState(() {
+      if (correct) {
+        _solved = true;
+      }
+      _busy = true;
+      _focusModeActive = false;
+      _coachingOffScript = false;
+      _pendingRegretHalfMoves = 0;
+      _examCompletedCount += 1;
+      if (correct) {
+        _examCorrectCount += 1;
+      }
+    });
+
+    final nextIndex = _puzzleIndex + 1;
+    final isLastPuzzle = nextIndex >= _activeSequence.length;
+    if (isLastPuzzle) {
+      await _finishExam(timedOut: false);
+      return;
+    }
+
+    await Future<void>.delayed(Duration(milliseconds: correct ? 360 : 480));
+    if (!mounted) return;
+
+    await _loadPuzzle(
+      _activeSequence[nextIndex],
+      nextIndex,
+      historicalView: false,
+    );
+  }
+
+  Future<void> _finishExam({required bool timedOut}) async {
+    if (_examFinished) return;
+    _examFinished = true;
+    _examTicker?.cancel();
+
+    final provider = context.read<PuzzleAcademyProvider>();
+    final totalCount = _activeSequence.length;
+    final remaining = timedOut ? Duration.zero : _examRemaining;
+    final elapsedMs = max(
+      0,
+      widget.examDuration.inMilliseconds - remaining.inMilliseconds,
+    );
+    final result = AcademyExamResult(
+      nodeKey: widget.node.key,
+      score: provider.calculateExamScore(
+        correctCount: _examCorrectCount,
+        totalCount: totalCount,
+        remaining: remaining,
+        timeLimit: widget.examDuration,
+      ),
+      correctCount: _examCorrectCount,
+      totalCount: totalCount,
+      elapsedMs: elapsedMs,
+      timeLimitMs: widget.examDuration.inMilliseconds,
+      completedAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    await provider.recordExamResult(result);
+    if (!mounted) return;
+
+    final accuracy = totalCount <= 0
+        ? 0
+        : ((result.correctCount / totalCount) * 100).round();
+    final heading = timedOut ? 'Exam Time Expired' : 'Exam Complete';
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final scheme = theme.colorScheme;
+        return AlertDialog(
+          title: Text(heading),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Score: ${result.score}'),
+              const SizedBox(height: 8),
+              Text('Accuracy: $accuracy%'),
+              const SizedBox(height: 4),
+              Text('Solved: ${result.correctCount}/$totalCount'),
+              const SizedBox(height: 4),
+              Text(
+                'Time used: ${_formatDuration(Duration(milliseconds: elapsedMs))}',
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Score blends 80% accuracy and 20% speed, so faster clean runs rank higher.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Back to Academy'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+    _exitToMap();
+  }
+
+  String _formatDuration(Duration duration) {
+    final totalSeconds = max(0, duration.inSeconds);
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+
   bool _applyUciMoveOnGame(chess.Chess game, String uci) {
     if (uci.length < 4) return false;
     final payload = <String, String>{
@@ -212,7 +386,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     String to, {
     String? preferredPromotion,
   }) {
+    final requestedPromotion = preferredPromotion?.toLowerCase();
     final verbose = _game.moves(<String, dynamic>{'verbose': true});
+    var hasNonPromotionCandidate = false;
+    String? fallbackPromotion;
     for (final move in verbose) {
       if (move is! Map) continue;
       final candidate = move.cast<String, dynamic>();
@@ -221,18 +398,137 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         continue;
       }
 
-      final promotion = candidate['promotion']?.toString();
+      final promotion = candidate['promotion']?.toString().toLowerCase();
       if (promotion == null || promotion.isEmpty) {
-        return '$from$to';
+        hasNonPromotionCandidate = true;
+        continue;
       }
 
-      if (preferredPromotion != null &&
-          promotion.toLowerCase() == preferredPromotion.toLowerCase()) {
-        return '$from$to${promotion.toLowerCase()}';
+      final candidateUci = '$from$to$promotion';
+      if (requestedPromotion != null && promotion == requestedPromotion) {
+        return candidateUci;
       }
-      return '$from$to${promotion.toLowerCase()}';
+      fallbackPromotion ??= candidateUci;
     }
-    return null;
+
+    if (requestedPromotion != null) {
+      return fallbackPromotion ?? '$from$to$requestedPromotion';
+    }
+
+    if (hasNonPromotionCandidate) {
+      return '$from$to';
+    }
+
+    return fallbackPromotion;
+  }
+
+  bool _isPromotionTarget(String from, String to) {
+    final piece = _game.get(from);
+    if (piece == null || piece.type != chess.Chess.PAWN) {
+      return false;
+    }
+
+    final targetRank = int.tryParse(to[1]);
+    if (targetRank == null) return false;
+
+    return (piece.color == chess.Color.WHITE && targetRank == 8) ||
+        (piece.color == chess.Color.BLACK && targetRank == 1);
+  }
+
+  Future<String?> _showPromotionPicker(chess.Color color) async {
+    final themeProvider = context.read<AppThemeProvider>();
+    final scheme = Theme.of(context).colorScheme;
+    final isWhite = color == chess.Color.WHITE;
+    final options = <({String value, String label, String assetId})>[
+      (value: 'q', label: 'Queen', assetId: 'q_${isWhite ? 'w' : 'b'}'),
+      (value: 'r', label: 'Rook', assetId: 't_${isWhite ? 'w' : 'b'}'),
+      (value: 'b', label: 'Bishop', assetId: 'b_${isWhite ? 'w' : 'b'}'),
+      (value: 'n', label: 'Knight', assetId: 'n_${isWhite ? 'w' : 'b'}'),
+    ];
+
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: scheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        final sheetScheme = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: sheetScheme.outline.withValues(alpha: 0.30),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Choose Promotion',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: sheetScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final option in options)
+                      InkWell(
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop(option.value),
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          width: 132,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              sheetScheme.primary.withValues(alpha: 0.06),
+                              sheetScheme.surface,
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: sheetScheme.outline.withValues(
+                                alpha: 0.28,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildPieceImage(themeProvider, option.assetId),
+                              const SizedBox(height: 10),
+                              Text(
+                                option.label,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: sheetScheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   String _formatEval(double value) {
@@ -250,16 +546,29 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     if (!_canMove || _puzzle == null) return;
 
     final expected = _puzzle!.moves[_lineIndex];
+    String? chosenPromotion;
+    if (_isPromotionTarget(from, to)) {
+      final movingPiece = _game.get(from);
+      if (movingPiece == null) return;
+      chosenPromotion = await _showPromotionPicker(movingPiece.color);
+      if (chosenPromotion == null) return;
+    }
+
     final attemptedUci = _resolveLegalUci(
       from,
       to,
-      preferredPromotion: expected.length == 5 ? expected[4] : null,
+      preferredPromotion:
+          chosenPromotion ?? (expected.length == 5 ? expected[4] : null),
     );
     if (attemptedUci == null) {
       return;
     }
 
     if (attemptedUci != expected) {
+      if (_isExamMode) {
+        await _handleExamWrongMove(attemptedUci);
+        return;
+      }
       await _handleWrongMove(attemptedUci);
       return;
     }
@@ -374,6 +683,21 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     });
   }
 
+  Future<void> _handleExamWrongMove(String attemptedUci) async {
+    await HapticFeedback.heavyImpact();
+    if (!mounted) return;
+
+    _setGreyArrowFromUci(attemptedUci, animate: true);
+    setState(() {
+      _busy = true;
+      _focusModeActive = false;
+      _dragFromSquare = null;
+      _status = 'Incorrect. Loading the next exam puzzle...';
+    });
+
+    await _completeExamPuzzle(correct: false);
+  }
+
   Future<void> _playOpponentCounterMove() async {
     final puzzle = _puzzle;
     if (puzzle == null || _lineIndex >= puzzle.moves.length) {
@@ -400,6 +724,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     setState(() {
       _lineIndex += 1;
       _busy = false;
+      _focusModeActive = false;
       _status = _lineIndex >= puzzle.moves.length
           ? 'Solved. Continue to next puzzle.'
           : 'Continue';
@@ -445,7 +770,6 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Future<void> _handlePuzzleSolved() async {
-    final provider = context.read<PuzzleAcademyProvider>();
     final puzzle = _puzzle;
     if (puzzle == null) return;
 
@@ -460,7 +784,21 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       });
     }
 
-    final isDaily = provider.todayDailyPuzzle?.puzzleId == puzzle.puzzleId;
+    if (_isExamMode) {
+      await HapticFeedback.mediumImpact();
+      if (!mounted) return;
+      setState(() {
+        _status = 'Correct. Loading the next exam puzzle...';
+      });
+      await _completeExamPuzzle(correct: true);
+      return;
+    }
+
+    final provider = context.read<PuzzleAcademyProvider>();
+
+    final isDaily =
+        _isDailySequence ||
+        provider.todayDailyPuzzle?.puzzleId == puzzle.puzzleId;
     await provider.recordPuzzleSolve(
       puzzle: puzzle,
       solveTime: _stopwatch.elapsed,
@@ -468,9 +806,36 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       brilliant: puzzle.moves.length >= 5 || puzzle.rating >= 2200,
     );
 
+    await _maybeShowAcademyInterstitialReward(provider);
+
     if (!mounted) return;
 
+    setState(() {});
+
     await HapticFeedback.mediumImpact();
+  }
+
+  Future<void> _maybeShowAcademyInterstitialReward(
+    PuzzleAcademyProvider provider,
+  ) async {
+    if (!provider.shouldShowBrainBreak) {
+      return;
+    }
+
+    final shown = await AdService.instance.showInterstitialAd();
+    if (shown && mounted) {
+      final economy = context.read<EconomyProvider>();
+      await economy.awardAcademyInterstitialCoins();
+      await provider.syncCoinsFromStoreState(notify: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(content: Text('Academy break complete. +10 coins.')),
+        );
+    }
+
+    provider.consumeBrainBreakTrigger();
   }
 
   Future<void> _regretLastMistake() async {
@@ -503,6 +868,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Future<void> _useHint(PuzzleAcademyProvider provider) async {
+    if (_isExamMode) return;
     final puzzle = _puzzle;
     if (puzzle == null || _busy || _solved) return;
 
@@ -529,6 +895,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Future<void> _skipCurrentPuzzle(PuzzleAcademyProvider provider) async {
+    if (_isExamMode) return;
     final puzzle = _puzzle;
     if (puzzle == null || _busy || _solved) return;
 
@@ -551,6 +918,14 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     PuzzleAcademyProvider provider, {
     required bool forward,
   }) {
+    if (_usesCustomSequence) {
+      final index = _puzzleIndex + (forward ? 1 : -1);
+      if (index < 0 || index >= _activeSequence.length) {
+        return null;
+      }
+      return MapEntry<int, PuzzleItem>(index, _activeSequence[index]);
+    }
+
     final startIndex = _puzzleIndex + (forward ? 1 : -1);
     final endIndex = provider.gridPuzzleCountForNode(widget.node);
 
@@ -587,6 +962,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
 
+    if (_usesCustomSequence) {
+      await _loadPuzzle(nextEntry.value, nextEntry.key, historicalView: false);
+      return;
+    }
+
     final nextState = provider.tileStateForNodeIndex(
       widget.node,
       nextEntry.key,
@@ -599,9 +979,19 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Future<void> _openPreviousPuzzle() async {
+    if (_isExamMode) return;
     final provider = context.read<PuzzleAcademyProvider>();
     final previousEntry = _adjacentNavigablePuzzle(provider, forward: false);
     if (previousEntry == null) return;
+
+    if (_usesCustomSequence) {
+      await _loadPuzzle(
+        previousEntry.value,
+        previousEntry.key,
+        historicalView: true,
+      );
+      return;
+    }
 
     await _loadPuzzle(
       previousEntry.value,
@@ -639,13 +1029,44 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     await _onUserDrop(selectedFrom, square);
   }
 
-  void _exitToMap() {
+  Future<void> _exitToMap() async {
+    if (_isExamMode && !_examFinished) {
+      final shouldSubmit = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('End Exam Early?'),
+            content: const Text(
+              'Leaving now submits your current score and returns to the Academy map.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Continue Exam'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Submit Exam'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSubmit != true) {
+        return;
+      }
+
+      await _finishExam(timedOut: false);
+      return;
+    }
+
     final callback = widget.onExitToMap;
     if (callback != null) {
       callback();
       return;
     }
-    Navigator.of(context).maybePop();
+    await Navigator.of(context).maybePop();
   }
 
   List<String> _legalTargetsForSquare(String from) {
@@ -748,12 +1169,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                             ],
                           ),
                   ),
-                  if (!isLandscape)
-                    AnimatedOpacity(
-                      opacity: _focusModeActive ? 0.5 : 1.0,
-                      duration: const Duration(milliseconds: 220),
-                      child: _buildBottomActions(provider),
-                    ),
+                  if (!isLandscape) _buildBottomActions(provider),
                 ],
               ),
           ],
@@ -854,8 +1270,18 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final total = provider.gridPuzzleCountForNode(widget.node);
+    final total = _usesCustomSequence
+        ? _activeSequence.length
+        : provider.gridPuzzleCountForNode(widget.node);
     final index = _puzzleIndex + 1;
+    final title = _isExamMode
+        ? 'Bracket ${widget.node.title} Exam'
+        : (_isDailySequence
+              ? '${widget.sequenceTitle ?? 'Daily Challenge'} • ${widget.node.title}'
+              : 'Elo Bracket ${widget.node.title}');
+    final subtitle = _isExamMode
+        ? 'Puzzle #$index of $total • ${_formatDuration(_examRemaining)} left'
+        : 'Puzzle #$index of $total';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
@@ -909,7 +1335,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Elo Bracket ${widget.node.title}',
+                  title,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
@@ -918,7 +1344,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                   ),
                 ),
                 Text(
-                  'Puzzle #$index of $total',
+                  subtitle,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: scheme.onSurface.withValues(alpha: 0.72),
@@ -928,6 +1354,29 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               ],
             ),
           ),
+          if (_isExamMode)
+            Container(
+              margin: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.10),
+                  scheme.surface,
+                ),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.28),
+                ),
+              ),
+              child: Text(
+                '$_examCorrectCount/${_activeSequence.length}',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ),
           IconButton(
             tooltip: 'Settings',
             onPressed: () => _openBoardAndPieceThemeSettings(themeProvider),
@@ -1346,8 +1795,6 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   Widget _buildIntelPanel(PuzzleAcademyProvider provider) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final total = provider.gridPuzzleCountForNode(widget.node);
-    final index = _puzzleIndex + 1;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
@@ -1379,8 +1826,6 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                _InfoLine(label: 'Elo Bracket', value: widget.node.title),
-                _InfoLine(label: 'Puzzle Index', value: '#$index of $total'),
                 _InfoLine(
                   label: 'State',
                   value: _solved
@@ -1389,7 +1834,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                             ? 'Engine Response'
                             : (_coachingOffScript
                                   ? 'Coach Review'
-                                  : 'In Progress')),
+                                  : 'Solving')),
                 ),
                 _InfoLine(label: 'Eval', value: _formatEval(_evalWhitePawns)),
                 if (_lastMistakeFromEval != null && _lastMistakeToEval != null)
@@ -1431,11 +1876,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               _buildIntelPanel(provider),
             ),
           ),
-          AnimatedOpacity(
-            opacity: _focusModeActive ? 0.5 : 1.0,
-            duration: const Duration(milliseconds: 220),
-            child: _buildBottomActions(provider, vertical: true),
-          ),
+          _buildBottomActions(provider, vertical: true),
         ],
       ),
     );
@@ -1445,6 +1886,49 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     PuzzleAcademyProvider provider, {
     bool vertical = false,
   }) {
+    if (_isExamMode) {
+      final accuracy = _examCompletedCount <= 0
+          ? 0
+          : ((_examCorrectCount / _examCompletedCount) * 100).round();
+      final scheme = Theme.of(context).colorScheme;
+      final statusCard = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            scheme.primary.withValues(alpha: 0.06),
+            scheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Correct $_examCorrectCount/${_activeSequence.length}',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              'Accuracy $accuracy%',
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.76),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+        child: vertical ? statusCard : Column(children: [statusCard]),
+      );
+    }
+
     final hasPrevious = _puzzleIndex > 0;
     final canRegret = _pendingRegretHalfMoves > 0 && !_busy;
     final canHint = !_busy && !_solved && provider.progress.freeHints > 0;
@@ -1455,11 +1939,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         currentPuzzle != null &&
         provider.isPuzzleSolved(currentPuzzle.puzzleId);
     final currentSkippedHistorically =
-      currentPuzzle != null &&
-      provider.isPuzzleSkipped(currentPuzzle.puzzleId);
+        currentPuzzle != null &&
+        provider.isPuzzleSkipped(currentPuzzle.puzzleId);
     final canAdvanceToNext =
         !_busy &&
-      (_solved || currentSolvedHistorically || currentSkippedHistorically) &&
+        (_solved || currentSolvedHistorically || currentSkippedHistorically) &&
         nextPuzzle != null &&
         nextPuzzle.value.puzzleId != _puzzle?.puzzleId;
     const regretColor = Color(0xFF6FE7FF);
@@ -1480,12 +1964,24 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     ButtonStyle outlinedAccentStyle(Color color) {
-      return OutlinedButton.styleFrom(
-        foregroundColor: color,
-        side: BorderSide(color: color.withValues(alpha: 0.82)),
-        backgroundColor: color.withValues(alpha: 0.10),
-        disabledForegroundColor: color.withValues(alpha: 0.48),
-        disabledBackgroundColor: color.withValues(alpha: 0.06),
+      return ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return color.withValues(alpha: 0.20);
+          }
+          return color;
+        }),
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return color.withValues(alpha: 0.025);
+          }
+          return color.withValues(alpha: 0.10);
+        }),
+        side: WidgetStateProperty.resolveWith((states) {
+          final alpha = states.contains(WidgetState.disabled) ? 0.10 : 0.82;
+          return BorderSide(color: color.withValues(alpha: alpha));
+        }),
+        overlayColor: WidgetStatePropertyAll(color.withValues(alpha: 0.08)),
       );
     }
 
@@ -1532,20 +2028,44 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       label: const Text('Next Puzzle'),
     );
 
+    Widget withDisabledOpacity(Widget child, bool enabled) {
+      return Opacity(opacity: enabled ? 1.0 : 0.3, child: child);
+    }
+
     if (vertical) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(8, 4, 12, 8),
         child: Column(
           children: [
-            SizedBox(width: double.infinity, height: 44, child: previousButton),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: withDisabledOpacity(previousButton, hasPrevious),
+            ),
             const SizedBox(height: 10),
-            SizedBox(width: double.infinity, height: 44, child: regretButton),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: withDisabledOpacity(regretButton, canRegret),
+            ),
             const SizedBox(height: 10),
-            SizedBox(width: double.infinity, height: 44, child: hintButton),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: withDisabledOpacity(hintButton, canHint),
+            ),
             const SizedBox(height: 10),
-            SizedBox(width: double.infinity, height: 44, child: skipButton),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: withDisabledOpacity(skipButton, canSkip),
+            ),
             const SizedBox(height: 10),
-            SizedBox(width: double.infinity, height: 44, child: nextButton),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: withDisabledOpacity(nextButton, canAdvanceToNext),
+            ),
           ],
         ),
       );
@@ -1557,19 +2077,21 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         children: [
           Row(
             children: [
-              Expanded(child: regretButton),
+              Expanded(child: withDisabledOpacity(regretButton, canRegret)),
               const SizedBox(width: 10),
-              Expanded(child: hintButton),
+              Expanded(child: withDisabledOpacity(hintButton, canHint)),
               const SizedBox(width: 10),
-              Expanded(child: skipButton),
+              Expanded(child: withDisabledOpacity(skipButton, canSkip)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: previousButton),
+              Expanded(child: withDisabledOpacity(previousButton, hasPrevious)),
               const SizedBox(width: 10),
-              Expanded(child: nextButton),
+              Expanded(
+                child: withDisabledOpacity(nextButton, canAdvanceToNext),
+              ),
             ],
           ),
         ],

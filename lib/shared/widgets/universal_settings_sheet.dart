@@ -161,6 +161,19 @@ Future<void> showUniversalSettingsSheet({
                                     icon: _HapticsGlyph(enabled: draftHaptics),
                                   ),
                                 ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: _HeaderToggleButton(
+                                  active: false,
+                                  tooltip: 'Close settings',
+                                  onTap: () => Navigator.of(context).pop(),
+                                  icon: Icon(
+                                    Icons.close_rounded,
+                                    size: 20,
+                                    color: scheme.onSurface,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -518,17 +531,20 @@ class _HapticsGlyph extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         Icon(
-          enabled ? Icons.vibration_rounded : Icons.do_not_disturb_on_rounded,
+          enabled ? Icons.vibration_rounded : Icons.vibration_outlined,
           size: 20,
           color: color,
         ),
         if (!enabled)
-          Positioned(
-            bottom: 7,
+          Transform.rotate(
+            angle: -0.85,
             child: Container(
-              width: 12,
-              height: 1.6,
-              color: color.withValues(alpha: 0.82),
+              width: 18,
+              height: 2,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(999),
+              ),
             ),
           ),
       ],
@@ -591,51 +607,51 @@ class _ThemeStyleSwatchTile extends StatelessWidget {
                     ]
                   : const [],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: swatches
-                              .map(
-                                (color) => Container(
-                                  width: 14,
-                                  height: 14,
-                                  margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: color.computeLuminance() > 0.7
-                                          ? Colors.black12
-                                          : Colors.white12,
-                                    ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 18,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: swatches
+                            .map(
+                              (color) => Container(
+                                width: 14,
+                                height: 14,
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 2.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: color.computeLuminance() > 0.7
+                                        ? Colors.black12
+                                        : Colors.white12,
                                   ),
                                 ),
-                              )
-                              .toList(growable: false),
-                        ),
+                              ),
+                            )
+                            .toList(growable: false),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.palette_outlined,
-                  size: 18,
-                  color: selected
-                      ? activeColor
-                      : scheme.onSurface.withValues(alpha: 0.68),
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 8),
+                  Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.palette_outlined,
+                    size: 18,
+                    color: selected
+                        ? activeColor
+                        : scheme.onSurface.withValues(alpha: 0.68),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

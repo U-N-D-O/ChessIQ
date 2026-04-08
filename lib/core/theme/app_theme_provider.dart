@@ -173,36 +173,44 @@ class AppThemeProvider extends ChangeNotifier {
 
     final scaffold = isMono
         ? (isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF5F5F5))
-        : (isDark ? const Color(0xFF090B12) : const Color(0xFFF4F7FB));
+        : (isDark ? const Color(0xFF15171B) : const Color(0xFFF7F2EA));
     final surface = isMono
         ? (isDark ? const Color(0xFF171717) : const Color(0xFFFFFFFF))
-        : (isDark ? const Color(0xFF10131D) : const Color(0xFFFFFFFF));
+        : (isDark ? const Color(0xFF1E2127) : const Color(0xFFFCF9F4));
     final appBar = isMono
         ? (isDark ? const Color(0xFF101010) : const Color(0xFFEDEDED))
-        : (isDark ? const Color(0xFF0E111A) : const Color(0xFFEFF3F9));
-    final primary = isMono ? const Color(0xFF808080) : const Color(0xFFB9A46A);
+        : (isDark ? const Color(0xFF1A1D23) : const Color(0xFFF2EADF));
+    final primary = isMono ? const Color(0xFF808080) : const Color(0xFFC2A56A);
     final secondary = isMono
         ? const Color(0xFFA6A6A6)
-        : const Color(0xFF3F6ED8);
-    final tertiary = isMono ? const Color(0xFF5E5E5E) : const Color(0xFF5CCB8A);
+        : const Color(0xFF7A95C2);
+    final tertiary = isMono ? const Color(0xFF5E5E5E) : const Color(0xFF74B892);
     final onSurface = isDark
-        ? const Color(0xFFEDEEF1)
-        : const Color(0xFF111318);
+        ? const Color(0xFFF1EEE7)
+        : const Color(0xFF17181C);
     final onPrimary = isMono
         ? (isDark ? const Color(0xFF101010) : Colors.white)
-        : (isDark ? const Color(0xFF111318) : Colors.white);
+        : (isDark ? const Color(0xFF1A1712) : const Color(0xFF18130B));
+    final outline = isMono
+        ? (isDark ? const Color(0xFF5A5A5A) : const Color(0xFFCFCFCF))
+        : (isDark ? const Color(0xFF474B55) : const Color(0xFFD7CFBF));
     final buttonShadowColor = isDark
-        ? primary.withValues(alpha: 0.36)
-        : Colors.black.withValues(alpha: 0.22);
+        ? Colors.black.withValues(alpha: 0.24)
+        : Colors.black.withValues(alpha: 0.12);
 
     final textTheme = GoogleFonts.plusJakartaSansTextTheme(base.textTheme)
         .copyWith(
+          displaySmall: GoogleFonts.cormorantGaramond(
+            fontWeight: FontWeight.w700,
+            color: onSurface,
+            letterSpacing: 0.2,
+          ),
           headlineSmall: GoogleFonts.plusJakartaSans(
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             color: onSurface,
           ),
-          titleLarge: GoogleFonts.plusJakartaSans(
-            fontWeight: FontWeight.w600,
+          titleLarge: GoogleFonts.cormorantGaramond(
+            fontWeight: FontWeight.w700,
             color: onSurface,
           ),
           titleMedium: GoogleFonts.plusJakartaSans(
@@ -231,15 +239,16 @@ class AppThemeProvider extends ChangeNotifier {
         surface: surface,
         onSurface: onSurface,
         onPrimary: onPrimary,
+        outline: outline,
         surfaceTint: primary.withValues(alpha: isDark ? 0.10 : 0.08),
       ),
       cardTheme: CardThemeData(
         color: surface,
-        elevation: isDark ? 6 : 2,
+        elevation: isDark ? 8 : 3,
         shadowColor: isDark
-            ? Colors.black.withValues(alpha: 0.34)
-            : Colors.black.withValues(alpha: 0.14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ? Colors.black.withValues(alpha: 0.28)
+            : Colors.black.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: appBar,
@@ -261,6 +270,27 @@ class AppThemeProvider extends ChangeNotifier {
             borderRadius: BorderRadius.circular(12),
           ),
           textStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: onSurface,
+          side: BorderSide(color: outline),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: surface,
+        modalBackgroundColor: surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
       ),
     );

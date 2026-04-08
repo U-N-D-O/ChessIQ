@@ -1,84 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-
-abstract class _PuzzleEngineBackend {
-  Future<void> start(void Function(String line) onOutput);
-  void send(String command);
-  Future<void> stop();
-}
-
-class _NullPuzzleEngineBackend extends _PuzzleEngineBackend {
-  @override
-  Future<void> start(void Function(String line) onOutput) async {}
-
-  @override
-  void send(String command) {}
-
-  @override
-  Future<void> stop() async {}
-}
-
-class _DesktopPuzzleEngineBackend extends _PuzzleEngineBackend {
-  Process? _process;
-  StreamSubscription<String>? _stdoutSubscription;
-
-  @override
-  Future<void> start(void Function(String line) onOutput) async {
-    _process = await Process.start('./engine/stockfish.exe', []);
-    _stdoutSubscription = _process!.stdout
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen(onOutput);
-  }
-
-  @override
-  void send(String command) => _process?.stdin.writeln(command);
-
-  @override
-  Future<void> stop() async {
-    send('quit');
-    await _stdoutSubscription?.cancel();
-    _process?.kill();
-    _process = null;
-    _stdoutSubscription = null;
-  }
-}
-
-class _IosPuzzleEngineBackend extends _PuzzleEngineBackend {
-  static const _method = MethodChannel('com.chessiq/stockfish');
-  static const _event = EventChannel('com.chessiq/stockfish_output');
-  StreamSubscription<String>? _outputSubscription;
-
-  @override
-  Future<void> start(void Function(String line) onOutput) async {
-    await _method.invokeMethod<void>('start');
-    _outputSubscription = _event.receiveBroadcastStream().cast<String>().listen(
-      onOutput,
-    );
-  }
-
-  @override
-  void send(String command) {
-    _method.invokeMethod<void>('send', command);
-  }
-
-  @override
-  Future<void> stop() async {
-    await _method.invokeMethod<void>('stop');
-    await _outputSubscription?.cancel();
-    _outputSubscription = null;
-  }
-}
-
-_PuzzleEngineBackend _createEngineBackend() {
-  if (kIsWeb) return _NullPuzzleEngineBackend();
-  if (Platform.isIOS) return _IosPuzzleEngineBackend();
-  return _DesktopPuzzleEngineBackend();
-}
+import 'package:chessiq/core/services/engine_service.dart';
 
 class PuzzleEngineAnalysis {
   const PuzzleEngineAnalysis({
@@ -93,9 +15,12 @@ class PuzzleEngineAnalysis {
 }
 
 class PuzzleEngineService {
-  PuzzleEngineService() : _backend = _createEngineBackend();
+  PuzzleEngineService()
+    : _engine = createEngineService(owner: _academyPuzzleEngineOwner);
 
-  final _PuzzleEngineBackend _backend;
+  static const String _academyPuzzleEngineOwner = 'academy.puzzle';
+
+  final EngineService _engine;
   Completer<void>? _uciReady;
   Completer<void>? _readyOk;
   Completer<PuzzleEngineAnalysis>? _pendingAnalysis;
@@ -110,10 +35,10 @@ class PuzzleEngineService {
     if (_started) return;
     _uciReady = Completer<void>();
     _readyOk = Completer<void>();
-    await _backend.start(_handleLine);
-    _backend.send('uci');
+    await _engine.start(_handleLine);
+    _engine.send('uci');
     await _uciReady!.future.timeout(const Duration(seconds: 5));
-    _backend.send('isready');
+    _engine.send('isready');
     await _readyOk!.future.timeout(const Duration(seconds: 5));
     _started = true;
   }
@@ -125,7 +50,7 @@ class PuzzleEngineService {
     void Function(double evalWhitePawns)? onEval,
   }) async {
     await ensureStarted();
-    _backend.send('stop');
+    _engine.send('stop');
     _pendingAnalysis?.complete(
       PuzzleEngineAnalysis(
         bestMove: _lastBestMove,
@@ -138,8 +63,8 @@ class PuzzleEngineService {
     _lastBestMove = null;
     _onEval = onEval;
     _pendingAnalysis = Completer<PuzzleEngineAnalysis>();
-    _backend.send('position fen $fen');
-    _backend.send('go depth $depth');
+    _engine.send('position fen $fen');
+    _engine.send('go depth $depth');
     return _pendingAnalysis!.future.timeout(
       const Duration(seconds: 8),
       onTimeout: () => PuzzleEngineAnalysis(
@@ -151,7 +76,9 @@ class PuzzleEngineService {
   }
 
   Future<void> dispose() async {
-    await _backend.stop();
+    _started = false;
+    _pendingAnalysis = null;
+    await _engine.stop();
   }
 
   void _handleLine(String line) {

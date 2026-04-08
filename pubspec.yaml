@@ -41,6 +41,7 @@ dependencies:
   provider: ^6.1.2
   chess: ^0.8.1
   confetti: ^0.8.0
+  google_mobile_ads: ^7.0.0
 
 dev_dependencies:
   flutter_test:

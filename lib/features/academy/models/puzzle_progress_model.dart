@@ -16,6 +16,7 @@ class PuzzleProgressModel {
   final Set<String> solvedPuzzleIds;
   final Set<String> speedDemonNodeKeys;
   final Map<String, int> bestSolveTimeMsByPuzzleId;
+  final List<AcademyExamResult> examResults;
 
   const PuzzleProgressModel({
     required this.coins,
@@ -33,6 +34,7 @@ class PuzzleProgressModel {
     required this.solvedPuzzleIds,
     required this.speedDemonNodeKeys,
     required this.bestSolveTimeMsByPuzzleId,
+    required this.examResults,
   });
 
   factory PuzzleProgressModel.initial({
@@ -54,6 +56,7 @@ class PuzzleProgressModel {
       solvedPuzzleIds: <String>{},
       speedDemonNodeKeys: <String>{},
       bestSolveTimeMsByPuzzleId: <String, int>{},
+      examResults: const <AcademyExamResult>[],
     );
   }
 
@@ -73,6 +76,7 @@ class PuzzleProgressModel {
     Set<String>? solvedPuzzleIds,
     Set<String>? speedDemonNodeKeys,
     Map<String, int>? bestSolveTimeMsByPuzzleId,
+    List<AcademyExamResult>? examResults,
   }) {
     return PuzzleProgressModel(
       coins: coins ?? this.coins,
@@ -93,6 +97,7 @@ class PuzzleProgressModel {
       speedDemonNodeKeys: speedDemonNodeKeys ?? this.speedDemonNodeKeys,
       bestSolveTimeMsByPuzzleId:
           bestSolveTimeMsByPuzzleId ?? this.bestSolveTimeMsByPuzzleId,
+      examResults: examResults ?? this.examResults,
     );
   }
 
@@ -115,6 +120,7 @@ class PuzzleProgressModel {
       'solvedPuzzleIds': solvedPuzzleIds.toList(growable: false),
       'speedDemonNodeKeys': speedDemonNodeKeys.toList(growable: false),
       'bestSolveTimeMsByPuzzleId': bestSolveTimeMsByPuzzleId,
+      'examResults': examResults.map((result) => result.toMap()).toList(),
     };
   }
 
@@ -144,6 +150,7 @@ class PuzzleProgressModel {
     final bestSolveRaw =
         (map['bestSolveTimeMsByPuzzleId'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{};
+    final examResultsRaw = (map['examResults'] as List?) ?? const <dynamic>[];
 
     return PuzzleProgressModel(
       coins: (map['coins'] as num?)?.toInt() ?? 0,
@@ -179,6 +186,12 @@ class PuzzleProgressModel {
       bestSolveTimeMsByPuzzleId: bestSolveRaw.map(
         (key, value) => MapEntry<String, int>(key, (value as num).toInt()),
       ),
+      examResults: examResultsRaw
+          .whereType<Map>()
+          .map(
+            (entry) => AcademyExamResult.fromMap(entry.cast<String, dynamic>()),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -371,6 +384,52 @@ class PuzzleItem {
           .split(RegExp(r'\s+'))
           .where((value) => value.trim().isNotEmpty)
           .toList(growable: false),
+    );
+  }
+}
+
+class AcademyExamResult {
+  final String nodeKey;
+  final int score;
+  final int correctCount;
+  final int totalCount;
+  final int elapsedMs;
+  final int timeLimitMs;
+  final int completedAtMs;
+
+  const AcademyExamResult({
+    required this.nodeKey,
+    required this.score,
+    required this.correctCount,
+    required this.totalCount,
+    required this.elapsedMs,
+    required this.timeLimitMs,
+    required this.completedAtMs,
+  });
+
+  double get accuracy => totalCount <= 0 ? 0.0 : correctCount / totalCount;
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'nodeKey': nodeKey,
+      'score': score,
+      'correctCount': correctCount,
+      'totalCount': totalCount,
+      'elapsedMs': elapsedMs,
+      'timeLimitMs': timeLimitMs,
+      'completedAtMs': completedAtMs,
+    };
+  }
+
+  factory AcademyExamResult.fromMap(Map<String, dynamic> map) {
+    return AcademyExamResult(
+      nodeKey: map['nodeKey']?.toString() ?? '',
+      score: (map['score'] as num?)?.toInt() ?? 0,
+      correctCount: (map['correctCount'] as num?)?.toInt() ?? 0,
+      totalCount: (map['totalCount'] as num?)?.toInt() ?? 0,
+      elapsedMs: (map['elapsedMs'] as num?)?.toInt() ?? 0,
+      timeLimitMs: (map['timeLimitMs'] as num?)?.toInt() ?? 0,
+      completedAtMs: (map['completedAtMs'] as num?)?.toInt() ?? 0,
     );
   }
 }

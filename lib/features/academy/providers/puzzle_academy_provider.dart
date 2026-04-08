@@ -1,12 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
 import 'package:chess/chess.dart' as chess;
+import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../models/puzzle_progress_model.dart';
 
 const String _basePuzzleAssetPath = 'assets/puzzles/base_puzzles.json';
 final RegExp _ratingPattern = RegExp(r'"Rating"\s*:\s*(\d+)');
@@ -128,8 +129,20 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   static const String _progressKey = 'puzzle_academy_progress_v2';
   static const String _sharedStoreStateKey = 'store_state_v1';
   static const int _coinsPerAdWatch = 10;
+  static const int _brainBreakSolveInterval = 15;
   static const int _dailyPuzzleReward = 40;
   static const int _gridPuzzleCount = 500;
+  static const int _examUnlockSolveCount = 150;
+  static const int _examPuzzleCount = 50;
+  static const Duration _examDuration = Duration(hours: 1);
+  static const String _defaultUnlockedNodeKey = '1000_1050';
+  static const Map<String, int> _examUnlockRequirementsByNodeKey =
+      <String, int>{
+        '1500_1550': 6,
+        '2100_2150': 6,
+        '2500_2550': 3,
+        '3000_3050': 2,
+      };
 
   final List<SemesterRange> semesters = const <SemesterRange>[
     SemesterRange(
@@ -160,9 +173,17 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       id: 'master',
       title: 'Master Semester',
       minElo: 2100,
-      maxElo: 2950,
+      maxElo: 2450,
       intro:
           'Elite tactical positions demand restraint. Precision matters more than speed, until speed matters more than everything.',
+    ),
+    SemesterRange(
+      id: 'grandmaster',
+      title: 'Grandmaster Semester',
+      minElo: 2500,
+      maxElo: 2950,
+      intro:
+          'This tier opens only after proven exam consistency. Calculate with control and finish with force.',
     ),
     SemesterRange(
       id: 'oracle',
@@ -242,6 +263,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   List<String> _dailyPuzzleAssetPaths = const <String>[];
   PuzzleItem? _todayDailyPuzzle;
   String? _todayDailyPuzzleAssetPath;
+  EconomyProvider? _economyProvider;
 
   bool _initialized = false;
   bool _isLoading = false;
@@ -255,17 +277,71 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   bool get shouldShowGrandmasterOracle => _shouldShowGrandmasterOracle;
   String? get celebrationNodeKey => _celebrationNodeKey;
   List<PuzzleItem> get dailyPuzzles => _dailyPuzzles;
+  Duration get examDuration => _examDuration;
+  int get examPuzzleCount => _examPuzzleCount;
   List<PuzzleItem> get basePuzzles => _basePuzzleCacheByNode.values
       .expand((items) => items)
       .toList(growable: false);
-  PuzzleItem? get todayDailyPuzzle => _todayDailyPuzzle;
-  bool get hasTodayDailyPuzzle => _todayDailyPuzzle != null;
-  int get unresolvedSkippedPuzzleCount => progress.skippedPuzzleIds.length;
+  PuzzleItem? get todayDailyPuzzle {
+    final snapshot = _progress;
+    if (snapshot == null || _dailyPuzzles.isEmpty) {
+      return _todayDailyPuzzle;
+    }
+
+    for (final puzzle in _dailyPuzzles) {
+      if (!snapshot.completedDailyPuzzleIds.contains(puzzle.puzzleId)) {
+        return puzzle;
+      }
+    }
+
+    return _todayDailyPuzzle ?? _dailyPuzzles.first;
+  }
+
+  int get todayDailyPuzzleIndex {
+    final activePuzzle = todayDailyPuzzle;
+    if (activePuzzle == null) return -1;
+    return _dailyPuzzles.indexWhere(
+      (puzzle) => puzzle.puzzleId == activePuzzle.puzzleId,
+    );
+  }
+
+  bool get hasTodayDailyPuzzle => todayDailyPuzzle != null;
+  int get unresolvedSkippedPuzzleCount => progress.skippedPuzzleIds
+      .where((puzzleId) => !progress.solvedPuzzleIds.contains(puzzleId))
+      .length;
   int get completedTodayDailyCount => _dailyPuzzles
       .where(
         (puzzle) => progress.completedDailyPuzzleIds.contains(puzzle.puzzleId),
       )
       .length;
+  List<AcademyExamResult> get academyExamResults {
+    final results = List<AcademyExamResult>.from(progress.examResults);
+    results.sort((a, b) {
+      final scoreCompare = b.score.compareTo(a.score);
+      if (scoreCompare != 0) return scoreCompare;
+      return b.completedAtMs.compareTo(a.completedAtMs);
+    });
+    return results;
+  }
+
+  List<LeaderboardEntry> get academyScoreboardEntries {
+    final results = academyExamResults.take(10).toList(growable: false);
+    return List<LeaderboardEntry>.generate(results.length, (index) {
+      final result = results[index];
+      final node = progress.nodes[result.nodeKey];
+      final nodeLabel = node == null
+          ? result.nodeKey.replaceAll('_', '-')
+          : '${node.startElo}-${node.endElo}';
+      final accuracy = (result.accuracy * 100).round();
+      return LeaderboardEntry(
+        rank: index + 1,
+        handle: 'Bracket $nodeLabel',
+        score: result.score,
+        title:
+            '${result.correctCount}/${result.totalCount} correct • $accuracy% • ${_formatDurationLabel(Duration(milliseconds: result.elapsedMs))}',
+      );
+    });
+  }
 
   PuzzleProgressModel get progress {
     final value = _progress;
@@ -273,6 +349,20 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       throw StateError('PuzzleAcademyProvider used before initialization');
     }
     return value;
+  }
+
+  void attachEconomyProvider(EconomyProvider economyProvider) {
+    _economyProvider = economyProvider;
+    if (!_initialized || _progress == null || !economyProvider.loaded) {
+      return;
+    }
+    if (progress.coins == economyProvider.coins) {
+      return;
+    }
+
+    _progress = progress.copyWith(coins: economyProvider.coins);
+    unawaited(_saveProgress(mirrorStoreCoins: false));
+    notifyListeners();
   }
 
   List<EloNodeProgress> get orderedNodes {
@@ -292,7 +382,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   String get currentTitle {
     final elo = highestUnlockedElo;
     if (elo >= 3000) return 'Grandmaster Oracle';
-    if (elo >= 2800) return 'Grandmaster Candidate';
+    if (elo >= 2500) return 'Grandmaster Candidate';
     if (elo >= 2200) return 'Master of Tactics';
     if (elo >= 1500) return 'Tactical Sergeant';
     if (elo >= 1000) return 'Knight Captain';
@@ -343,7 +433,11 @@ class PuzzleAcademyProvider extends ChangeNotifier {
             .map((node) => node.key)
             .toSet(),
       );
-      await syncCoinsFromStoreState(notify: false);
+      if (_economyProvider?.loaded == true) {
+        _progress = progress.copyWith(coins: _economyProvider!.coins);
+      } else {
+        await syncCoinsFromStoreState(notify: false);
+      }
       await _saveProgress();
       _initialized = true;
     } finally {
@@ -404,7 +498,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     }
 
     final completedDaily = Set<String>.from(progress.completedDailyPuzzleIds);
-    var coins = progress.coins;
+    var coins = _economyProvider?.coins ?? progress.coins;
     if (daily && completedDaily.add(puzzle.puzzleId)) {
       coins += _dailyPuzzleReward;
     }
@@ -422,7 +516,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     var adCounter = progress.adCounter;
     if (!wasSolved) {
       adCounter += 1;
-      if (adCounter >= 10) {
+      if (adCounter >= _brainBreakSolveInterval) {
         _shouldShowBrainBreak = true;
         adCounter = 0;
       }
@@ -454,8 +548,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     );
 
     updated = _applyUnlockingAndRewards(updated);
-    _progress = updated;
-    await _saveProgress();
+    await _saveUpdatedProgress(updated, syncCoins: true);
     final unlockedNow = updated.nodes.values
         .where((candidate) => candidate.unlocked)
         .map((candidate) => candidate.key)
@@ -515,39 +608,43 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     final completed = Set<String>.from(progress.completedDailyPuzzleIds)
       ..add(puzzleId);
 
-    _progress = progress.copyWith(
+    final updated = progress.copyWith(
       completedDailyPuzzleIds: completed,
-      coins: progress.coins + _dailyPuzzleReward,
+      coins: (_economyProvider?.coins ?? progress.coins) + _dailyPuzzleReward,
     );
 
-    await _saveProgress();
+    await _saveUpdatedProgress(updated, syncCoins: true);
     notifyListeners();
   }
 
   Future<void> watchRewardedAd() async {
-    _progress = progress.copyWith(coins: progress.coins + _coinsPerAdWatch);
-    await _saveProgress();
+    final updated = progress.copyWith(
+      coins: (_economyProvider?.coins ?? progress.coins) + _coinsPerAdWatch,
+    );
+    await _saveUpdatedProgress(updated, syncCoins: true);
     notifyListeners();
   }
 
   Future<bool> buyHintPack({int amount = 3, int cost = 25}) async {
-    if (progress.coins < cost) return false;
-    _progress = progress.copyWith(
-      coins: progress.coins - cost,
+    final currentCoins = _economyProvider?.coins ?? progress.coins;
+    if (currentCoins < cost) return false;
+    final updated = progress.copyWith(
+      coins: currentCoins - cost,
       freeHints: progress.freeHints + amount,
     );
-    await _saveProgress();
+    await _saveUpdatedProgress(updated, syncCoins: true);
     notifyListeners();
     return true;
   }
 
   Future<bool> buySkipPack({int amount = 2, int cost = 35}) async {
-    if (progress.coins < cost) return false;
-    _progress = progress.copyWith(
-      coins: progress.coins - cost,
+    final currentCoins = _economyProvider?.coins ?? progress.coins;
+    if (currentCoins < cost) return false;
+    final updated = progress.copyWith(
+      coins: currentCoins - cost,
       freeSkips: progress.freeSkips + amount,
     );
-    await _saveProgress();
+    await _saveUpdatedProgress(updated, syncCoins: true);
     notifyListeners();
     return true;
   }
@@ -588,6 +685,9 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       progress.bestSolveTimeMsByPuzzleId[puzzleId];
   bool shouldShowSemesterIntro(String semesterId) =>
       !progress.seenSemesters.contains(semesterId);
+  bool canTakeExam(EloNodeProgress node) =>
+      node.unlocked && node.solvedCount >= _examUnlockSolveCount;
+  int examUnlockSolveTarget(EloNodeProgress node) => _examUnlockSolveCount;
 
   SemesterRange semesterForNode(EloNodeProgress node) {
     return semesters.firstWhere(
@@ -606,6 +706,108 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       (acc, node) => acc + node.masteryProgress,
     );
     return (sum / list.length).clamp(0.0, 1.0);
+  }
+
+  int _completedExamCountInSemester(
+    PuzzleProgressModel snapshot,
+    SemesterRange semester,
+  ) {
+    return snapshot.examResults.where((result) {
+      final node = snapshot.nodes[result.nodeKey];
+      return node != null && semester.includes(node.startElo);
+    }).length;
+  }
+
+  int completedExamCountInSemester(SemesterRange semester) {
+    return _completedExamCountInSemester(progress, semester);
+  }
+
+  int examUnlockRequirementForNode(EloNodeProgress node) {
+    return _examUnlockRequirementsByNodeKey[node.key] ?? 0;
+  }
+
+  String? unlockRequirementText(EloNodeProgress node) {
+    final required = examUnlockRequirementForNode(node);
+    if (required <= 0) {
+      return null;
+    }
+
+    final previousSemester = _previousSemesterFor(node);
+    if (previousSemester == null) {
+      return null;
+    }
+
+    final completed = completedExamCountInSemester(previousSemester);
+    return 'Unlock: $completed/$required exams in ${previousSemester.title}';
+  }
+
+  SemesterRange? _previousSemesterFor(EloNodeProgress node) {
+    SemesterRange? previous;
+    for (final semester in semesters) {
+      if (semester.maxElo < node.startElo) {
+        previous = semester;
+      }
+    }
+    return previous;
+  }
+
+  bool _isDefaultUnlockedNode(EloNodeProgress node) {
+    return node.key == _defaultUnlockedNodeKey;
+  }
+
+  bool _requiresPreviousSemesterExamGate(EloNodeProgress node) {
+    return examUnlockRequirementForNode(node) > 0;
+  }
+
+  bool _hasRequiredPreviousSemesterExams(
+    PuzzleProgressModel snapshot,
+    EloNodeProgress node,
+  ) {
+    final required = examUnlockRequirementForNode(node);
+    if (required <= 0) {
+      return true;
+    }
+
+    final previousSemester = _previousSemesterFor(node);
+    if (previousSemester == null) {
+      return false;
+    }
+
+    return _completedExamCountInSemester(snapshot, previousSemester) >=
+        required;
+  }
+
+  Map<String, EloNodeProgress> _normalizedNodesFor(
+    PuzzleProgressModel snapshot,
+  ) {
+    final nodes = snapshot.nodes.values.toList(growable: false)
+      ..sort((a, b) => a.startElo.compareTo(b.startElo));
+
+    final updated = <String, EloNodeProgress>{};
+    for (var index = 0; index < nodes.length; index++) {
+      final node = snapshot.nodes[nodes[index].key] ?? nodes[index];
+      final previouslyUnlocked = node.unlocked;
+      late final bool unlocked;
+
+      if (index == 0 || _isDefaultUnlockedNode(node)) {
+        unlocked = true;
+      } else if (_requiresPreviousSemesterExamGate(node)) {
+        unlocked = _hasRequiredPreviousSemesterExams(snapshot, node);
+      } else {
+        final previous = updated[nodes[index - 1].key] ?? nodes[index - 1];
+        unlocked =
+            previouslyUnlocked ||
+            (previous.unlocked &&
+                previous.solvedCount >= previous.unlockTarget);
+      }
+
+      updated[node.key] = node.copyWith(
+        unlocked: unlocked,
+        speedDemon: snapshot.speedDemonNodeKeys.contains(node.key),
+      );
+    }
+
+    return updated;
   }
 
   String heroTagForNode(EloNodeProgress node) =>
@@ -667,6 +869,70 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   PuzzleItem? nextAvailablePuzzleForNode(EloNodeProgress node) {
     final index = frontierPuzzleIndexForNode(node);
     return puzzleForNodeIndex(node, index);
+  }
+
+  Future<List<PuzzleItem>> buildExamPuzzleSequence(EloNodeProgress node) async {
+    await ensureNodePuzzlesLoadedForNode(node);
+    final source = List<PuzzleItem>.from(puzzlesForNode(node));
+    if (source.isEmpty) return const <PuzzleItem>[];
+    final random = Random(
+      DateTime.now().millisecondsSinceEpoch ^ node.startElo ^ node.solvedCount,
+    );
+    source.shuffle(random);
+    return source
+        .take(min(_examPuzzleCount, source.length))
+        .toList(growable: false);
+  }
+
+  List<AcademyExamResult> examResultsForNode(String nodeKey) {
+    final results = progress.examResults
+        .where((result) => result.nodeKey == nodeKey)
+        .toList(growable: false);
+    results.sort((a, b) {
+      final scoreCompare = b.score.compareTo(a.score);
+      if (scoreCompare != 0) return scoreCompare;
+      return b.completedAtMs.compareTo(a.completedAtMs);
+    });
+    return results;
+  }
+
+  AcademyExamResult? bestExamResultForNode(String nodeKey) {
+    final results = examResultsForNode(nodeKey);
+    return results.isEmpty ? null : results.first;
+  }
+
+  int calculateExamScore({
+    required int correctCount,
+    required int totalCount,
+    required Duration remaining,
+    Duration timeLimit = _examDuration,
+  }) {
+    if (totalCount <= 0) return 0;
+    final boundedRemainingMs = remaining.inMilliseconds.clamp(
+      0,
+      timeLimit.inMilliseconds,
+    );
+    final accuracyRatio = (correctCount / totalCount).clamp(0.0, 1.0);
+    final speedRatio = timeLimit.inMilliseconds <= 0
+        ? 0.0
+        : boundedRemainingMs / timeLimit.inMilliseconds;
+    return ((accuracyRatio * 8000) + (speedRatio * 2000)).round();
+  }
+
+  Future<void> recordExamResult(AcademyExamResult result) async {
+    final updatedResults = List<AcademyExamResult>.from(progress.examResults)
+      ..add(result)
+      ..sort((a, b) {
+        final scoreCompare = b.score.compareTo(a.score);
+        if (scoreCompare != 0) return scoreCompare;
+        return b.completedAtMs.compareTo(a.completedAtMs);
+      });
+
+    _progress = progress.copyWith(
+      examResults: updatedResults.take(40).toList(growable: false),
+    );
+    await _saveProgress();
+    notifyListeners();
   }
 
   Future<void> ensureNodePuzzlesLoadedForNode(EloNodeProgress node) async {
@@ -731,10 +997,16 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       }
 
       final normalizedCoins = max(0, storeCoins);
-      if (normalizedCoins == progress.coins) {
+      if (normalizedCoins == progress.coins &&
+          (_economyProvider == null ||
+              !_economyProvider!.loaded ||
+              _economyProvider!.coins == normalizedCoins)) {
         return;
       }
 
+      if (_economyProvider != null) {
+        await _economyProvider!.setCoins(normalizedCoins, notify: false);
+      }
       _progress = progress.copyWith(coins: normalizedCoins);
       await _saveProgress(mirrorStoreCoins: false);
       if (notify) {
@@ -751,6 +1023,21 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     if (mirrorStoreCoins) {
       await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
     }
+  }
+
+  Future<void> _saveUpdatedProgress(
+    PuzzleProgressModel updated, {
+    bool syncCoins = false,
+  }) async {
+    if (syncCoins && _economyProvider != null) {
+      await _economyProvider!.setCoins(updated.coins, notify: false);
+      _progress = updated.copyWith(coins: _economyProvider!.coins);
+      await _saveProgress(mirrorStoreCoins: false);
+      return;
+    }
+
+    _progress = updated;
+    await _saveProgress();
   }
 
   Future<void> _mirrorCoinsToStoreState(
@@ -778,31 +1065,15 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     await resolvedPrefs.setString(_sharedStoreStateKey, jsonEncode(payload));
   }
 
+  String _formatDurationLabel(Duration duration) {
+    final totalSeconds = max(0, duration.inSeconds);
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+
   void _normalizeUnlockState() {
-    final nodes = orderedNodes;
-    if (nodes.isEmpty) return;
-
-    final updated = <String, EloNodeProgress>{};
-    for (var index = 0; index < nodes.length; index++) {
-      final node = nodes[index];
-      var unlocked = node.unlocked;
-
-      if (index == 0) {
-        unlocked = true;
-      } else {
-        final previous = updated[nodes[index - 1].key] ?? nodes[index - 1];
-        if (previous.solvedCount >= previous.unlockTarget) {
-          unlocked = true;
-        }
-      }
-
-      updated[node.key] = node.copyWith(
-        unlocked: unlocked,
-        speedDemon: progress.speedDemonNodeKeys.contains(node.key),
-      );
-    }
-
-    _progress = progress.copyWith(nodes: updated);
+    _progress = progress.copyWith(nodes: _normalizedNodesFor(progress));
   }
 
   PuzzleProgressModel _applyUnlockingAndRewards(PuzzleProgressModel current) {
@@ -849,12 +1120,14 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       }
     }
 
-    return current.copyWith(
+    final normalized = current.copyWith(
       nodes: updated,
       unlockedThemeRewards: unlockedRewards,
       depth33To35Unlocked: depthUnlocked,
       grandmasterOracleTriggered: oracleTriggered,
     );
+
+    return normalized.copyWith(nodes: _normalizedNodesFor(normalized));
   }
 
   Map<String, EloNodeProgress> _buildInitialNodes(Map<String, int> counts) {
@@ -894,7 +1167,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
         totalPuzzles: total,
         solvedCount: 0,
         attempts: 0,
-        unlocked: index == 0,
+        unlocked: index == 0 || key == _defaultUnlockedNodeKey,
         goldCrown: false,
         themeRewardUnlocked: false,
         speedDemon: false,
