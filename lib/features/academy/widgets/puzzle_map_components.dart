@@ -325,7 +325,6 @@ class _PuzzleNodeCard extends StatelessWidget {
     required this.compact,
     required this.heroTag,
     required this.showGhost,
-    required this.showSpeed,
     required this.onTap,
     required this.showExamButton,
     this.lockedRequirementText,
@@ -337,7 +336,6 @@ class _PuzzleNodeCard extends StatelessWidget {
   final bool compact;
   final String heroTag;
   final bool showGhost;
-  final bool showSpeed;
   final VoidCallback? onTap;
   final bool showExamButton;
   final String? lockedRequirementText;
@@ -643,12 +641,6 @@ class _PuzzleNodeCard extends StatelessWidget {
             text: 'Ghost',
             color: Color(0xFFB8D6F3),
             icon: Icons.history_toggle_off_rounded,
-          ),
-        if (showSpeed)
-          const _Tag(
-            text: 'Speed Demon',
-            color: Color(0xFF9BE27C),
-            icon: Icons.flash_on_rounded,
           ),
       ],
     );

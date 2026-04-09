@@ -82,6 +82,7 @@ class ChessAnalysisPage extends StatefulWidget {
 
 class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     with TickerProviderStateMixin {
+  static const String _lastBotIndexKey = 'last_bot_index_v1';
   static const BoardPerspective _defaultPerspective = BoardPerspective.white;
   static const BoardThemeMode _defaultBoardTheme = BoardThemeMode.dark;
   static const PieceThemeMode _defaultPieceTheme = PieceThemeMode.classic;
@@ -176,105 +177,102 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     viewportFraction: 0.60,
   );
   int _botSetupSelectedIndex = 0;
+  Future<void> _loadLastBotIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final idx = prefs.getInt(_lastBotIndexKey);
+    if (idx != null && idx >= 0 && idx < _botCharacters.length) {
+      setState(() {
+        _botSetupSelectedIndex = idx;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_botSetupPageController.hasClients) {
+          _botSetupPageController.jumpToPage(idx);
+        }
+      });
+    }
+  }
+
+  Future<void> _saveLastBotIndex(int idx) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastBotIndexKey, idx);
+  }
+
   BotSideChoice _botSideChoice = BotSideChoice.random;
 
   static const List<BotCharacter> _botCharacters = [
     BotCharacter(
       rank: 1,
-      name: 'The Baby',
-      description: 'Pure chaos. Anything can happen.',
-      elo: 250,
-      multiPv: 16,
+      name: 'Hammy',
+      description:
+          'I just wanted to see the pretty wooden pieces... why is the timer making that noise?',
+      elo: 100,
+      limitStrength: true,
+      multiPv: 20,
       threads: 1,
       skillLevel: 0,
-      searchDepth: 4,
+      searchDepth: 1,
+      moveTimeMs: 800,
       profile: BotSkillProfile.baby,
-      avatarAsset: 'assets/bots/babybot.png',
+      avatarAsset: 'assets/bots/hammy.png',
     ),
     BotCharacter(
       rank: 2,
-      name: 'The Nephew',
-      description: 'Always lunges for the shiny capture.',
-      elo: 700,
+      name: 'Ok.',
+      description: 'Yeah, sure. Mate in three? 👍.',
+      elo: 450,
+      limitStrength: true,
       multiPv: 8,
       threads: 1,
       skillLevel: 2,
-      searchDepth: 7,
+      searchDepth: 2,
+      moveTimeMs: 500,
       profile: BotSkillProfile.nephew,
-      avatarAsset: 'assets/bots/nephewbot.png',
+      avatarAsset: 'assets/bots/ok.png',
     ),
     BotCharacter(
       rank: 3,
-      name: 'Best Friend',
-      description: 'A relaxed casual player with decent instincts.',
-      elo: 1050,
-      multiPv: 5,
+      name: 'Buff Doggo',
+      description:
+          'Do you even lift (your pieces), bro? I\'m going to crush your center like it\'s leg day.',
+      elo: 800,
+      limitStrength: true,
+      multiPv: 3,
       threads: 1,
-      skillLevel: 5,
-      searchDepth: 9,
-      profile: BotSkillProfile.bestFriend,
-      avatarAsset: 'assets/bots/frenbot.png',
+      skillLevel: 8,
+      searchDepth: 6,
+      moveTimeMs: 900,
+      profile: BotSkillProfile.teenBoy,
+      avatarAsset: 'assets/bots/doggo.png',
     ),
     BotCharacter(
       rank: 4,
-      name: 'Nerdy Girl',
-      description: 'Booked up early, less sure later on.',
-      elo: 1400,
-      multiPv: 4,
+      name: 'Handsome Squid',
+      description:
+          'Oh, please. Your opening is as unrefined as a dry burger. Witness true brilliance.',
+      elo: 1150,
+      limitStrength: true,
+      multiPv: 3,
       threads: 2,
-      skillLevel: 8,
-      searchDepth: 11,
-      profile: BotSkillProfile.nerdyGirl,
-      avatarAsset: 'assets/bots/nerdygirlbot.jpg',
+      skillLevel: 12,
+      searchDepth: 10,
+      moveTimeMs: 1000,
+      profile: BotSkillProfile.grandpa,
+      avatarAsset: 'assets/bots/goodlooking.png',
     ),
     BotCharacter(
       rank: 5,
-      name: 'HS Senior',
-      description: 'Fast, sharp, and a little reckless.',
-      elo: 1700,
+      name: 'Master Chud',
+      description:
+          'The engine predicted your defeat ten moves ago. The swamp consumes all.',
+      elo: 1500,
+      limitStrength: true,
       multiPv: 2,
       threads: 2,
-      skillLevel: 11,
-      moveTimeMs: 420,
-      profile: BotSkillProfile.teenBoy,
-      avatarAsset: 'assets/bots/studentbot.jpg',
-    ),
-    BotCharacter(
-      rank: 6,
-      name: 'The Uncle',
-      description: 'Prefers tricky, messy positions.',
-      elo: 2000,
-      multiPv: 3,
-      threads: 2,
-      skillLevel: 14,
-      searchDepth: 13,
-      profile: BotSkillProfile.uncle,
-      avatarAsset: 'assets/bots/unclebot.jpg',
-    ),
-    BotCharacter(
-      rank: 7,
-      name: 'The Grandpa',
-      description: 'Calm, precise, and relentlessly solid.',
-      elo: 2400,
-      multiPv: 1,
-      threads: 4,
-      skillLevel: 17,
-      moveTimeMs: 900,
-      profile: BotSkillProfile.grandpa,
-      avatarAsset: 'assets/bots/grandpabot.jpg',
-    ),
-    BotCharacter(
-      rank: 8,
-      name: 'The Alien',
-      description: 'Instant calculation with no mercy.',
-      elo: 3500,
-      limitStrength: false,
-      multiPv: 1,
-      threads: 8,
-      skillLevel: 20,
-      moveTimeMs: 220,
+      skillLevel: 16,
+      searchDepth: 14,
+      moveTimeMs: 1200,
       profile: BotSkillProfile.interGm,
-      avatarAsset: 'assets/bots/alienbot.png',
+      avatarAsset: 'assets/bots/chudmaster.png',
     ),
   ];
 
@@ -339,6 +337,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Map<String, int> _quizNameDailyCorrect = <String, int>{};
   Map<String, int> _quizLineDailyAttempts = <String, int>{};
   Map<String, int> _quizLineDailyCorrect = <String, int>{};
+  Map<String, int> _quizDailyQuestionsAsked = <String, int>{};
   int _quizQuestionsTarget = 10;
   int _quizSessionAnswered = 0;
   int _quizSessionCorrect = 0;
@@ -366,6 +365,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   @override
   void initState() {
     super.initState();
+    _loadLastBotIndex();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
@@ -516,7 +516,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       await player.setReleaseMode(ReleaseMode.stop);
       await player.play(
         AssetSource(assetPath),
-        mode: PlayerMode.mediaPlayer,
+        mode: PlayerMode.lowLatency,
         volume: 1.0,
       );
     } catch (e) {
@@ -631,6 +631,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               (k, v) => MapEntry(k, v is int ? max(0, v) : 0),
             );
           }
+
+          final questionsAsked = decoded['dailyQuestionsAsked'];
+          if (questionsAsked is Map<String, dynamic>) {
+            _quizDailyQuestionsAsked = questionsAsked.map(
+              (k, v) => MapEntry(k, v is int ? max(0, v) : 0),
+            );
+          }
         }
       }
     } catch (e) {
@@ -654,6 +661,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       'nameDailyCorrect': _quizNameDailyCorrect,
       'lineDailyAttempts': _quizLineDailyAttempts,
       'lineDailyCorrect': _quizLineDailyCorrect,
+      'dailyQuestionsAsked': _quizDailyQuestionsAsked,
     };
     await prefs.setString(_quizStatsKey, jsonEncode(payload));
   }
@@ -4241,10 +4249,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizPromptFocus = '';
         _quizOptions = options.map((entry) => entry.name).toList();
       } else {
-        _quizPrompt = '';
+        // For guessLine mode, show the opening name as the prompt
+        _quizPrompt = resolvedCorrect.name;
         _quizPromptFocus = '';
         _quizOptions = options.map((entry) => entry.normalizedMoves).toList();
       }
+
+      // Track question asked for this day
+      final day = _todayKey();
+      _quizDailyQuestionsAsked[day] = (_quizDailyQuestionsAsked[day] ?? 0) + 1;
+      _trimDailyMap(_quizDailyQuestionsAsked);
     });
   }
 
@@ -6445,6 +6459,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   setState(
                                     () => _botSetupSelectedIndex = index,
                                   );
+                                  _saveLastBotIndex(index);
                                 },
                                 itemBuilder: (context, index) =>
                                     _buildBotSetupCard(
@@ -7415,142 +7430,160 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       );
     }
 
-    return Container(
-      color: quizBackground,
-      child: Padding(
-        padding: quizPadding,
-        child: Column(
-          children: [
-            Row(
+    return Stack(
+      children: [
+        Container(
+          color: quizBackground,
+          child: Padding(
+            padding: quizPadding,
+            child: Column(
               children: [
-                IconButton(
-                  onPressed: _returnToQuizSetup,
-                  color: lightHeaderColor,
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Back to Setup',
-                ),
-                Expanded(
-                  child: Text(
-                    '${displayedQuizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: _returnToQuizSetup,
+                      color: lightHeaderColor,
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Back to Setup',
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  onPressed: _openAppearanceSettings,
-                  color: lightHeaderColor,
-                  icon: const Icon(Icons.palette_outlined),
-                  tooltip: 'Board & Pieces',
-                ),
-                IconButton(
-                  onPressed: _openQuizStatsSheet,
-                  color: lightHeaderColor,
-                  icon: const Icon(Icons.insights_outlined),
-                  tooltip: 'Performance Stats',
-                ),
-                Text(
-                  'Q ${min(_quizSessionAnswered + (_quizAnswered ? 0 : 1), _quizQuestionsTarget)}/$_quizQuestionsTarget',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.66),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (sideBySideLayout) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: LayoutBuilder(
-                            builder: (context, leftConstraints) {
-                              const boardCardChromeHeight = 62.0;
-                              final boardSize = max(
-                                0.0,
-                                min(
-                                  leftConstraints.maxWidth - 24,
-                                  leftConstraints.maxHeight -
-                                      boardCardChromeHeight,
-                                ),
-                              );
-                              return buildQuizBoardCard(
-                                maxBoardSize: boardSize,
-                              );
-                            },
-                          ),
+                    Expanded(
+                      child: Text(
+                        '${displayedQuizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 6,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              buildQuizPromptBlock(),
-                              Expanded(
-                                child: ListView(
-                                  children: buildQuizOptionButtons(),
-                                ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _openAppearanceSettings,
+                      color: lightHeaderColor,
+                      icon: const Icon(Icons.palette_outlined),
+                      tooltip: 'Board & Pieces',
+                    ),
+                    IconButton(
+                      onPressed: _openQuizStatsSheet,
+                      color: lightHeaderColor,
+                      icon: const Icon(Icons.insights_outlined),
+                      tooltip: 'Performance Stats',
+                    ),
+                    Text(
+                      'Q ${min(_quizSessionAnswered + (_quizAnswered ? 0 : 1), _quizQuestionsTarget)}/$_quizQuestionsTarget',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.66),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (sideBySideLayout) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: LayoutBuilder(
+                                builder: (context, leftConstraints) {
+                                  const boardCardChromeHeight = 62.0;
+                                  final boardSize = max(
+                                    0.0,
+                                    min(
+                                      leftConstraints.maxWidth - 24,
+                                      leftConstraints.maxHeight -
+                                          boardCardChromeHeight,
+                                    ),
+                                  );
+                                  return buildQuizBoardCard(
+                                    maxBoardSize: boardSize,
+                                  );
+                                },
                               ),
-                              if (displayedFeedback.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 2,
-                                    bottom: 8,
-                                  ),
-                                  child: Text(
-                                    displayedFeedback,
-                                    style: TextStyle(
-                                      color: isCorrectAnswer
-                                          ? const Color(0xFF7EDC8A)
-                                          : const Color(0xFFFFB26A),
-                                      fontWeight: FontWeight.w600,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 6,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  buildQuizPromptBlock(),
+                                  Expanded(
+                                    child: ListView(
+                                      children: buildQuizOptionButtons(),
                                     ),
                                   ),
-                                ),
-                              buildQuizPrimaryActionButton(),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  }
+                                  if (displayedFeedback.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: 2,
+                                        bottom: 8,
+                                      ),
+                                      child: Text(
+                                        displayedFeedback,
+                                        style: TextStyle(
+                                          color: isCorrectAnswer
+                                              ? const Color(0xFF7EDC8A)
+                                              : const Color(0xFFFFB26A),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  buildQuizPrimaryActionButton(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      }
 
-                  return ListView(
-                    children: [
-                      if (hasQuizBoard) buildQuizBoardCard(),
-                      if (hasQuizBoard) const SizedBox(height: 8),
-                      buildQuizPromptBlock(),
-                      ...buildQuizOptionButtons(),
-                    ],
-                  );
-                },
-              ),
-            ),
-            if (displayedFeedback.isNotEmpty && !sideBySideLayout)
-              Padding(
-                padding: const EdgeInsets.only(top: 2, bottom: 8),
-                child: Text(
-                  displayedFeedback,
-                  style: TextStyle(
-                    color: isCorrectAnswer
-                        ? const Color(0xFF7EDC8A)
-                        : const Color(0xFFFFB26A),
-                    fontWeight: FontWeight.w600,
+                      return ListView(
+                        children: [
+                          if (hasQuizBoard) buildQuizBoardCard(),
+                          if (hasQuizBoard) const SizedBox(height: 8),
+                          buildQuizPromptBlock(),
+                          ...buildQuizOptionButtons(),
+                        ],
+                      );
+                    },
                   ),
                 ),
-              ),
-            if (!sideBySideLayout) buildQuizPrimaryActionButton(),
-          ],
+                if (displayedFeedback.isNotEmpty && !sideBySideLayout)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, bottom: 8),
+                    child: Text(
+                      displayedFeedback,
+                      style: TextStyle(
+                        color: isCorrectAnswer
+                            ? const Color(0xFF7EDC8A)
+                            : const Color(0xFFFFB26A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                if (!sideBySideLayout) buildQuizPrimaryActionButton(),
+              ],
+            ),
+          ),
         ),
-      ),
+        // Quizcat image in lower right
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: IgnorePointer(
+            child: Image.asset(
+              'assets/quizcat.png',
+              width: 120,
+              height: 120,
+              fit: BoxFit.contain,
+              opacity: AlwaysStoppedAnimation(0.85),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -7564,6 +7597,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final accuracy = _quizAccuracy();
     final series = _buildQuizAccuracySeries(filter, days: 10);
     final latest = series.isEmpty ? null : series.last.value;
+
+    // Calculate average questions asked per day
+    final questionsAskedValues = _quizDailyQuestionsAsked.values.toList();
+    final avgQuestionsAsked = questionsAskedValues.isEmpty
+        ? 0.0
+        : questionsAskedValues.reduce((a, b) => a + b) /
+              questionsAskedValues.length;
 
     return Container(
       width: double.infinity,
@@ -7638,6 +7678,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 'Accuracy',
                 '${accuracy.toStringAsFixed(1)}%',
                 const Color(0xFFFFB26A),
+              ),
+              _quizMetricChip(
+                'Avg Lines/Day',
+                avgQuestionsAsked.toStringAsFixed(1),
+                const Color(0xFFB49DDB),
               ),
             ],
           ),
@@ -11011,7 +11056,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       title: 'Watch Ad For Coins',
                       subtitle: canWatchRewardAd
                           ? 'Watch and earn +120 coins'
-                          : 'Cooldown active. Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}.',
+                          : 'Earn +120 coins (cooldown active)',
                       priceLabel: 'Free',
                       enabled: canWatchRewardAd,
                       preview: canWatchRewardAd
@@ -11020,9 +11065,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                               rewardAdRemaining,
                               useMonochrome: useMonochrome,
                             ),
-                      actionLabel: canWatchRewardAd
-                          ? 'Watch'
-                          : 'Available in ${_storeRewardAdCountdownLabel(rewardAdRemaining)}',
+                      actionLabel: canWatchRewardAd ? 'Watch' : 'Cooldown',
                       actionColor: canWatchRewardAd
                           ? const Color(0xFF5AAEE8)
                           : const Color(0xFF6B7280),
@@ -11252,7 +11295,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final totalSeconds = EconomyProvider.storeRewardCooldown.inSeconds;
+    final currentCooldown = context.read<EconomyProvider>().watchCountToday >= 3
+        ? const Duration(days: 1)
+        : const [
+            Duration(minutes: 5),
+            Duration(minutes: 15),
+            Duration(minutes: 30),
+          ][context.read<EconomyProvider>().watchCountToday.clamp(0, 2)];
+    final totalSeconds = currentCooldown.inSeconds;
     final clampedRemainingSeconds = remaining.inSeconds.clamp(0, totalSeconds);
     final progress =
         1 - (clampedRemainingSeconds / totalSeconds.clamp(1, totalSeconds));
@@ -11273,7 +11323,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             Icon(Icons.timer_outlined, size: 14, color: accent),
             const SizedBox(width: 6),
             Text(
-              'Cooldown live · ${_storeRewardAdCountdownLabel(remaining)} remaining',
+              'Available in ${_storeRewardAdCountdownLabel(remaining)}',
               style: TextStyle(
                 color: scheme.onSurface.withValues(alpha: 0.72),
                 fontSize: 11.5,
@@ -11889,7 +11939,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }) {
     final activeTheme = theme ?? _pieceThemeMode;
     final baseImage = Image.asset(
-      'pieces/$piece.png',
+      'assets/pieces/$piece.png',
       width: width,
       height: height,
     );
@@ -11937,7 +11987,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             child: Opacity(
               opacity: 0.18,
               child: Image.asset(
-                'pieces/$piece.png',
+                'assets/pieces/$piece.png',
                 width: outlineWidth,
                 height: outlineHeight,
                 color: const Color(0xFFF7FBFF),

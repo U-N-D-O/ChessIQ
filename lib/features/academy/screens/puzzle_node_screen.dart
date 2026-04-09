@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
@@ -53,9 +54,16 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     with SingleTickerProviderStateMixin {
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
+  static const int _boardSfxPlayerPoolSize = 4;
 
   final PuzzleEngineService _engine = PuzzleEngineService();
   final Stopwatch _stopwatch = Stopwatch();
+  final Random _rng = Random();
+  final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
+    _boardSfxPlayerPoolSize,
+    (_) => AudioPlayer(),
+  );
+  int _nextBoardSfxPlayerIndex = 0;
 
   late final AnimationController _arrowFadeController;
   Timer? _examTicker;
@@ -69,6 +77,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   bool _playerIsBlack = false;
   bool _userMovesOnOddPly = true;
   bool _coachingOffScript = false;
+  bool _muteSounds = false;
 
   int _pendingRegretHalfMoves = 0;
 
@@ -108,6 +117,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       value: 1.0,
     );
     _examRemaining = widget.examDuration;
+    unawaited(_loadAudioPrefs());
   }
 
   @override
@@ -144,8 +154,21 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     _examTicker?.cancel();
     _stopwatch.stop();
     _arrowFadeController.dispose();
+    for (final player in _boardSfxPlayers) {
+      player.dispose();
+    }
     _engine.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAudioPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _muteSounds = prefs.getBool(_muteSoundsKey) ?? false;
+    });
   }
 
   Future<void> _loadPuzzle(
@@ -573,9 +596,12 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
 
+    final wasCapture = _isCaptureUci(attemptedUci);
     if (!_applyUciMove(attemptedUci)) {
       return;
     }
+
+    unawaited(_playBoardMoveSound(isCapture: wasCapture));
 
     await HapticFeedback.lightImpact();
     if (!_focusModeActive) {
@@ -606,6 +632,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final puzzle = _puzzle;
     final evalBefore = _evalWhitePawns;
 
+    final attemptedWasCapture = _isCaptureUci(attemptedUci);
     if (!_applyUciMove(attemptedUci)) {
       await HapticFeedback.heavyImpact();
       if (!mounted) return;
@@ -617,6 +644,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       });
       return;
     }
+
+    unawaited(_playBoardMoveSound(isCapture: attemptedWasCapture));
 
     if (puzzle != null) {
       await provider.recordPuzzleMiss(rating: puzzle.rating);
@@ -660,11 +689,16 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     var counterMove = analysis?.bestMove;
-    if (counterMove != null && !_applyUciMove(counterMove)) {
-      counterMove = null;
+    var counterWasCapture = false;
+    if (counterMove != null) {
+      counterWasCapture = _isCaptureUci(counterMove);
+      if (!_applyUciMove(counterMove)) {
+        counterMove = null;
+      }
     }
 
     if (counterMove != null) {
+      unawaited(_playBoardMoveSound(isCapture: counterWasCapture));
       _setGreyArrowFromUci(counterMove, animate: true);
       setState(() {
         _pendingRegretHalfMoves = 2;
@@ -706,6 +740,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     final expectedCounter = puzzle.moves[_lineIndex];
+    final expectedCounterWasCapture = _isCaptureUci(expectedCounter);
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (!mounted) return;
 
@@ -717,6 +752,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       });
       return;
     }
+
+    unawaited(_playBoardMoveSound(isCapture: expectedCounterWasCapture));
 
     _setGreyArrowFromUci(expectedCounter, animate: true);
 
@@ -749,6 +786,39 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
     final result = _game.move(payload);
     return result == true;
+  }
+
+  bool _isCaptureUci(String uci) {
+    if (uci.length < 4) {
+      return false;
+    }
+    final targetSquare = uci.substring(2, 4);
+    return _game.get(targetSquare) != null;
+  }
+
+  Future<void> _playBoardMoveSound({required bool isCapture}) async {
+    if (_muteSounds) {
+      return;
+    }
+
+    final assetPath = isCapture
+        ? 'sounds/take1.mp3'
+        : 'sounds/move${_rng.nextInt(8) + 1}.mp3';
+    final player = _boardSfxPlayers[_nextBoardSfxPlayerIndex];
+    _nextBoardSfxPlayerIndex =
+        (_nextBoardSfxPlayerIndex + 1) % _boardSfxPlayers.length;
+
+    try {
+      await player.stop();
+      await player.setReleaseMode(ReleaseMode.stop);
+      await player.play(
+        AssetSource(assetPath),
+        mode: PlayerMode.lowLatency,
+        volume: 1.0,
+      );
+    } catch (_) {
+      // Keep puzzle flow responsive if audio playback fails.
+    }
   }
 
   void _setGreyArrowFromUci(String? uci, {required bool animate}) {
@@ -1402,6 +1472,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       hapticsEnabled: hapticsEnabled,
       onSoundEnabledChanged: (enabled) async {
         await prefs.setBool(_muteSoundsKey, !enabled);
+        if (mounted) {
+          setState(() {
+            _muteSounds = !enabled;
+          });
+        }
       },
       onHapticsEnabledChanged: (enabled) async {
         await prefs.setBool(_hapticsEnabledKey, enabled);
@@ -1592,7 +1667,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Widget _buildPieceImage(AppThemeProvider theme, String assetId) {
-    final baseImage = Image.asset('pieces/$assetId.png', fit: BoxFit.contain);
+    final baseImage = Image.asset('assets/pieces/$assetId.png', fit: BoxFit.contain);
     final tinted = theme.useClassicPieces
         ? baseImage
         : ColorFiltered(
@@ -1628,7 +1703,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               child: Opacity(
                 opacity: 0.18,
                 child: Image.asset(
-                  'pieces/$assetId.png',
+                  'assets/pieces/$assetId.png',
                   fit: BoxFit.contain,
                   color: const Color(0xFFF7FBFF),
                   colorBlendMode: BlendMode.srcIn,

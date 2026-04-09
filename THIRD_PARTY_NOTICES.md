@@ -84,3 +84,8 @@ This project includes third-party audio assets used for coin and rewards feedbac
 - Creator: Floraphonic
 - License / usage note: Free for use. Royalty Free Audio
 - Source website: https://www.floraphonic.com/
+
+- Asset: `assets/sounds/academybuy.mp3`
+- Title: `Wood Surface Single Coin Payout 4`
+- Creator: floraphonic
+- Description / usage note: Coin, Toss, Flip sound effect. Free for use.

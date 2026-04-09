@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
@@ -39,6 +40,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   bool _didPrimeUi = false;
   String? _lastCelebrationKey;
   late final ConfettiController _confettiController;
+  final AudioPlayer _academyStoreSfxPlayer = AudioPlayer();
 
   @override
   void initState() {
@@ -51,6 +53,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   @override
   void dispose() {
     _confettiController.dispose();
+    _academyStoreSfxPlayer.dispose();
     super.dispose();
   }
 
@@ -321,7 +324,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  void _openStore(PuzzleAcademyProvider provider) {
+  void _openStore() {
     final scheme = Theme.of(context).colorScheme;
 
     showModalBottomSheet<void>(
@@ -332,46 +335,76 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       ),
       builder: (context) => SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Academy Store',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+        child: Consumer<PuzzleAcademyProvider>(
+          builder: (context, liveProvider, _) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Academy Store',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Coins: ${liveProvider.progress.coins}',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.82),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _StoreRow(
+                    icon: Icons.lightbulb_outline,
+                    title: 'Hint Pack',
+                    subtitle: '+3 Smart Hints',
+                    price: '25 coins',
+                    onBuy: () async {
+                      final ok = await liveProvider.buyHintPack();
+                      if (!mounted || !ok) return;
+                      unawaited(_playAcademyBuySound());
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _StoreRow(
+                    icon: Icons.skip_next_rounded,
+                    title: 'Skip Pack',
+                    subtitle: '+2 Tactical Skips',
+                    price: '35 coins',
+                    onBuy: () async {
+                      final ok = await liveProvider.buySkipPack();
+                      if (!mounted || !ok) return;
+                      unawaited(_playAcademyBuySound());
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              _StoreRow(
-                icon: Icons.lightbulb_outline,
-                title: 'Hint Pack',
-                subtitle: '+3 Smart Hints',
-                price: '25 coins',
-                onBuy: () async {
-                  final navigator = Navigator.of(context);
-                  final ok = await provider.buyHintPack();
-                  if (!mounted) return;
-                  if (ok) navigator.pop();
-                },
-              ),
-              const SizedBox(height: 10),
-              _StoreRow(
-                icon: Icons.skip_next_rounded,
-                title: 'Skip Pack',
-                subtitle: '+2 Tactical Skips',
-                price: '35 coins',
-                onBuy: () async {
-                  final navigator = Navigator.of(context);
-                  final ok = await provider.buySkipPack();
-                  if (!mounted) return;
-                  if (ok) navigator.pop();
-                },
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  Future<void> _playAcademyBuySound() async {
+    final prefs = await SharedPreferences.getInstance();
+    final muted = prefs.getBool(_muteSoundsKey) ?? false;
+    if (muted) {
+      return;
+    }
+
+    try {
+      await _academyStoreSfxPlayer.stop();
+      await _academyStoreSfxPlayer.setReleaseMode(ReleaseMode.stop);
+      await _academyStoreSfxPlayer.play(
+        AssetSource('sounds/academybuy.mp3'),
+        mode: PlayerMode.lowLatency,
+        volume: 1.0,
+      );
+    } catch (_) {
+      // Keep purchases smooth even if audio playback fails.
+    }
   }
 
   @override
@@ -682,7 +715,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         Padding(
           padding: const EdgeInsets.only(right: 16),
           child: IconButton(
-            onPressed: () => _openStore(provider),
+            onPressed: _openStore,
             icon: const Icon(Icons.storefront_outlined),
           ),
         ),
@@ -899,12 +932,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       showExamButton: provider.canTakeExam(node),
       bestExamScore: provider.bestExamResultForNode(node.key)?.score,
       lockedRequirementText: provider.unlockRequirementText(node),
-      showSpeed:
-          provider.hasSpeedDemonBadge(node.key) &&
-          node.startElo != 450 &&
-          node.startElo != 750 &&
-          node.startElo != 800 &&
-          node.startElo != 950,
       onExamTap: !provider.canTakeExam(node)
           ? null
           : () => _startExamForNode(provider, node, heroTag, monochrome),

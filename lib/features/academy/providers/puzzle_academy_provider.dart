@@ -110,7 +110,6 @@ enum PuzzleGridTileState { solved, skipped, nextAvailable, replayable, locked }
 class PuzzleSolveResult {
   final bool countedAsNewSolve;
   final bool beatGhostTime;
-  final bool earnedSpeedDemon;
   final bool earnedGoldCrown;
   final bool brilliant;
   final int? previousBestMs;
@@ -118,7 +117,6 @@ class PuzzleSolveResult {
   const PuzzleSolveResult({
     required this.countedAsNewSolve,
     required this.beatGhostTime,
-    required this.earnedSpeedDemon,
     required this.earnedGoldCrown,
     required this.brilliant,
     required this.previousBestMs,
@@ -135,9 +133,9 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   static const int _examUnlockSolveCount = 150;
   static const int _examPuzzleCount = 50;
   static const Duration _examDuration = Duration(hours: 1);
-  static const String _defaultUnlockedNodeKey = '1000_1050';
   static const Map<String, int> _examUnlockRequirementsByNodeKey =
       <String, int>{
+        '1000_1050': 2,
         '1500_1550': 6,
         '2100_2150': 6,
         '2500_2550': 3,
@@ -466,7 +464,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       return const PuzzleSolveResult(
         countedAsNewSolve: false,
         beatGhostTime: false,
-        earnedSpeedDemon: false,
         earnedGoldCrown: false,
         brilliant: false,
         previousBestMs: null,
@@ -489,13 +486,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
         (value) => min(value, solveMs),
         ifAbsent: () => solveMs,
       );
-
-    final speedDemonNodes = Set<String>.from(progress.speedDemonNodeKeys);
-    var earnedSpeedDemon = false;
-    if (beatGhostTime && !speedDemonNodes.contains(nodeKey)) {
-      speedDemonNodes.add(nodeKey);
-      earnedSpeedDemon = true;
-    }
 
     final completedDaily = Set<String>.from(progress.completedDailyPuzzleIds);
     var coins = _economyProvider?.coins ?? progress.coins;
@@ -527,7 +517,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       ..[nodeKey] = node.copyWith(
         attempts: node.attempts + 1,
         solvedCount: solvedCount,
-        speedDemon: speedDemonNodes.contains(nodeKey),
       );
 
     final earnedGoldCrown =
@@ -543,7 +532,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       completedDailyPuzzleIds: completedDaily,
       solvedPuzzleIds: solvedPuzzleIds,
       skippedPuzzleIds: skippedPuzzleIds,
-      speedDemonNodeKeys: speedDemonNodes,
       bestSolveTimeMsByPuzzleId: bestTimes,
     );
 
@@ -562,7 +550,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     return PuzzleSolveResult(
       countedAsNewSolve: !wasSolved,
       beatGhostTime: beatGhostTime,
-      earnedSpeedDemon: earnedSpeedDemon,
       earnedGoldCrown: earnedGoldCrown,
       brilliant: brilliant,
       previousBestMs: previousBestMs,
@@ -679,8 +666,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       progress.solvedPuzzleIds.contains(puzzleId);
   bool isPuzzleSkipped(String puzzleId) =>
       progress.skippedPuzzleIds.contains(puzzleId);
-  bool hasSpeedDemonBadge(String nodeKey) =>
-      progress.speedDemonNodeKeys.contains(nodeKey);
   int? bestSolveTimeFor(String puzzleId) =>
       progress.bestSolveTimeMsByPuzzleId[puzzleId];
   bool shouldShowSemesterIntro(String semesterId) =>
@@ -751,10 +736,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     return previous;
   }
 
-  bool _isDefaultUnlockedNode(EloNodeProgress node) {
-    return node.key == _defaultUnlockedNodeKey;
-  }
-
   bool _requiresPreviousSemesterExamGate(EloNodeProgress node) {
     return examUnlockRequirementForNode(node) > 0;
   }
@@ -789,7 +770,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       final previouslyUnlocked = node.unlocked;
       late final bool unlocked;
 
-      if (index == 0 || _isDefaultUnlockedNode(node)) {
+      if (index == 0) {
         unlocked = true;
       } else if (_requiresPreviousSemesterExamGate(node)) {
         unlocked = _hasRequiredPreviousSemesterExams(snapshot, node);
@@ -801,10 +782,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
                 previous.solvedCount >= previous.unlockTarget);
       }
 
-      updated[node.key] = node.copyWith(
-        unlocked: unlocked,
-        speedDemon: snapshot.speedDemonNodeKeys.contains(node.key),
-      );
+      updated[node.key] = node.copyWith(unlocked: unlocked);
     }
 
     return updated;
@@ -1167,7 +1145,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
         totalPuzzles: total,
         solvedCount: 0,
         attempts: 0,
-        unlocked: index == 0 || key == _defaultUnlockedNodeKey,
+        unlocked: index == 0,
         goldCrown: false,
         themeRewardUnlocked: false,
         speedDemon: false,
