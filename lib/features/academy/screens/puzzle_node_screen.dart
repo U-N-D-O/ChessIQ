@@ -1667,7 +1667,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Widget _buildPieceImage(AppThemeProvider theme, String assetId) {
-    final baseImage = Image.asset('assets/pieces/$assetId.png', fit: BoxFit.contain);
+    final baseImage = Image.asset(
+      'assets/pieces/$assetId.png',
+      fit: BoxFit.contain,
+    );
     final tinted = theme.useClassicPieces
         ? baseImage
         : ColorFiltered(

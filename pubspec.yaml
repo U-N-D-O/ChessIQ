@@ -74,7 +74,8 @@ flutter:
     - assets/QILAmodus.png
     - assets/logo.png
     - assets/logo2.png
-    - pieces/
+    - assets/quizcat.png
+    - assets/pieces/
     - openings/
     - COPYRIGHT.md
     - THIRD_PARTY_NOTICES.md
