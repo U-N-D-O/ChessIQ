@@ -202,7 +202,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   static const List<BotCharacter> _botCharacters = [
     BotCharacter(
       rank: 1,
-      name: 'Hammy',
+      name: 'Mochi Gearheart',
       description:
           'I just wanted to see the pretty wooden pieces... why is the timer making that noise?',
       elo: 100,
@@ -217,7 +217,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     ),
     BotCharacter(
       rank: 2,
-      name: 'Ok.',
+      name: 'Checkmate Carl',
       description: 'Yeah, sure. Mate in three? 👍.',
       elo: 450,
       limitStrength: true,
@@ -231,7 +231,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     ),
     BotCharacter(
       rank: 3,
-      name: 'Buff Doggo',
+      name: 'Rex Halfcheck',
       description:
           'Do you even lift (your pieces), bro? I\'m going to crush your center like it\'s leg day.',
       elo: 800,
@@ -246,9 +246,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     ),
     BotCharacter(
       rank: 4,
-      name: 'Handsome Squid',
+      name: 'Octavian Inkveil',
       description:
-          'Oh, please. Your opening is as unrefined as a dry burger. Witness true brilliance.',
+          'Oh, please. Your opening is as unrefined as a one-move threat. Witness true brilliance.',
       elo: 1150,
       limitStrength: true,
       multiPv: 3,
@@ -261,7 +261,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     ),
     BotCharacter(
       rank: 5,
-      name: 'Master Chud',
+      name: 'Master Prime',
       description:
           'The engine predicted your defeat ten moves ago. The swamp consumes all.',
       elo: 1500,
@@ -440,7 +440,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Future<void> _playMenuMusic() async {
     if (_muteSounds || _menuMusicPlaying) return;
     try {
-      await _menuAudioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _menuAudioPlayer.setReleaseMode(ReleaseMode.stop);
       await _menuAudioPlayer.play(
         AssetSource('sounds/main.mp3'),
         mode: PlayerMode.mediaPlayer,
