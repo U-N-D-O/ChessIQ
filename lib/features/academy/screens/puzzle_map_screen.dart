@@ -13,6 +13,7 @@ import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
 import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,6 +42,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   String? _lastCelebrationKey;
   late final ConfettiController _confettiController;
   final AudioPlayer _academyStoreSfxPlayer = AudioPlayer();
+  late final Ticker _academyBlueDotTicker;
+  late final ValueNotifier<double> _academyBlueDotTime;
+  late final double _academyBlueDotPhase;
+  late final double _academyBlueDotShapeSeed;
+  late final double _academyBlueDotTrajectoryNoise;
+  late final double _academyBlueDotRadius;
+  Duration _academyBlueDotLastTick = Duration.zero;
 
   @override
   void initState() {
@@ -48,11 +56,28 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     _confettiController = ConfettiController(
       duration: const Duration(milliseconds: 2200),
     );
+
+    final random = Random();
+    _academyBlueDotPhase = random.nextDouble() * 2 * pi;
+    _academyBlueDotShapeSeed = random.nextDouble() * 3.2;
+    _academyBlueDotTrajectoryNoise = random.nextDouble();
+    _academyBlueDotRadius = 0.58 + random.nextDouble() * 0.12;
+
+    _academyBlueDotTime = ValueNotifier<double>(0.0);
+    _academyBlueDotTicker = createTicker((elapsed) {
+      final delta = elapsed - _academyBlueDotLastTick;
+      _academyBlueDotLastTick = elapsed;
+      final nextTime =
+          (_academyBlueDotTime.value + delta.inMilliseconds / 1000.0) % 1024.0;
+      _academyBlueDotTime.value = nextTime;
+    })..start();
   }
 
   @override
   void dispose() {
     _confettiController.dispose();
+    _academyBlueDotTicker.dispose();
+    _academyBlueDotTime.dispose();
     _academyStoreSfxPlayer.dispose();
     super.dispose();
   }
@@ -419,7 +444,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             widget.cinematicThemeEnabled;
 
         if (provider.isLoading || !provider.initialized) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: _buildAcademyLoadingIndicator(materialTheme));
         }
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -525,6 +550,37 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     return IgnorePointer(
       child: Stack(
         children: [
+          ValueListenableBuilder<double>(
+            valueListenable: _academyBlueDotTime,
+            builder: (context, time, child) {
+              return Align(
+                alignment: _academyDotAlignment(
+                  _academyBlueDotPhase,
+                  0.52,
+                  _academyBlueDotRadius,
+                  time,
+                  _academyBlueDotTrajectoryNoise,
+                  _academyBlueDotShapeSeed,
+                ),
+                child: child,
+              );
+            },
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5AAEE8).withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+            ),
+          ),
           Align(
             alignment: const Alignment(-0.88, -0.82),
             child: Container(
@@ -570,6 +626,97 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                                 : const Color(0xFFD8B640))
                             .withValues(alpha: cinematic ? 0.10 : 0.16),
                     blurRadius: 90,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Alignment _academyDotAlignment(
+    double phase,
+    double speed,
+    double radius,
+    double pulse,
+    double trajectoryNoise,
+    double shapeSeed,
+  ) {
+    final time = pulse * 1.26 * speed + phase + shapeSeed;
+    final x =
+        sin(time * (1.25 + shapeSeed * 0.14)) * radius +
+        sin(time * (2.6 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.35) + 2.1) * 0.035;
+    final y =
+        cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
+        cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.28) + 0.6) * 0.035;
+    final driftX = sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.015;
+    final driftY = cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.015;
+    final jitterX =
+        sin(
+          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
+              trajectoryNoise * 3.7,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final jitterY =
+        cos(
+          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
+              trajectoryNoise * 2.9,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final raw = Offset(x + driftX + jitterX, y + driftY + jitterY);
+    final distance = raw.distance;
+    const limit = 1.35;
+    final returnFactor = distance > limit ? limit / distance : 1.0;
+    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
+  }
+
+  Widget _buildAcademyLoadingIndicator(ThemeData theme) {
+    const blue = Color(0xFF5AAEE8);
+    return SizedBox(
+      width: 92,
+      height: 92,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: blue.withOpacity(
+                theme.brightness == Brightness.dark ? 0.10 : 0.08,
+              ),
+              border: Border.all(color: blue.withOpacity(0.24), width: 4),
+            ),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: _academyBlueDotTime,
+            builder: (context, time, child) {
+              final alignment = _academyDotAlignment(
+                _academyBlueDotPhase,
+                0.72,
+                0.70,
+                time,
+                _academyBlueDotTrajectoryNoise,
+                _academyBlueDotShapeSeed,
+              );
+              return Align(alignment: alignment, child: child);
+            },
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: blue,
+                boxShadow: [
+                  BoxShadow(
+                    color: blue.withOpacity(0.35),
+                    blurRadius: 14,
+                    spreadRadius: 1,
                   ),
                 ],
               ),
@@ -701,7 +848,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           alpha: theme.brightness == Brightness.dark ? 0.12 : 0.05,
         ),
         scheme.surface,
-      ).withValues(alpha: 0.94),
+      ).withValues(alpha: 0.90),
       leading: IconButton(
         onPressed: widget.onBack,
         icon: const Icon(Icons.arrow_back_rounded),
@@ -868,7 +1015,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 alpha: theme.brightness == Brightness.dark ? 0.12 : 0.04,
               ),
               scheme.surface,
-            ).withValues(alpha: 0.92),
+            ).withValues(alpha: 0.88),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
           ),

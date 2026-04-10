@@ -758,6 +758,10 @@ class PuzzleAcademyProvider extends ChangeNotifier {
         required;
   }
 
+  bool _requiresPreviousNodeSolveTarget(EloNodeProgress node) {
+    return node.startElo > 450 && node.startElo <= 800;
+  }
+
   Map<String, EloNodeProgress> _normalizedNodesFor(
     PuzzleProgressModel snapshot,
   ) {
@@ -776,10 +780,14 @@ class PuzzleAcademyProvider extends ChangeNotifier {
         unlocked = _hasRequiredPreviousSemesterExams(snapshot, node);
       } else {
         final previous = updated[nodes[index - 1].key] ?? nodes[index - 1];
-        unlocked =
-            previouslyUnlocked ||
-            (previous.unlocked &&
-                previous.solvedCount >= previous.unlockTarget);
+        if (_requiresPreviousNodeSolveTarget(node)) {
+          unlocked = previouslyUnlocked || previous.unlocked;
+        } else {
+          unlocked =
+              previouslyUnlocked ||
+              (previous.unlocked &&
+                  previous.solvedCount >= previous.unlockTarget);
+        }
       }
 
       updated[node.key] = node.copyWith(unlocked: unlocked);

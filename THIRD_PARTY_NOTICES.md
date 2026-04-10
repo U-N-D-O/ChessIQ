@@ -2,6 +2,8 @@
 
 This project incorporates, references, or relies on third-party software, data, and services. The notices below are provided for attribution and licensing transparency.
 
+
+
 ## 1. Chess Engine
 
 This project is designed to support the Stockfish chess engine for local analysis.

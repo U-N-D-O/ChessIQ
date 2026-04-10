@@ -63,6 +63,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     _boardSfxPlayerPoolSize,
     (_) => AudioPlayer(),
   );
+  final AudioPlayer _rewardAdAudioPlayer = AudioPlayer();
   int _nextBoardSfxPlayerIndex = 0;
 
   late final AnimationController _arrowFadeController;
@@ -78,6 +79,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   bool _userMovesOnOddPly = true;
   bool _coachingOffScript = false;
   bool _muteSounds = false;
+  bool _dailyRewardClaimed = false;
 
   int _pendingRegretHalfMoves = 0;
 
@@ -157,6 +159,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     for (final player in _boardSfxPlayers) {
       player.dispose();
     }
+    _rewardAdAudioPlayer.dispose();
     _engine.dispose();
     super.dispose();
   }
@@ -802,8 +805,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     final assetPath = isCapture
-        ? 'sounds/take1.mp3'
-        : 'sounds/move${_rng.nextInt(8) + 1}.mp3';
+        ? 'sounds/take1.wav'
+        : 'sounds/move${_rng.nextInt(8) + 1}.wav';
     final player = _boardSfxPlayers[_nextBoardSfxPlayerIndex];
     _nextBoardSfxPlayerIndex =
         (_nextBoardSfxPlayerIndex + 1) % _boardSfxPlayers.length;
@@ -1068,6 +1071,76 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       previousEntry.key,
       historicalView: true,
     );
+  }
+
+  Future<void> _claimDailySequenceReward(PuzzleAcademyProvider provider) async {
+    final economy = context.read<EconomyProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final rewardEarned = await AdService.instance.showRewardedAd();
+    if (!rewardEarned || !mounted) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Reward ad unavailable or not completed.'),
+          ),
+        );
+      return;
+    }
+
+    const rewardAmount = 200;
+    _dailyRewardClaimed = true;
+    await economy.addCoins(rewardAmount);
+    await provider.syncCoinsFromStoreState(notify: true);
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final navigator = Navigator.of(dialogContext);
+        return AlertDialog(
+          title: const Text('Daily Challenge Complete!'),
+          content: Text(
+            '+$rewardAmount coins awarded. Great work completing today’s daily challenge!',
+            style: theme.textTheme.bodyMedium,
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () async {
+                try {
+                  await _rewardAdAudioPlayer.stop();
+                  await _rewardAdAudioPlayer.setReleaseMode(ReleaseMode.stop);
+                  await _rewardAdAudioPlayer.setSource(
+                    AssetSource('sounds/coinbag.mp3'),
+                  );
+                  await _rewardAdAudioPlayer.setVolume(1.0);
+                  await _rewardAdAudioPlayer.resume();
+                } catch (_) {
+                  // Ignore sound playback failures.
+                }
+                navigator.pop();
+              },
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        const SnackBar(content: Text('Reward claimed! +200 coins.')),
+      );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        const SnackBar(content: Text('Reward claimed! +200 coins.')),
+      );
   }
 
   Future<void> _handleSquareTap(String square) async {
@@ -1340,6 +1413,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final currentRating = _puzzle?.rating ?? widget.node.startElo;
+    final displayedStartElo = (currentRating ~/ 50) * 50;
     final total = _usesCustomSequence
         ? _activeSequence.length
         : provider.gridPuzzleCountForNode(widget.node);
@@ -1389,7 +1464,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 ),
                 child: Center(
                   child: Text(
-                    '${widget.node.startElo}',
+                    '$displayedStartElo',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: scheme.onSurface,
@@ -1920,6 +1995,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         (_solved || currentSolvedHistorically || currentSkippedHistorically) &&
         nextPuzzle != null &&
         nextPuzzle.value.puzzleId != _puzzle?.puzzleId;
+    final isDailyEndSequence =
+        _isDailySequence && _puzzleIndex == _activeSequence.length - 1;
+    final canClaimDailyReward =
+        isDailyEndSequence &&
+        !_dailyRewardClaimed &&
+        (_solved || currentSolvedHistorically || currentSkippedHistorically);
+    final showDailyRewardButton = isDailyEndSequence;
     const regretColor = Color(0xFF6FE7FF);
     const hintColor = Color(0xFF71B7FF);
     const skipColor = Color(0xFFE0A6FF);
@@ -2002,6 +2084,24 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       label: const Text('Next Puzzle'),
     );
 
+    final dailyRewardButton = FilledButton.icon(
+      onPressed: canClaimDailyReward
+          ? () => _claimDailySequenceReward(provider)
+          : null,
+      style: FilledButton.styleFrom(
+        backgroundColor: canClaimDailyReward
+            ? nextEnabledColor
+            : nextDisabledColor,
+        foregroundColor: canClaimDailyReward
+            ? const Color(0xFF07131F)
+            : Colors.white.withValues(alpha: 0.88),
+        disabledBackgroundColor: nextDisabledColor,
+        disabledForegroundColor: Colors.white.withValues(alpha: 0.88),
+      ),
+      icon: const Icon(Icons.emoji_events_rounded),
+      label: const Text('Get Reward'),
+    );
+
     Widget withDisabledOpacity(Widget child, bool enabled) {
       return Opacity(opacity: enabled ? 1.0 : 0.3, child: child);
     }
@@ -2038,7 +2138,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             SizedBox(
               width: double.infinity,
               height: 44,
-              child: withDisabledOpacity(nextButton, canAdvanceToNext),
+              child: withDisabledOpacity(
+                showDailyRewardButton ? dailyRewardButton : nextButton,
+                showDailyRewardButton ? canClaimDailyReward : canAdvanceToNext,
+              ),
             ),
           ],
         ),
@@ -2064,7 +2167,12 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               Expanded(child: withDisabledOpacity(previousButton, hasPrevious)),
               const SizedBox(width: 10),
               Expanded(
-                child: withDisabledOpacity(nextButton, canAdvanceToNext),
+                child: withDisabledOpacity(
+                  showDailyRewardButton ? dailyRewardButton : nextButton,
+                  showDailyRewardButton
+                      ? canClaimDailyReward
+                      : canAdvanceToNext,
+                ),
               ),
             ],
           ),

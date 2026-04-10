@@ -367,18 +367,18 @@ class _PuzzleNodeCard extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: locked
                   ? [
-                      cardBase.withValues(alpha: 0.94),
+                      cardBase.withValues(alpha: 0.90),
                       Color.alphaBlend(
                         scheme.primary.withValues(alpha: 0.02),
                         scheme.surface,
                       ).withValues(alpha: 0.90),
                     ]
                   : [
-                      cardBase.withValues(alpha: 0.96),
+                      cardBase.withValues(alpha: 0.90),
                       Color.alphaBlend(
                         scheme.secondary.withValues(alpha: 0.05),
                         scheme.surface,
-                      ).withValues(alpha: 0.92),
+                      ).withValues(alpha: 0.90),
                     ],
             ),
             borderRadius: BorderRadius.circular(22),

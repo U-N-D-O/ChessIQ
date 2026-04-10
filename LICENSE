@@ -1,24 +1,21 @@
-ChessIQ
+ChessIQ Proprietary License
+
 Copyright (c) 2026 Qila. All rights reserved.
 
-Legal entity details:
-- App name: ChessIQ
-- Developing division: QILA modus (division of Qila)
-- Registered legal owner: Qila
-- CVR no.: 42666297
+Entity Information:
 
-This repository contains original software and assets developed by the QILA modus division and owned by Qila.
-No permission is granted to copy, modify, distribute, sublicense, or sell this
-work, in whole or in part, except with prior written permission from Qila.
+    App Name: ChessIQ
+    Owner: Qila (CVR no.: 42666297)
+    Division: QILA modus
+    Jurisdiction: Greenland / Kingdom of Denmark
 
-Third-party components included or referenced in this repository are licensed
-by their respective owners under their own terms.
-See THIRD_PARTY_NOTICES.md and licenses/ for details.
+This software and all associated original assets (images, UI/UX design, logic, and text) are the exclusive property of Qila. No part of this software may be copied, modified, distributed, sublicensed, or sold without express prior written permission from Qila.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
-DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
-OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
-OR OTHER DEALINGS IN THE SOFTWARE.
+Third-Party Components:
+This software utilizes third-party libraries and data. These remain the property of their respective owners and are used under license. See THIRD_PARTY_NOTICES.md for full attributions.
+
+Disclaimer of Warranty:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE.
+
+Contact & Support:
+For licensing inquiries or official questions, please visit modus.qila.gl or contact modus@qila.gl.

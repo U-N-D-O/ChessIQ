@@ -6,10 +6,10 @@ import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
-
-class PuzzleGridScreen extends StatelessWidget {
+class PuzzleGridScreen extends StatefulWidget {
   const PuzzleGridScreen({
     super.key,
     required this.node,
@@ -22,17 +22,84 @@ class PuzzleGridScreen extends StatelessWidget {
   final bool cinematicThemeEnabled;
 
   @override
+  State<PuzzleGridScreen> createState() => _PuzzleGridScreenState();
+}
+
+class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
+  late final ScrollController _scrollController;
+  late final ValueNotifier<double> _scrollForce;
+  double _lastScrollPosition = 0.0;
+  bool _didScrollToFrontier = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController()..addListener(_handleScroll);
+    _scrollForce = ValueNotifier<double>(0.0);
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position.pixels;
+    final delta = position - _lastScrollPosition;
+    _lastScrollPosition = position;
+
+    final rawImpulse = (-delta / 20).clamp(-1.2, 1.2);
+    final nextForce = (_scrollForce.value * 0.2) + (rawImpulse * 0.8);
+    _scrollForce.value = nextForce.abs() < 0.001 ? 0.0 : nextForce;
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_handleScroll);
+    _scrollController.dispose();
+    _scrollForce.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didScrollToFrontier) return;
+    _didScrollToFrontier = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final academy = context.read<PuzzleAcademyProvider>();
+      final frontier = academy.frontierPuzzleIndexForNode(widget.node);
+      if (frontier <= 0) return;
+
+      final screenWidth = MediaQuery.sizeOf(context).width;
+      final gridWidth = screenWidth - 32.0;
+      final crossAxisCount = max(4, (gridWidth / 78).floor());
+      final spacing = 10.0;
+      final totalSpacing = (crossAxisCount - 1) * spacing;
+      final tileSize = (gridWidth - totalSpacing) / crossAxisCount;
+      final rowIndex = frontier ~/ crossAxisCount;
+      final offset = rowIndex * (tileSize + spacing);
+
+      if (!_scrollController.hasClients) return;
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(offset.clamp(0.0, maxScroll));
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final academy = context.watch<PuzzleAcademyProvider>();
     final appTheme = context.watch<AppThemeProvider>();
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final monochrome = appTheme.isMonochrome || cinematicThemeEnabled;
-    final total = academy.gridPuzzleCountForNode(node);
-    final frontier = academy.frontierPuzzleIndexForNode(node);
+    final monochrome = appTheme.isMonochrome || widget.cinematicThemeEnabled;
+    final total = academy.gridPuzzleCountForNode(widget.node);
+    final frontier = academy.frontierPuzzleIndexForNode(widget.node);
     final content = Stack(
       children: [
-        Positioned.fill(child: _GridBackdrop(monochrome: monochrome)),
+        Positioned.fill(
+          child: _GridBackdrop(
+            monochrome: monochrome,
+            scrollForce: _scrollForce,
+          ),
+        ),
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -62,7 +129,7 @@ class PuzzleGridScreen extends StatelessWidget {
                       child: Row(
                         children: [
                           Hero(
-                            tag: heroTag,
+                            tag: widget.heroTag,
                             child: Material(
                               color: Colors.transparent,
                               child: Container(
@@ -85,14 +152,14 @@ class PuzzleGridScreen extends StatelessWidget {
                                     ],
                                   ),
                                   border: Border.all(
-                                    color: node.goldCrown
+                                    color: widget.node.goldCrown
                                         ? const Color(0xFFD8B640)
                                         : scheme.primary,
                                   ),
                                 ),
                                 child: Center(
                                   child: Text(
-                                    '${node.startElo}',
+                                    '${widget.node.startElo}',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w800,
                                       color: scheme.onSurface,
@@ -108,7 +175,7 @@ class PuzzleGridScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Elo Bracket ${node.title}',
+                                  'Elo Bracket ${widget.node.title}',
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w800,
@@ -117,7 +184,7 @@ class PuzzleGridScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Green is solved, amber is skipped, cyan is the next live puzzle, and dimmed squares stay locked until you reach them.',
+                                  'Green is solved, amber is skipped, cyan is the next live puzzle, and dimmed squares stay locked until you reach them. Once you have finished 150 puzzles in this course, the course exam becomes available.',
                                   style: TextStyle(
                                     color: scheme.onSurface.withValues(
                                       alpha: 0.72,
@@ -150,6 +217,7 @@ class PuzzleGridScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 Expanded(
                   child: GridView.builder(
+                    controller: _scrollController,
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: max(
                         4,
@@ -161,9 +229,12 @@ class PuzzleGridScreen extends StatelessWidget {
                     ),
                     itemCount: total,
                     itemBuilder: (context, index) {
-                      final puzzle = academy.puzzleForNodeIndex(node, index);
+                      final puzzle = academy.puzzleForNodeIndex(
+                        widget.node,
+                        index,
+                      );
                       final tileState = academy.tileStateForNodeIndex(
-                        node,
+                        widget.node,
                         index,
                       );
                       return _GridTile(
@@ -172,24 +243,24 @@ class PuzzleGridScreen extends StatelessWidget {
                         isFrontier: index == frontier,
                         enabled:
                             puzzle != null &&
-                            academy.canOpenGridIndex(node, index),
+                            academy.canOpenGridIndex(widget.node, index),
                         onTap:
                             puzzle == null ||
-                                !academy.canOpenGridIndex(node, index)
+                                !academy.canOpenGridIndex(widget.node, index)
                             ? null
                             : () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
                                     builder: (_) => PuzzleNodeScreen(
-                                      node: node,
-                                      heroTag: heroTag,
+                                      node: widget.node,
+                                      heroTag: widget.heroTag,
                                       initialPuzzle: puzzle,
                                       initialPuzzleIndex: index,
                                       initialReviewMode:
                                           tileState !=
                                           PuzzleGridTileState.nextAvailable,
                                       cinematicThemeEnabled:
-                                          cinematicThemeEnabled,
+                                          widget.cinematicThemeEnabled,
                                       onExitToMap: () {
                                         Navigator.of(context).pop();
                                         Navigator.of(context).pop();
@@ -212,13 +283,13 @@ class PuzzleGridScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: scheme.surface,
       appBar: AppBar(
-        title: Text('Level ${node.title}'),
+        title: Text('Level ${widget.node.title}'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: Center(
               child: Text(
-                '${node.solvedCount}/${node.masteryTarget}',
+                '${widget.node.solvedCount}/${widget.node.masteryTarget}',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
@@ -230,10 +301,61 @@ class PuzzleGridScreen extends StatelessWidget {
   }
 }
 
-class _GridBackdrop extends StatelessWidget {
-  const _GridBackdrop({required this.monochrome});
+class _GridBackdrop extends StatefulWidget {
+  const _GridBackdrop({required this.monochrome, required this.scrollForce});
 
   final bool monochrome;
+  final ValueNotifier<double> scrollForce;
+
+  @override
+  State<_GridBackdrop> createState() => _GridBackdropState();
+}
+
+class _GridBackdropState extends State<_GridBackdrop>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _blueDotTicker;
+  late final ValueNotifier<double> _blueDotTime;
+  late Duration _blueDotLastTick;
+  late final double _blueDotPhase;
+  late final double _blueDotShapeSeed;
+  late final double _blueDotTrajectoryNoise;
+  late final double _blueDotRadius;
+  double _blueDotScrollVelocity = 0.0;
+  double _blueDotScrollOffset = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _blueDotTime = ValueNotifier<double>(0.0);
+    _blueDotLastTick = Duration.zero;
+    _blueDotTicker = createTicker((elapsed) {
+      final delta = elapsed - _blueDotLastTick;
+      _blueDotLastTick = elapsed;
+      final dt = delta.inMilliseconds / 1000.0;
+      _blueDotTime.value += dt;
+      final impulse = widget.scrollForce.value;
+      if (impulse != 0.0) {
+        _blueDotScrollVelocity += impulse * 0.7;
+        widget.scrollForce.value = 0.0;
+      }
+      _blueDotScrollVelocity *= 0.93;
+      _blueDotScrollOffset += _blueDotScrollVelocity * dt;
+      _blueDotScrollOffset = _blueDotScrollOffset.clamp(-1.15, 1.15);
+    })..start();
+
+    final random = Random();
+    _blueDotPhase = random.nextDouble() * 2 * pi;
+    _blueDotShapeSeed = random.nextDouble() * 3.2;
+    _blueDotTrajectoryNoise = random.nextDouble();
+    _blueDotRadius = 0.58 + random.nextDouble() * 0.12;
+  }
+
+  @override
+  void dispose() {
+    _blueDotTicker.dispose();
+    _blueDotTime.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +364,7 @@ class _GridBackdrop extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: monochrome
+          colors: widget.monochrome
               ? const [Color(0xFF070707), Color(0xFF141414)]
               : const [Color(0xFF06111B), Color(0xFF0E2234)],
         ),
@@ -257,7 +379,7 @@ class _GridBackdrop extends StatelessWidget {
               height: 220,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: monochrome
+                color: widget.monochrome
                     ? Colors.white10
                     : const Color(0xFF6FE7FF).withValues(alpha: 0.12),
               ),
@@ -271,15 +393,89 @@ class _GridBackdrop extends StatelessWidget {
               height: 260,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: monochrome
+                color: widget.monochrome
                     ? Colors.white12
                     : const Color(0xFFD8B640).withValues(alpha: 0.10),
+              ),
+            ),
+          ),
+          ValueListenableBuilder<double>(
+            valueListenable: _blueDotTime,
+            builder: (context, time, child) {
+              return Align(
+                alignment: _gridBackdropDotAlignment(
+                  _blueDotPhase,
+                  0.55,
+                  _blueDotRadius,
+                  time,
+                  _blueDotTrajectoryNoise,
+                  _blueDotShapeSeed,
+                  _blueDotScrollOffset,
+                ),
+                child: child,
+              );
+            },
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5AAEE8).withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    spreadRadius: 3,
+                  ),
+                ],
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Alignment _gridBackdropDotAlignment(
+    double phase,
+    double speed,
+    double radius,
+    double pulse,
+    double trajectoryNoise,
+    double shapeSeed,
+    double scrollOffset,
+  ) {
+    final time = pulse * 1.26 * speed + phase + shapeSeed;
+    final x =
+        sin(time * (1.25 + shapeSeed * 0.14)) * radius +
+        sin(time * (2.6 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.35) + 2.1) * 0.035;
+    final y =
+        cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
+        cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.28) + 0.6) * 0.035;
+    final driftX = sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.015;
+    final driftY = cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.015;
+    final jitterX =
+        sin(
+          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
+              trajectoryNoise * 3.7,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final jitterY =
+        cos(
+          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
+              trajectoryNoise * 2.9,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final raw = Offset(
+      x + driftX + jitterX + (scrollOffset * 0.03),
+      y + driftY + jitterY + (scrollOffset * 0.90),
+    );
+    final distance = raw.distance;
+    const limit = 1.35;
+    final returnFactor = distance > limit ? limit / distance : 1.0;
+    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
   }
 }
 

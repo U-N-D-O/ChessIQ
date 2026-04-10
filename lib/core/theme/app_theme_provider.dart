@@ -32,7 +32,7 @@ class AppThemeProvider extends ChangeNotifier {
   static const List<AppBoardPalette> _boardPalettes = <AppBoardPalette>[
     AppBoardPalette(
       darkSquare: Color(0xFF2C3E50),
-      lightSquare: Color(0x3395A5A6),
+      lightSquare: Color.fromARGB(220, 255, 255, 255),
     ),
     AppBoardPalette(
       darkSquare: Color(0xFFB58863),

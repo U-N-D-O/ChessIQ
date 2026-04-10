@@ -74,6 +74,37 @@ class _RenderedMoveToken {
   });
 }
 
+class _MenuSparkParticle {
+  Offset position;
+  final Offset velocity;
+  final Color color;
+
+  _MenuSparkParticle({
+    required this.position,
+    required this.velocity,
+    required this.color,
+  });
+}
+
+enum _CreditsBackdropDotRole { green, blue, yellow }
+
+class _CreditsBackdropDot {
+  Offset position;
+  Offset velocity;
+  final Color color;
+  final double radius;
+  final _CreditsBackdropDotRole role;
+  double contactDuration = 0.0;
+
+  _CreditsBackdropDot({
+    required this.position,
+    required this.velocity,
+    required this.color,
+    required this.radius,
+    required this.role,
+  });
+}
+
 class ChessAnalysisPage extends StatefulWidget {
   const ChessAnalysisPage({super.key});
   @override
@@ -116,6 +147,36 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   final AudioPlayer _introAudioPlayer = AudioPlayer();
   final AudioPlayer _menuAudioPlayer = AudioPlayer();
   final AudioPlayer _sfxAudioPlayer = AudioPlayer();
+  final List<_MenuSparkParticle> _menuSparkParticles = <_MenuSparkParticle>[];
+  final List<_CreditsBackdropDot> _creditsBackdropDots =
+      <_CreditsBackdropDot>[];
+  final Random _creditsBackdropRandom = Random();
+  bool _creditsDialogOpen = false;
+  bool _menuDotsPreviouslyColliding = false;
+  Offset _blueMenuDotPosition = Offset.zero;
+  Offset _yellowMenuDotPosition = Offset.zero;
+  Offset _blueMenuDotVelocity = Offset.zero;
+  Offset _yellowMenuDotVelocity = Offset.zero;
+  late final ScrollController _botSetupScrollController;
+  Size? _botSetupLastLayoutSize;
+  double _botSetupLastScrollPosition = 0.0;
+  double _botSetupScrollForce = 0.0;
+  double _blueDotScrollVelocity = 0.0;
+  double _blueDotScrollOffset = 0.0;
+  DateTime? _menuSparkLastUpdate;
+  DateTime? _creditsBackdropLastUpdate;
+  double _menuDotTime = 0.0;
+  double _blueYellowContactTime = 0.0;
+  late final double _blueDotPhase;
+  late final double _yellowDotPhase;
+  late final double _blueDotSpeed;
+  late final double _yellowDotSpeed;
+  late final double _blueDotRadius;
+  late final double _yellowDotRadius;
+  late final double _blueDotTrajectoryNoise;
+  late final double _yellowDotTrajectoryNoise;
+  late final double _blueDotShapeSeed;
+  late final double _yellowDotShapeSeed;
   static const int _boardSfxPlayerPoolSize = 4;
   final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
     _boardSfxPlayerPoolSize,
@@ -370,6 +431,40 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       vsync: this,
       duration: const Duration(milliseconds: 1600),
     )..repeat();
+    _pulseController.addListener(_updateMenuSparks);
+    _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
+    _botSetupScrollController = ScrollController()
+      ..addListener(_handleBotSetupScroll);
+    _menuSparkLastUpdate = DateTime.now();
+    _creditsBackdropLastUpdate = DateTime.now();
+    final random = Random();
+    _blueDotPhase = random.nextDouble() * 2 * pi;
+    _yellowDotPhase = random.nextDouble() * 2 * pi;
+    _blueDotSpeed = (0.28 + random.nextDouble() * 0.12) * 1.40;
+    _yellowDotSpeed = (0.25 + random.nextDouble() * 0.12) * 1.40;
+    _blueDotRadius = 0.58 + random.nextDouble() * 0.12;
+    _yellowDotRadius = 0.52 + random.nextDouble() * 0.12;
+    _blueDotTrajectoryNoise = random.nextDouble();
+    _yellowDotTrajectoryNoise = random.nextDouble();
+    _blueDotShapeSeed = random.nextDouble() * 3.2;
+    _yellowDotShapeSeed = random.nextDouble() * 3.2;
+    _menuDotTime = 0.0;
+    _blueMenuDotPosition = Offset(
+      cos(_blueDotPhase) * 0.58,
+      sin(_blueDotPhase) * 0.56,
+    );
+    _yellowMenuDotPosition = Offset(
+      cos(_yellowDotPhase) * 0.54,
+      sin(_yellowDotPhase) * 0.52,
+    );
+    _blueMenuDotVelocity = Offset(
+      0.18 - random.nextDouble() * 0.32,
+      0.18 - random.nextDouble() * 0.32,
+    );
+    _yellowMenuDotVelocity = Offset(
+      0.18 - random.nextDouble() * 0.32,
+      0.18 - random.nextDouble() * 0.32,
+    );
     _introController =
         AnimationController(
           vsync: this,
@@ -419,6 +514,425 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _menuRevealController.forward(from: 0);
       _sectionTransitionController.forward(from: 0);
     });
+  }
+
+  void _updateMenuSparks() {
+    final now = DateTime.now();
+    final last = _menuSparkLastUpdate ?? now;
+    final dt = now.difference(last).inMilliseconds / 1000.0;
+    _menuSparkLastUpdate = now;
+
+    _menuDotTime += dt;
+    if (_menuDotTime > 1e6) {
+      _menuDotTime %= 2 * pi;
+    }
+
+    final pulse = _menuDotTime;
+    final blueTargetAlignment = _menuDotAlignment(
+      _blueDotPhase,
+      _blueDotSpeed,
+      _blueDotRadius,
+      pulse,
+      _blueDotTrajectoryNoise,
+      _blueDotShapeSeed,
+      false,
+    );
+    final yellowTargetAlignment = _menuDotAlignment(
+      _yellowDotPhase,
+      _yellowDotSpeed,
+      _yellowDotRadius,
+      pulse,
+      _yellowDotTrajectoryNoise,
+      _yellowDotShapeSeed,
+      true,
+    );
+    final blueTarget = Offset(blueTargetAlignment.x, blueTargetAlignment.y);
+    final yellowTarget = Offset(
+      yellowTargetAlignment.x * -1.0,
+      yellowTargetAlignment.y,
+    );
+
+    final separation = _blueMenuDotPosition - _yellowMenuDotPosition;
+    final collisionDistance = separation.distance;
+    final currentlyColliding = collisionDistance < 0.045;
+
+    if (currentlyColliding && !_menuDotsPreviouslyColliding) {
+      final origin = Offset(
+        (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
+        (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
+      );
+      final particleCount = Random().nextInt(2) + 1;
+      for (var i = 0; i < particleCount; i++) {
+        final angle = Random().nextDouble() * 2 * pi;
+        final velocity = Offset(
+          cos(angle) * (0.8 + Random().nextDouble() * 0.6),
+          sin(angle) * (0.8 + Random().nextDouble() * 0.6),
+        );
+        _menuSparkParticles.add(
+          _MenuSparkParticle(
+            position: origin,
+            velocity: velocity,
+            color: Colors.green.withValues(alpha: 0.90),
+          ),
+        );
+      }
+
+      final direction = separation / collisionDistance;
+      const repulsionStrength = 14.7;
+      final impulse =
+          direction * repulsionStrength +
+          Offset(-direction.dy, direction.dx) * 2.7;
+      _blueMenuDotVelocity += impulse;
+      _yellowMenuDotVelocity -= impulse;
+    }
+
+    _menuDotsPreviouslyColliding = currentlyColliding;
+
+    final blueCenter = _blueMenuDotPosition;
+    final yellowCenter = _yellowMenuDotPosition;
+    final blueSpring = (blueTarget - blueCenter) * 4.4;
+    final yellowSpring = (yellowTarget - yellowCenter) * 4.2;
+    final blueOrbit = Offset(-blueCenter.dy, blueCenter.dx) * 3.8;
+    final yellowOrbit = Offset(yellowCenter.dy, -yellowCenter.dx) * 3.7;
+    final blueTwist =
+        Offset(-_blueMenuDotVelocity.dy, _blueMenuDotVelocity.dx) * 2.4;
+    final yellowTwist =
+        Offset(_yellowMenuDotVelocity.dy, -_yellowMenuDotVelocity.dx) * 2.3;
+    final blueNoise = Offset(
+      sin(pulse * 3.1 + 1.7) * 0.28,
+      cos(pulse * 3.5 - 0.5) * 0.28,
+    );
+    final yellowNoise = Offset(
+      cos(pulse * 2.9 + 1.1) * 0.27,
+      sin(pulse * 3.2 - 1.0) * 0.27,
+    );
+    final blueChaos = Offset(
+      sin(pulse * 5.0 + _blueDotShapeSeed) * 0.14,
+      cos(pulse * 4.2 - _blueDotShapeSeed) * 0.13,
+    );
+    final yellowChaos = Offset(
+      cos(pulse * 4.7 + _yellowDotShapeSeed) * 0.15,
+      sin(pulse * 4.4 - _yellowDotShapeSeed) * 0.14,
+    );
+    final blueRadial = blueCenter * -0.18;
+    final yellowRadial = yellowCenter * -0.16;
+
+    final blueAcceleration =
+        blueSpring + blueOrbit + blueTwist + blueNoise + blueChaos + blueRadial;
+    final yellowAcceleration =
+        yellowSpring +
+        yellowOrbit +
+        yellowTwist +
+        yellowNoise +
+        yellowChaos +
+        yellowRadial;
+
+    _blueMenuDotVelocity =
+        (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) * 0.78;
+    _yellowMenuDotVelocity =
+        (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) * 0.78;
+
+    _blueMenuDotPosition += _blueMenuDotVelocity * dt;
+    _yellowMenuDotPosition += _yellowMenuDotVelocity * dt;
+
+    if (_blueMenuDotPosition.distance > 0.96) {
+      _blueMenuDotPosition =
+          _blueMenuDotPosition / _blueMenuDotPosition.distance * 0.92;
+      _blueMenuDotVelocity *= 0.72;
+    }
+    if (_yellowMenuDotPosition.distance > 0.96) {
+      _yellowMenuDotPosition =
+          _yellowMenuDotPosition / _yellowMenuDotPosition.distance * 0.92;
+      _yellowMenuDotVelocity *= 0.72;
+    }
+
+    _menuSparkParticles.removeWhere((particle) {
+      particle.position += particle.velocity * dt;
+      return particle.position.dx.abs() > 1.2 ||
+          particle.position.dy.abs() > 1.2;
+    });
+
+    if (_creditsDialogOpen) {
+      final creditsLast = _creditsBackdropLastUpdate ?? now;
+      final creditsDt = now.difference(creditsLast).inMilliseconds / 1000.0;
+      _creditsBackdropLastUpdate = now;
+      if (_creditsBackdropDots.isNotEmpty) {
+        const gravityStrength = 0.019;
+        const centralStiffness = 0.20;
+        const damping = 0.995;
+        const repulsionThreshold = 0.10;
+        const blueYellowContactThreshold = 0.13;
+        const blueYellowRestDuration = 3.0;
+        const greenPushStrength = 0.28 * 1.3;
+        const blueYellowPushStrength = 0.64 * 1.2 * 1.3;
+
+        var blueYellowTouching = false;
+        Offset blueYellowMidpoint = Offset.zero;
+
+        _blueYellowContactTime = _blueYellowContactTime.clamp(
+          0.0,
+          blueYellowRestDuration,
+        );
+
+        for (final dot in _creditsBackdropDots) {
+          var acceleration = Offset.zero;
+          for (final other in _creditsBackdropDots) {
+            if (identical(dot, other)) continue;
+            final separation = other.position - dot.position;
+            final distance = separation.distance.clamp(0.06, 1.2);
+            acceleration +=
+                separation /
+                (distance * distance) *
+                (gravityStrength * (other.radius * 0.18));
+
+            if (dot.role == _CreditsBackdropDotRole.green &&
+                other.role == _CreditsBackdropDotRole.green &&
+                distance < repulsionThreshold) {
+              final push = separation / distance * greenPushStrength;
+              dot.velocity -=
+                  push * (1.0 + _creditsBackdropRandom.nextDouble() * 0.7);
+            }
+
+            final isBlueYellowPair =
+                (dot.role == _CreditsBackdropDotRole.blue &&
+                    other.role == _CreditsBackdropDotRole.yellow) ||
+                (dot.role == _CreditsBackdropDotRole.yellow &&
+                    other.role == _CreditsBackdropDotRole.blue);
+            if (isBlueYellowPair && distance < blueYellowContactThreshold) {
+              blueYellowTouching = true;
+              blueYellowMidpoint = (dot.position + other.position) / 2;
+            }
+          }
+          acceleration -= dot.position * centralStiffness;
+          dot.velocity = (dot.velocity + acceleration * creditsDt) * damping;
+        }
+
+        var spawnGreenBall = false;
+        if (blueYellowTouching) {
+          _blueYellowContactTime += creditsDt;
+          if (_blueYellowContactTime >= blueYellowRestDuration) {
+            for (final dot in _creditsBackdropDots) {
+              if (dot.role == _CreditsBackdropDotRole.blue ||
+                  dot.role == _CreditsBackdropDotRole.yellow) {
+                final other = _creditsBackdropDots.firstWhere(
+                  (candidate) =>
+                      candidate.role != dot.role &&
+                      (candidate.role == _CreditsBackdropDotRole.blue ||
+                          candidate.role == _CreditsBackdropDotRole.yellow),
+                );
+                final separation = dot.position - other.position;
+                final distance = separation.distance.clamp(0.06, 1.2);
+                final push = separation / distance * blueYellowPushStrength;
+                dot.velocity +=
+                    push * (1.0 + _creditsBackdropRandom.nextDouble() * 0.4);
+              }
+            }
+            spawnGreenBall = _creditsBackdropDots.length < 10;
+            _blueYellowContactTime = 0.0;
+          }
+        } else {
+          _blueYellowContactTime = 0.0;
+        }
+
+        if (spawnGreenBall) {
+          final angle = _creditsBackdropRandom.nextDouble() * 2 * pi;
+          final direction = Offset(cos(angle), sin(angle));
+          _creditsBackdropDots.add(
+            _CreditsBackdropDot(
+              position: blueYellowMidpoint,
+              velocity:
+                  direction *
+                  (0.02 + _creditsBackdropRandom.nextDouble() * 0.03),
+              color: const Color(0xFF7EDC8A).withValues(alpha: 0.84),
+              radius: 8.0 + _creditsBackdropRandom.nextDouble() * 2.0,
+              role: _CreditsBackdropDotRole.green,
+            ),
+          );
+        }
+
+        for (final dot in _creditsBackdropDots) {
+          dot.position += dot.velocity * creditsDt;
+          final distance = dot.position.distance;
+          if (distance > 0.95) {
+            dot.position = dot.position / distance * 0.92;
+            dot.velocity *= 0.62;
+          }
+        }
+      }
+    } else {
+      _creditsBackdropLastUpdate = now;
+    }
+  }
+
+  void _initializeCreditsBackdrop() {
+    _creditsBackdropDots.clear();
+
+    final specs = <Map<String, Object>>[
+      {
+        'role': _CreditsBackdropDotRole.green,
+        'color': const Color(0xFF7EDC8A),
+        'radius': 9.0,
+      },
+      {
+        'role': _CreditsBackdropDotRole.blue,
+        'color': const Color(0xFF2A6CF0),
+        'radius': 10.0,
+      },
+      {
+        'role': _CreditsBackdropDotRole.yellow,
+        'color': const Color(0xFFD8B640),
+        'radius': 11.0,
+      },
+      {
+        'role': _CreditsBackdropDotRole.green,
+        'color': const Color(0xFF4ADE80),
+        'radius': 8.5,
+      },
+      {
+        'role': _CreditsBackdropDotRole.green,
+        'color': const Color(0xFF7EDC8A),
+        'radius': 10.5,
+      },
+    ];
+
+    for (final spec in specs) {
+      final angle = _creditsBackdropRandom.nextDouble() * 2 * pi;
+      final distance = 0.18 + _creditsBackdropRandom.nextDouble() * 0.26;
+      final position = Offset(cos(angle) * distance, sin(angle) * distance);
+      final speed = 0.025 + _creditsBackdropRandom.nextDouble() * 0.05;
+      final velocity = Offset.fromDirection(
+        angle + pi / 2 + (_creditsBackdropRandom.nextDouble() - 0.5) * 0.8,
+        speed,
+      );
+
+      _creditsBackdropDots.add(
+        _CreditsBackdropDot(
+          position: position,
+          velocity: velocity,
+          color: (spec['color'] as Color).withValues(alpha: 0.84),
+          radius: spec['radius'] as double,
+          role: spec['role'] as _CreditsBackdropDotRole,
+        ),
+      );
+    }
+
+    _creditsBackdropLastUpdate = DateTime.now();
+  }
+
+  Alignment _menuDotAlignment(
+    double phase,
+    double speed,
+    double radius,
+    double pulse,
+    double trajectoryNoise,
+    double shapeSeed,
+    bool inverted,
+  ) {
+    final time =
+        pulse * 2.6 * speed + phase + shapeSeed * (inverted ? 1.22 : 1.0);
+    final x = inverted
+        ? cos(time * (1.45 + shapeSeed * 0.16) + 0.7) * radius * 0.82 +
+              cos(time * (2.9 + shapeSeed * 0.20) - 1.1) * 0.10 +
+              sin(time * (4.6 + shapeSeed * 0.27) + 0.9) * 0.05
+        : sin(time * (1.25 + shapeSeed * 0.14)) * radius +
+              sin(time * (2.7 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) *
+                  0.12 +
+              sin(time * (4.1 + shapeSeed * 0.35) + 2.1) * 0.06;
+    final y = inverted
+        ? sin(time * (1.65 + shapeSeed * 0.19) - 0.5) * radius * 0.90 +
+              sin(time * (2.55 + shapeSeed * 0.13) + 0.2) * 0.12 +
+              cos(time * (3.9 + shapeSeed * 0.33) - 0.4) * 0.06
+        : cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
+              cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.11 +
+              sin(time * (3.9 + shapeSeed * 0.28) + 0.6) * 0.05;
+    final driftX = inverted
+        ? cos(time * (0.70 + shapeSeed * 0.05) - 0.4) * 0.05
+        : sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.04;
+    final driftY = inverted
+        ? sin(time * (0.88 + shapeSeed * 0.06) + 0.1) * 0.05
+        : cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.04;
+    final jitterX =
+        sin(
+          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
+              trajectoryNoise * 3.7 +
+              (inverted ? 1.4 : 0.0),
+        ) *
+        (trajectoryNoise * 0.08 + shapeSeed * 0.04);
+    final jitterY =
+        cos(
+          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
+              trajectoryNoise * 2.9 +
+              (inverted ? 1.7 : 0.0),
+        ) *
+        (trajectoryNoise * 0.08 + shapeSeed * 0.04);
+    final raw = Offset(x + driftX + jitterX, y + driftY + jitterY);
+    final distance = raw.distance;
+    const limit = 1.20;
+    final returnFactor = distance > limit ? limit / distance : 1.0;
+    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
+  }
+
+  Alignment _botSelectorBlueDotAlignment(
+    double phase,
+    double speed,
+    double radius,
+    double pulse,
+    double trajectoryNoise,
+    double shapeSeed,
+    double scrollOffset,
+  ) {
+    final time = pulse * 1.26 * speed + phase + shapeSeed;
+    final x =
+        sin(time * (1.25 + shapeSeed * 0.14)) * radius +
+        sin(time * (2.6 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.35) + 2.1) * 0.035;
+    final y =
+        cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
+        cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.28) + 0.6) * 0.035;
+    final driftX = sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.015;
+    final driftY = cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.015;
+    final jitterX =
+        sin(
+          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
+              trajectoryNoise * 3.7,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final jitterY =
+        cos(
+          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
+              trajectoryNoise * 2.9,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final raw = Offset(
+      x + driftX + jitterX + (scrollOffset * 0.03),
+      y + driftY + jitterY + (scrollOffset * 0.90),
+    );
+    final distance = raw.distance;
+    const limit = 1.35;
+    final returnFactor = distance > limit ? limit / distance : 1.0;
+    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
+  }
+
+  void _handleBotSetupScroll() {
+    if (!_botSetupScrollController.hasClients) return;
+    final position = _botSetupScrollController.position.pixels;
+    final delta = position - _botSetupLastScrollPosition;
+    if (delta.abs() > 200) {
+      _botSetupLastScrollPosition = position;
+      return;
+    }
+    _botSetupLastScrollPosition = position;
+    final rawImpulse = (-delta / 20).clamp(-1.2, 1.2);
+    final nextForce = (_botSetupScrollForce * 0.2) + (rawImpulse * 0.8);
+    _botSetupScrollForce = nextForce.abs() < 0.001 ? 0.0 : nextForce;
+    _blueDotScrollVelocity += _botSetupScrollForce * 0.7;
+  }
+
+  void _updateBotSetupBlueDotScrollOffset() {
+    _blueDotScrollVelocity *= 0.93;
+    _blueDotScrollOffset += _blueDotScrollVelocity * 0.016;
+    _blueDotScrollOffset = _blueDotScrollOffset.clamp(-1.15, 1.15);
   }
 
   Future<void> _playIntroSound() async {
@@ -503,11 +1017,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
+  Future<void> _playCoinBagSoundL() async {
+    if (_muteSounds) return;
+    try {
+      await _sfxAudioPlayer.stop();
+      await _sfxAudioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _sfxAudioPlayer.setSource(AssetSource('sounds/coinbag2.mp3'));
+      await _sfxAudioPlayer.setVolume(1.0);
+      await _sfxAudioPlayer.resume();
+    } catch (e) {
+      debugPrint('Coin bag L sound failed: $e');
+      _addLog('Coin bag L sound failed: $e');
+    }
+  }
+
   Future<void> _playBoardMoveSound({required bool isCapture}) async {
     if (_muteSounds) return;
     final assetPath = isCapture
-        ? 'sounds/take1.mp3'
-        : 'sounds/move${_rng.nextInt(8) + 1}.mp3';
+        ? 'sounds/take1.wav'
+        : 'sounds/move${_rng.nextInt(8) + 1}.wav';
     final player = _boardSfxPlayers[_nextBoardSfxPlayerIndex];
     _nextBoardSfxPlayerIndex =
         (_nextBoardSfxPlayerIndex + 1) % _boardSfxPlayers.length;
@@ -3682,13 +4210,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _selectedBot = null;
       _botThinking = false;
       _gameOutcome = null;
-      _botSetupSelectedIndex = 0;
       _botSideChoice = BotSideChoice.random;
       _activeSection = AppSection.botSetup;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_botSetupPageController.hasClients) {
-        _botSetupPageController.jumpToPage(0);
+        _botSetupPageController.jumpToPage(_botSetupSelectedIndex);
+      }
+      if (_botSetupScrollController.hasClients) {
+        _botSetupScrollController.jumpTo(0);
+        _botSetupLastScrollPosition = 0.0;
       }
     });
   }
@@ -4306,6 +4837,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       if (piece == null) break;
 
       final boardDuringFlight = Map<String, String>.from(board)..remove(from);
+      final isCapture =
+          board.containsKey(to) || (piece[0] == 'p' && from[0] != to[0]);
       setState(() {
         _quizPlayBoard = boardDuringFlight;
         _quizFlyFrom = from;
@@ -4314,21 +4847,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizFlyProgress = 0.0;
       });
 
-      for (final step in const <double>[
-        0.125,
-        0.25,
-        0.375,
-        0.5,
-        0.625,
-        0.75,
-        0.875,
-        1.0,
-      ]) {
+      for (var stepIndex = 1; stepIndex <= 24; stepIndex++) {
         if (!mounted || !_quizPlayActive) return;
+        final step = stepIndex / 24.0;
         setState(() {
           _quizFlyProgress = step;
         });
-        await Future.delayed(const Duration(milliseconds: 60));
+        await Future.delayed(const Duration(milliseconds: 20));
       }
       if (!mounted || !_quizPlayActive) return;
 
@@ -4341,6 +4866,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizFlyPiece = null;
         _quizFlyProgress = 0.0;
       });
+      unawaited(_playBoardMoveSound(isCapture: isCapture));
 
       if (i < _quizContinuation.length - 1) {
         await Future.delayed(const Duration(milliseconds: 340));
@@ -5402,6 +5928,22 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _suggestionButtonCenterInScene() ??
       Offset(scene.width / 2, scene.height - 52);
 
+  Offset _introMenuDotStart(Size scene, bool yellow) {
+    final menuCenter = Offset(scene.width / 2, scene.height / 2);
+    final menuDotPosition = yellow
+        ? _yellowMenuDotPosition
+        : _blueMenuDotPosition;
+    final alignedMenuDot = Offset(
+      menuDotPosition.dx.clamp(-1.0, 1.0),
+      menuDotPosition.dy.clamp(-1.0, 1.0),
+    );
+    return menuCenter +
+        Offset(
+          alignedMenuDot.dx * scene.width * 0.42,
+          alignedMenuDot.dy * scene.height * 0.40,
+        );
+  }
+
   RenderBox? _renderBoxFromContext(BuildContext? context) {
     final obj = context?.findRenderObject();
     if (obj is! RenderBox) return null;
@@ -5423,43 +5965,37 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     if (t < 0.22) {
       final p = Curves.easeOutCubic.transform(t / 0.22);
-      final start = yellow
-          ? Offset(scene.width * 0.22, 46 - topInsetCompensation)
-          : Offset(scene.width * 0.76, 96 - topInsetCompensation);
+      final start = _introMenuDotStart(scene, yellow);
       final settle =
           boardCenter +
-          (yellow ? const Offset(-42, -58) : const Offset(48, -18));
+          (yellow ? const Offset(-38, -50) : const Offset(38, -22));
       return Offset.lerp(start, settle, p)!;
     }
 
     if (t < 0.56) {
       final q = (t - 0.22) / 0.34;
-      final centerDrift = Offset(
-        sin(q * pi * 1.3) * 14,
-        cos(q * pi * 1.15) * 6,
-      );
+      final centerDrift = Offset(sin(q * pi * 0.9) * 10, cos(q * pi * 0.8) * 8);
       final pairCenter = boardCenter + centerDrift;
-      final inspectAngle = (q * pi * 2 * 1.15) + (yellow ? 0.7 : 3.4);
-      final inspectRadius = 34 - (6 * sin(q * pi * 2));
-      final flirt = Offset(
-        sin(q * pi * 4 + (yellow ? 0.0 : pi / 2)) * 7,
-        cos(q * pi * 3 + (yellow ? pi / 3 : pi)) * 5,
+      final swirlAngle = (q * pi * 2.0 * 3.6) + (yellow ? 0.0 : pi);
+      final swirlRadius = 38 - (20 * q) + sin(q * pi * 3) * 4;
+      final swirl = Offset(
+        cos(swirlAngle) * swirlRadius,
+        sin(swirlAngle) * swirlRadius * 0.92,
       );
-      return pairCenter +
-          flirt +
-          Offset(
-            cos(inspectAngle) * inspectRadius,
-            sin(inspectAngle) * inspectRadius * 0.88,
-          );
+      final polish = Offset(
+        sin(q * pi * 2 + (yellow ? 0.5 : -0.5)) * 3.5,
+        cos(q * pi * 2 + (yellow ? -0.4 : 0.4)) * 2.8,
+      );
+      return pairCenter + swirl + polish;
     }
 
     if (t < 0.68) {
       final q = (t - 0.56) / 0.12;
       final eased = Curves.easeInOutCubic.transform(q);
-      final radius = 46 - (18 * eased);
-      final angle = (q * pi * 2 * 2.8) + (yellow ? 0 : pi);
+      final radius = 30 - (12 * eased);
+      final angle = (q * pi * 2 * 4.0) + (yellow ? pi / 2 : 0);
       return boardCenter +
-          Offset(cos(angle) * radius, sin(angle) * radius * 0.68);
+          Offset(cos(angle) * radius, sin(angle) * radius * 0.82);
     }
 
     if (t < 0.86) {
@@ -5469,14 +6005,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         buttonCenter,
         Curves.easeInOutCubic.transform(q),
       )!;
-      final radius = 26 - (14 * q);
-      final angle = (q * pi * 2 * 3.0) + (yellow ? 0 : pi);
+      final radius = 30 - (18 * q);
+      final angle = (q * pi * 2 * 4.2) + (yellow ? 0.25 : -0.25);
       return travelCenter +
-          Offset(cos(angle) * radius, sin(angle) * radius * 0.72);
+          Offset(cos(angle) * radius, sin(angle) * radius * 0.78);
     }
 
     final q = (t - 0.86) / 0.14;
-    final radius = 12 - (8 * Curves.easeIn.transform(q));
+    final radius = 18 - (10 * Curves.easeIn.transform(q));
     final angle = (q * pi * 2 * 6.6) + (yellow ? 0 : pi);
     return buttonCenter +
         Offset(cos(angle) * radius, sin(angle) * radius * 0.78);
@@ -5880,69 +6416,33 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       animation: _pulseController,
       builder: (context, _) {
         final appTheme = context.watch<AppThemeProvider>();
-        final t = _pulseController.value;
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
-        final isDark = theme.brightness == Brightness.dark;
         final isMono = appTheme.isMonochrome || _isCinematicThemeEnabled;
-        final controlSurface = Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.11 : 0.07),
-          scheme.surface,
+        final controlSurface = scheme.surfaceContainerHighest;
+        final menuBackground = scheme.surface;
+        final menuWindowSurface = scheme.surfaceContainerHighest;
+        final blueDotColor = isMono
+            ? scheme.onSurface.withValues(alpha: 0.52)
+            : const Color(0xFF5AAEE8);
+        final yellowDotColor = isMono
+            ? scheme.onSurface.withValues(alpha: 0.50)
+            : const Color(0xFFD8B640);
+
+        final blueDotAlignment = Alignment(
+          _blueMenuDotPosition.dx.clamp(-1.0, 1.0),
+          _blueMenuDotPosition.dy.clamp(-1.0, 1.0),
         );
-        final menuTopColor = Color.alphaBlend(
-          Color.lerp(
-            scheme.primary,
-            scheme.secondary,
-            0.28,
-          )!.withValues(alpha: isDark ? 0.11 : 0.05),
-          scheme.surface,
+        final yellowDotAlignment = Alignment(
+          _yellowMenuDotPosition.dx.clamp(-1.0, 1.0),
+          _yellowMenuDotPosition.dy.clamp(-1.0, 1.0),
         );
-        final menuBottomColor = Color.alphaBlend(
-          scheme.tertiary.withValues(alpha: isDark ? 0.08 : 0.04),
-          scheme.surface,
-        );
-        final blueBlob = isMono
-            ? (isDark ? const Color(0xFF334B80) : const Color(0xFFDEE8FB))
-            : coreBlue;
-        final goldBlob = isMono
-            ? (isDark ? const Color(0xFF6E6540) : const Color(0xFFF3EBCF))
-            : coreGold;
-        final greenBlob = isMono
-            ? (isDark ? const Color(0xFF4C6A53) : const Color(0xFFE1F3E6))
-            : fusionGreen;
-        final blueOrb = Alignment(
-          -0.68 + 0.08 * sin(t * pi * 2),
-          -0.22 + 0.05 * cos(t * pi * 2),
-        );
-        final goldOrb = Alignment(
-          0.68 + 0.07 * cos(t * pi * 2),
-          -0.28 + 0.05 * sin(t * pi * 2),
-        );
-        final greenOrb = Alignment(
-          0.02 + 0.04 * sin(t * pi * 2),
-          -0.18 + 0.07 * cos(t * pi * 2),
-        );
-        final fusionPulse = 0.28 + 0.16 * (0.5 + 0.5 * sin(t * pi * 2));
 
         return Stack(
           children: [
             Positioned.fill(
               child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [menuTopColor, scheme.surface, menuBottomColor],
-                    stops: const [0.0, 0.72, 1.0],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: blueBlob.withValues(alpha: isDark ? 0.14 : 0.06),
-                      blurRadius: 140,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
+                decoration: BoxDecoration(color: menuBackground),
               ),
             ),
             Positioned.fill(
@@ -5950,70 +6450,64 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 child: Stack(
                   children: [
                     Align(
-                      alignment: blueOrb,
+                      alignment: blueDotAlignment,
                       child: Container(
-                        width: 192,
-                        height: 192,
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: blueBlob.withValues(
-                            alpha: isDark ? 0.16 : 0.11,
-                          ),
+                          color: blueDotColor,
                           boxShadow: [
                             BoxShadow(
-                              color: blueBlob.withValues(
-                                alpha: isDark ? 0.40 : 0.18,
-                              ),
-                              blurRadius: 72,
+                              color: blueDotColor.withValues(alpha: 0.48),
+                              blurRadius: 18,
+                              spreadRadius: 3,
                             ),
                           ],
                         ),
                       ),
                     ),
                     Align(
-                      alignment: goldOrb,
+                      alignment: yellowDotAlignment,
                       child: Container(
-                        width: 180,
-                        height: 180,
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: goldBlob.withValues(
-                            alpha: isDark ? 0.15 : 0.10,
-                          ),
+                          color: yellowDotColor,
                           boxShadow: [
                             BoxShadow(
-                              color: goldBlob.withValues(
-                                alpha: isDark ? 0.34 : 0.14,
-                              ),
-                              blurRadius: 66,
+                              color: yellowDotColor.withValues(alpha: 0.48),
+                              blurRadius: 18,
+                              spreadRadius: 3,
                             ),
                           ],
                         ),
                       ),
                     ),
-                    Align(
-                      alignment: greenOrb,
-                      child: Container(
-                        width: 148,
-                        height: 148,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: greenBlob.withValues(
-                            alpha: isDark
-                                ? (fusionPulse * 0.70)
-                                : (0.08 + (fusionPulse * 0.28)),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: greenBlob.withValues(
-                                alpha: isDark ? 0.46 : 0.18,
-                              ),
-                              blurRadius: 80,
-                            ),
-                          ],
+                    ..._menuSparkParticles.map((particle) {
+                      return Align(
+                        alignment: Alignment(
+                          particle.position.dx,
+                          particle.position.dy,
                         ),
-                      ),
-                    ),
+                        child: Container(
+                          width: 4,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: particle.color,
+                            boxShadow: [
+                              BoxShadow(
+                                color: particle.color.withValues(alpha: 0.85),
+                                blurRadius: 8,
+                                spreadRadius: 1.5,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -6070,9 +6564,32 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 vertical: 16,
                               ),
                               decoration: BoxDecoration(
-                                color: controlSurface.withValues(alpha: 0.86),
+                                color: menuWindowSurface.withValues(
+                                  alpha: isMono ? 0.92 : 0.82,
+                                ),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    menuWindowSurface.withValues(alpha: 0.90),
+                                    menuWindowSurface.withValues(alpha: 0.78),
+                                  ],
+                                ),
                                 borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: scheme.outline),
+                                border: Border.all(
+                                  color: scheme.primary.withValues(alpha: 0.12),
+                                  width: 1.1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: scheme.onSurface.withValues(
+                                      alpha: 0.08,
+                                    ),
+                                    blurRadius: 32,
+                                    spreadRadius: 2,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -6268,496 +6785,610 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     return Container(
       color: pageBackground,
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: EdgeInsets.zero,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: _goToMenu,
-                        color: lightHeaderColor,
-                        icon: const Icon(Icons.arrow_back),
-                        tooltip: 'Back to menu',
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          'Play Chess',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 20,
-                            color: lightHeaderColor,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => _openSettings(),
-                        color: lightHeaderColor,
-                        icon: const Icon(Icons.settings_outlined),
-                        tooltip: 'Settings',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color.alphaBlend(
-                            scheme.primary.withValues(
-                              alpha: isDark ? 0.16 : 0.06,
-                            ),
-                            scheme.surface,
-                          ),
-                          Color.alphaBlend(
-                            scheme.secondary.withValues(
-                              alpha: isDark ? 0.10 : 0.04,
-                            ),
-                            scheme.surface,
-                          ),
-                          scheme.surface,
-                        ],
-                        stops: const [0.0, 0.55, 1.0],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: const Color(0xFF5AAEE8).withValues(alpha: 0.25),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF5AAEE8).withValues(
-                            alpha:
-                                0.10 +
-                                (0.08 * (0.5 + 0.5 * sin(pulse * pi * 2))),
-                          ),
-                          blurRadius: 20,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
+      child: Stack(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final currentLayoutSize = Size(
+                constraints.maxWidth,
+                constraints.maxHeight,
+              );
+              if (_botSetupLastLayoutSize != currentLayoutSize) {
+                _botSetupLastLayoutSize = currentLayoutSize;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!_botSetupScrollController.hasClients) return;
+                  final position = _botSetupScrollController.position;
+                  final target = position.pixels.clamp(
+                    0.0,
+                    position.maxScrollExtent,
+                  );
+                  if (target != position.pixels) {
+                    _botSetupScrollController.jumpTo(target);
+                  }
+                  _botSetupLastScrollPosition = target;
+                });
+              }
+              return SingleChildScrollView(
+                controller: _botSetupScrollController,
+                padding: EdgeInsets.zero,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(height: 6),
-                        SizedBox(
-                          height: cardViewportHeight,
-                          child: Stack(
-                            alignment: Alignment.center,
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: _goToMenu,
+                              color: lightHeaderColor,
+                              icon: const Icon(Icons.arrow_back),
+                              tooltip: 'Back to menu',
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Play Chess',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 20,
+                                  color: lightHeaderColor,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => _openSettings(),
+                              color: lightHeaderColor,
+                              icon: const Icon(Icons.settings_outlined),
+                              tooltip: 'Settings',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color.alphaBlend(
+                                  scheme.primary.withValues(
+                                    alpha: isDark ? 0.16 : 0.06,
+                                  ),
+                                  scheme.surface,
+                                ),
+                                Color.alphaBlend(
+                                  scheme.secondary.withValues(
+                                    alpha: isDark ? 0.10 : 0.04,
+                                  ),
+                                  scheme.surface,
+                                ),
+                                scheme.surface,
+                              ],
+                              stops: const [0.0, 0.55, 1.0],
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF5AAEE8,
+                              ).withValues(alpha: 0.25),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF5AAEE8).withValues(
+                                  alpha:
+                                      0.10 +
+                                      (0.08 *
+                                          (0.5 + 0.5 * sin(pulse * pi * 2))),
+                                ),
+                                blurRadius: 20,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: Column(
                             children: [
-                              Positioned(
-                                left: 18 + (sin(pulse * pi * 2) * 8),
-                                top: 18 + (cos(pulse * pi * 2) * 6),
-                                child: Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color:
-                                        (useMonochrome
-                                                ? scheme.outline
-                                                : const Color(0xFF8FD0FF))
-                                            .withValues(
-                                              alpha: useMonochrome
-                                                  ? 0.12
-                                                  : 0.16,
+                              const SizedBox(height: 6),
+                              SizedBox(
+                                height: cardViewportHeight,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Positioned(
+                                      left: 18 + (sin(pulse * pi * 2) * 8),
+                                      top: 18 + (cos(pulse * pi * 2) * 6),
+                                      child: Container(
+                                        width: 26,
+                                        height: 26,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color:
+                                              (useMonochrome
+                                                      ? scheme.outline
+                                                      : const Color(0xFF8FD0FF))
+                                                  .withValues(
+                                                    alpha: useMonochrome
+                                                        ? 0.12
+                                                        : 0.16,
+                                                  ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color:
+                                                  (useMonochrome
+                                                          ? scheme.outline
+                                                          : const Color(
+                                                              0xFF8FD0FF,
+                                                            ))
+                                                      .withValues(
+                                                        alpha: useMonochrome
+                                                            ? 0.18
+                                                            : 0.28,
+                                                      ),
+                                              blurRadius: 14,
                                             ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            (useMonochrome
-                                                    ? scheme.outline
-                                                    : const Color(0xFF8FD0FF))
-                                                .withValues(
-                                                  alpha: useMonochrome
-                                                      ? 0.18
-                                                      : 0.28,
-                                                ),
-                                        blurRadius: 14,
+                                          ],
+                                        ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                right: 20 + (cos(pulse * pi * 2) * 9),
-                                bottom: 20 + (sin(pulse * pi * 2) * 7),
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color:
-                                        (useMonochrome
-                                                ? scheme.outline
-                                                : const Color(0xFFD8B640))
-                                            .withValues(
-                                              alpha: useMonochrome
-                                                  ? 0.10
-                                                  : 0.15,
-                                            ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color:
-                                            (useMonochrome
-                                                    ? scheme.outline
-                                                    : const Color(0xFFD8B640))
-                                                .withValues(
-                                                  alpha: useMonochrome
-                                                      ? 0.16
-                                                      : 0.25,
-                                                ),
-                                        blurRadius: 12,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(24),
-                                    gradient: RadialGradient(
-                                      center: Alignment(
-                                        sin(pulse * pi * 2) * 0.08,
-                                        -0.12 + cos(pulse * pi * 2) * 0.05,
-                                      ),
-                                      radius: 0.95,
-                                      colors: [
-                                        (useMonochrome
-                                                ? scheme.outline
-                                                : const Color(0xFF5AAEE8))
-                                            .withValues(
-                                              alpha: useMonochrome
-                                                  ? 0.10
-                                                  : 0.18,
-                                            ),
-                                        (useMonochrome
-                                                ? scheme.outline
-                                                : const Color(0xFF5AAEE8))
-                                            .withValues(alpha: 0.0),
-                                      ],
                                     ),
-                                  ),
-                                ),
-                              ),
-                              PageView.builder(
-                                controller: _botSetupPageController,
-                                itemCount: _botCharacters.length,
-                                physics: const BouncingScrollPhysics(),
-                                allowImplicitScrolling: true,
-                                onPageChanged: (index) {
-                                  setState(
-                                    () => _botSetupSelectedIndex = index,
-                                  );
-                                  _saveLastBotIndex(index);
-                                },
-                                itemBuilder: (context, index) =>
-                                    _buildBotSetupCard(
-                                      _botCharacters[index],
-                                      index,
-                                      compact: compactLandscape,
+                                    Positioned(
+                                      right: 20 + (cos(pulse * pi * 2) * 9),
+                                      bottom: 20 + (sin(pulse * pi * 2) * 7),
+                                      child: Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color:
+                                              (useMonochrome
+                                                      ? scheme.outline
+                                                      : const Color(0xFFD8B640))
+                                                  .withValues(
+                                                    alpha: useMonochrome
+                                                        ? 0.10
+                                                        : 0.15,
+                                                  ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color:
+                                                  (useMonochrome
+                                                          ? scheme.outline
+                                                          : const Color(
+                                                              0xFFD8B640,
+                                                            ))
+                                                      .withValues(
+                                                        alpha: useMonochrome
+                                                            ? 0.16
+                                                            : 0.25,
+                                                      ),
+                                              blurRadius: 12,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                              ),
-                              Positioned(
-                                left: 0,
-                                top: 0,
-                                bottom: 0,
-                                child: IgnorePointer(
-                                  child: Container(
-                                    width: 52,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(24),
-                                      gradient: LinearGradient(
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                        colors: [
-                                          scheme.surface.withValues(
-                                            alpha: isDark ? 0.95 : 0.82,
+                                    Positioned.fill(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            24,
                                           ),
-                                          scheme.surface.withValues(alpha: 0.0),
-                                        ],
+                                          gradient: RadialGradient(
+                                            center: Alignment(
+                                              sin(pulse * pi * 2) * 0.08,
+                                              -0.12 +
+                                                  cos(pulse * pi * 2) * 0.05,
+                                            ),
+                                            radius: 0.95,
+                                            colors: [
+                                              (useMonochrome
+                                                      ? scheme.outline
+                                                      : const Color(0xFF5AAEE8))
+                                                  .withValues(
+                                                    alpha: useMonochrome
+                                                        ? 0.10
+                                                        : 0.18,
+                                                  ),
+                                              (useMonochrome
+                                                      ? scheme.outline
+                                                      : const Color(0xFF5AAEE8))
+                                                  .withValues(alpha: 0.0),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    PageView.builder(
+                                      controller: _botSetupPageController,
+                                      itemCount: _botCharacters.length,
+                                      physics: const BouncingScrollPhysics(),
+                                      allowImplicitScrolling: true,
+                                      onPageChanged: (index) {
+                                        setState(
+                                          () => _botSetupSelectedIndex = index,
+                                        );
+                                        _saveLastBotIndex(index);
+                                      },
+                                      itemBuilder: (context, index) =>
+                                          _buildBotSetupCard(
+                                            _botCharacters[index],
+                                            index,
+                                            compact: compactLandscape,
+                                          ),
+                                    ),
+                                    Positioned(
+                                      left: 0,
+                                      top: 0,
+                                      bottom: 0,
+                                      child: IgnorePointer(
+                                        child: Container(
+                                          width: 52,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                            gradient: LinearGradient(
+                                              begin: Alignment.centerLeft,
+                                              end: Alignment.centerRight,
+                                              colors: [
+                                                scheme.surface.withValues(
+                                                  alpha: isDark ? 0.95 : 0.82,
+                                                ),
+                                                scheme.surface.withValues(
+                                                  alpha: 0.0,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      bottom: 0,
+                                      child: IgnorePointer(
+                                        child: Container(
+                                          width: 52,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                            gradient: LinearGradient(
+                                              begin: Alignment.centerRight,
+                                              end: Alignment.centerLeft,
+                                              colors: [
+                                                scheme.surface.withValues(
+                                                  alpha: isDark ? 0.95 : 0.82,
+                                                ),
+                                                scheme.surface.withValues(
+                                                  alpha: 0.0,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                bottom: 0,
-                                child: IgnorePointer(
-                                  child: Container(
-                                    width: 52,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(24),
-                                      gradient: LinearGradient(
-                                        begin: Alignment.centerRight,
-                                        end: Alignment.centerLeft,
-                                        colors: [
-                                          scheme.surface.withValues(
-                                            alpha: isDark ? 0.95 : 0.82,
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    onPressed: _botSetupSelectedIndex == 0
+                                        ? null
+                                        : () => _animateBotSetupTo(
+                                            _botSetupSelectedIndex - 1,
                                           ),
-                                          scheme.surface.withValues(alpha: 0.0),
-                                        ],
+                                    icon: const Icon(
+                                      Icons.chevron_left_rounded,
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Color.alphaBlend(
+                                        scheme.primary.withValues(
+                                          alpha: isDark ? 0.12 : 0.05,
+                                        ),
+                                        scheme.surface,
+                                      ),
+                                      side: BorderSide(
+                                        color: scheme.outline.withValues(
+                                          alpha: 0.32,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
+                                  Expanded(
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: List.generate(
+                                        _botCharacters.length,
+                                        (index) {
+                                          final active =
+                                              index == _botSetupSelectedIndex;
+                                          return AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 220,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                            width: active ? 22 : 8,
+                                            height: 8,
+                                            margin: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                              color: active
+                                                  ? const Color(0xFF7FC4FF)
+                                                  : Colors.white24,
+                                              boxShadow: active
+                                                  ? [
+                                                      BoxShadow(
+                                                        color:
+                                                            const Color(
+                                                              0xFF5AAEE8,
+                                                            ).withValues(
+                                                              alpha: 0.32,
+                                                            ),
+                                                        blurRadius: 10,
+                                                        spreadRadius: 1,
+                                                      ),
+                                                    ]
+                                                  : null,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed:
+                                        _botSetupSelectedIndex ==
+                                            _botCharacters.length - 1
+                                        ? null
+                                        : () => _animateBotSetupTo(
+                                            _botSetupSelectedIndex + 1,
+                                          ),
+                                    icon: const Icon(
+                                      Icons.chevron_right_rounded,
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Color.alphaBlend(
+                                        scheme.primary.withValues(
+                                          alpha: isDark ? 0.12 : 0.05,
+                                        ),
+                                        scheme.surface,
+                                      ),
+                                      side: BorderSide(
+                                        color: scheme.outline.withValues(
+                                          alpha: 0.32,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: _botSetupSelectedIndex == 0
-                                  ? null
-                                  : () => _animateBotSetupTo(
-                                      _botSetupSelectedIndex - 1,
-                                    ),
-                              icon: const Icon(Icons.chevron_left_rounded),
-                              style: IconButton.styleFrom(
-                                backgroundColor: Color.alphaBlend(
-                                  scheme.primary.withValues(
-                                    alpha: isDark ? 0.12 : 0.05,
-                                  ),
-                                  scheme.surface,
-                                ),
-                                side: BorderSide(
-                                  color: scheme.outline.withValues(alpha: 0.32),
-                                ),
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              scheme.primary.withValues(
+                                alpha: isDark ? 0.12 : 0.05,
                               ),
+                              scheme.surface,
                             ),
-                            Expanded(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: List.generate(_botCharacters.length, (
-                                  index,
-                                ) {
-                                  final active =
-                                      index == _botSetupSelectedIndex;
-                                  return AnimatedContainer(
-                                    duration: const Duration(milliseconds: 220),
-                                    curve: Curves.easeOutCubic,
-                                    width: active ? 22 : 8,
-                                    height: 8,
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(999),
-                                      color: active
-                                          ? const Color(0xFF7FC4FF)
-                                          : Colors.white24,
-                                      boxShadow: active
-                                          ? [
-                                              BoxShadow(
-                                                color: const Color(
-                                                  0xFF5AAEE8,
-                                                ).withValues(alpha: 0.32),
-                                                blurRadius: 10,
-                                                spreadRadius: 1,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: scheme.outline.withValues(alpha: 0.32),
+                            ),
+                          ),
+                          child: Center(
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                ChoiceChip(
+                                  selected:
+                                      _botSideChoice == BotSideChoice.white,
+                                  checkmarkColor: const Color(0xFF1A2232),
+                                  selectedColor: const Color(0xFFDEE4EF),
+                                  side: BorderSide(
+                                    color: _botSideChoice == BotSideChoice.white
+                                        ? const Color(0xFFEDEFF4)
+                                        : scheme.outline.withValues(
+                                            alpha: 0.34,
+                                          ),
+                                  ),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _pieceImage('p_w', width: 16, height: 16),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'White',
+                                        style: TextStyle(
+                                          color:
+                                              _botSideChoice ==
+                                                  BotSideChoice.white
+                                              ? const Color(0xFF1A2232)
+                                              : scheme.onSurface.withValues(
+                                                  alpha: 0.82,
+                                                ),
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  onSelected: (_) {
+                                    setState(
+                                      () =>
+                                          _botSideChoice = BotSideChoice.white,
+                                    );
+                                  },
+                                ),
+                                ChoiceChip(
+                                  selected:
+                                      _botSideChoice == BotSideChoice.random,
+                                  checkmarkColor: const Color(0xFF8FD0FF),
+                                  selectedColor: const Color(
+                                    0xFF5AAEE8,
+                                  ).withValues(alpha: 0.22),
+                                  side: BorderSide(
+                                    color:
+                                        _botSideChoice == BotSideChoice.random
+                                        ? const Color(0xFF5AAEE8)
+                                        : scheme.outline.withValues(
+                                            alpha: 0.34,
+                                          ),
+                                  ),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.shuffle_rounded,
+                                        size: 16,
+                                        color:
+                                            _botSideChoice ==
+                                                BotSideChoice.random
+                                            ? const Color(0xFF8FD0FF)
+                                            : scheme.onSurface.withValues(
+                                                alpha: 0.82,
                                               ),
-                                            ]
-                                          : null,
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed:
-                                  _botSetupSelectedIndex ==
-                                      _botCharacters.length - 1
-                                  ? null
-                                  : () => _animateBotSetupTo(
-                                      _botSetupSelectedIndex + 1,
-                                    ),
-                              icon: const Icon(Icons.chevron_right_rounded),
-                              style: IconButton.styleFrom(
-                                backgroundColor: Color.alphaBlend(
-                                  scheme.primary.withValues(
-                                    alpha: isDark ? 0.12 : 0.05,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Random',
+                                        style: TextStyle(
+                                          color:
+                                              _botSideChoice ==
+                                                  BotSideChoice.random
+                                              ? const Color(0xFF8FD0FF)
+                                              : scheme.onSurface.withValues(
+                                                  alpha: 0.82,
+                                                ),
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  scheme.surface,
+                                  onSelected: (_) {
+                                    setState(
+                                      () =>
+                                          _botSideChoice = BotSideChoice.random,
+                                    );
+                                  },
                                 ),
-                                side: BorderSide(
-                                  color: scheme.outline.withValues(alpha: 0.32),
+                                ChoiceChip(
+                                  selected:
+                                      _botSideChoice == BotSideChoice.black,
+                                  checkmarkColor: Colors.white,
+                                  selectedColor: const Color(0xFF222933),
+                                  side: BorderSide(
+                                    color: _botSideChoice == BotSideChoice.black
+                                        ? const Color(0xFF49576B)
+                                        : scheme.outline.withValues(
+                                            alpha: 0.34,
+                                          ),
+                                  ),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _pieceImage('p_b', width: 16, height: 16),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Black',
+                                        style: TextStyle(
+                                          color:
+                                              _botSideChoice ==
+                                                  BotSideChoice.black
+                                              ? Colors.white
+                                              : scheme.onSurface.withValues(
+                                                  alpha: 0.82,
+                                                ),
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  onSelected: (_) {
+                                    setState(
+                                      () =>
+                                          _botSideChoice = BotSideChoice.black,
+                                    );
+                                  },
                                 ),
-                              ),
+                              ],
                             ),
-                          ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 360),
+                            child: FilledButton(
+                              onPressed: () {
+                                unawaited(
+                                  _startBotMatch(
+                                    bot: selectedBot,
+                                    sideChoice: _botSideChoice,
+                                  ),
+                                );
+                              },
+                              child: const Text('Start'),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    decoration: BoxDecoration(
-                      color: Color.alphaBlend(
-                        scheme.primary.withValues(alpha: isDark ? 0.12 : 0.05),
-                        scheme.surface,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: scheme.outline.withValues(alpha: 0.32),
-                      ),
+                ),
+              );
+            },
+          ),
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                final pulse = _menuDotTime;
+                final alignment = _botSelectorBlueDotAlignment(
+                  _blueDotPhase,
+                  0.55,
+                  _blueDotRadius,
+                  pulse,
+                  _blueDotTrajectoryNoise,
+                  _blueDotShapeSeed,
+                  _blueDotScrollOffset,
+                );
+                return Align(alignment: alignment, child: child);
+              },
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.45),
+                      blurRadius: 18,
+                      spreadRadius: 3,
                     ),
-                    child: Center(
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          ChoiceChip(
-                            selected: _botSideChoice == BotSideChoice.white,
-                            checkmarkColor: const Color(0xFF1A2232),
-                            selectedColor: const Color(0xFFDEE4EF),
-                            side: BorderSide(
-                              color: _botSideChoice == BotSideChoice.white
-                                  ? const Color(0xFFEDEFF4)
-                                  : scheme.outline.withValues(alpha: 0.34),
-                            ),
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _pieceImage('p_w', width: 16, height: 16),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'White',
-                                  style: TextStyle(
-                                    color: _botSideChoice == BotSideChoice.white
-                                        ? const Color(0xFF1A2232)
-                                        : scheme.onSurface.withValues(
-                                            alpha: 0.82,
-                                          ),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            onSelected: (_) {
-                              setState(
-                                () => _botSideChoice = BotSideChoice.white,
-                              );
-                            },
-                          ),
-                          ChoiceChip(
-                            selected: _botSideChoice == BotSideChoice.random,
-                            checkmarkColor: const Color(0xFF8FD0FF),
-                            selectedColor: const Color(
-                              0xFF5AAEE8,
-                            ).withValues(alpha: 0.22),
-                            side: BorderSide(
-                              color: _botSideChoice == BotSideChoice.random
-                                  ? const Color(0xFF5AAEE8)
-                                  : scheme.outline.withValues(alpha: 0.34),
-                            ),
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.shuffle_rounded,
-                                  size: 16,
-                                  color: _botSideChoice == BotSideChoice.random
-                                      ? const Color(0xFF8FD0FF)
-                                      : scheme.onSurface.withValues(
-                                          alpha: 0.82,
-                                        ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Random',
-                                  style: TextStyle(
-                                    color:
-                                        _botSideChoice == BotSideChoice.random
-                                        ? const Color(0xFF8FD0FF)
-                                        : scheme.onSurface.withValues(
-                                            alpha: 0.82,
-                                          ),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            onSelected: (_) {
-                              setState(
-                                () => _botSideChoice = BotSideChoice.random,
-                              );
-                            },
-                          ),
-                          ChoiceChip(
-                            selected: _botSideChoice == BotSideChoice.black,
-                            checkmarkColor: Colors.white,
-                            selectedColor: const Color(0xFF222933),
-                            side: BorderSide(
-                              color: _botSideChoice == BotSideChoice.black
-                                  ? const Color(0xFF49576B)
-                                  : scheme.outline.withValues(alpha: 0.34),
-                            ),
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _pieceImage('p_b', width: 16, height: 16),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Black',
-                                  style: TextStyle(
-                                    color: _botSideChoice == BotSideChoice.black
-                                        ? Colors.white
-                                        : scheme.onSurface.withValues(
-                                            alpha: 0.82,
-                                          ),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            onSelected: (_) {
-                              setState(
-                                () => _botSideChoice = BotSideChoice.black,
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 360),
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.smart_toy_outlined),
-                        label: Text('Start Vs ${selectedBot.name}'),
-                        onPressed: () {
-                          unawaited(
-                            _startBotMatch(
-                              bot: selectedBot,
-                              sideChoice: _botSideChoice,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -6828,174 +7459,253 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         : Colors.black;
 
     if (!_quizSessionStarted) {
-      return Container(
-        color: quizBackground,
-        child: Padding(
-          padding: quizPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: _goToMenu,
-                    color: lightHeaderColor,
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Back to menu',
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Opening Puzzles',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 20,
-                      color: lightHeaderColor,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: _openAppearanceSettings,
-                    color: lightHeaderColor,
-                    icon: const Icon(Icons.palette_outlined),
-                    tooltip: 'Board & Pieces',
-                  ),
-                  IconButton(
-                    onPressed: _openQuizStatsSheet,
-                    color: lightHeaderColor,
-                    icon: const Icon(Icons.insights_outlined),
-                    tooltip: 'Performance Stats',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(14),
+      return Stack(
+        children: [
+          Container(color: quizBackground),
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _pulseController,
+              builder: (context, child) {
+                final pulse = _menuDotTime;
+                final alignment = _botSelectorBlueDotAlignment(
+                  _blueDotPhase,
+                  0.55,
+                  _blueDotRadius,
+                  pulse,
+                  _blueDotTrajectoryNoise,
+                  _blueDotShapeSeed,
+                  0.0,
+                );
+                return Align(alignment: alignment, child: child);
+              },
+              child: Container(
+                width: 16,
+                height: 16,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [panelSurface, panelSurfaceAlt, scheme.surface],
-                    stops: const [0.0, 0.55, 1.0],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
-                  ),
+                  shape: BoxShape.circle,
+                  color: const ui.Color.fromARGB(
+                    255,
+                    46,
+                    95,
+                    232,
+                  ).withValues(alpha: 0.92),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
+                      color: const Color(0xFF3B78D8).withValues(alpha: 0.45),
+                      blurRadius: 18,
+                      spreadRadius: 3,
                     ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ),
+          ),
+          Padding(
+            padding: quizPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
+                    IconButton(
+                      onPressed: _goToMenu,
+                      color: lightHeaderColor,
+                      icon: const Icon(Icons.arrow_back),
+                      tooltip: 'Back to menu',
+                    ),
+                    const SizedBox(width: 6),
                     Text(
-                      'Mode',
+                      'Opening Puzzles',
                       style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.66),
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                        color: lightHeaderColor,
                       ),
                     ),
-                    const SizedBox(height: 7),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Guess Opening Name'),
-                          selected: _quizMode == GambitQuizMode.guessName,
-                          selectedColor: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: 0.20),
-                          side: BorderSide(
-                            color: _quizMode == GambitQuizMode.guessName
-                                ? const Color(0xFF5AAEE8)
-                                : chipBorderColor,
-                          ),
-                          labelStyle: TextStyle(
-                            color: _quizMode == GambitQuizMode.guessName
-                                ? const Color(0xFF8FD0FF)
-                                : chipUnselectedText,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          onSelected: (_) => setState(
-                            () => _quizMode = GambitQuizMode.guessName,
-                          ),
-                        ),
-                        ChoiceChip(
-                          label: const Text('Guess Opening Line'),
-                          selected: _quizMode == GambitQuizMode.guessLine,
-                          selectedColor: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: 0.20),
-                          side: BorderSide(
-                            color: _quizMode == GambitQuizMode.guessLine
-                                ? const Color(0xFF5AAEE8)
-                                : chipBorderColor,
-                          ),
-                          labelStyle: TextStyle(
-                            color: _quizMode == GambitQuizMode.guessLine
-                                ? const Color(0xFF8FD0FF)
-                                : chipUnselectedText,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          onSelected: (_) => setState(
-                            () => _quizMode = GambitQuizMode.guessLine,
-                          ),
-                        ),
-                      ],
+                    const Spacer(),
+                    IconButton(
+                      onPressed: _openAppearanceSettings,
+                      color: lightHeaderColor,
+                      icon: const Icon(Icons.palette_outlined),
+                      tooltip: 'Board & Pieces',
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Difficulty',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.66),
-                        fontWeight: FontWeight.w600,
+                    IconButton(
+                      onPressed: _openQuizStatsSheet,
+                      color: lightHeaderColor,
+                      icon: const Icon(Icons.insights_outlined),
+                      tooltip: 'Performance Stats',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [panelSurface, panelSurfaceAlt, scheme.surface],
+                      stops: const [0.0, 0.55, 1.0],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
                       ),
-                    ),
-                    const SizedBox(height: 7),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ...QuizDifficulty.values.map((difficulty) {
-                          final selected = _quizDifficulty == difficulty;
-                          final color = _quizDifficultyColor(difficulty);
-                          return ChoiceChip(
-                            label: Text(_quizDifficultyLabel(difficulty)),
-                            selected: selected,
-                            selectedColor: color.withValues(alpha: 0.2),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mode',
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.66),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Guess Opening Name'),
+                            selected: _quizMode == GambitQuizMode.guessName,
+                            selectedColor: const Color(
+                              0xFF5AAEE8,
+                            ).withValues(alpha: 0.20),
                             side: BorderSide(
-                              color: selected
-                                  ? color.withValues(alpha: 0.9)
+                              color: _quizMode == GambitQuizMode.guessName
+                                  ? const Color(0xFF5AAEE8)
                                   : chipBorderColor,
                             ),
                             labelStyle: TextStyle(
-                              color: selected ? color : chipUnselectedText,
+                              color: _quizMode == GambitQuizMode.guessName
+                                  ? const Color(0xFF8FD0FF)
+                                  : chipUnselectedText,
                               fontWeight: FontWeight.w700,
-                              fontSize: 12,
                             ),
-                            onSelected: (_) => _setQuizDifficulty(difficulty),
-                          );
-                        }),
-                        if (isLandscape) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 2,
-                              vertical: 6,
-                            ),
-                            child: Text(
-                              'Questions',
-                              style: TextStyle(
-                                color: scheme.onSurface.withValues(alpha: 0.66),
-                                fontWeight: FontWeight.w600,
-                              ),
+                            onSelected: (_) => setState(
+                              () => _quizMode = GambitQuizMode.guessName,
                             ),
                           ),
-                          ...[10, 15, 20].map((target) {
+                          ChoiceChip(
+                            label: const Text('Guess Opening Line'),
+                            selected: _quizMode == GambitQuizMode.guessLine,
+                            selectedColor: const Color(
+                              0xFF5AAEE8,
+                            ).withValues(alpha: 0.20),
+                            side: BorderSide(
+                              color: _quizMode == GambitQuizMode.guessLine
+                                  ? const Color(0xFF5AAEE8)
+                                  : chipBorderColor,
+                            ),
+                            labelStyle: TextStyle(
+                              color: _quizMode == GambitQuizMode.guessLine
+                                  ? const Color(0xFF8FD0FF)
+                                  : chipUnselectedText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            onSelected: (_) => setState(
+                              () => _quizMode = GambitQuizMode.guessLine,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Difficulty',
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.66),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ...QuizDifficulty.values.map((difficulty) {
+                            final selected = _quizDifficulty == difficulty;
+                            final color = _quizDifficultyColor(difficulty);
+                            return ChoiceChip(
+                              label: Text(_quizDifficultyLabel(difficulty)),
+                              selected: selected,
+                              selectedColor: color.withValues(alpha: 0.2),
+                              side: BorderSide(
+                                color: selected
+                                    ? color.withValues(alpha: 0.9)
+                                    : chipBorderColor,
+                              ),
+                              labelStyle: TextStyle(
+                                color: selected ? color : chipUnselectedText,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                              onSelected: (_) => _setQuizDifficulty(difficulty),
+                            );
+                          }),
+                          if (isLandscape) ...[
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                                vertical: 6,
+                              ),
+                              child: Text(
+                                'Questions',
+                                style: TextStyle(
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.66,
+                                  ),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            ...[10, 15, 20].map((target) {
+                              final selected = _quizQuestionsTarget == target;
+                              return ChoiceChip(
+                                label: Text('$target'),
+                                selected: selected,
+                                selectedColor: const Color(
+                                  0xFFD8B640,
+                                ).withValues(alpha: 0.20),
+                                side: BorderSide(
+                                  color: selected
+                                      ? const Color(0xFFD8B640)
+                                      : chipBorderColor,
+                                ),
+                                labelStyle: TextStyle(
+                                  color: selected
+                                      ? const Color(0xFFE4CA79)
+                                      : chipUnselectedText,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                onSelected: (_) =>
+                                    _setQuizQuestionTarget(target),
+                              );
+                            }),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (!isLandscape) ...[
+                        Text(
+                          'Questions',
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.66),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Wrap(
+                          spacing: 8,
+                          children: [10, 15, 20].map((target) {
                             final selected = _quizQuestionsTarget == target;
                             return ChoiceChip(
                               label: Text('$target'),
@@ -7016,92 +7726,56 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                               ),
                               onSelected: (_) => _setQuizQuestionTarget(target),
                             );
-                          }),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    if (!isLandscape) ...[
-                      Text(
-                        'Questions',
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.66),
-                          fontWeight: FontWeight.w600,
+                          }).toList(),
                         ),
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 8,
-                        children: [10, 15, 20].map((target) {
-                          final selected = _quizQuestionsTarget == target;
-                          return ChoiceChip(
-                            label: Text('$target'),
-                            selected: selected,
-                            selectedColor: const Color(
-                              0xFFD8B640,
-                            ).withValues(alpha: 0.20),
-                            side: BorderSide(
-                              color: selected
-                                  ? const Color(0xFFD8B640)
-                                  : chipBorderColor,
+                      ],
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _openQuizStatsSheet,
+                              icon: const Icon(Icons.insights_outlined),
+                              label: const Text('View Stats'),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(
+                                  color: const Color(
+                                    0xFF5AAEE8,
+                                  ).withValues(alpha: 0.45),
+                                ),
+                                foregroundColor: const Color(0xFF8FD0FF),
+                              ),
                             ),
-                            labelStyle: TextStyle(
-                              color: selected
-                                  ? const Color(0xFFE4CA79)
-                                  : chipUnselectedText,
-                              fontWeight: FontWeight.w700,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: _startQuizSession,
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: const Text('Start Quiz'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF5AAEE8),
+                                foregroundColor: const Color(0xFF07131F),
+                              ),
                             ),
-                            onSelected: (_) => _setQuizQuestionTarget(target),
-                          );
-                        }).toList(),
+                          ),
+                        ],
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _openQuizStatsSheet,
-                            icon: const Icon(Icons.insights_outlined),
-                            label: const Text('View Stats'),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: const Color(
-                                  0xFF5AAEE8,
-                                ).withValues(alpha: 0.45),
-                              ),
-                              foregroundColor: const Color(0xFF8FD0FF),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: _startQuizSession,
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Start Quiz'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF5AAEE8),
-                              foregroundColor: const Color(0xFF07131F),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '${_viewedGambits.length}/${gambits.length} gambits viewed',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.52),
-                  fontSize: 12,
+                const SizedBox(height: 10),
+                Text(
+                  '${_viewedGambits.length}/${gambits.length} gambits viewed',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.52),
+                    fontSize: 12,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       );
     }
 
@@ -9617,286 +10291,335 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  void _showCreditsDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        final openedFromAnalysis = _activeSection == AppSection.analysis;
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        final isDark = theme.brightness == Brightness.dark;
-        final dialogSurface = Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
-          scheme.surface,
-        );
-        final dialogAccent = Color.alphaBlend(
-          scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.05),
-          scheme.surface,
-        );
-        final dialogHeight = min(
-          MediaQuery.of(context).size.height * 0.82,
-          700.0,
-        );
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: Container(
-            constraints: BoxConstraints(maxWidth: 560, maxHeight: dialogHeight),
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [dialogSurface, dialogAccent],
+  Future<void> _showCreditsDialog() async {
+    setState(() {
+      _creditsDialogOpen = true;
+      _initializeCreditsBackdrop();
+    });
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          final openedFromAnalysis = _activeSection == AppSection.analysis;
+          final theme = Theme.of(context);
+          final scheme = theme.colorScheme;
+          final isDark = theme.brightness == Brightness.dark;
+          final useMonochrome =
+              context.watch<AppThemeProvider>().isMonochrome ||
+              _isCinematicThemeEnabled;
+          final dialogSurface = useMonochrome
+              ? scheme.surface
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+                  scheme.surface,
+                );
+          final dialogAccent = useMonochrome
+              ? Color.alphaBlend(
+                  scheme.onSurface.withValues(alpha: 0.12),
+                  scheme.surface,
+                )
+              : Color.alphaBlend(
+                  scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.05),
+                  scheme.surface,
+                );
+          final dialogHeadingAccent = useMonochrome
+              ? scheme.onSurface.withValues(alpha: 0.92)
+              : scheme.secondary;
+          final legalAccent = useMonochrome
+              ? scheme.onSurface.withValues(alpha: 0.92)
+              : scheme.secondary;
+          final thirdPartyAccent = useMonochrome
+              ? scheme.onSurface.withValues(alpha: 0.92)
+              : scheme.primary;
+          final licenseAccent = useMonochrome
+              ? scheme.onSurface.withValues(alpha: 0.92)
+              : const Color(0xFFD8B640);
+          final dialogHeight = min(
+            MediaQuery.of(context).size.height * 0.82,
+            700.0,
+          );
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: 560,
+                maxHeight: dialogHeight,
               ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
-                  blurRadius: 28,
-                  offset: const Offset(0, 12),
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [dialogSurface, dialogAccent],
                 ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                Positioned.fill(child: _buildCreditsDynamicBackdrop()),
-                Column(
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Row(
-                      children: [
-                        const Spacer(),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: Icon(
-                            Icons.close,
-                            color: scheme.onSurface.withValues(alpha: 0.72),
-                          ),
-                          tooltip: 'Close credits',
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: scheme.outline.withValues(alpha: 0.22),
-                        ),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            scheme.primary.withValues(alpha: 0.10),
-                            scheme.secondary.withValues(alpha: 0.05),
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: scheme.primary.withValues(alpha: 0.12),
-                            blurRadius: 18,
-                            spreadRadius: 1,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
+                    blurRadius: 28,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(child: _buildCreditsDynamicBackdrop()),
+                  Column(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Row(
+                        children: [
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: Icon(
+                              Icons.close,
+                              color: scheme.onSurface.withValues(alpha: 0.72),
+                            ),
+                            tooltip: 'Close credits',
                           ),
                         ],
                       ),
-                      child: Image.asset(
-                        'assets/QILAmodus.png',
-                        width: 260,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Credits, Data & Legal',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: scheme.onSurface.withValues(alpha: 0.74),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            _buildCreditRow(
-                              'Product & Direction',
-                              'QILA modus',
-                            ),
-                            _buildCreditRow(
-                              'Engineering & Design',
-                              'QILA modus',
-                            ),
-                            _buildCreditRow(
-                              'Chess Engine',
-                              'Stockfish (GPL-3.0)',
-                            ),
-                            _buildCreditRow(
-                              'Puzzle Data',
-                              'Lichess puzzle database (CC0)',
-                            ),
-                            _buildCreditRow('Opening Data', 'ECO data (MIT)'),
-                            _buildCreditRow(
-                              'Audio',
-                              'Suno theme plus Freesound and Floraphonic effects',
-                            ),
-                            _buildCreditRow('Platform', 'Flutter / Dart'),
-                            const SizedBox(height: 12),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.fromLTRB(
-                                14,
-                                12,
-                                14,
-                                12,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: scheme.outline.withValues(alpha: 0.22),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: useMonochrome
+                                ? [
+                                    scheme.surface.withAlpha(0xEE),
                                     Color.alphaBlend(
-                                      scheme.primary.withValues(alpha: 0.10),
+                                      scheme.onSurface.withValues(alpha: 0.06),
                                       scheme.surface,
                                     ),
-                                    Color.alphaBlend(
-                                      scheme.secondary.withValues(alpha: 0.06),
-                                      scheme.surface,
-                                    ),
+                                  ]
+                                : [
+                                    scheme.primary.withValues(alpha: 0.10),
+                                    scheme.secondary.withValues(alpha: 0.05),
                                   ],
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: scheme.outline.withValues(alpha: 0.26),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(
-                                      alpha: isDark ? 0.18 : 0.06,
-                                    ),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.verified_outlined,
-                                        size: 16,
-                                        color: scheme.secondary.withValues(
-                                          alpha: 0.92,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Ownership & Legal',
-                                        style: TextStyle(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.2,
-                                          color: scheme.secondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'ChessIQ is developed by QILA modus (a division of Qila). Original code, design, and project-specific assets are owned by Qila (CVR no. 42666297).',
-                                    style: TextStyle(
-                                      fontSize: 12.2,
-                                      color: scheme.onSurface.withValues(
-                                        alpha: 0.86,
-                                      ),
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Full attribution details and license notices are available in COPYRIGHT.md and THIRD_PARTY_NOTICES.md.',
-                                    style: TextStyle(
-                                      fontSize: 11.6,
-                                      color: scheme.onSurface.withValues(
-                                        alpha: 0.68,
-                                      ),
-                                      height: 1.32,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      _buildLegalNoticeLink(
-                                        label: 'Copyright Notice',
-                                        icon: Icons.copyright_rounded,
-                                        accent: scheme.secondary,
-                                        onTap: () => _showLegalNoticeDialog(
-                                          title: 'COPYRIGHT.md',
-                                          assetPath: 'COPYRIGHT.md',
-                                          accent: scheme.secondary,
-                                        ),
-                                      ),
-                                      _buildLegalNoticeLink(
-                                        label: 'Third-Party Notices',
-                                        icon: Icons.policy_outlined,
-                                        accent: scheme.primary,
-                                        onTap: () => _showLegalNoticeDialog(
-                                          title: 'THIRD_PARTY_NOTICES.md',
-                                          assetPath: 'THIRD_PARTY_NOTICES.md',
-                                          accent: scheme.primary,
-                                        ),
-                                      ),
-                                      _buildLegalNoticeLink(
-                                        label: 'License',
-                                        icon: Icons.gavel_rounded,
-                                        accent: const Color(0xFFD8B640),
-                                        onTap: () => _showLegalNoticeDialog(
-                                          title: 'LICENSE',
-                                          assetPath: 'LICENSE',
-                                          accent: const Color(0xFFFFD88A),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: useMonochrome
+                                  ? scheme.onSurface.withValues(alpha: 0.08)
+                                  : scheme.primary.withValues(alpha: 0.12),
+                              blurRadius: 18,
+                              spreadRadius: 1,
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          if (!openedFromAnalysis) {
-                            _goToMenu();
-                          }
-                        },
-                        child: Text(
-                          openedFromAnalysis ? 'Close' : 'Back to Main Menu',
+                        child: Image.asset(
+                          'assets/QILAmodus.png',
+                          width: 260,
+                          fit: BoxFit.contain,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(height: 10),
+                      Text(
+                        'Credits, Data & Legal',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: scheme.onSurface.withValues(alpha: 0.74),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              _buildCreditRow(
+                                'Product & Direction',
+                                'QILA modus',
+                              ),
+                              _buildCreditRow(
+                                'Engineering & Design',
+                                'QILA modus',
+                              ),
+                              _buildCreditRow(
+                                'Chess Engine',
+                                'Stockfish (GPL-3.0)',
+                              ),
+                              _buildCreditRow(
+                                'Puzzle Data',
+                                'Lichess puzzle database (CC0)',
+                              ),
+                              _buildCreditRow('Opening Data', 'ECO data (MIT)'),
+                              _buildCreditRow(
+                                'Audio',
+                                'Freesound and Floraphonic effects',
+                              ),
+                              _buildCreditRow('Platform', 'Flutter / Dart'),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.fromLTRB(
+                                  14,
+                                  12,
+                                  14,
+                                  12,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Color.alphaBlend(
+                                        scheme.primary.withValues(alpha: 0.10),
+                                        scheme.surface,
+                                      ),
+                                      Color.alphaBlend(
+                                        scheme.secondary.withValues(
+                                          alpha: 0.06,
+                                        ),
+                                        scheme.surface,
+                                      ),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: scheme.outline.withValues(
+                                      alpha: 0.26,
+                                    ),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: isDark ? 0.18 : 0.06,
+                                      ),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.verified_outlined,
+                                          size: 16,
+                                          color: dialogHeadingAccent,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Ownership & Legal',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.2,
+                                            color: dialogHeadingAccent,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'ChessIQ is developed by QILA modus (a division of Qila). Original code, design, and project-specific assets are owned by Qila (CVR no. 42666297).',
+                                      style: TextStyle(
+                                        fontSize: 12.2,
+                                        color: scheme.onSurface.withValues(
+                                          alpha: 0.86,
+                                        ),
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _buildLegalNoticeLink(
+                                          label: 'Copyright Notice',
+                                          icon: Icons.copyright_rounded,
+                                          accent: legalAccent,
+                                          onTap: () => _showLegalNoticeDialog(
+                                            title: 'COPYRIGHT.md',
+                                            assetPath: 'COPYRIGHT.md',
+                                            accent: legalAccent,
+                                          ),
+                                        ),
+                                        _buildLegalNoticeLink(
+                                          label: 'Third-Party Notices',
+                                          icon: Icons.policy_outlined,
+                                          accent: thirdPartyAccent,
+                                          onTap: () => _showLegalNoticeDialog(
+                                            title: 'THIRD_PARTY_NOTICES.md',
+                                            assetPath: 'THIRD_PARTY_NOTICES.md',
+                                            accent: thirdPartyAccent,
+                                          ),
+                                        ),
+                                        _buildLegalNoticeLink(
+                                          label: 'License',
+                                          icon: Icons.gavel_rounded,
+                                          accent: licenseAccent,
+                                          onTap: () => _showLegalNoticeDialog(
+                                            title: 'LICENSE',
+                                            assetPath: 'LICENSE',
+                                            accent: licenseAccent,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            if (!openedFromAnalysis) {
+                              _goToMenu();
+                            }
+                          },
+                          child: Text(
+                            openedFromAnalysis ? 'Close' : 'Back to Main Menu',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _creditsDialogOpen = false;
+          _creditsBackdropDots.clear();
+          _blueYellowContactTime = 0.0;
+          _creditsBackdropLastUpdate = null;
+        });
+      } else {
+        _creditsDialogOpen = false;
+        _creditsBackdropDots.clear();
+        _blueYellowContactTime = 0.0;
+        _creditsBackdropLastUpdate = null;
+      }
+    }
   }
 
   Widget _buildLegalNoticeLink({
@@ -9929,10 +10652,29 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       await showDialog<void>(
         context: context,
         builder: (dialogContext) {
+          final appTheme = context.watch<AppThemeProvider>();
+          final useMonochrome =
+              appTheme.isMonochrome || _isCinematicThemeEnabled;
+          final theme = Theme.of(dialogContext);
+          final scheme = theme.colorScheme;
+          final isLightTheme = theme.brightness == Brightness.light;
+          final noticeHasLightSurface = useMonochrome || isLightTheme;
           final dialogHeight = min(
             MediaQuery.of(dialogContext).size.height * 0.86,
             760.0,
           );
+          final dialogAccentColor = useMonochrome
+              ? scheme.onSurface.withValues(alpha: 0.92)
+              : accent;
+          final dialogBackgroundStart = noticeHasLightSurface
+              ? scheme.surface
+              : const Color(0xFF071429);
+          final dialogBackgroundEnd = noticeHasLightSurface
+              ? Color.alphaBlend(
+                  scheme.onSurface.withValues(alpha: 0.06),
+                  scheme.surface,
+                )
+              : const Color(0xFF040D1D);
           return Dialog(
             backgroundColor: Colors.transparent,
             elevation: 0,
@@ -9942,13 +10684,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 maxHeight: dialogHeight,
               ),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFF071429), Color(0xFF040D1D)],
+                  colors: [dialogBackgroundStart, dialogBackgroundEnd],
                 ),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: accent.withValues(alpha: 0.35)),
+                border: Border.all(
+                  color: dialogAccentColor.withValues(alpha: 0.35),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.42),
@@ -9973,7 +10717,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       children: [
                         Icon(
                           Icons.description_outlined,
-                          color: accent,
+                          color: dialogAccentColor,
                           size: 18,
                         ),
                         const SizedBox(width: 8),
@@ -9981,7 +10725,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                           child: Text(
                             title,
                             style: TextStyle(
-                              color: accent,
+                              color: dialogAccentColor,
                               fontWeight: FontWeight.w700,
                               fontSize: 13.2,
                               letterSpacing: 0.2,
@@ -9990,7 +10734,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         ),
                         IconButton(
                           onPressed: () => Navigator.of(dialogContext).pop(),
-                          icon: const Icon(Icons.close, color: Colors.white70),
+                          icon: Icon(
+                            Icons.close,
+                            color: scheme.onSurface.withValues(alpha: 0.72),
+                          ),
                           tooltip: 'Close legal notice',
                         ),
                       ],
@@ -10042,7 +10789,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   child: Text(
                                     trimmed.substring(4),
                                     style: TextStyle(
-                                      color: accent.withValues(alpha: 0.95),
+                                      color: dialogAccentColor.withValues(
+                                        alpha: 0.95,
+                                      ),
                                       fontSize: 13.2,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -10055,7 +10804,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   child: Text(
                                     trimmed.substring(3),
                                     style: TextStyle(
-                                      color: accent.withValues(alpha: 0.97),
+                                      color: dialogAccentColor.withValues(
+                                        alpha: 0.97,
+                                      ),
                                       fontSize: 14,
                                       fontWeight: FontWeight.w800,
                                     ),
@@ -10068,7 +10819,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   child: Text(
                                     trimmed.substring(2),
                                     style: TextStyle(
-                                      color: accent,
+                                      color: dialogAccentColor,
                                       fontSize: 15.2,
                                       fontWeight: FontWeight.w900,
                                     ),
@@ -10090,7 +10841,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                       Text(
                                         '• ',
                                         style: TextStyle(
-                                          color: accent.withValues(alpha: 0.9),
+                                          color: dialogAccentColor.withValues(
+                                            alpha: 0.9,
+                                          ),
                                           fontSize: 12.6,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -10099,7 +10852,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                         child: SelectableText(
                                           trimmed.substring(2),
                                           style: TextStyle(
-                                            color: Colors.white.withValues(
+                                            color: scheme.onSurface.withValues(
                                               alpha: 0.88,
                                             ),
                                             fontSize: 12.35,
@@ -10117,7 +10870,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                 child: SelectableText(
                                   line,
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.86),
+                                    color: scheme.onSurface.withValues(
+                                      alpha: 0.86,
+                                    ),
                                     fontSize: 12.3,
                                     height: 1.42,
                                   ),
@@ -10134,7 +10889,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
                     decoration: BoxDecoration(
                       border: Border(
-                        top: BorderSide(color: accent.withValues(alpha: 0.2)),
+                        top: BorderSide(
+                          color: dialogAccentColor.withValues(alpha: 0.2),
+                        ),
                       ),
                     ),
                     child: Align(
@@ -10306,6 +11063,37 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     ),
                   ),
                 ),
+              for (final dot in _creditsBackdropDots)
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment(dot.position.dx, dot.position.dy),
+                    child: Container(
+                      width: dot.radius * 2,
+                      height: dot.radius * 2,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: dot.color.withValues(alpha: 0.16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: dot.color.withValues(alpha: 0.28),
+                            blurRadius: dot.radius * 3,
+                            spreadRadius: dot.radius * 0.8,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: dot.radius,
+                          height: dot.radius,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: dot.color,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -10367,7 +11155,36 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final result = await showDialog<String?>(
       context: context,
       builder: (context) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final useMonochrome =
+            context.watch<AppThemeProvider>().isMonochrome ||
+            _isCinematicThemeEnabled;
         final isVsBot = _playVsBot;
+        final dialogSurface = useMonochrome
+            ? scheme.surface
+            : Color.alphaBlend(
+                scheme.primary.withValues(alpha: 0.10),
+                scheme.surface,
+              );
+        final dialogAccent = useMonochrome
+            ? Color.alphaBlend(
+                scheme.onSurface.withValues(alpha: 0.08),
+                scheme.surface,
+              )
+            : Color.alphaBlend(
+                scheme.secondary.withValues(alpha: 0.10),
+                scheme.surface,
+              );
+        final buttonPrimarySurface = useMonochrome
+            ? scheme.onSurface.withValues(alpha: 0.12)
+            : scheme.primary;
+        final buttonSecondary = useMonochrome
+            ? scheme.onSurface.withValues(alpha: 0.92)
+            : scheme.secondary;
+        final buttonBackground = useMonochrome
+            ? scheme.surfaceContainerHighest.withValues(alpha: 0.85)
+            : scheme.surfaceContainerHighest;
         return Dialog(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -10376,13 +11193,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             child: Container(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFF0F1726), Color(0xFF090F1B)],
+                  colors: [dialogSurface, dialogAccent],
                 ),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white24),
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.28),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.52),
@@ -10399,13 +11218,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       Icon(
                         Icons.tune_rounded,
                         size: 18,
-                        color: Colors.white.withValues(alpha: 0.85),
+                        color: scheme.onSurface.withValues(alpha: 0.85),
                       ),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'Return Menu',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: scheme.onSurface,
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.25,
@@ -10420,8 +11239,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     child: FilledButton(
                       onPressed: () => Navigator.of(context).pop('reset'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2A3E5E),
-                        foregroundColor: Colors.white,
+                        backgroundColor: buttonPrimarySurface,
+                        foregroundColor: scheme.onSurface,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -10460,15 +11279,21 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       child: FilledButton.icon(
                         onPressed: () => Navigator.of(context).pop('opponent'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2D4A39),
-                          foregroundColor: Colors.white,
+                          backgroundColor: buttonSecondary.withValues(
+                            alpha: 0.18,
+                          ),
+                          foregroundColor: buttonSecondary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                         ),
-                        icon: const Icon(Icons.smart_toy_outlined, size: 18),
-                        label: const Text('New Opponent'),
+                        icon: Icon(
+                          Icons.smart_toy_outlined,
+                          size: 18,
+                          color: buttonSecondary,
+                        ),
+                        label: Text('New Opponent'),
                       ),
                     ),
                   ],
@@ -10479,15 +11304,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     child: FilledButton.icon(
                       onPressed: () => Navigator.of(context).pop('menu'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF384154),
-                        foregroundColor: Colors.white,
+                        backgroundColor: buttonBackground,
+                        foregroundColor: scheme.onSurface,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                       ),
-                      icon: const Icon(Icons.menu_rounded, size: 18),
-                      label: const Text('Main Menu'),
+                      icon: Icon(
+                        Icons.menu_rounded,
+                        size: 18,
+                        color: scheme.onSurface,
+                      ),
+                      label: Text('Main Menu'),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -10497,8 +11326,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
+                        foregroundColor: scheme.onSurface,
+                        side: BorderSide(
+                          color: scheme.outline.withValues(alpha: 0.38),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -10862,7 +11693,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Future<void> _buyCoinPack(int amount, String label) async {
     final economy = context.read<EconomyProvider>();
     await economy.addCoins(amount);
-    unawaited(_playCoinBagSound());
+    if (label == 'Coin Pack L') {
+      unawaited(_playCoinBagSoundL());
+    } else {
+      unawaited(_playCoinBagSound());
+    }
     await _saveStoreState();
     _addLog('Purchased $label (+$amount coins)');
   }
@@ -10933,6 +11768,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             }
             setL(() {});
           });
+          final themePackCardKey = GlobalKey();
+          final piecePackCardKey = GlobalKey();
+          Future<void> scrollToPack(GlobalKey key) async {
+            final targetContext = key.currentContext;
+            if (targetContext != null) {
+              await Scrollable.ensureVisible(
+                targetContext,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            }
+          }
+
           final theme = Theme.of(ctx);
           final scheme = theme.colorScheme;
           final isDark = theme.brightness == Brightness.dark;
@@ -11120,8 +11968,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       'Themes',
                       'Owned themes live here, and new ones unlock below',
                     ),
-                    _buildThemeVaultCard(setL),
+                    _buildThemeVaultCard(
+                      setL,
+                      onBoardThemeUnlockTap: () =>
+                          scrollToPack(themePackCardKey),
+                      onPieceThemeUnlockTap: () =>
+                          scrollToPack(piecePackCardKey),
+                    ),
                     _storeItemCard(
+                      itemKey: themePackCardKey,
                       icon: Icons.palette_outlined,
                       title: 'Board Theme Pack',
                       subtitle: _themePackOwned
@@ -11138,6 +11993,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       },
                     ),
                     _storeItemCard(
+                      itemKey: piecePackCardKey,
                       icon: Icons.extension_outlined,
                       title: 'Piece Set Pack',
                       subtitle: _piecePackOwned
@@ -11346,7 +12202,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildThemeVaultCard(Function setL) {
+  Widget _buildThemeVaultCard(
+    Function setL, {
+    Future<void> Function()? onBoardThemeUnlockTap,
+    Future<void> Function()? onPieceThemeUnlockTap,
+  }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -11387,7 +12247,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             spacing: 10,
             runSpacing: 10,
             children: BoardThemeMode.values
-                .map((mode) => _buildStoreBoardThemeCard(mode, setL))
+                .map(
+                  (mode) => _buildStoreBoardThemeCard(
+                    mode,
+                    setL,
+                    onLockedTap: onBoardThemeUnlockTap,
+                  ),
+                )
                 .toList(growable: false),
           ),
           const SizedBox(height: 14),
@@ -11397,7 +12263,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             spacing: 10,
             runSpacing: 10,
             children: PieceThemeMode.values
-                .map((mode) => _buildStorePieceThemeCard(mode, setL))
+                .map(
+                  (mode) => _buildStorePieceThemeCard(
+                    mode,
+                    setL,
+                    onLockedTap: onPieceThemeUnlockTap,
+                  ),
+                )
                 .toList(growable: false),
           ),
           const SizedBox(height: 14),
@@ -11428,7 +12300,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildStoreBoardThemeCard(BoardThemeMode mode, Function setL) {
+  Widget _buildStoreBoardThemeCard(
+    BoardThemeMode mode,
+    Function setL, {
+    Future<void> Function()? onLockedTap,
+  }) {
     final unlocked = _isBoardThemeUnlocked(mode);
     final selected = _boardThemeMode == mode;
     return _storeThemeChoiceCard(
@@ -11445,7 +12321,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ? null
           : () async {
               if (!unlocked) {
-                await _purchaseThemePack();
+                if (onLockedTap != null) {
+                  await onLockedTap();
+                }
               } else {
                 setState(() => _boardThemeMode = mode);
                 _persistCurrentSettings();
@@ -11460,7 +12338,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildStorePieceThemeCard(PieceThemeMode mode, Function setL) {
+  Widget _buildStorePieceThemeCard(
+    PieceThemeMode mode,
+    Function setL, {
+    Future<void> Function()? onLockedTap,
+  }) {
     final unlocked = _isPieceThemeUnlocked(mode);
     final selected = _pieceThemeMode == mode;
     return _storeThemeChoiceCard(
@@ -11477,7 +12359,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ? null
           : () async {
               if (!unlocked) {
-                await _purchasePiecePack();
+                if (onLockedTap != null) {
+                  await onLockedTap();
+                }
               } else {
                 setState(() => _pieceThemeMode = mode);
                 _persistCurrentSettings();
@@ -11673,6 +12557,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _storeItemCard({
+    Key? itemKey,
     required IconData icon,
     required String title,
     required String subtitle,
@@ -11696,6 +12581,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         : Colors.white;
 
     return Container(
+      key: itemKey,
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -12047,6 +12933,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _editModeHintTimer?.cancel();
     _clearBotGhostArrows();
     unawaited(_engine?.stop());
+    _pulseController.removeListener(_updateBotSetupBlueDotScrollOffset);
+    _botSetupScrollController.removeListener(_handleBotSetupScroll);
+    _botSetupScrollController.dispose();
     _pulseController.dispose();
     _introController.dispose();
     _menuRevealController.dispose();

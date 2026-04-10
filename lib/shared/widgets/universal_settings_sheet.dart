@@ -180,6 +180,14 @@ Future<void> showUniversalSettingsSheet({
                     ],
                   ),
                   const SizedBox(height: 14),
+                  if (boardPerspectiveSelector != null) ...[
+                    _SettingsCard(
+                      backgroundColor: sectionColor,
+                      borderColor: scheme.outline.withValues(alpha: 0.24),
+                      child: boardPerspectiveSelector,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   if (boardThemeSelector != null) ...[
                     _SettingsCard(
                       backgroundColor: sectionColor,
@@ -335,14 +343,6 @@ Future<void> showUniversalSettingsSheet({
                       ],
                     ),
                   ),
-                  if (boardPerspectiveSelector != null) ...[
-                    const SizedBox(height: 10),
-                    _SettingsCard(
-                      backgroundColor: sectionColor,
-                      borderColor: scheme.outline.withValues(alpha: 0.24),
-                      child: boardPerspectiveSelector,
-                    ),
-                  ],
                   if (showEngineControls) ...[
                     const SizedBox(height: 10),
                     _SettingsCard(
