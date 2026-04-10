@@ -85,9 +85,34 @@ class _IosEngineBackend extends _EngineBackend {
   }
 }
 
+class _AndroidEngineBackend extends _EngineBackend {
+  static const _method = MethodChannel('com.chessiq/stockfish');
+  static const _event = EventChannel('com.chessiq/stockfish_output');
+  StreamSubscription<dynamic>? _sub;
+
+  @override
+  Future<void> start(EngineOutputCallback onOutput) async {
+    await _method.invokeMethod<void>('start');
+    _sub = _event.receiveBroadcastStream().cast<String>().listen(onOutput);
+  }
+
+  @override
+  void send(String cmd) {
+    unawaited(_method.invokeMethod<void>('send', cmd));
+  }
+
+  @override
+  Future<void> stop() async {
+    await _method.invokeMethod<void>('stop');
+    await _sub?.cancel();
+    _sub = null;
+  }
+}
+
 _EngineBackend _createEngineBackend() {
   if (kIsWeb) return _NullEngineBackend();
   if (Platform.isIOS) return _IosEngineBackend();
+  if (Platform.isAndroid) return _AndroidEngineBackend();
   return _DesktopEngineBackend();
 }
 

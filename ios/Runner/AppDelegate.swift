@@ -15,5 +15,8 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "StockfishPlugin") {
       StockfishPlugin.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SystemAudioPlugin") {
+      SystemAudioPlugin.register(with: registrar)
+    }
   }
 }

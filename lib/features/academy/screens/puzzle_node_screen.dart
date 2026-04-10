@@ -387,12 +387,12 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     return result == true;
   }
 
-  Future<void> _analyzePosition() async {
+  Future<void> _analyzePosition({int depth = 20}) async {
     try {
       final analysis = await _engine.analyzePosition(
         _game.fen,
         whiteToMove: _game.turn == chess.Color.WHITE,
-        depth: 20,
+        depth: depth,
         onEval: (value) {
           if (!mounted) return;
           setState(() => _evalWhitePawns = value);
@@ -675,7 +675,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       analysis = await _engine.analyzePosition(
         _game.fen,
         whiteToMove: _game.turn == chess.Color.WHITE,
-        depth: 20,
+        depth: 18,
         onEval: (value) {
           if (!mounted) return;
           setState(() => _evalWhitePawns = value);
@@ -706,7 +706,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       setState(() {
         _pendingRegretHalfMoves = 2;
       });
-      await _analyzePosition();
+      await _analyzePosition(depth: 18);
     }
 
     if (!mounted) return;

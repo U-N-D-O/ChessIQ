@@ -33,7 +33,7 @@ These ECO files are collated datasets and may contain source markers within entr
 
 ## 3. Puzzle Data
 
-This project uses chess puzzle data sourced from the public Lichess puzzle database for Academy and related puzzle workflows.
+This project sources chess puzzle data from the public Lichess puzzle database for Academy and related puzzle workflows.
 
 - Source: Lichess puzzle database
 - Website: https://database.lichess.org/#puzzles
@@ -65,9 +65,7 @@ Each third-party package remains licensed under its own terms. For complete and 
 
 ## 5. Audio Asset Attribution
 
-- Main menu theme music: Created with Suno.
-
-This project includes third-party audio assets used for coin and rewards feedback.
+This project includes third-party audio assets used chess fx, coins and rewards feedback.
 
 - Assets: `assets/sounds/move1.mp3` – `move8.mp3`, `assets/sounds/take1.mp3`
 - Title: `Chess-pieces, Owi, Boardgames`

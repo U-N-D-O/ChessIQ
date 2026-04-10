@@ -112,7 +112,7 @@ class ChessAnalysisPage extends StatefulWidget {
 }
 
 class _ChessAnalysisPageState extends State<ChessAnalysisPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const String _lastBotIndexKey = 'last_bot_index_v1';
   static const BoardPerspective _defaultPerspective = BoardPerspective.white;
   static const BoardThemeMode _defaultBoardTheme = BoardThemeMode.dark;
@@ -157,12 +157,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Offset _yellowMenuDotPosition = Offset.zero;
   Offset _blueMenuDotVelocity = Offset.zero;
   Offset _yellowMenuDotVelocity = Offset.zero;
-  late final ScrollController _botSetupScrollController;
   Size? _botSetupLastLayoutSize;
   double _botSetupLastScrollPosition = 0.0;
   double _botSetupScrollForce = 0.0;
   double _blueDotScrollVelocity = 0.0;
   double _blueDotScrollOffset = 0.0;
+  Timer? _idleInterstitialTimer;
+  bool _screenActive = true;
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   DateTime? _menuSparkLastUpdate;
   DateTime? _creditsBackdropLastUpdate;
   double _menuDotTime = 0.0;
@@ -279,7 +281,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     BotCharacter(
       rank: 2,
       name: 'Checkmate Carl',
-      description: 'Yeah, sure. Mate in three? 👍.',
+      description: 'Mate in three? 👍.',
       elo: 450,
       limitStrength: true,
       multiPv: 8,
@@ -423,9 +425,49 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     });
   }
 
+  void _startIdleInterstitialTimer() {
+    _cancelIdleInterstitialTimer();
+    if (!_screenActive || _lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _idleInterstitialTimer = Timer(const Duration(minutes: 3), () async {
+      if (!mounted ||
+          !_screenActive ||
+          _lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      final shown = await AdService.instance.showInterstitialAd();
+      if (shown && mounted) {
+        _resetIdleTimer();
+      }
+    });
+  }
+
+  void _cancelIdleInterstitialTimer() {
+    _idleInterstitialTimer?.cancel();
+    _idleInterstitialTimer = null;
+  }
+
+  void _resetIdleTimer() {
+    _startIdleInterstitialTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycleState = state;
+    if (state == AppLifecycleState.resumed) {
+      _screenActive = true;
+      _resetIdleTimer();
+    } else {
+      _screenActive = false;
+      _cancelIdleInterstitialTimer();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadLastBotIndex();
     _pulseController = AnimationController(
       vsync: this,
@@ -433,8 +475,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     )..repeat();
     _pulseController.addListener(_updateMenuSparks);
     _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
-    _botSetupScrollController = ScrollController()
-      ..addListener(_handleBotSetupScroll);
+    _startIdleInterstitialTimer();
     _menuSparkLastUpdate = DateTime.now();
     _creditsBackdropLastUpdate = DateTime.now();
     final random = Random();
@@ -912,21 +953,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     const limit = 1.35;
     final returnFactor = distance > limit ? limit / distance : 1.0;
     return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
-  }
-
-  void _handleBotSetupScroll() {
-    if (!_botSetupScrollController.hasClients) return;
-    final position = _botSetupScrollController.position.pixels;
-    final delta = position - _botSetupLastScrollPosition;
-    if (delta.abs() > 200) {
-      _botSetupLastScrollPosition = position;
-      return;
-    }
-    _botSetupLastScrollPosition = position;
-    final rawImpulse = (-delta / 20).clamp(-1.2, 1.2);
-    final nextForce = (_botSetupScrollForce * 0.2) + (rawImpulse * 0.8);
-    _botSetupScrollForce = nextForce.abs() < 0.001 ? 0.0 : nextForce;
-    _blueDotScrollVelocity += _botSetupScrollForce * 0.7;
   }
 
   void _updateBotSetupBlueDotScrollOffset() {
@@ -4217,10 +4243,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       if (_botSetupPageController.hasClients) {
         _botSetupPageController.jumpToPage(_botSetupSelectedIndex);
       }
-      if (_botSetupScrollController.hasClients) {
-        _botSetupScrollController.jumpTo(0);
-        _botSetupLastScrollPosition = 0.0;
-      }
+      _botSetupLastScrollPosition = 0.0;
+      _botSetupScrollForce = 0.0;
     });
   }
 
@@ -4344,6 +4368,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       builder: (context, child) {
         final page =
             _botSetupPageController.hasClients &&
+                _botSetupPageController.positions.length == 1 &&
                 _botSetupPageController.position.hasContentDimensions
             ? (_botSetupPageController.page ??
                   _botSetupSelectedIndex.toDouble())
@@ -6331,31 +6356,61 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       scheme.tertiary.withValues(alpha: isDark ? 0.08 : 0.04),
       scheme.surface,
     );
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.f5) {
-          unawaited(_resetFromHotkey());
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: _activeSection == AppSection.analysis
-          ? _buildAnalysisBoardScaffold(context)
-          : Scaffold(
-              body: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [menuTopColor, scheme.surface, menuBottomColor],
-                    stops: [0.0, 0.72, 1.0],
+    return Listener(
+      onPointerDown: (_) => _resetIdleTimer(),
+      onPointerMove: (_) => _resetIdleTimer(),
+      onPointerSignal: (_) => _resetIdleTimer(),
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.f5) {
+            unawaited(_resetFromHotkey());
+            _resetIdleTimer();
+            return KeyEventResult.handled;
+          }
+          if (event is KeyDownEvent || event is KeyUpEvent) {
+            _resetIdleTimer();
+          }
+          return KeyEventResult.ignored;
+        },
+        child: _activeSection == AppSection.analysis
+            ? _buildAnalysisBoardScaffold(context)
+            : Scaffold(
+                body: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [menuTopColor, scheme.surface, menuBottomColor],
+                      stops: [0.0, 0.72, 1.0],
+                    ),
                   ),
-                ),
-                child: (!isLandscape)
-                    ? SafeArea(
-                        child: !_menuReady
+                  child: (!isLandscape)
+                      ? SafeArea(
+                          child: !_menuReady
+                              ? Center(
+                                  child: FadeTransition(
+                                    opacity: CurvedAnimation(
+                                      parent: _menuRevealController,
+                                      curve: Curves.easeOutCubic,
+                                    ),
+                                    child: Image.asset(
+                                      _menuLogoAsset(context),
+                                      width: 220,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                )
+                              : FadeTransition(
+                                  opacity: CurvedAnimation(
+                                    parent: _sectionTransitionController,
+                                    curve: Curves.easeInOutCubic,
+                                  ),
+                                  child: _buildMenuExitTransition(),
+                                ),
+                        )
+                      : (!_menuReady
                             ? Center(
                                 child: FadeTransition(
                                   opacity: CurvedAnimation(
@@ -6375,31 +6430,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   curve: Curves.easeInOutCubic,
                                 ),
                                 child: _buildMenuExitTransition(),
-                              ),
-                      )
-                    : (!_menuReady
-                          ? Center(
-                              child: FadeTransition(
-                                opacity: CurvedAnimation(
-                                  parent: _menuRevealController,
-                                  curve: Curves.easeOutCubic,
-                                ),
-                                child: Image.asset(
-                                  _menuLogoAsset(context),
-                                  width: 220,
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                            )
-                          : FadeTransition(
-                              opacity: CurvedAnimation(
-                                parent: _sectionTransitionController,
-                                curve: Curves.easeInOutCubic,
-                              ),
-                              child: _buildMenuExitTransition(),
-                            )),
+                              )),
+                ),
               ),
-            ),
+      ),
     );
   }
 
@@ -6795,480 +6829,492 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               );
               if (_botSetupLastLayoutSize != currentLayoutSize) {
                 _botSetupLastLayoutSize = currentLayoutSize;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!_botSetupScrollController.hasClients) return;
-                  final position = _botSetupScrollController.position;
-                  final target = position.pixels.clamp(
-                    0.0,
-                    position.maxScrollExtent,
-                  );
-                  if (target != position.pixels) {
-                    _botSetupScrollController.jumpTo(target);
-                  }
-                  _botSetupLastScrollPosition = target;
-                });
+                _botSetupLastScrollPosition = _botSetupLastScrollPosition.clamp(
+                  0.0,
+                  double.infinity,
+                );
               }
-              return SingleChildScrollView(
-                controller: _botSetupScrollController,
-                padding: EdgeInsets.zero,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: _goToMenu,
-                              color: lightHeaderColor,
-                              icon: const Icon(Icons.arrow_back),
-                              tooltip: 'Back to menu',
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Play Chess',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 20,
-                                  color: lightHeaderColor,
+              return NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification is ScrollUpdateNotification) {
+                    final position = notification.metrics.pixels;
+                    final delta = position - _botSetupLastScrollPosition;
+                    if (delta.abs() <= 200) {
+                      final rawImpulse = (-delta / 20).clamp(-1.2, 1.2);
+                      final nextForce =
+                          (_botSetupScrollForce * 0.2) + (rawImpulse * 0.8);
+                      _botSetupScrollForce = nextForce.abs() < 0.001
+                          ? 0.0
+                          : nextForce;
+                      _blueDotScrollVelocity += _botSetupScrollForce * 0.7;
+                    }
+                    _botSetupLastScrollPosition = position;
+                  }
+                  return false;
+                },
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.zero,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              IconButton(
+                                onPressed: _goToMenu,
+                                color: lightHeaderColor,
+                                icon: const Icon(Icons.arrow_back),
+                                tooltip: 'Back to menu',
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Play Chess',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 20,
+                                    color: lightHeaderColor,
+                                  ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              onPressed: () => _openSettings(),
-                              color: lightHeaderColor,
-                              icon: const Icon(Icons.settings_outlined),
-                              tooltip: 'Settings',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color.alphaBlend(
-                                  scheme.primary.withValues(
-                                    alpha: isDark ? 0.16 : 0.06,
-                                  ),
-                                  scheme.surface,
-                                ),
-                                Color.alphaBlend(
-                                  scheme.secondary.withValues(
-                                    alpha: isDark ? 0.10 : 0.04,
-                                  ),
-                                  scheme.surface,
-                                ),
-                                scheme.surface,
-                              ],
-                              stops: const [0.0, 0.55, 1.0],
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(
-                                0xFF5AAEE8,
-                              ).withValues(alpha: 0.25),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF5AAEE8).withValues(
-                                  alpha:
-                                      0.10 +
-                                      (0.08 *
-                                          (0.5 + 0.5 * sin(pulse * pi * 2))),
-                                ),
-                                blurRadius: 20,
-                                spreadRadius: 1,
+                              IconButton(
+                                onPressed: () => _openSettings(),
+                                color: lightHeaderColor,
+                                icon: const Icon(Icons.settings_outlined),
+                                tooltip: 'Settings',
                               ),
                             ],
                           ),
-                          child: Column(
-                            children: [
-                              const SizedBox(height: 6),
-                              SizedBox(
-                                height: cardViewportHeight,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Positioned(
-                                      left: 18 + (sin(pulse * pi * 2) * 8),
-                                      top: 18 + (cos(pulse * pi * 2) * 6),
-                                      child: Container(
-                                        width: 26,
-                                        height: 26,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color:
-                                              (useMonochrome
-                                                      ? scheme.outline
-                                                      : const Color(0xFF8FD0FF))
-                                                  .withValues(
-                                                    alpha: useMonochrome
-                                                        ? 0.12
-                                                        : 0.16,
-                                                  ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color:
-                                                  (useMonochrome
-                                                          ? scheme.outline
-                                                          : const Color(
-                                                              0xFF8FD0FF,
-                                                            ))
-                                                      .withValues(
-                                                        alpha: useMonochrome
-                                                            ? 0.18
-                                                            : 0.28,
-                                                      ),
-                                              blurRadius: 14,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color.alphaBlend(
+                                    scheme.primary.withValues(
+                                      alpha: isDark ? 0.16 : 0.06,
                                     ),
-                                    Positioned(
-                                      right: 20 + (cos(pulse * pi * 2) * 9),
-                                      bottom: 20 + (sin(pulse * pi * 2) * 7),
-                                      child: Container(
-                                        width: 22,
-                                        height: 22,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color:
-                                              (useMonochrome
-                                                      ? scheme.outline
-                                                      : const Color(0xFFD8B640))
-                                                  .withValues(
-                                                    alpha: useMonochrome
-                                                        ? 0.10
-                                                        : 0.15,
-                                                  ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color:
-                                                  (useMonochrome
-                                                          ? scheme.outline
-                                                          : const Color(
-                                                              0xFFD8B640,
-                                                            ))
-                                                      .withValues(
-                                                        alpha: useMonochrome
-                                                            ? 0.16
-                                                            : 0.25,
-                                                      ),
-                                              blurRadius: 12,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                    scheme.surface,
+                                  ),
+                                  Color.alphaBlend(
+                                    scheme.secondary.withValues(
+                                      alpha: isDark ? 0.10 : 0.04,
                                     ),
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            24,
-                                          ),
-                                          gradient: RadialGradient(
-                                            center: Alignment(
-                                              sin(pulse * pi * 2) * 0.08,
-                                              -0.12 +
-                                                  cos(pulse * pi * 2) * 0.05,
-                                            ),
-                                            radius: 0.95,
-                                            colors: [
-                                              (useMonochrome
-                                                      ? scheme.outline
-                                                      : const Color(0xFF5AAEE8))
-                                                  .withValues(
-                                                    alpha: useMonochrome
-                                                        ? 0.10
-                                                        : 0.18,
-                                                  ),
-                                              (useMonochrome
-                                                      ? scheme.outline
-                                                      : const Color(0xFF5AAEE8))
-                                                  .withValues(alpha: 0.0),
+                                    scheme.surface,
+                                  ),
+                                  scheme.surface,
+                                ],
+                                stops: const [0.0, 0.55, 1.0],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFF5AAEE8,
+                                ).withValues(alpha: 0.25),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF5AAEE8).withValues(
+                                    alpha:
+                                        0.10 +
+                                        (0.08 *
+                                            (0.5 + 0.5 * sin(pulse * pi * 2))),
+                                  ),
+                                  blurRadius: 20,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 6),
+                                SizedBox(
+                                  height: cardViewportHeight,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Positioned(
+                                        left: 18 + (sin(pulse * pi * 2) * 8),
+                                        top: 18 + (cos(pulse * pi * 2) * 6),
+                                        child: Container(
+                                          width: 26,
+                                          height: 26,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color:
+                                                (useMonochrome
+                                                        ? scheme.outline
+                                                        : const Color(
+                                                            0xFF8FD0FF,
+                                                          ))
+                                                    .withValues(
+                                                      alpha: useMonochrome
+                                                          ? 0.12
+                                                          : 0.16,
+                                                    ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color:
+                                                    (useMonochrome
+                                                            ? scheme.outline
+                                                            : const Color(
+                                                                0xFF8FD0FF,
+                                                              ))
+                                                        .withValues(
+                                                          alpha: useMonochrome
+                                                              ? 0.18
+                                                              : 0.28,
+                                                        ),
+                                                blurRadius: 14,
+                                              ),
                                             ],
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    PageView.builder(
-                                      controller: _botSetupPageController,
-                                      itemCount: _botCharacters.length,
-                                      physics: const BouncingScrollPhysics(),
-                                      allowImplicitScrolling: true,
-                                      onPageChanged: (index) {
-                                        setState(
-                                          () => _botSetupSelectedIndex = index,
-                                        );
-                                        _saveLastBotIndex(index);
-                                      },
-                                      itemBuilder: (context, index) =>
-                                          _buildBotSetupCard(
-                                            _botCharacters[index],
-                                            index,
-                                            compact: compactLandscape,
-                                          ),
-                                    ),
-                                    Positioned(
-                                      left: 0,
-                                      top: 0,
-                                      bottom: 0,
-                                      child: IgnorePointer(
+                                      Positioned(
+                                        right: 20 + (cos(pulse * pi * 2) * 9),
+                                        bottom: 20 + (sin(pulse * pi * 2) * 7),
                                         child: Container(
-                                          width: 52,
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color:
+                                                (useMonochrome
+                                                        ? scheme.outline
+                                                        : const Color(
+                                                            0xFFD8B640,
+                                                          ))
+                                                    .withValues(
+                                                      alpha: useMonochrome
+                                                          ? 0.10
+                                                          : 0.15,
+                                                    ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color:
+                                                    (useMonochrome
+                                                            ? scheme.outline
+                                                            : const Color(
+                                                                0xFFD8B640,
+                                                              ))
+                                                        .withValues(
+                                                          alpha: useMonochrome
+                                                              ? 0.16
+                                                              : 0.25,
+                                                        ),
+                                                blurRadius: 12,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned.fill(
+                                        child: Container(
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(
                                               24,
                                             ),
-                                            gradient: LinearGradient(
-                                              begin: Alignment.centerLeft,
-                                              end: Alignment.centerRight,
+                                            gradient: RadialGradient(
+                                              center: Alignment(
+                                                sin(pulse * pi * 2) * 0.08,
+                                                -0.12 +
+                                                    cos(pulse * pi * 2) * 0.05,
+                                              ),
+                                              radius: 0.95,
                                               colors: [
-                                                scheme.surface.withValues(
-                                                  alpha: isDark ? 0.95 : 0.82,
-                                                ),
-                                                scheme.surface.withValues(
-                                                  alpha: 0.0,
-                                                ),
+                                                (useMonochrome
+                                                        ? scheme.outline
+                                                        : const Color(
+                                                            0xFF5AAEE8,
+                                                          ))
+                                                    .withValues(
+                                                      alpha: useMonochrome
+                                                          ? 0.10
+                                                          : 0.18,
+                                                    ),
+                                                (useMonochrome
+                                                        ? scheme.outline
+                                                        : const Color(
+                                                            0xFF5AAEE8,
+                                                          ))
+                                                    .withValues(alpha: 0.0),
                                               ],
                                             ),
                                           ),
                                         ),
                                       ),
+                                      PageView.builder(
+                                        controller: _botSetupPageController,
+                                        itemCount: _botCharacters.length,
+                                        physics: const BouncingScrollPhysics(),
+                                        allowImplicitScrolling: true,
+                                        onPageChanged: (index) {
+                                          setState(
+                                            () =>
+                                                _botSetupSelectedIndex = index,
+                                          );
+                                          _saveLastBotIndex(index);
+                                        },
+                                        itemBuilder: (context, index) =>
+                                            _buildBotSetupCard(
+                                              _botCharacters[index],
+                                              index,
+                                              compact: compactLandscape,
+                                            ),
+                                      ),
+                                      Positioned(
+                                        left: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        child: IgnorePointer(
+                                          child: Container(
+                                            width: 52,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
+                                              gradient: LinearGradient(
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight,
+                                                colors: [
+                                                  scheme.surface.withValues(
+                                                    alpha: isDark ? 0.95 : 0.82,
+                                                  ),
+                                                  scheme.surface.withValues(
+                                                    alpha: 0.0,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        right: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        child: IgnorePointer(
+                                          child: Container(
+                                            width: 52,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
+                                              gradient: LinearGradient(
+                                                begin: Alignment.centerRight,
+                                                end: Alignment.centerLeft,
+                                                colors: [
+                                                  scheme.surface.withValues(
+                                                    alpha: isDark ? 0.95 : 0.82,
+                                                  ),
+                                                  scheme.surface.withValues(
+                                                    alpha: 0.0,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      onPressed: _botSetupSelectedIndex == 0
+                                          ? null
+                                          : () => _animateBotSetupTo(
+                                              _botSetupSelectedIndex - 1,
+                                            ),
+                                      icon: const Icon(
+                                        Icons.chevron_left_rounded,
+                                      ),
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: Color.alphaBlend(
+                                          scheme.primary.withValues(
+                                            alpha: isDark ? 0.12 : 0.05,
+                                          ),
+                                          scheme.surface,
+                                        ),
+                                        side: BorderSide(
+                                          color: scheme.outline.withValues(
+                                            alpha: 0.32,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    Positioned(
-                                      right: 0,
-                                      top: 0,
-                                      bottom: 0,
-                                      child: IgnorePointer(
-                                        child: Container(
-                                          width: 52,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(
-                                              24,
+                                    Expanded(
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: List.generate(
+                                          _botCharacters.length,
+                                          (index) {
+                                            final active =
+                                                index == _botSetupSelectedIndex;
+                                            return AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 220,
+                                              ),
+                                              curve: Curves.easeOutCubic,
+                                              width: active ? 22 : 8,
+                                              height: 8,
+                                              margin:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                                color: active
+                                                    ? const Color(0xFF7FC4FF)
+                                                    : Colors.white24,
+                                                boxShadow: active
+                                                    ? [
+                                                        BoxShadow(
+                                                          color:
+                                                              const Color(
+                                                                0xFF5AAEE8,
+                                                              ).withValues(
+                                                                alpha: 0.32,
+                                                              ),
+                                                          blurRadius: 10,
+                                                          spreadRadius: 1,
+                                                        ),
+                                                      ]
+                                                    : null,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed:
+                                          _botSetupSelectedIndex ==
+                                              _botCharacters.length - 1
+                                          ? null
+                                          : () => _animateBotSetupTo(
+                                              _botSetupSelectedIndex + 1,
                                             ),
-                                            gradient: LinearGradient(
-                                              begin: Alignment.centerRight,
-                                              end: Alignment.centerLeft,
-                                              colors: [
-                                                scheme.surface.withValues(
-                                                  alpha: isDark ? 0.95 : 0.82,
-                                                ),
-                                                scheme.surface.withValues(
-                                                  alpha: 0.0,
-                                                ),
-                                              ],
-                                            ),
+                                      icon: const Icon(
+                                        Icons.chevron_right_rounded,
+                                      ),
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: Color.alphaBlend(
+                                          scheme.primary.withValues(
+                                            alpha: isDark ? 0.12 : 0.05,
+                                          ),
+                                          scheme.surface,
+                                        ),
+                                        side: BorderSide(
+                                          color: scheme.outline.withValues(
+                                            alpha: 0.32,
                                           ),
                                         ),
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    onPressed: _botSetupSelectedIndex == 0
-                                        ? null
-                                        : () => _animateBotSetupTo(
-                                            _botSetupSelectedIndex - 1,
-                                          ),
-                                    icon: const Icon(
-                                      Icons.chevron_left_rounded,
-                                    ),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: Color.alphaBlend(
-                                        scheme.primary.withValues(
-                                          alpha: isDark ? 0.12 : 0.05,
-                                        ),
-                                        scheme.surface,
-                                      ),
-                                      side: BorderSide(
-                                        color: scheme.outline.withValues(
-                                          alpha: 0.32,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: List.generate(
-                                        _botCharacters.length,
-                                        (index) {
-                                          final active =
-                                              index == _botSetupSelectedIndex;
-                                          return AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 220,
-                                            ),
-                                            curve: Curves.easeOutCubic,
-                                            width: active ? 22 : 8,
-                                            height: 8,
-                                            margin: const EdgeInsets.symmetric(
-                                              horizontal: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                              color: active
-                                                  ? const Color(0xFF7FC4FF)
-                                                  : Colors.white24,
-                                              boxShadow: active
-                                                  ? [
-                                                      BoxShadow(
-                                                        color:
-                                                            const Color(
-                                                              0xFF5AAEE8,
-                                                            ).withValues(
-                                                              alpha: 0.32,
-                                                            ),
-                                                        blurRadius: 10,
-                                                        spreadRadius: 1,
-                                                      ),
-                                                    ]
-                                                  : null,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed:
-                                        _botSetupSelectedIndex ==
-                                            _botCharacters.length - 1
-                                        ? null
-                                        : () => _animateBotSetupTo(
-                                            _botSetupSelectedIndex + 1,
-                                          ),
-                                    icon: const Icon(
-                                      Icons.chevron_right_rounded,
-                                    ),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: Color.alphaBlend(
-                                        scheme.primary.withValues(
-                                          alpha: isDark ? 0.12 : 0.05,
-                                        ),
-                                        scheme.surface,
-                                      ),
-                                      side: BorderSide(
-                                        color: scheme.outline.withValues(
-                                          alpha: 0.32,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                          decoration: BoxDecoration(
-                            color: Color.alphaBlend(
-                              scheme.primary.withValues(
-                                alpha: isDark ? 0.12 : 0.05,
-                              ),
-                              scheme.surface,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: scheme.outline.withValues(alpha: 0.32),
+                              ],
                             ),
                           ),
-                          child: Center(
-                            child: Wrap(
-                              alignment: WrapAlignment.center,
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                ChoiceChip(
-                                  selected:
-                                      _botSideChoice == BotSideChoice.white,
-                                  checkmarkColor: const Color(0xFF1A2232),
-                                  selectedColor: const Color(0xFFDEE4EF),
-                                  side: BorderSide(
-                                    color: _botSideChoice == BotSideChoice.white
-                                        ? const Color(0xFFEDEFF4)
-                                        : scheme.outline.withValues(
-                                            alpha: 0.34,
-                                          ),
-                                  ),
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _pieceImage('p_w', width: 16, height: 16),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'White',
-                                        style: TextStyle(
-                                          color:
-                                              _botSideChoice ==
-                                                  BotSideChoice.white
-                                              ? const Color(0xFF1A2232)
-                                              : scheme.onSurface.withValues(
-                                                  alpha: 0.82,
-                                                ),
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  onSelected: (_) {
-                                    setState(
-                                      () =>
-                                          _botSideChoice = BotSideChoice.white,
-                                    );
-                                  },
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                            decoration: BoxDecoration(
+                              color: Color.alphaBlend(
+                                scheme.primary.withValues(
+                                  alpha: isDark ? 0.12 : 0.05,
                                 ),
-                                ChoiceChip(
-                                  selected:
-                                      _botSideChoice == BotSideChoice.random,
-                                  checkmarkColor: const Color(0xFF8FD0FF),
-                                  selectedColor: const Color(
-                                    0xFF5AAEE8,
-                                  ).withValues(alpha: 0.22),
-                                  side: BorderSide(
-                                    color:
-                                        _botSideChoice == BotSideChoice.random
-                                        ? const Color(0xFF5AAEE8)
-                                        : scheme.outline.withValues(
-                                            alpha: 0.34,
+                                scheme.surface,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: scheme.outline.withValues(alpha: 0.32),
+                              ),
+                            ),
+                            child: Center(
+                              child: Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  ChoiceChip(
+                                    selected:
+                                        _botSideChoice == BotSideChoice.white,
+                                    checkmarkColor: const Color(0xFF1A2232),
+                                    selectedColor: const Color(0xFFDEE4EF),
+                                    side: BorderSide(
+                                      color:
+                                          _botSideChoice == BotSideChoice.white
+                                          ? const Color(0xFFEDEFF4)
+                                          : scheme.outline.withValues(
+                                              alpha: 0.34,
+                                            ),
+                                    ),
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _pieceImage(
+                                          'p_w',
+                                          width: 16,
+                                          height: 16,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'White',
+                                          style: TextStyle(
+                                            color:
+                                                _botSideChoice ==
+                                                    BotSideChoice.white
+                                                ? const Color(0xFF1A2232)
+                                                : scheme.onSurface.withValues(
+                                                    alpha: 0.82,
+                                                  ),
+                                            fontWeight: FontWeight.w700,
                                           ),
+                                        ),
+                                      ],
+                                    ),
+                                    onSelected: (_) {
+                                      setState(
+                                        () => _botSideChoice =
+                                            BotSideChoice.white,
+                                      );
+                                    },
                                   ),
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.shuffle_rounded,
-                                        size: 16,
-                                        color:
-                                            _botSideChoice ==
-                                                BotSideChoice.random
-                                            ? const Color(0xFF8FD0FF)
-                                            : scheme.onSurface.withValues(
-                                                alpha: 0.82,
-                                              ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Random',
-                                        style: TextStyle(
+                                  ChoiceChip(
+                                    selected:
+                                        _botSideChoice == BotSideChoice.random,
+                                    checkmarkColor: const Color(0xFF8FD0FF),
+                                    selectedColor: const Color(
+                                      0xFF5AAEE8,
+                                    ).withValues(alpha: 0.22),
+                                    side: BorderSide(
+                                      color:
+                                          _botSideChoice == BotSideChoice.random
+                                          ? const Color(0xFF5AAEE8)
+                                          : scheme.outline.withValues(
+                                              alpha: 0.34,
+                                            ),
+                                    ),
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.shuffle_rounded,
+                                          size: 16,
                                           color:
                                               _botSideChoice ==
                                                   BotSideChoice.random
@@ -7276,79 +7322,97 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                               : scheme.onSurface.withValues(
                                                   alpha: 0.82,
                                                 ),
-                                          fontWeight: FontWeight.w700,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  onSelected: (_) {
-                                    setState(
-                                      () =>
-                                          _botSideChoice = BotSideChoice.random,
-                                    );
-                                  },
-                                ),
-                                ChoiceChip(
-                                  selected:
-                                      _botSideChoice == BotSideChoice.black,
-                                  checkmarkColor: Colors.white,
-                                  selectedColor: const Color(0xFF222933),
-                                  side: BorderSide(
-                                    color: _botSideChoice == BotSideChoice.black
-                                        ? const Color(0xFF49576B)
-                                        : scheme.outline.withValues(
-                                            alpha: 0.34,
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Random',
+                                          style: TextStyle(
+                                            color:
+                                                _botSideChoice ==
+                                                    BotSideChoice.random
+                                                ? const Color(0xFF8FD0FF)
+                                                : scheme.onSurface.withValues(
+                                                    alpha: 0.82,
+                                                  ),
+                                            fontWeight: FontWeight.w700,
                                           ),
-                                  ),
-                                  label: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _pieceImage('p_b', width: 16, height: 16),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Black',
-                                        style: TextStyle(
-                                          color:
-                                              _botSideChoice ==
-                                                  BotSideChoice.black
-                                              ? Colors.white
-                                              : scheme.onSurface.withValues(
-                                                  alpha: 0.82,
-                                                ),
-                                          fontWeight: FontWeight.w700,
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
+                                    onSelected: (_) {
+                                      setState(
+                                        () => _botSideChoice =
+                                            BotSideChoice.random,
+                                      );
+                                    },
                                   ),
-                                  onSelected: (_) {
-                                    setState(
-                                      () =>
-                                          _botSideChoice = BotSideChoice.black,
-                                    );
-                                  },
-                                ),
-                              ],
+                                  ChoiceChip(
+                                    selected:
+                                        _botSideChoice == BotSideChoice.black,
+                                    checkmarkColor: Colors.white,
+                                    selectedColor: const Color(0xFF222933),
+                                    side: BorderSide(
+                                      color:
+                                          _botSideChoice == BotSideChoice.black
+                                          ? const Color(0xFF49576B)
+                                          : scheme.outline.withValues(
+                                              alpha: 0.34,
+                                            ),
+                                    ),
+                                    label: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _pieceImage(
+                                          'p_b',
+                                          width: 16,
+                                          height: 16,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Black',
+                                          style: TextStyle(
+                                            color:
+                                                _botSideChoice ==
+                                                    BotSideChoice.black
+                                                ? Colors.white
+                                                : scheme.onSurface.withValues(
+                                                    alpha: 0.82,
+                                                  ),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    onSelected: (_) {
+                                      setState(
+                                        () => _botSideChoice =
+                                            BotSideChoice.black,
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 360),
-                            child: FilledButton(
-                              onPressed: () {
-                                unawaited(
-                                  _startBotMatch(
-                                    bot: selectedBot,
-                                    sideChoice: _botSideChoice,
-                                  ),
-                                );
-                              },
-                              child: const Text('Start'),
+                          const SizedBox(height: 10),
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 360),
+                              child: FilledButton(
+                                onPressed: () {
+                                  unawaited(
+                                    _startBotMatch(
+                                      bot: selectedBot,
+                                      sideChoice: _botSideChoice,
+                                    ),
+                                  );
+                                },
+                                child: const Text('Start'),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -7394,7 +7458,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildGambitQuizScreen() {
-    final gambits = _uniqueGambits();
     final media = MediaQuery.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -7766,7 +7829,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '${_viewedGambits.length}/${gambits.length} gambits viewed',
+                  '${_viewedGambits.length}/${_ecoOpenings.length} openings viewed',
                   style: TextStyle(
                     color: scheme.onSurface.withValues(alpha: 0.52),
                     fontSize: 12,
@@ -11484,10 +11547,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         );
         final borderColor = scheme.outline.withValues(alpha: 0.24);
 
-        if (_availableBoardThemes.length >= BoardThemeMode.values.length &&
-            _availablePieceThemes.length >= PieceThemeMode.values.length) {
+        final hasAllThemes =
+            _availableBoardThemes.length >= BoardThemeMode.values.length &&
+            _availablePieceThemes.length >= PieceThemeMode.values.length;
+        final hasAllStockfishUpgrades =
+            _depthTier >= 3 && _maxSuggestionsAllowed >= 10;
+
+        if (hasAllThemes && hasAllStockfishUpgrades) {
           return const <Widget>[];
         }
+
+        final storeButtonLabel = hasAllThemes
+            ? 'Open Stockfish Upgrades'
+            : 'Open Theme Store';
+        final storeButtonIcon = hasAllThemes
+            ? Icons.upgrade_rounded
+            : Icons.auto_awesome_rounded;
+        final initialStoreSection = hasAllThemes
+            ? StoreSection.general
+            : StoreSection.themes;
 
         return <Widget>[
           Container(
@@ -11501,11 +11579,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               onPressed: () {
                 Navigator.of(sheetContext).pop();
                 Future.microtask(
-                  () => _openStore(initialSection: StoreSection.themes),
+                  () => _openStore(initialSection: initialStoreSection),
                 );
               },
-              icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-              label: const Text('Open Theme Store'),
+              icon: Icon(storeButtonIcon, size: 18),
+              label: Text(storeButtonLabel),
             ),
           ),
         ];
@@ -12930,12 +13008,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   @override
   void dispose() {
+    _cancelIdleInterstitialTimer();
+    WidgetsBinding.instance.removeObserver(this);
     _editModeHintTimer?.cancel();
     _clearBotGhostArrows();
     unawaited(_engine?.stop());
+    _cancelIdleInterstitialTimer();
+    WidgetsBinding.instance.removeObserver(this);
     _pulseController.removeListener(_updateBotSetupBlueDotScrollOffset);
-    _botSetupScrollController.removeListener(_handleBotSetupScroll);
-    _botSetupScrollController.dispose();
     _pulseController.dispose();
     _introController.dispose();
     _menuRevealController.dispose();

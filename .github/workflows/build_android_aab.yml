@@ -1,0 +1,79 @@
+name: Build Android AAB
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android-aab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install Android NDK
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_SDK_ROOT:-}" ]; then
+            if [ -n "${ANDROID_HOME:-}" ]; then
+              export ANDROID_SDK_ROOT="$ANDROID_HOME"
+            else
+              export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+            fi
+          fi
+          if [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager"
+          else
+            SDKMANAGER="$(command -v sdkmanager || true)"
+          fi
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found" >&2
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" "ndk;25.1.8937393"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> "$GITHUB_ENV"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Clone Stockfish 18
+        run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
+
+      - name: Build Stockfish Android executables
+        env:
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
+          PATH: ${{ env.ANDROID_NDK_ROOT }}/toolchains/llvm/prebuilt/linux-x86_64/bin:${{ env.PATH }}
+        run: |
+          set -euo pipefail
+          cd Stockfish/src
+          make clean
+          make COMP=ndk ARCH=armv8 -j"$(nproc)"
+          mv stockfish ../stockfish-arm64-v8a
+          make clean
+          make COMP=ndk ARCH=armv7 -j"$(nproc)"
+          mv stockfish ../stockfish-armeabi-v7a
+          make clean
+          make COMP=ndk ARCH=x86_64 -j"$(nproc)"
+          mv stockfish ../stockfish-x86_64
+          mkdir -p android/app/src/main/assets
+          cp ../stockfish-arm64-v8a ../../android/app/src/main/assets/stockfish-arm64-v8a
+          cp ../stockfish-armeabi-v7a ../../android/app/src/main/assets/stockfish-armeabi-v7a
+          cp ../stockfish-x86_64 ../../android/app/src/main/assets/stockfish-x86_64
+
+      - name: Build Android App Bundle
+        run: flutter build appbundle --release
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChessIQ-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 90
