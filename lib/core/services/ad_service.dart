@@ -12,7 +12,7 @@ class AdService {
       'ca-app-pub-3940256099942544/4411468910';
   static const String rewardedAdUnitId =
       'ca-app-pub-3940256099942544/1712485313';
-  static const Duration _boardResetCooldown = Duration(minutes: 3);
+  static const Duration _boardResetCooldown = Duration(minutes: 1);
 
   Future<void>? _initializationFuture;
   InterstitialAd? _interstitialAd;

@@ -1,8 +1,8 @@
 enum BoardPerspective { white, black, auto }
 
-enum BoardThemeMode { dark, light, monochrome, ember, aurora }
+enum BoardThemeMode { dark, light, monochrome, ember, aurora, sakura, tropical }
 
-enum PieceThemeMode { classic, ember, frost }
+enum PieceThemeMode { classic, ember, frost, tuttiFrutti, spectral }
 
 enum AppSection { menu, analysis, gambitQuiz, botSetup, puzzleAcademy }
 

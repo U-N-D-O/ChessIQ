@@ -687,10 +687,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             height: 76,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: blue.withOpacity(
-                theme.brightness == Brightness.dark ? 0.10 : 0.08,
+              color: blue.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.10 : 0.08,
               ),
-              border: Border.all(color: blue.withOpacity(0.24), width: 4),
+              border: Border.all(color: blue.withValues(alpha: 0.24), width: 4),
             ),
           ),
           ValueListenableBuilder<double>(
@@ -714,7 +714,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 color: blue,
                 boxShadow: [
                   BoxShadow(
-                    color: blue.withOpacity(0.35),
+                    color: blue.withValues(alpha: 0.35),
                     blurRadius: 14,
                     spreadRadius: 1,
                   ),
@@ -1071,13 +1071,15 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         featured != null && provider.isPuzzleSolved(featured.puzzleId);
     final heroTag = provider.heroTagForNode(node);
 
+    final bestExamResult = provider.bestExamResultForNode(node.key);
     return _PuzzleNodeCard(
       node: node,
       compact: compact,
       heroTag: heroTag,
       showGhost: solvedFeatured,
       showExamButton: provider.canTakeExam(node),
-      bestExamScore: provider.bestExamResultForNode(node.key)?.score,
+      bestExamScore: bestExamResult?.score,
+      bestExamGrade: bestExamResult?.grade,
       lockedRequirementText: provider.unlockRequirementText(node),
       onExamTap: !provider.canTakeExam(node)
           ? null

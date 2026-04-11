@@ -409,6 +409,23 @@ class AcademyExamResult {
 
   double get accuracy => totalCount <= 0 ? 0.0 : correctCount / totalCount;
 
+  String get grade {
+    if (score >= 9800) return 'S+';
+    if (score >= 9400) return 'S';
+    if (score >= 9000) return 'A+';
+    if (score >= 8600) return 'A';
+    if (score >= 8200) return 'A-';
+    if (score >= 7800) return 'B+';
+    if (score >= 7400) return 'B';
+    if (score >= 7000) return 'B-';
+    if (score >= 6600) return 'C+';
+    if (score >= 6200) return 'C';
+    if (score >= 5800) return 'C-';
+    if (score >= 5400) return 'D+';
+    if (score >= 5000) return 'D';
+    return 'D-';
+  }
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'nodeKey': nodeKey,

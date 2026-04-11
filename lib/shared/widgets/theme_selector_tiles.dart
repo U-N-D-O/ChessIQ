@@ -89,7 +89,7 @@ class PieceThemePreviewTile extends StatelessWidget {
   const PieceThemePreviewTile({
     super.key,
     required this.pieceThemeIndex,
-    this.pieceSize = 18,
+    this.pieceSize = 18.0,
   });
 
   final int pieceThemeIndex;
@@ -97,8 +97,9 @@ class PieceThemePreviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = pieceSize > 18 ? pieceSize * 2.4 : 42.0;
     return SizedBox(
-      width: 42,
+      width: width,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,

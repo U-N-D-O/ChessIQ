@@ -329,6 +329,7 @@ class _PuzzleNodeCard extends StatelessWidget {
     required this.showExamButton,
     this.lockedRequirementText,
     this.bestExamScore,
+    this.bestExamGrade,
     this.onExamTap,
   });
 
@@ -340,6 +341,7 @@ class _PuzzleNodeCard extends StatelessWidget {
   final bool showExamButton;
   final String? lockedRequirementText;
   final int? bestExamScore;
+  final String? bestExamGrade;
   final VoidCallback? onExamTap;
 
   @override
@@ -411,7 +413,12 @@ class _PuzzleNodeCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            _HeroBadge(heroTag: heroTag, node: node, locked: locked),
+            _HeroBadge(
+              heroTag: heroTag,
+              node: node,
+              locked: locked,
+              gradeBadge: bestExamGrade,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -437,7 +444,9 @@ class _PuzzleNodeCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        'Best exam: $bestExamScore',
+                        bestExamGrade != null
+                            ? 'Best exam: $bestExamGrade ($bestExamScore)'
+                            : 'Best exam: $bestExamScore',
                         style: TextStyle(
                           color: scheme.onSurface.withValues(alpha: 0.66),
                           fontSize: 11.5,
@@ -524,7 +533,12 @@ class _PuzzleNodeCard extends StatelessWidget {
 
     return Row(
       children: [
-        _HeroBadge(heroTag: heroTag, node: node, locked: locked),
+        _HeroBadge(
+          heroTag: heroTag,
+          node: node,
+          locked: locked,
+          gradeBadge: bestExamGrade,
+        ),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
@@ -560,7 +574,9 @@ class _PuzzleNodeCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Best exam score: $bestExamScore',
+                    bestExamGrade != null
+                        ? 'Best exam: $bestExamGrade ($bestExamScore)'
+                        : 'Best exam score: $bestExamScore',
                     style: TextStyle(
                       color: scheme.onSurface.withValues(alpha: 0.68),
                       fontSize: 11.8,
@@ -652,11 +668,13 @@ class _HeroBadge extends StatelessWidget {
     required this.heroTag,
     required this.node,
     required this.locked,
+    this.gradeBadge,
   });
 
   final String heroTag;
   final EloNodeProgress node;
   final bool locked;
+  final String? gradeBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -699,15 +717,44 @@ class _HeroBadge extends StatelessWidget {
                   : scheme.primary.withValues(alpha: 0.50),
             ),
           ),
-          child: Center(
-            child: Text(
-              '${node.startElo}',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-                color: scheme.onSurface,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Center(
+                child: Text(
+                  '${node.startElo}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: scheme.onSurface,
+                  ),
+                ),
               ),
-            ),
+              if (gradeBadge != null)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDA3B3B),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: scheme.surface, width: 1.5),
+                    ),
+                    child: Text(
+                      gradeBadge!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),

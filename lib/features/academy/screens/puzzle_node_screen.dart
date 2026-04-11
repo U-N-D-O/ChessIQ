@@ -318,6 +318,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     await provider.recordExamResult(result);
     if (!mounted) return;
 
+    final grade = result.grade;
     final accuracy = totalCount <= 0
         ? 0
         : ((result.correctCount / totalCount) * 100).round();
@@ -336,6 +337,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Score: ${result.score}'),
+              const SizedBox(height: 8),
+              Text('Grade: $grade'),
               const SizedBox(height: 8),
               Text('Accuracy: $accuracy%'),
               const SizedBox(height: 4),

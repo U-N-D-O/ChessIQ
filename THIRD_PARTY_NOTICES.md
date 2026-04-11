@@ -65,7 +65,7 @@ Each third-party package remains licensed under its own terms. For complete and 
 
 ## 5. Audio Asset Attribution
 
-This project includes third-party audio assets used chess fx, coins and rewards feedback.
+This project includes third-party audio assets used chess sound effects, coin sound effects and rewards feedback.
 
 - Assets: `assets/sounds/move1.mp3` – `move8.mp3`, `assets/sounds/take1.mp3`
 - Title: `Chess-pieces, Owi, Boardgames`

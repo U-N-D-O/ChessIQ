@@ -16,10 +16,18 @@ class AppBoardPalette {
 class AppThemeUnlockState {
   final bool themePackOwned;
   final bool piecePackOwned;
+  final bool sakuraBoardOwned;
+  final bool tropicalBoardOwned;
+  final bool tuttiFruttiOwned;
+  final bool spectralOwned;
 
   const AppThemeUnlockState({
     this.themePackOwned = false,
     this.piecePackOwned = false,
+    this.sakuraBoardOwned = false,
+    this.tropicalBoardOwned = false,
+    this.tuttiFruttiOwned = false,
+    this.spectralOwned = false,
   });
 }
 
@@ -31,7 +39,7 @@ class AppThemeProvider extends ChangeNotifier {
   static const String _sharedStoreStateKey = 'store_state_v1';
   static const List<AppBoardPalette> _boardPalettes = <AppBoardPalette>[
     AppBoardPalette(
-      darkSquare: Color(0xFF2C3E50),
+      darkSquare: Color.fromARGB(198, 42, 76, 112),
       lightSquare: Color.fromARGB(220, 255, 255, 255),
     ),
     AppBoardPalette(
@@ -50,6 +58,14 @@ class AppThemeProvider extends ChangeNotifier {
       darkSquare: Color(0xFF1E5F74),
       lightSquare: Color(0xFFBFE6D8),
     ),
+    AppBoardPalette(
+      darkSquare: Color.fromARGB(235, 139, 36, 65),
+      lightSquare: Color.fromARGB(204, 248, 215, 225),
+    ),
+    AppBoardPalette(
+      darkSquare: Color(0xFF0B7A69),
+      lightSquare: Color(0xFFFFF2C4),
+    ),
   ];
   static const List<String> _boardThemeLabels = <String>[
     'Neon',
@@ -57,11 +73,15 @@ class AppThemeProvider extends ChangeNotifier {
     'Mono',
     'Ember',
     'Sea',
+    'Sakura',
+    'Tropical',
   ];
   static const List<String> _pieceThemeLabels = <String>[
     'Classic',
     'Ember',
     'Frost',
+    'Tutti Frutti',
+    'Spectral',
   ];
 
   ThemeMode _themeMode = ThemeMode.dark;
@@ -104,10 +124,14 @@ class AppThemeProvider extends ChangeNotifier {
   static bool isBoardThemeIndexUnlocked(
     int index, {
     required bool themePackOwned,
+    required bool sakuraBoardOwned,
+    required bool tropicalBoardOwned,
   }) {
     return switch (index) {
       0 || 1 || 2 => true,
       3 || 4 => themePackOwned,
+      5 => sakuraBoardOwned,
+      6 => tropicalBoardOwned,
       _ => false,
     };
   }
@@ -115,28 +139,48 @@ class AppThemeProvider extends ChangeNotifier {
   static bool isPieceThemeIndexUnlocked(
     int index, {
     required bool piecePackOwned,
+    required bool tuttiFruttiOwned,
+    required bool spectralOwned,
   }) {
     return switch (index) {
       0 => true,
       1 || 2 => piecePackOwned,
+      3 => tuttiFruttiOwned,
+      4 => spectralOwned,
       _ => false,
     };
   }
 
-  static List<int> availableBoardThemeIndices({required bool themePackOwned}) {
+  static List<int> availableBoardThemeIndices({
+    required bool themePackOwned,
+    required bool sakuraBoardOwned,
+    required bool tropicalBoardOwned,
+  }) {
     return List<int>.generate(boardThemeCount, (index) => index)
         .where(
-          (index) =>
-              isBoardThemeIndexUnlocked(index, themePackOwned: themePackOwned),
+          (index) => isBoardThemeIndexUnlocked(
+            index,
+            themePackOwned: themePackOwned,
+            sakuraBoardOwned: sakuraBoardOwned,
+            tropicalBoardOwned: tropicalBoardOwned,
+          ),
         )
         .toList(growable: false);
   }
 
-  static List<int> availablePieceThemeIndices({required bool piecePackOwned}) {
+  static List<int> availablePieceThemeIndices({
+    required bool piecePackOwned,
+    required bool tuttiFruttiOwned,
+    required bool spectralOwned,
+  }) {
     return List<int>.generate(pieceThemeCount, (index) => index)
         .where(
-          (index) =>
-              isPieceThemeIndexUnlocked(index, piecePackOwned: piecePackOwned),
+          (index) => isPieceThemeIndexUnlocked(
+            index,
+            piecePackOwned: piecePackOwned,
+            tuttiFruttiOwned: tuttiFruttiOwned,
+            spectralOwned: spectralOwned,
+          ),
         )
         .toList(growable: false);
   }
@@ -144,10 +188,22 @@ class AppThemeProvider extends ChangeNotifier {
   static Color pieceTintColorForIndex(int pieceThemeIndex, String piece) {
     final isWhitePiece = piece.endsWith('_w');
     return switch (pieceThemeIndex) {
-      1 => isWhitePiece ? const Color(0xFFFFD38A) : const Color(0xFF8B3A1B),
+      1 =>
+        isWhitePiece
+            ? const Color(0xFFFFD38A)
+            : _brighten(const Color(0xFF9F4E2A), 0.20),
       2 => isWhitePiece ? const Color(0xFFDDF7FF) : const Color(0xFF4D6F94),
+      3 => isWhitePiece ? const Color(0xFFFFC8E8) : const Color(0xFF6AB89F),
+      4 => isWhitePiece ? const Color(0xFFB9B6FF) : const Color(0xFF95F0FF),
       _ => Colors.white,
     };
+  }
+
+  static Color _brighten(Color color, double amount) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness + amount).clamp(0.0, 1.0))
+        .toColor();
   }
 
   static bool useClassicPiecesForIndex(int pieceThemeIndex) {
@@ -245,6 +301,10 @@ class AppThemeProvider extends ChangeNotifier {
       return AppThemeUnlockState(
         themePackOwned: decoded['themePackOwned'] == true,
         piecePackOwned: decoded['piecePackOwned'] == true,
+        sakuraBoardOwned: decoded['sakuraBoardOwned'] == true,
+        tropicalBoardOwned: decoded['tropicalBoardOwned'] == true,
+        tuttiFruttiOwned: decoded['tuttiFruttiOwned'] == true,
+        spectralOwned: decoded['spectralOwned'] == true,
       );
     } catch (_) {
       return const AppThemeUnlockState();

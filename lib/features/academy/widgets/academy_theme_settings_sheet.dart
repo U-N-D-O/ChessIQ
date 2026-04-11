@@ -17,10 +17,14 @@ Future<void> showAcademyThemeSettingsSheet({
   final availableBoardThemeIndices =
       AppThemeProvider.availableBoardThemeIndices(
         themePackOwned: unlockState.themePackOwned,
+        sakuraBoardOwned: unlockState.sakuraBoardOwned,
+        tropicalBoardOwned: unlockState.tropicalBoardOwned,
       );
   final availablePieceThemeIndices =
       AppThemeProvider.availablePieceThemeIndices(
         piecePackOwned: unlockState.piecePackOwned,
+        tuttiFruttiOwned: unlockState.tuttiFruttiOwned,
+        spectralOwned: unlockState.spectralOwned,
       );
 
   if (!context.mounted) return;

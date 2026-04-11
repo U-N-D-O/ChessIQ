@@ -105,6 +105,55 @@ class _CreditsBackdropDot {
   });
 }
 
+class _RegularPolygonPainter extends CustomPainter {
+  const _RegularPolygonPainter({
+    required this.sides,
+    required this.strokeColor,
+    required this.strokeWidth,
+  });
+
+  final int sides;
+  final Color strokeColor;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = size.shortestSide / 2 - strokeWidth / 2;
+    final center = Offset(size.width / 2, size.height / 2);
+
+    final paint = Paint()
+      ..color = strokeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeJoin = StrokeJoin.round;
+
+    if (sides <= 0) {
+      canvas.drawCircle(center, radius, paint);
+      return;
+    }
+
+    final path = Path();
+    for (var i = 0; i < sides; i++) {
+      final angle = (2 * pi * i / sides) - pi / 2;
+      final point = center + Offset(cos(angle), sin(angle)) * radius;
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RegularPolygonPainter old) {
+    return old.sides != sides ||
+        old.strokeColor != strokeColor ||
+        old.strokeWidth != strokeWidth;
+  }
+}
+
 class ChessAnalysisPage extends StatefulWidget {
   const ChessAnalysisPage({super.key});
   @override
@@ -179,6 +228,21 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   late final double _yellowDotTrajectoryNoise;
   late final double _blueDotShapeSeed;
   late final double _yellowDotShapeSeed;
+  static const double _menuCenterBaseSpinSpeed = 0.24;
+  static const double _menuCenterMaxSpinSpeed = 6.0;
+  static const double _menuCenterSpinDecayRate = 0.9;
+  static const double _menuCenterCollisionStreakWindow = 1.2;
+
+  double _menuCenterRotationA = 0.0;
+  double _menuCenterRotationB = 0.0;
+  int _menuCenterShapeSidesA = 4;
+  int _menuCenterShapeSidesB = 5;
+  double _menuCenterShapeChangeTimerA = 1.6;
+  double _menuCenterShapeChangeTimerB = 1.2;
+  double _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
+  DateTime? _menuCenterLastUpdate;
+  DateTime? _menuCenterLastCollision;
+  int _menuCenterCollisionStreakCount = 0;
   static const int _boardSfxPlayerPoolSize = 4;
   final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
     _boardSfxPlayerPoolSize,
@@ -339,9 +403,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     ),
   ];
 
-  int _depthTier = 0; // 0=base,1=pro,2=expert,3=grandmaster
+  int _depthTier = 1; // 1=pro,2=expert,3=grandmaster,4=wilder
   int _extraSuggestionPurchases = 0; // each +1 up to max 10 suggestions
   bool _themePackOwned = false;
+  bool _sakuraBoardOwned = false;
+  bool _tropicalBoardOwned = false;
+  bool _tuttiFruttiOwned = false;
+  bool _spectralOwned = false;
   bool _piecePackOwned = false;
   bool _adFreeOwned = false;
   bool _introCompleted = true;
@@ -489,6 +557,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _yellowDotTrajectoryNoise = random.nextDouble();
     _blueDotShapeSeed = random.nextDouble() * 3.2;
     _yellowDotShapeSeed = random.nextDouble() * 3.2;
+    _menuCenterRotationA = 0.0;
+    _menuCenterRotationB = 0.0;
+    _menuCenterShapeSidesA = 4;
+    _menuCenterShapeSidesB = 5;
+    _menuCenterShapeChangeTimerA = 2.4 + random.nextDouble() * 2.0;
+    _menuCenterShapeChangeTimerB = 2.8 + random.nextDouble() * 1.8;
+    _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
+    _menuCenterLastUpdate = DateTime.now();
+    _menuCenterLastCollision = null;
+    _menuCenterCollisionStreakCount = 0;
     _menuDotTime = 0.0;
     _blueMenuDotPosition = Offset(
       cos(_blueDotPhase) * 0.58,
@@ -568,6 +646,41 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _menuDotTime %= 2 * pi;
     }
 
+    final centerTime = _menuCenterLastUpdate == null
+        ? 0.0
+        : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
+    _menuCenterLastUpdate = now;
+    _menuCenterSpinSpeed = max(
+      _menuCenterBaseSpinSpeed,
+      _menuCenterSpinSpeed - _menuCenterSpinDecayRate * centerTime,
+    );
+    _menuCenterRotationA += centerTime * _menuCenterSpinSpeed;
+    _menuCenterRotationB += centerTime * _menuCenterSpinSpeed;
+
+    _menuCenterShapeChangeTimerA -= centerTime;
+    _menuCenterShapeChangeTimerB -= centerTime;
+
+    if (_menuCenterShapeChangeTimerA <= 0.0) {
+      final rollA = _creditsBackdropRandom.nextDouble();
+      _menuCenterShapeSidesA = rollA < (1.0 / 31.0)
+          ? 5
+          : rollA < (16.0 / 31.0)
+          ? 0
+          : 4;
+      _menuCenterShapeChangeTimerA =
+          2.4 + _creditsBackdropRandom.nextDouble() * 2.0;
+    }
+    if (_menuCenterShapeChangeTimerB <= 0.0) {
+      final rollB = _creditsBackdropRandom.nextDouble();
+      _menuCenterShapeSidesB = rollB < (1.0 / 31.0)
+          ? 5
+          : rollB < (16.0 / 31.0)
+          ? 0
+          : 4;
+      _menuCenterShapeChangeTimerB =
+          2.8 + _creditsBackdropRandom.nextDouble() * 1.8;
+    }
+
     final pulse = _menuDotTime;
     final blueTargetAlignment = _menuDotAlignment(
       _blueDotPhase,
@@ -598,6 +711,22 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final currentlyColliding = collisionDistance < 0.045;
 
     if (currentlyColliding && !_menuDotsPreviouslyColliding) {
+      final collisionAge = _menuCenterLastCollision == null
+          ? double.infinity
+          : now.difference(_menuCenterLastCollision!).inMilliseconds / 1000.0;
+      if (collisionAge <= _menuCenterCollisionStreakWindow) {
+        _menuCenterCollisionStreakCount += 1;
+      } else {
+        _menuCenterCollisionStreakCount = 1;
+      }
+      _menuCenterLastCollision = now;
+
+      final collisionBonus = 1.4 + _menuCenterCollisionStreakCount * 0.55;
+      _menuCenterSpinSpeed = min(
+        _menuCenterSpinSpeed + collisionBonus,
+        _menuCenterMaxSpinSpeed,
+      );
+
       final origin = Offset(
         (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
         (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
@@ -617,6 +746,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ),
         );
       }
+
+      unawaited(_lightHaptic());
 
       final direction = separation / collisionDistance;
       const repulsionStrength = 14.7;
@@ -785,10 +916,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   direction *
                   (0.02 + _creditsBackdropRandom.nextDouble() * 0.03),
               color: const Color(0xFF7EDC8A).withValues(alpha: 0.84),
-              radius: 8.0 + _creditsBackdropRandom.nextDouble() * 2.0,
+              radius: 4.0 + _creditsBackdropRandom.nextDouble() * 1.0,
               role: _CreditsBackdropDotRole.green,
             ),
           );
+          _menuCenterSpinSpeed = min(_menuCenterSpinSpeed + 0.24, 4.2);
         }
 
         for (final dot in _creditsBackdropDots) {
@@ -805,6 +937,29 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
+  Widget _buildMenuCenterShape({
+    required double size,
+    required Color strokeColor,
+    required double strokeWidth,
+    required double rotation,
+    required int sides,
+  }) {
+    return Transform.rotate(
+      angle: rotation,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(
+          painter: _RegularPolygonPainter(
+            sides: sides,
+            strokeColor: strokeColor,
+            strokeWidth: strokeWidth,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _initializeCreditsBackdrop() {
     _creditsBackdropDots.clear();
 
@@ -812,7 +967,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       {
         'role': _CreditsBackdropDotRole.green,
         'color': const Color(0xFF7EDC8A),
-        'radius': 9.0,
+        'radius': 4.5,
       },
       {
         'role': _CreditsBackdropDotRole.blue,
@@ -827,12 +982,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       {
         'role': _CreditsBackdropDotRole.green,
         'color': const Color(0xFF4ADE80),
-        'radius': 8.5,
+        'radius': 4.25,
       },
       {
         'role': _CreditsBackdropDotRole.green,
         'color': const Color(0xFF7EDC8A),
-        'radius': 10.5,
+        'radius': 5.25,
       },
     ];
 
@@ -1273,11 +1428,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   int get _maxDepthAllowed {
     switch (_depthTier) {
       case 1:
-        return 27;
+        return 24;
       case 2:
-        return 29;
+        return 27;
       case 3:
-        return 32;
+        return 29;
+      case 4:
+        return 35;
       default:
         return 24;
     }
@@ -1298,6 +1455,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return AppThemeProvider.isBoardThemeIndexUnlocked(
       mode.index,
       themePackOwned: _themePackOwned,
+      sakuraBoardOwned: _sakuraBoardOwned,
+      tropicalBoardOwned: _tropicalBoardOwned,
     );
   }
 
@@ -1305,6 +1464,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     return AppThemeProvider.isPieceThemeIndexUnlocked(
       mode.index,
       piecePackOwned: _piecePackOwned,
+      tuttiFruttiOwned: _tuttiFruttiOwned,
+      spectralOwned: _spectralOwned,
     );
   }
 
@@ -1343,15 +1504,23 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final tier = decoded['depthTier'];
       final extraSuggestions = decoded['extraSuggestions'];
       final themePack = decoded['themePackOwned'];
+      final sakuraBoard = decoded['sakuraBoardOwned'];
+      final tropicalBoard = decoded['tropicalBoardOwned'];
       final piecePack = decoded['piecePackOwned'];
+      final tuttiFrutti = decoded['tuttiFruttiOwned'];
+      final spectral = decoded['spectralOwned'];
       final adFree = decoded['adFreeOwned'];
 
-      if (tier is int) _depthTier = tier.clamp(0, 3);
+      if (tier is int) _depthTier = max(1, tier.clamp(1, 4));
       if (extraSuggestions is int) {
         _extraSuggestionPurchases = extraSuggestions.clamp(0, 8);
       }
       if (themePack is bool) _themePackOwned = themePack;
+      if (sakuraBoard is bool) _sakuraBoardOwned = sakuraBoard;
+      if (tropicalBoard is bool) _tropicalBoardOwned = tropicalBoard;
       if (piecePack is bool) _piecePackOwned = piecePack;
+      if (tuttiFrutti is bool) _tuttiFruttiOwned = tuttiFrutti;
+      if (spectral is bool) _spectralOwned = spectral;
       if (adFree is bool) _adFreeOwned = adFree;
 
       _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
@@ -1370,6 +1539,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       'depthTier': _depthTier,
       'extraSuggestions': _extraSuggestionPurchases,
       'themePackOwned': _themePackOwned,
+      'sakuraBoardOwned': _sakuraBoardOwned,
+      'tropicalBoardOwned': _tropicalBoardOwned,
+      'tuttiFruttiOwned': _tuttiFruttiOwned,
+      'spectralOwned': _spectralOwned,
       'piecePackOwned': _piecePackOwned,
       'adFreeOwned': _adFreeOwned,
     };
@@ -6552,10 +6725,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 children: [
                   if (showMenuLogo)
                     Center(
-                      child: Image.asset(
-                        _menuLogoAsset(context),
-                        width: 220,
-                        fit: BoxFit.contain,
+                      child: GestureDetector(
+                        onTap: _showCreditsDialog,
+                        child: Image.asset(
+                          _menuLogoAsset(context),
+                          width: 220,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   SizedBox(height: showMenuLogo ? 10 : 2),
@@ -6569,27 +6745,23 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            Container(
-                              width: 360,
-                              height: 360,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: scheme.outline.withValues(alpha: 0.38),
-                                  width: 2,
-                                ),
+                            _buildMenuCenterShape(
+                              size: 360,
+                              strokeColor: scheme.outline.withValues(
+                                alpha: 0.38,
                               ),
+                              strokeWidth: 2,
+                              rotation: _menuCenterRotationA,
+                              sides: _menuCenterShapeSidesA,
                             ),
-                            Container(
-                              width: 285,
-                              height: 285,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: scheme.outline.withValues(alpha: 0.30),
-                                  width: 1.5,
-                                ),
+                            _buildMenuCenterShape(
+                              size: 285,
+                              strokeColor: scheme.outline.withValues(
+                                alpha: 0.30,
                               ),
+                              strokeWidth: 1.5,
+                              rotation: _menuCenterRotationB,
+                              sides: _menuCenterShapeSidesB,
                             ),
                             Container(
                               width: 220,
@@ -6678,14 +6850,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                           )
                                         : fusionGreen,
                                     onTap: _openStore,
-                                  ),
-                                  _menuGlyphButton(
-                                    label: 'CREDITS',
-                                    icon: Icons.info_outline,
-                                    accent: scheme.onSurface.withValues(
-                                      alpha: 0.86,
-                                    ),
-                                    onTap: _showCreditsDialog,
                                   ),
                                 ],
                               ),
@@ -9111,42 +9275,48 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           ),
           Expanded(
             child: Center(
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 14 * scale,
-                  vertical: 6 * scale,
-                ),
-                decoration: BoxDecoration(
-                  color: isLightMono
-                      ? Colors.white
-                      : Color.alphaBlend(
-                          scheme.primary.withValues(
-                            alpha: isDark ? 0.14 : 0.05,
-                          ),
-                          scheme.surface,
-                        ).withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isLightMono
-                        ? Colors.black
-                        : scheme.outline.withValues(alpha: 0.34),
+              child: Visibility(
+                visible: _shouldKeepEvalActive,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 14 * scale,
+                    vertical: 6 * scale,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.30 : 0.10,
-                      ),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
+                  decoration: BoxDecoration(
+                    color: isLightMono
+                        ? Colors.white
+                        : Color.alphaBlend(
+                            scheme.primary.withValues(
+                              alpha: isDark ? 0.14 : 0.05,
+                            ),
+                            scheme.surface,
+                          ).withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isLightMono
+                          ? Colors.black
+                          : scheme.outline.withValues(alpha: 0.34),
                     ),
-                  ],
-                ),
-                child: Text(
-                  _evalTextForUi(displayedEval),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: displayedEvalColor,
-                    fontSize: 14 * scale,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.30 : 0.10,
+                        ),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    _evalTextForUi(displayedEval),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: displayedEvalColor,
+                      fontSize: 14 * scale,
+                    ),
                   ),
                 ),
               ),
@@ -9155,66 +9325,83 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!_playVsBot) ...[
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _analysisEditMode = !_analysisEditMode;
-                          _holdSelectedFrom = null;
-                          _gambitSelectedFrom = null;
-                          _legalTargets.clear();
-                          _gambitAvailableTargets.clear();
-                          _editModeHintText = _analysisEditMode
-                              ? 'Edit mode on'
-                              : 'Edit mode off';
-                        });
-                        _scheduleEditModeHintHide();
-                      },
-                      icon: Text(
-                        _analysisEditMode ? '🛠️' : '🔒',
-                        style: TextStyle(fontSize: 14 * scale),
-                      ),
-                      tooltip: _analysisEditMode
-                          ? 'Edit mode on (any move allowed)'
-                          : 'Edit mode off (legal moves only)',
-                      splashRadius: 14 * scale,
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: BoxConstraints.tightFor(
-                        width: 20 * scale,
-                        height: 20 * scale,
+              child: SizedBox(
+                width: 120 * scale,
+                height: 20 * scale,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.centerRight,
+                  children: [
+                    Positioned(
+                      right: 0,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Depth $_currentDepth',
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.54),
+                              fontSize: 11 * scale,
+                            ),
+                          ),
+                          SizedBox(width: 4 * scale),
+                          IconButton(
+                            onPressed: _showLogsDialog,
+                            icon: Icon(
+                              Icons.bug_report_outlined,
+                              color: scheme.onSurface.withValues(alpha: 0.56),
+                              size: 16 * scale,
+                            ),
+                            splashRadius: 14 * scale,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints.tightFor(
+                              width: 20 * scale,
+                              height: 20 * scale,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    SizedBox(width: 4 * scale),
+                    if (!_playVsBot)
+                      Positioned(
+                        right: 84 * scale,
+                        child: SizedBox(
+                          width: 20 * scale,
+                          height: 20 * scale,
+                          child: IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _analysisEditMode = !_analysisEditMode;
+                                _holdSelectedFrom = null;
+                                _gambitSelectedFrom = null;
+                                _legalTargets.clear();
+                                _gambitAvailableTargets.clear();
+                                _editModeHintText = _analysisEditMode
+                                    ? 'Edit mode on'
+                                    : 'Edit mode off';
+                              });
+                              _scheduleEditModeHintHide();
+                            },
+                            icon: Text(
+                              _analysisEditMode ? '🛠️' : '🔒',
+                              style: TextStyle(fontSize: 14 * scale),
+                            ),
+                            tooltip: _analysisEditMode
+                                ? 'Edit mode on (any move allowed)'
+                                : 'Edit mode off (legal moves only)',
+                            splashRadius: 14 * scale,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints.tightFor(
+                              width: 20 * scale,
+                              height: 20 * scale,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
-                  SizedBox(width: 4 * scale),
-                  Text(
-                    'Depth $_currentDepth',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.54),
-                      fontSize: 11 * scale,
-                    ),
-                  ),
-                  SizedBox(width: 4 * scale),
-                  IconButton(
-                    onPressed: _showLogsDialog,
-                    icon: Icon(
-                      Icons.bug_report_outlined,
-                      color: scheme.onSurface.withValues(alpha: 0.56),
-                      size: 16 * scale,
-                    ),
-                    splashRadius: 14 * scale,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: BoxConstraints.tightFor(
-                      width: 20 * scale,
-                      height: 20 * scale,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -9723,6 +9910,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             fontWeight: l.multiPv == 1
                                 ? FontWeight.bold
                                 : FontWeight.normal,
+                            shadows: const [
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(0.5, 0.5),
+                                blurRadius: 0.8,
+                              ),
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(-0.5, 0.5),
+                                blurRadius: 0.8,
+                              ),
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(0.5, -0.5),
+                                blurRadius: 0.8,
+                              ),
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(-0.5, -0.5),
+                                blurRadius: 0.8,
+                              ),
+                            ],
                           ),
                         ),
                         if (isCapture) ...[
@@ -9738,6 +9947,28 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                             color: color,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
+                            shadows: const [
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(0.5, 0.5),
+                                blurRadius: 0.8,
+                              ),
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(-0.5, 0.5),
+                                blurRadius: 0.8,
+                              ),
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(0.5, -0.5),
+                                blurRadius: 0.8,
+                              ),
+                              Shadow(
+                                color: Color(0xFF757575),
+                                offset: Offset(-0.5, -0.5),
+                                blurRadius: 0.8,
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -11144,16 +11375,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                           ),
                         ],
                       ),
-                      child: Center(
-                        child: Container(
-                          width: dot.radius,
-                          height: dot.radius,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: dot.color,
-                          ),
-                        ),
-                      ),
+                      child: dot.role == _CreditsBackdropDotRole.green
+                          ? Center(
+                              child: Container(
+                                width: dot.radius,
+                                height: dot.radius,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: dot.color,
+                                ),
+                              ),
+                            )
+                          : null,
                     ),
                   ),
                 ),
@@ -11634,21 +11867,23 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return 'Expert';
       case 3:
         return 'Grandmaster';
+      case 4:
+        return 'Wilder';
       default:
-        return 'Standard';
+        return 'Pro';
     }
   }
 
   Future<void> _purchaseDepthTier(int targetTier) async {
     final price = switch (targetTier) {
-      1 => 1800,
       2 => 2600,
       3 => 4200,
+      4 => 6200,
       _ => 0,
     };
-    if (targetTier <= _depthTier || targetTier < 1 || targetTier > 3) return;
+    if (targetTier <= _depthTier || targetTier < 2 || targetTier > 4) return;
     if (targetTier != _depthTier + 1) {
-      _addLog('Unlock tiers in order: Pro -> Expert -> Grandmaster');
+      _addLog('Unlock tiers in order: Pro -> Expert -> Grandmaster -> Wilder');
       return;
     }
     final economy = context.read<EconomyProvider>();
@@ -11715,6 +11950,66 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     });
     await _saveStoreState();
     _addLog('Piece Set Pack unlocked (Ember and Frost styles available)');
+  }
+
+  Future<void> _purchaseSpectral() async {
+    const price = 2900;
+    if (_spectralOwned) return;
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
+      _addLog('Not enough coins for Spectral pieces');
+      return;
+    }
+    setState(() {
+      _spectralOwned = true;
+    });
+    await _saveStoreState();
+    _addLog('Spectral pieces unlocked');
+  }
+
+  Future<void> _purchaseTuttiFrutti() async {
+    const price = 1000;
+    if (_tuttiFruttiOwned) return;
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
+      _addLog('Not enough coins for Tutti Frutti pieces');
+      return;
+    }
+    setState(() {
+      _tuttiFruttiOwned = true;
+    });
+    await _saveStoreState();
+    _addLog('Tutti Frutti pieces unlocked');
+  }
+
+  Future<void> _purchaseSakuraBoard() async {
+    const price = 700;
+    if (_sakuraBoardOwned) return;
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
+      _addLog('Not enough coins for Sakura board');
+      return;
+    }
+    setState(() {
+      _sakuraBoardOwned = true;
+    });
+    await _saveStoreState();
+    _addLog('Sakura board unlocked');
+  }
+
+  Future<void> _purchaseTropicalBoard() async {
+    const price = 700;
+    if (_tropicalBoardOwned) return;
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
+      _addLog('Not enough coins for Tropical board');
+      return;
+    }
+    setState(() {
+      _tropicalBoardOwned = true;
+    });
+    await _saveStoreState();
+    _addLog('Tropical board unlocked');
   }
 
   Future<void> _performResetWithSponsoredBreak() async {
@@ -11794,9 +12089,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Future<void> _resetPurchases() async {
     final economy = context.read<EconomyProvider>();
     setState(() {
-      _depthTier = 0;
+      _depthTier = 1;
       _extraSuggestionPurchases = 0;
       _themePackOwned = false;
+      _sakuraBoardOwned = false;
+      _tropicalBoardOwned = false;
+      _tuttiFruttiOwned = false;
+      _spectralOwned = false;
       _piecePackOwned = false;
       _adFreeOwned = false;
       _perspective = _defaultPerspective;
@@ -12071,6 +12370,44 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       },
                     ),
                     _storeItemCard(
+                      icon: Icons.local_florist_outlined,
+                      title: 'Sakura Board',
+                      subtitle: _sakuraBoardOwned
+                          ? 'Owned'
+                          : 'Unlock Sakura board palette',
+                      priceLabel: '700 c',
+                      enabled: !_sakuraBoardOwned,
+                      actionLabel: _sakuraBoardOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: Padding(
+                        padding: const EdgeInsets.only(left: 10),
+                        child: _boardThemeSwatch(BoardThemeMode.sakura),
+                      ),
+                      onTap: () async {
+                        await _purchaseSakuraBoard();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.beach_access_outlined,
+                      title: 'Tropical Board',
+                      subtitle: _tropicalBoardOwned
+                          ? 'Owned'
+                          : 'Unlock Tropical board palette',
+                      priceLabel: '700 c',
+                      enabled: !_tropicalBoardOwned,
+                      actionLabel: _tropicalBoardOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: Padding(
+                        padding: const EdgeInsets.only(left: 10),
+                        child: _boardThemeSwatch(BoardThemeMode.tropical),
+                      ),
+                      onTap: () async {
+                        await _purchaseTropicalBoard();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
                       itemKey: piecePackCardKey,
                       icon: Icons.extension_outlined,
                       title: 'Piece Set Pack',
@@ -12087,6 +12424,44 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                         setL(() {});
                       },
                     ),
+                    _storeItemCard(
+                      icon: Icons.auto_awesome,
+                      title: 'Spectral Pieces',
+                      subtitle: _spectralOwned
+                          ? 'Owned'
+                          : 'Unlock the Spectral piece theme',
+                      priceLabel: '2900 c',
+                      enabled: !_spectralOwned,
+                      actionLabel: _spectralOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: _pieceThemePreview(
+                        PieceThemeMode.spectral,
+                        pieceSize: 24.0,
+                      ),
+                      onTap: () async {
+                        await _purchaseSpectral();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.icecream,
+                      title: 'Tutti Frutti Pieces',
+                      subtitle: _tuttiFruttiOwned
+                          ? 'Owned'
+                          : 'Unlock Tutti Frutti piece styles',
+                      priceLabel: '1000 c',
+                      enabled: !_tuttiFruttiOwned,
+                      actionLabel: _tuttiFruttiOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: _pieceThemePreview(
+                        PieceThemeMode.tuttiFrutti,
+                        pieceSize: 24.0,
+                      ),
+                      onTap: () async {
+                        await _purchaseTuttiFrutti();
+                        setL(() {});
+                      },
+                    ),
                     const SizedBox(height: 10),
                     _storeSectionHeader(
                       'Analysis Upgrades',
@@ -12095,24 +12470,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     _storeItemCard(
                       icon: Icons.auto_graph,
                       title: 'Pro Mode',
-                      subtitle: _depthTier >= 1
-                          ? 'Unlocked (max ply depth 27)'
-                          : 'Unlock ply depth 25-27',
-                      priceLabel: '1800 c',
-                      enabled: _depthTier == 0,
-                      actionLabel: _depthTier >= 1 ? 'Owned' : 'Unlock',
+                      subtitle: 'Default mode (max ply depth 24)',
+                      priceLabel: 'Included',
+                      enabled: false,
+                      actionLabel: 'Owned',
                       actionColor: const Color(0xFF5AAEE8),
-                      onTap: () async {
-                        await _purchaseDepthTier(1);
-                        setL(() {});
-                      },
+                      onTap: null,
                     ),
                     _storeItemCard(
                       icon: Icons.psychology_alt_outlined,
                       title: 'Expert Mode',
                       subtitle: _depthTier >= 2
-                          ? 'Unlocked (max ply depth 29)'
-                          : 'Unlock ply depth 28-29',
+                          ? 'Unlocked (max ply depth 27)'
+                          : 'Unlock ply depth 25-27',
                       priceLabel: '2600 c',
                       enabled: _depthTier == 1,
                       actionLabel: _depthTier >= 2
@@ -12128,8 +12498,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       icon: Icons.workspace_premium_outlined,
                       title: 'Grandmaster Mode',
                       subtitle: _depthTier >= 3
-                          ? 'Unlocked (max ply depth 32)'
-                          : 'Unlock ply depth 30-32',
+                          ? 'Unlocked (max ply depth 29)'
+                          : 'Unlock ply depth 28-29',
                       priceLabel: '4200 c',
                       enabled: _depthTier == 2,
                       actionLabel: _depthTier >= 3
@@ -12138,6 +12508,23 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       actionColor: const Color(0xFF5AAEE8),
                       onTap: () async {
                         await _purchaseDepthTier(3);
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.whatshot_outlined,
+                      title: 'Wilder Mode',
+                      subtitle: _depthTier >= 4
+                          ? 'Unlocked (max ply depth 35)'
+                          : 'Unlock ply depth 33-35',
+                      priceLabel: '6200 c',
+                      enabled: _depthTier == 3,
+                      actionLabel: _depthTier >= 4
+                          ? 'Owned'
+                          : (_depthTier == 3 ? 'Unlock' : 'Locked'),
+                      actionColor: const Color(0xFF5AAEE8),
+                      onTap: () async {
+                        await _purchaseDepthTier(4);
                         setL(() {});
                       },
                     ),
@@ -12644,7 +13031,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     required String actionLabel,
     Color? actionColor,
     Widget? preview,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -12851,8 +13238,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _pieceThemePreview(PieceThemeMode mode) {
-    return PieceThemePreviewTile(pieceThemeIndex: mode.index);
+  Widget _pieceThemePreview(PieceThemeMode mode, {double pieceSize = 18}) {
+    return PieceThemePreviewTile(
+      pieceThemeIndex: mode.index,
+      pieceSize: pieceSize,
+    );
   }
 
   Widget _themePackPreview() {
@@ -12907,61 +13297,207 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       width: width,
       height: height,
     );
-    if (activeTheme == PieceThemeMode.classic) {
-      return baseImage;
-    }
-
-    final tinted = ColorFiltered(
-      colorFilter: ColorFilter.mode(
-        _pieceTintColor(piece, activeTheme),
-        BlendMode.modulate,
-      ),
-      child: baseImage,
-    );
+    final tinted = activeTheme == PieceThemeMode.classic
+        ? baseImage
+        : ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              _pieceTintColor(piece, activeTheme),
+              BlendMode.modulate,
+            ),
+            child: baseImage,
+          );
 
     final isBlackPiece = piece.endsWith('_b');
+    final isSpectral = activeTheme == PieceThemeMode.spectral;
+    Widget result;
+
     if (!isBlackPiece || !applyBlackOutline) {
-      return tinted;
-    }
+      if (!isSpectral) {
+        result = tinted;
+      } else {
+        result = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (final offset in const [
+              Offset(-0.8, -0.8),
+              Offset(0.8, -0.5),
+              Offset(-0.5, 0.8),
+              Offset(0.8, 0.8),
+            ])
+              Transform.translate(
+                offset: offset,
+                child: Opacity(
+                  opacity: 0.18,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      _pieceTintColor(
+                        piece,
+                        activeTheme,
+                      ).withValues(alpha: 0.4),
+                      BlendMode.srcIn,
+                    ),
+                    child: baseImage,
+                  ),
+                ),
+              ),
+            tinted,
+          ],
+        );
+      }
+    } else {
+      final outlineWidth = width == null
+          ? null
+          : width + blackOutlineOverflowPx;
+      final outlineHeight = height == null
+          ? null
+          : height + blackOutlineOverflowPx;
+      final outlineCenterShift = Offset(
+        -blackOutlineOverflowPx / 2,
+        -blackOutlineOverflowPx / 2,
+      );
 
-    final outlineWidth = width == null ? null : width + blackOutlineOverflowPx;
-    final outlineHeight = height == null
-        ? null
-        : height + blackOutlineOverflowPx;
-    final outlineCenterShift = Offset(
-      -blackOutlineOverflowPx / 2,
-      -blackOutlineOverflowPx / 2,
-    );
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        for (final offset in const [
-          Offset(-0.65, 0),
-          Offset(0.65, 0),
-          Offset(0, -0.65),
-          Offset(0, 0.65),
-          Offset(-0.5, -0.5),
-          Offset(0.5, -0.5),
-          Offset(-0.5, 0.5),
-          Offset(0.5, 0.5),
-        ])
-          Transform.translate(
-            offset: offset + outlineCenterShift,
-            child: Opacity(
-              opacity: 0.18,
-              child: Image.asset(
-                'assets/pieces/$piece.png',
-                width: outlineWidth,
-                height: outlineHeight,
-                color: const Color(0xFFF7FBFF),
-                colorBlendMode: BlendMode.srcIn,
+      result = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          if (isSpectral)
+            for (final offset in const [
+              Offset(-0.8, -0.8),
+              Offset(0.8, -0.5),
+              Offset(-0.5, 0.8),
+              Offset(0.8, 0.8),
+            ])
+              Transform.translate(
+                offset: offset,
+                child: Opacity(
+                  opacity: 0.18,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      _pieceTintColor(
+                        piece,
+                        activeTheme,
+                      ).withValues(alpha: 0.4),
+                      BlendMode.srcIn,
+                    ),
+                    child: baseImage,
+                  ),
+                ),
+              ),
+          for (final offset in const [
+            Offset(-0.65, 0),
+            Offset(0.65, 0),
+            Offset(0, -0.65),
+            Offset(0, 0.65),
+            Offset(-0.5, -0.5),
+            Offset(0.5, -0.5),
+            Offset(-0.5, 0.5),
+            Offset(0.5, 0.5),
+          ])
+            Transform.translate(
+              offset: offset + outlineCenterShift,
+              child: Opacity(
+                opacity: 0.18,
+                child: Image.asset(
+                  'assets/pieces/$piece.png',
+                  width: outlineWidth,
+                  height: outlineHeight,
+                  color: const Color(0xFFF7FBFF),
+                  colorBlendMode: BlendMode.srcIn,
+                ),
               ),
             ),
+          tinted,
+        ],
+      );
+    }
+
+    if (!isSpectral) {
+      return result;
+    }
+
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final phase = _pieceThemePhase(piece);
+        final phase2 = _pieceThemePhase2(piece);
+        final phase3 = _pieceThemePhase3(piece);
+        final frequency =
+            1.55 +
+            (piece.codeUnits.fold<int>(0, (sum, v) => sum + v) % 8) * 0.055;
+        final t = _pulseController.value * 2 * pi * frequency + phase;
+        final pulse =
+            ((sin(t) * 0.8) +
+                    (sin(t * 1.73 + phase2) * 0.45) +
+                    (sin(t * 2.27 + phase3) * 0.35)) *
+                0.18 +
+            0.53;
+        final flutterOffset = Offset(
+          cos(t * 1.95 + phase2) * (0.28 + pulse * 0.43),
+          sin(t * 2.23 + phase3) * (0.22 + pulse * 0.48),
+        );
+        final glowColor = _pieceTintColor(
+          piece,
+          activeTheme,
+        ).withValues(alpha: (0.26 + pulse * 0.34).clamp(0.2, 0.78));
+        final trailOffsets =
+            <Offset>[
+                  const Offset(-1.1, -0.9),
+                  const Offset(1.0, -0.2),
+                  const Offset(-0.6, 1.2),
+                ]
+                .map(
+                  (offset) =>
+                      offset * (0.70 + pulse * 0.92) +
+                      flutterOffset * (0.6 + pulse * 0.35),
+                )
+                .toList(growable: false);
+
+        return Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: glowColor,
+                blurRadius: 18 + pulse * 12,
+                spreadRadius: 2.8 + pulse * 4.5,
+              ),
+            ],
           ),
-        tinted,
-      ],
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (final offset in trailOffsets)
+                Transform.translate(
+                  offset: offset,
+                  child: Opacity(
+                    opacity: (0.16 - pulse * 0.06).clamp(0.06, 0.18),
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.mode(
+                        glowColor.withValues(alpha: 0.26),
+                        BlendMode.srcIn,
+                      ),
+                      child: baseImage,
+                    ),
+                  ),
+                ),
+              Transform.translate(offset: flutterOffset * 0.38, child: result),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  double _pieceThemePhase(String piece) {
+    return (piece.codeUnits.fold<int>(0, (sum, v) => sum + v) % 100) * 0.0628;
+  }
+
+  double _pieceThemePhase2(String piece) {
+    return (piece.codeUnits.fold<int>(0, (sum, v) => sum + v * 3) % 100) *
+        0.0628;
+  }
+
+  double _pieceThemePhase3(String piece) {
+    return (piece.codeUnits.fold<int>(0, (sum, v) => sum + v * 5) % 100) *
+        0.0628;
   }
 
   Color _pieceTintColor(String piece, PieceThemeMode theme) {
@@ -12980,6 +13516,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return 'Ember';
       case BoardThemeMode.aurora:
         return 'Sea';
+      case BoardThemeMode.sakura:
+        return 'Sakura';
+      case BoardThemeMode.tropical:
+        return 'Tropical';
     }
   }
 
@@ -12991,6 +13531,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return 'Ember';
       case PieceThemeMode.frost:
         return 'Frost';
+      case PieceThemeMode.tuttiFrutti:
+        return 'Tutti Frutti';
+      case PieceThemeMode.spectral:
+        return 'Spectral';
     }
   }
 
