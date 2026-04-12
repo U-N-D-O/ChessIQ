@@ -1,0 +1,1419 @@
+Analyzing chess_analysis_page.dart...                           
+
+  error - Missing concrete implementation of 'State.build' - lib\features\analysis\screens\chess_analysis_page.dart:114:7 - non_abstract_class_inherits_abstract_member
+   info - The private field _creditsDialogOpen could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:154:8 - prefer_final_fields
+   info - The private field _isHotkeyResetting could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:181:8 - prefer_final_fields
+   info - The private field _playVsBot could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:221:8 - prefer_final_fields
+   info - The private field _humanPlaysWhite could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:222:8 - prefer_final_fields
+warning - The declaration '_saveLastBotIndex' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:250:16 - unused_element
+   info - The private field _botSideChoice could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:255:17 - prefer_final_fields
+   info - The private field _activeSection could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:348:14 - prefer_final_fields
+   info - The private field _quizMode could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:349:18 - prefer_final_fields
+   info - The private field _analysisEditMode could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:357:8 - prefer_final_fields
+   info - The private field _quizPrompt could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:361:10 - prefer_final_fields
+   info - The private field _quizPromptFocus could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:362:10 - prefer_final_fields
+   info - The private field _quizOptions could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:363:16 - prefer_final_fields
+   info - The private field _quizCorrectIndex could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:364:7 - prefer_final_fields
+   info - The private field _quizFeedback could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:365:10 - prefer_final_fields
+   info - The private field _quizBoardState could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:366:23 - prefer_final_fields
+   info - The private field _quizContinuation could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:367:20 - prefer_final_fields
+   info - The private field _quizWhiteToMove could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:368:8 - prefer_final_fields
+   info - The private field _quizShownPly could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:369:7 - prefer_final_fields
+   info - The private field _quizPlayBoard could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:371:23 - prefer_final_fields
+   info - The private field _quizPlayArrowCount could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:372:7 - prefer_final_fields
+   info - The private field _quizPlayActive could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:373:8 - prefer_final_fields
+   info - The private field _quizFlyProgress could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:377:10 - prefer_final_fields
+   info - The private field _quizAnswered could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:378:8 - prefer_final_fields
+   info - The private field _quizSelectedIndex could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:379:7 - prefer_final_fields
+   info - The private field _quizQuestionsTarget could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:396:7 - prefer_final_fields
+   info - The private field _quizSessionAnswered could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:397:7 - prefer_final_fields
+   info - The private field _quizSessionCorrect could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:398:7 - prefer_final_fields
+   info - The private field _quizSessionStarted could be 'final' - lib\features\analysis\screens\chess_analysis_page.dart:399:8 - prefer_final_fields
+warning - The declaration '_scheduleEditModeHintHide' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:410:8 - unused_element
+warning - The declaration '_initializeCreditsBackdrop' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:758:8 - unused_element
+warning - The declaration '_playCoinRewardSound' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:919:16 - unused_element
+warning - The declaration '_playCoinBagSound' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:934:16 - unused_element
+warning - The declaration '_playCoinBagSoundL' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:948:16 - unused_element
+warning - The declaration '_playBoardMoveSound' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:962:16 - unused_element
+warning - The declaration '_saveQuizStats' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1104:16 - unused_element
+warning - The declaration '_saveViewedGambits' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1125:16 - unused_element
+warning - The declaration '_setMute' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1133:16 - unused_element
+warning - The declaration '_setHapticsEnabled' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1147:16 - unused_element
+warning - The declaration '_setCinematicThemeEnabled' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1153:16 - unused_element
+warning - The declaration '_lightHaptic' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1165:16 - unused_element
+warning - The declaration '_checkHaptic' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1170:16 - unused_element
+warning - The declaration '_availableBoardThemes' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1213:28 - unused_element
+warning - The declaration '_availablePieceThemes' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1217:28 - unused_element
+warning - The declaration '_saveStoreState' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1267:16 - unused_element
+warning - The declaration '_storeRewardAdCountdownLabel' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1281:10 - unused_element
+warning - The declaration '_persistAnalysisSnapshotIfNeeded' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1459:8 - unused_element
+warning - The declaration '_restoreAnalysisWorkspace' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1464:16 - unused_element
+warning - The declaration '_moveRecordToMap' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1485:24 - unused_element
+warning - The declaration '_applySuggestionCount' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:1657:8 - unused_element
+warning - The declaration '_maybeTriggerBotMove' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2033:16 - unused_element
+warning - The declaration '_updateCurrentOpening' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2208:8 - unused_element
+warning - The declaration '_displayEvalForPov' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2420:10 - unused_element
+warning - The declaration '_evalTextForUi' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2447:10 - unused_element
+warning - The declaration '_evalColorForUi' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2460:9 - unused_element
+warning - The declaration '_evalFillForUi' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2473:10 - unused_element
+warning - The declaration '_detectCurrentGameOutcome' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2494:16 - unused_element
+warning - The declaration '_toggleGambitMode' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2557:8 - unused_element
+warning - The declaration '_showGameResultDialog' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:2591:16 - unused_element
+  error - Expected to find ';' - lib\features\analysis\screens\chess_analysis_page.dart:3187:7 - expected_token
+  error - Expected an identifier - lib\features\analysis\screens\chess_analysis_page.dart:3187:8 - missing_identifier
+  error - Unexpected text ';' - lib\features\analysis\screens\chess_analysis_page.dart:3187:8 - unexpected_token
+  error - Expected to find '}' - lib\features\analysis\screens\chess_analysis_page.dart:3188:5 - expected_token
+  error - The method 'then' isn't defined for the type 'StatefulBuilder' - lib\features\analysis\screens\chess_analysis_page.dart:3188:7 - undefined_method
+  error - Expected to find ')' - lib\features\analysis\screens\chess_analysis_page.dart:3192:7 - expected_token
+warning - The declaration '_handleBoardTap' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:3195:8 - unused_element
+warning - The declaration '_handleGambitDragDrop' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:3319:8 - unused_element
+warning - The declaration '_attemptMove' isn't referenced - lib\features\analysis\screens\chess_analysis_page.dart:3429:16 - unused_element
+  error - Expected to find ';' - lib\features\analysis\screens\chess_analysis_page.dart:3714:11 - expected_token
+  error - Expected an identifier - lib\features\analysis\screens\chess_analysis_page.dart:3714:12 - missing_identifier
+  error - Unexpected text ';' - lib\features\analysis\screens\chess_analysis_page.dart:3714:12 - unexpected_token
+  error - Expected to find '}' - lib\features\analysis\screens\chess_analysis_page.dart:3715:9 - expected_token
+  error - Expected to find ')' - lib\features\analysis\screens\chess_analysis_page.dart:3715:10 - expected_token
+  error - Expected a class member - lib\features\analysis\screens\chess_analysis_page.dart:3716:8 - expected_class_member
+  error - Expected a class member - lib\features\analysis\screens\chess_analysis_page.dart:3717:5 - expected_class_member
+  error - Expected a class member - lib\features\analysis\screens\chess_analysis_page.dart:3717:6 - expected_class_member
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:3723:5 - undefined_function
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:3724:7 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:3725:7 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:3726:7 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:3727:7 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:3728:7 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:3729:7 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:3731:5 - undefined_function
+  error - Undefined name '_ecoLines' - lib\features\analysis\screens\chess_analysis_page.dart:3738:24 - undefined_identifier
+  error - Undefined name '_viewedGambits' - lib\features\analysis\screens\chess_analysis_page.dart:3748:9 - undefined_identifier
+  error - The function '_saveViewedGambits' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:3749:17 - undefined_function
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3791:5 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3792:5 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3793:5 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3794:5 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3795:5 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3796:5 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:3797:5 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3805:5 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3806:5 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3807:5 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3808:5 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3809:5 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:3810:5 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:3811:5 - undefined_identifier
+  error - The body might complete normally, causing 'null' to be returned, but the return type, 'int', is a potentially non-nullable type - lib\features\analysis\screens\chess_analysis_page.dart:3814:7 - body_might_complete_normally
+  error - Undefined name '_quizDifficulty' - lib\features\analysis\screens\chess_analysis_page.dart:3815:13 - undefined_identifier
+  error - Undefined name '_quizTotalAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:3855:9 - undefined_identifier
+  error - Undefined name '_quizCorrectAnswers' - lib\features\analysis\screens\chess_analysis_page.dart:3856:13 - undefined_identifier
+  error - Undefined name '_quizTotalAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:3856:35 - undefined_identifier
+  error - Undefined name '_quizDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:3886:20 - undefined_identifier
+  error - Undefined name '_quizDailyCorrectByDay' - lib\features\analysis\screens\chess_analysis_page.dart:3887:19 - undefined_identifier
+  error - Undefined name '_quizNameDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:3890:20 - undefined_identifier
+  error - Undefined name '_quizNameDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:3891:19 - undefined_identifier
+  error - Undefined name '_quizLineDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:3894:20 - undefined_identifier
+  error - Undefined name '_quizLineDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:3895:19 - undefined_identifier
+  error - The body might complete normally, causing 'null' to be returned, but the return type, 'int', is a potentially non-nullable type - lib\features\analysis\screens\chess_analysis_page.dart:3920:7 - body_might_complete_normally
+  error - Undefined name '_quizDifficulty' - lib\features\analysis\screens\chess_analysis_page.dart:3921:13 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:3941:25 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:3941:38 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:3942:26 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:3942:39 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:3947:9 - undefined_identifier
+  error - The function '_lightHaptic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4071:11 - undefined_function
+  error - The function '_lightHaptic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4073:11 - undefined_function
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4078:23 - undefined_identifier
+  error - Undefined name '_quizStreak' - lib\features\analysis\screens\chess_analysis_page.dart:4079:33 - undefined_identifier
+  error - Undefined name '_quizStreak' - lib\features\analysis\screens\chess_analysis_page.dart:4082:7 - undefined_identifier
+  error - Undefined name '_quizBestStreak' - lib\features\analysis\screens\chess_analysis_page.dart:4083:7 - undefined_identifier
+  error - Undefined name '_quizBestStreak' - lib\features\analysis\screens\chess_analysis_page.dart:4083:29 - undefined_identifier
+  error - Undefined name '_quizStreak' - lib\features\analysis\screens\chess_analysis_page.dart:4083:46 - undefined_identifier
+  error - Undefined name '_quizCorrectAnswers' - lib\features\analysis\screens\chess_analysis_page.dart:4084:7 - undefined_identifier
+  error - Undefined name '_quizScore' - lib\features\analysis\screens\chess_analysis_page.dart:4085:7 - undefined_identifier
+  error - Undefined name '_quizStreak' - lib\features\analysis\screens\chess_analysis_page.dart:4087:7 - undefined_identifier
+  error - Undefined name '_quizScore' - lib\features\analysis\screens\chess_analysis_page.dart:4088:7 - undefined_identifier
+  error - Undefined name '_quizScore' - lib\features\analysis\screens\chess_analysis_page.dart:4088:27 - undefined_identifier
+  error - Undefined name '_quizTotalAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4091:5 - undefined_identifier
+  error - Undefined name '_quizDailyScore' - lib\features\analysis\screens\chess_analysis_page.dart:4093:5 - undefined_identifier
+  error - Undefined name '_quizDailyScore' - lib\features\analysis\screens\chess_analysis_page.dart:4094:10 - undefined_identifier
+  error - Undefined name '_quizDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4096:5 - undefined_identifier
+  error - Undefined name '_quizDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4096:32 - undefined_identifier
+  error - Undefined name '_quizDailyCorrectByDay' - lib\features\analysis\screens\chess_analysis_page.dart:4098:7 - undefined_identifier
+  error - Undefined name '_quizDailyCorrectByDay' - lib\features\analysis\screens\chess_analysis_page.dart:4098:38 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4101:9 - undefined_identifier
+  error - Undefined name '_quizNameDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4102:7 - undefined_identifier
+  error - Undefined name '_quizNameDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4102:38 - undefined_identifier
+  error - Undefined name '_quizNameDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4104:9 - undefined_identifier
+  error - Undefined name '_quizNameDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4104:39 - undefined_identifier
+  error - Undefined name '_quizLineDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4107:7 - undefined_identifier
+  error - Undefined name '_quizLineDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4107:38 - undefined_identifier
+  error - Undefined name '_quizLineDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4109:9 - undefined_identifier
+  error - Undefined name '_quizLineDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4109:39 - undefined_identifier
+  error - Undefined name '_quizDailyScore' - lib\features\analysis\screens\chess_analysis_page.dart:4113:19 - undefined_identifier
+  error - Undefined name '_quizDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4114:19 - undefined_identifier
+  error - Undefined name '_quizDailyCorrectByDay' - lib\features\analysis\screens\chess_analysis_page.dart:4115:19 - undefined_identifier
+  error - Undefined name '_quizNameDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4116:19 - undefined_identifier
+  error - Undefined name '_quizNameDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4117:19 - undefined_identifier
+  error - Undefined name '_quizLineDailyAttempts' - lib\features\analysis\screens\chess_analysis_page.dart:4118:19 - undefined_identifier
+  error - Undefined name '_quizLineDailyCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4119:19 - undefined_identifier
+  error - The function '_saveQuizStats' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4121:15 - undefined_function
+  error - Undefined name '_quizDifficulty' - lib\features\analysis\screens\chess_analysis_page.dart:4125:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4126:5 - undefined_function
+  error - Undefined name '_quizDifficulty' - lib\features\analysis\screens\chess_analysis_page.dart:4127:7 - undefined_identifier
+  error - The function '_saveQuizStats' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4129:15 - undefined_function
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:4133:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4134:5 - undefined_function
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:4135:7 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:4144:9 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4145:9 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4146:9 - undefined_identifier
+  error - Undefined name '_quizReviewHistory' - lib\features\analysis\screens\chess_analysis_page.dart:4150:5 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4152:15 - undefined_identifier
+  error - Undefined name '_quizPrompt' - lib\features\analysis\screens\chess_analysis_page.dart:4153:17 - undefined_identifier
+  error - Undefined name '_quizPromptFocus' - lib\features\analysis\screens\chess_analysis_page.dart:4154:22 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:4155:36 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4156:23 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4159:46 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4160:45 - undefined_identifier
+  error - Undefined name '_quizWhiteToMove' - lib\features\analysis\screens\chess_analysis_page.dart:4161:22 - undefined_identifier
+  error - Undefined name '_quizShownPly' - lib\features\analysis\screens\chess_analysis_page.dart:4162:19 - undefined_identifier
+  error - Undefined name '_quizReviewHistory' - lib\features\analysis\screens\chess_analysis_page.dart:4169:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4171:5 - undefined_function
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4172:25 - undefined_identifier
+  error - Undefined name '_quizReviewHistory' - lib\features\analysis\screens\chess_analysis_page.dart:4173:13 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4174:20 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4175:7 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4176:7 - undefined_identifier
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:4177:7 - undefined_identifier
+  error - Undefined name '_quizPlayArrowCount' - lib\features\analysis\screens\chess_analysis_page.dart:4178:7 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:4179:7 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:4180:7 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:4181:7 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:4182:7 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4187:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4188:5 - undefined_function
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4188:20 - undefined_identifier
+  error - Undefined name '_quizPrompt' - lib\features\analysis\screens\chess_analysis_page.dart:4192:5 - undefined_identifier
+  error - Undefined name '_quizPromptFocus' - lib\features\analysis\screens\chess_analysis_page.dart:4193:5 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:4194:5 - undefined_identifier
+  error - Undefined name '_quizFeedback' - lib\features\analysis\screens\chess_analysis_page.dart:4195:5 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4196:5 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4197:5 - undefined_identifier
+  error - Undefined name '_quizWhiteToMove' - lib\features\analysis\screens\chess_analysis_page.dart:4198:5 - undefined_identifier
+  error - Undefined name '_quizShownPly' - lib\features\analysis\screens\chess_analysis_page.dart:4199:5 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4200:5 - undefined_identifier
+  error - Undefined name '_quizSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4201:5 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4202:5 - undefined_identifier
+  error - Undefined name '_quizPlayArrowCount' - lib\features\analysis\screens\chess_analysis_page.dart:4203:5 - undefined_identifier
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:4204:5 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:4205:5 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:4206:5 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:4207:5 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:4208:5 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4209:5 - undefined_identifier
+  error - Undefined name '_quizSessionStarted' - lib\features\analysis\screens\chess_analysis_page.dart:4213:5 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4214:5 - undefined_identifier
+  error - Undefined name '_quizSessionCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4215:5 - undefined_identifier
+  error - Undefined name '_quizReviewHistory' - lib\features\analysis\screens\chess_analysis_page.dart:4216:5 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4221:5 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4225:5 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:4226:7 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:4227:7 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:4228:7 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4230:7 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4235:5 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:4236:7 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:4237:7 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:4238:7 - undefined_identifier
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:4239:7 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4240:7 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4245:5 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:4246:7 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:4247:7 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:4248:7 - undefined_identifier
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:4249:7 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4250:7 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:4251:7 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4252:7 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4255:11 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4256:9 - undefined_identifier
+  error - Undefined name '_botCharacters' - lib\features\analysis\screens\chess_analysis_page.dart:4262:39 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4263:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4264:7 - undefined_function
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4264:22 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4266:9 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4267:7 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:4280:28 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:4284:9 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:4285:9 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4288:18 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4291:11 - undefined_function
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4291:26 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:4292:58 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4380:13 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4381:17 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:4382:16 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4383:19 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4384:15 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4472:7 - undefined_function
+  error - The function '_stopMenuMusic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4477:17 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4478:12 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4480:11 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:4480:53 - undefined_identifier
+  error - The function '_persistAnalysisSnapshotIfNeeded' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4481:9 - undefined_function
+  error - Undefined name '_rng' - lib\features\analysis\screens\chess_analysis_page.dart:4487:33 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4490:7 - undefined_function
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4491:9 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:4492:9 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:4493:9 - undefined_identifier
+  error - Undefined name '_humanPlaysWhite' - lib\features\analysis\screens\chess_analysis_page.dart:4494:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:4495:9 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:4496:9 - undefined_identifier
+  error - The function '_ensureEngineStarted' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4499:13 - undefined_function
+  error - The function '_resetBoard' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4500:7 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4502:12 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4503:7 - undefined_function
+  error - Undefined name '_suggestionsEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:4504:9 - undefined_identifier
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4507:7 - undefined_function
+  error - The function '_maybeTriggerBotMove' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4508:17 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4510:7 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4516:5 - undefined_function
+  error - Undefined name '_quizSessionStarted' - lib\features\analysis\screens\chess_analysis_page.dart:4517:7 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4518:7 - undefined_identifier
+  error - Undefined name '_quizSessionCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4519:7 - undefined_identifier
+  error - Undefined name '_quizFeedback' - lib\features\analysis\screens\chess_analysis_page.dart:4520:7 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4521:7 - undefined_identifier
+  error - Undefined name '_quizSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4522:7 - undefined_identifier
+  error - Undefined name '_quizReviewHistory' - lib\features\analysis\screens\chess_analysis_page.dart:4523:7 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4524:7 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4526:27 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4530:26 - undefined_identifier
+  error - Undefined name '_quizSessionCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4531:23 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:4533:16 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4540:31 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:4540:53 - undefined_identifier
+  error - Undefined name '_quizSessionCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4541:29 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4554:10 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4555:5 - undefined_function
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4561:9 - undefined_identifier
+  error - Undefined name '_quizSessionStarted' - lib\features\analysis\screens\chess_analysis_page.dart:4565:10 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4569:9 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4569:26 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:4569:50 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4573:10 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:4586:16 - undefined_identifier
+  error - Undefined name '_quizDifficulty' - lib\features\analysis\screens\chess_analysis_page.dart:4624:15 - undefined_identifier
+  error - The non-nullable local variable 'minPrefix' must be assigned before it can be used - lib\features\analysis\screens\chess_analysis_page.dart:4638:19 - not_assigned_potentially_non_nullable_local_variable
+  error - The non-nullable local variable 'maxHintPrefix' must be assigned before it can be used - lib\features\analysis\screens\chess_analysis_page.dart:4639:33 - not_assigned_potentially_non_nullable_local_variable
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4690:7 - undefined_function
+  error - Undefined name '_quizPrompt' - lib\features\analysis\screens\chess_analysis_page.dart:4691:9 - undefined_identifier
+  error - Undefined name '_quizPromptFocus' - lib\features\analysis\screens\chess_analysis_page.dart:4692:9 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:4693:9 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4694:9 - undefined_identifier
+  error - Undefined name '_quizFeedback' - lib\features\analysis\screens\chess_analysis_page.dart:4695:9 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4696:9 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4697:9 - undefined_identifier
+  error - Undefined name '_quizWhiteToMove' - lib\features\analysis\screens\chess_analysis_page.dart:4698:9 - undefined_identifier
+  error - Undefined name '_quizShownPly' - lib\features\analysis\screens\chess_analysis_page.dart:4699:9 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4700:9 - undefined_identifier
+  error - Undefined name '_quizSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4701:9 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4702:27 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4707:32 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4737:7 - undefined_function
+  error - Undefined name '_quizPrompt' - lib\features\analysis\screens\chess_analysis_page.dart:4738:9 - undefined_identifier
+  error - Undefined name '_quizPromptFocus' - lib\features\analysis\screens\chess_analysis_page.dart:4739:9 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:4740:9 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4741:9 - undefined_identifier
+  error - Undefined name '_quizFeedback' - lib\features\analysis\screens\chess_analysis_page.dart:4742:9 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4743:9 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4744:9 - undefined_identifier
+  error - Undefined name '_quizWhiteToMove' - lib\features\analysis\screens\chess_analysis_page.dart:4745:9 - undefined_identifier
+  error - Undefined name '_quizShownPly' - lib\features\analysis\screens\chess_analysis_page.dart:4746:9 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4747:9 - undefined_identifier
+  error - Undefined name '_quizSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4748:9 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4749:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4794:5 - undefined_function
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:4795:7 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4796:7 - undefined_identifier
+  error - Undefined name '_quizFeedback' - lib\features\analysis\screens\chess_analysis_page.dart:4797:7 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4798:7 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4799:7 - undefined_identifier
+  error - Undefined name '_quizWhiteToMove' - lib\features\analysis\screens\chess_analysis_page.dart:4800:7 - undefined_identifier
+  error - Undefined name '_quizShownPly' - lib\features\analysis\screens\chess_analysis_page.dart:4801:7 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4802:7 - undefined_identifier
+  error - Undefined name '_quizSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4803:7 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4804:7 - undefined_identifier
+  error - Undefined name '_quizPlayArrowCount' - lib\features\analysis\screens\chess_analysis_page.dart:4805:7 - undefined_identifier
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:4806:7 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:4807:7 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:4808:7 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:4809:7 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:4810:7 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4811:7 - undefined_identifier
+  error - Undefined name '_quizPrompt' - lib\features\analysis\screens\chess_analysis_page.dart:4813:9 - undefined_identifier
+  error - Undefined name '_quizPromptFocus' - lib\features\analysis\screens\chess_analysis_page.dart:4814:9 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:4815:9 - undefined_identifier
+  error - Undefined name '_quizPrompt' - lib\features\analysis\screens\chess_analysis_page.dart:4818:9 - undefined_identifier
+  error - Undefined name '_quizPromptFocus' - lib\features\analysis\screens\chess_analysis_page.dart:4819:9 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:4820:9 - undefined_identifier
+  error - Undefined name '_quizDailyQuestionsAsked' - lib\features\analysis\screens\chess_analysis_page.dart:4825:7 - undefined_identifier
+  error - Undefined name '_quizDailyQuestionsAsked' - lib\features\analysis\screens\chess_analysis_page.dart:4825:40 - undefined_identifier
+  error - Undefined name '_quizDailyQuestionsAsked' - lib\features\analysis\screens\chess_analysis_page.dart:4826:21 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4848:10 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4848:21 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4848:50 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4852:10 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4852:22 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4854:42 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4855:5 - undefined_function
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:4856:7 - undefined_identifier
+  error - Undefined name '_quizPlayArrowCount' - lib\features\analysis\screens\chess_analysis_page.dart:4857:7 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4857:29 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4858:7 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:4859:7 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:4860:7 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:4861:7 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:4862:7 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4865:25 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4866:12 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4866:24 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4867:23 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4874:7 - undefined_function
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:4875:9 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:4876:9 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:4877:9 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:4878:9 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:4879:9 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4892:14 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4892:26 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4893:9 - undefined_function
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:4894:11 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4898:12 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4898:24 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4901:7 - undefined_function
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:4902:9 - undefined_identifier
+  error - Undefined name '_quizPlayArrowCount' - lib\features\analysis\screens\chess_analysis_page.dart:4903:9 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:4904:9 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:4905:9 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:4906:9 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:4907:9 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4910:15 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4912:14 - undefined_identifier
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4912:26 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4916:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4916:18 - undefined_function
+  error - Undefined name '_quizPlayActive' - lib\features\analysis\screens\chess_analysis_page.dart:4916:33 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4920:9 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4921:32 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4922:26 - undefined_identifier
+  error - Undefined name '_quizSessionCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4923:25 - undefined_identifier
+  error - Undefined name '_quizStreak' - lib\features\analysis\screens\chess_analysis_page.dart:4924:36 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:4927:25 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:4928:24 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4941:5 - undefined_function
+  error - Undefined name '_quizSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:4942:7 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4943:7 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:4944:7 - undefined_identifier
+  error - Undefined name '_quizSessionCorrect' - lib\features\analysis\screens\chess_analysis_page.dart:4946:9 - undefined_identifier
+  error - Undefined name '_quizFeedback' - lib\features\analysis\screens\chess_analysis_page.dart:4948:7 - undefined_identifier
+  error - The function '_lightHaptic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4956:19 - undefined_function
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:4960:9 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:4960:39 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4966:9 - undefined_identifier
+  error - Undefined name '_menuExitAnimationController' - lib\features\analysis\screens\chess_analysis_page.dart:4969:7 - undefined_identifier
+  error - Undefined name '_menuExitAnimationController' - lib\features\analysis\screens\chess_analysis_page.dart:4972:26 - undefined_identifier
+  error - The function '_stopMenuMusic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4973:17 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:4977:12 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4978:7 - undefined_function
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4979:9 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:4980:9 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:4981:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:4982:9 - undefined_identifier
+  error - The function '_restoreAnalysisWorkspace' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4984:13 - undefined_function
+  error - The function '_ensureEngineStarted' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4985:17 - undefined_function
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4986:7 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4988:7 - undefined_function
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:4994:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:4995:7 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:4996:9 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:4997:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:4998:9 - undefined_identifier
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:4999:9 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5001:9 - undefined_identifier
+  error - The function '_playMenuMusic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5003:17 - undefined_function
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5007:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5008:7 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5009:9 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:5010:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:5011:9 - undefined_identifier
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:5012:9 - undefined_identifier
+  error - The function '_clearBotGhostArrows' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5013:9 - undefined_function
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5014:9 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5019:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5020:7 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5021:9 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:5022:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:5023:9 - undefined_identifier
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:5024:9 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5025:9 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5030:24 - undefined_identifier
+  error - The function '_send' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5032:7 - undefined_function
+  error - The function '_persistAnalysisSnapshotIfNeeded' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5034:7 - undefined_function
+  error - The function '_releaseEngineSession' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5036:15 - undefined_function
+  error - Undefined name '_menuExitAnimationController' - lib\features\analysis\screens\chess_analysis_page.dart:5038:5 - undefined_identifier
+  error - Undefined name '_sectionTransitionController' - lib\features\analysis\screens\chess_analysis_page.dart:5039:5 - undefined_identifier
+  error - Undefined name '_sectionTransitionController' - lib\features\analysis\screens\chess_analysis_page.dart:5040:5 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5041:7 - undefined_function
+  error - Undefined name '_suggestionsEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:5043:11 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:5044:11 - undefined_identifier
+  error - Undefined name '_currentDepth' - lib\features\analysis\screens\chess_analysis_page.dart:5045:11 - undefined_identifier
+  error - Undefined name '_botSearchCompleter' - lib\features\analysis\screens\chess_analysis_page.dart:5046:11 - undefined_identifier
+  error - Undefined name '_botSearchLines' - lib\features\analysis\screens\chess_analysis_page.dart:5047:11 - undefined_identifier
+  error - The function '_clearBotGhostArrows' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5048:11 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5050:9 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:5051:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:5052:9 - undefined_identifier
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:5053:9 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5054:9 - undefined_identifier
+  error - The function '_playMenuMusic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5056:17 - undefined_function
+  error - Undefined name '_isHotkeyResetting' - lib\features\analysis\screens\chess_analysis_page.dart:5061:9 - undefined_identifier
+  error - Undefined name '_isHotkeyResetting' - lib\features\analysis\screens\chess_analysis_page.dart:5062:5 - undefined_identifier
+  error - The function '_stopMenuMusic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5064:13 - undefined_function
+  error - Undefined name '_introAudioPlayer' - lib\features\analysis\screens\chess_analysis_page.dart:5065:13 - undefined_identifier
+  error - The function '_send' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5066:7 - undefined_function
+  error - The function '_releaseEngineSession' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5067:13 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:5069:12 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5070:7 - undefined_function
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5071:9 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5072:9 - undefined_identifier
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:5073:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:5074:9 - undefined_identifier
+  error - Undefined name '_menuReady' - lib\features\analysis\screens\chess_analysis_page.dart:5075:9 - undefined_identifier
+  error - Undefined name '_introCompleted' - lib\features\analysis\screens\chess_analysis_page.dart:5076:9 - undefined_identifier
+  error - Undefined name '_buttonUnlocked' - lib\features\analysis\screens\chess_analysis_page.dart:5077:9 - undefined_identifier
+  error - Undefined name '_menuMusicPlaying' - lib\features\analysis\screens\chess_analysis_page.dart:5078:9 - undefined_identifier
+  error - Undefined name '_menuExitAnimationController' - lib\features\analysis\screens\chess_analysis_page.dart:5081:7 - undefined_identifier
+  error - Undefined name '_sectionTransitionController' - lib\features\analysis\screens\chess_analysis_page.dart:5082:7 - undefined_identifier
+  error - Undefined name '_menuRevealController' - lib\features\analysis\screens\chess_analysis_page.dart:5083:7 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:5084:7 - undefined_identifier
+  error - The function '_resetBoard' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5086:7 - undefined_function
+  error - The function '_restoreSnapshotAndStart' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5087:17 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5089:7 - undefined_function
+  error - Undefined name '_isHotkeyResetting' - lib\features\analysis\screens\chess_analysis_page.dart:5092:7 - undefined_identifier
+  error - Undefined name '_menuExitAnimationController' - lib\features\analysis\screens\chess_analysis_page.dart:5098:18 - undefined_identifier
+  error - Undefined name '_menuExitAnimationController' - lib\features\analysis\screens\chess_analysis_page.dart:5102:11 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5117:24 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5119:23 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:5121:23 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:5124:48 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5237:11 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5238:11 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5239:35 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5239:53 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5242:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5243:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5246:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5246:46 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5249:27 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5250:27 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5251:27 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5266:11 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5267:11 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5268:35 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5268:53 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5271:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5272:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5275:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5276:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5277:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5280:27 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5281:27 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5282:27 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5289:19 - undefined_identifier
+  error - The function '_isCurrentTurnPiece' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5290:27 - undefined_function
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5299:27 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5300:29 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5316:29 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5319:13 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5335:9 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5337:26 - undefined_identifier
+  error - The function '_isKingAttacked' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5339:12 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5347:9 - undefined_identifier
+  error - Undefined name '_isHumanTurnInBotGame' - lib\features\analysis\screens\chess_analysis_page.dart:5347:24 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:5348:9 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:5348:30 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5349:27 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5350:11 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5352:11 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5353:13 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5354:13 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5355:13 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5356:13 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5362:11 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5363:9 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5364:11 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5365:11 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5366:11 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5372:9 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5373:11 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5374:11 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5379:11 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5380:22 - undefined_identifier
+  error - The function '_attemptMove' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5381:19 - undefined_function
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:5385:9 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:5386:11 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:5386:53 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5390:25 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5391:9 - undefined_identifier
+  error - The function '_isCurrentTurnPiece' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5392:11 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5393:9 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5394:11 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5395:11 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5396:11 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5404:9 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5405:7 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5406:9 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5407:9 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5408:9 - undefined_identifier
+  error - The function '_isCurrentTurnPiece' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5413:9 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5414:7 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5415:9 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5416:9 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5423:9 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5424:20 - undefined_identifier
+  error - The function '_attemptMove' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5425:17 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5429:5 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5430:7 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5431:7 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5432:7 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:5437:9 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:5438:46 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:5439:5 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:5440:28 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5441:7 - undefined_function
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:5444:7 - undefined_identifier
+  error - The function '_currentMoveSequence' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5449:26 - undefined_function
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5461:51 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:5462:22 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5472:9 - undefined_function
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:5711:9 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5712:9 - undefined_identifier
+  error - Undefined name '_isHumanTurnInBotGame' - lib\features\analysis\screens\chess_analysis_page.dart:5712:24 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:5712:50 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5716:20 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5724:7 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5728:24 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5731:11 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5732:11 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5735:7 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5737:24 - undefined_identifier
+  error - The function '_buildMoveNotation' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5741:22 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5749:5 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5751:5 - undefined_function
+  error - Undefined name '_historyIndex' - lib\features\analysis\screens\chess_analysis_page.dart:5753:11 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5753:27 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5754:9 - undefined_identifier
+  error - Undefined name '_historyIndex' - lib\features\analysis\screens\chess_analysis_page.dart:5754:34 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5754:53 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5756:7 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5760:11 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5762:11 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5766:27 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5767:27 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5768:27 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5769:27 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5772:38 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5773:38 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5774:38 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5775:38 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5780:9 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5782:9 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5785:7 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5790:27 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:5791:20 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5792:27 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5793:27 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5794:35 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5795:36 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5796:35 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5797:36 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5798:28 - undefined_identifier
+  error - Undefined name '_historyIndex' - lib\features\analysis\screens\chess_analysis_page.dart:5801:7 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5801:23 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5802:7 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5803:7 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5804:7 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5805:7 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:5806:7 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:5806:23 - undefined_identifier
+  error - The function '_updateCurrentOpening' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5807:7 - undefined_function
+  error - The function '_playBoardMoveSound' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5811:15 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5813:9 - undefined_identifier
+  error - The function '_isKingAttacked' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5813:23 - undefined_function
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5813:39 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:5813:51 - undefined_identifier
+  error - The function '_checkHaptic' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5814:17 - undefined_function
+  error - Undefined name '_historyScrollController' - lib\features\analysis\screens\chess_analysis_page.dart:5818:11 - undefined_identifier
+  error - Undefined name '_historyScrollController' - lib\features\analysis\screens\chess_analysis_page.dart:5819:9 - undefined_identifier
+  error - Undefined name '_historyScrollController' - lib\features\analysis\screens\chess_analysis_page.dart:5820:11 - undefined_identifier
+  error - The function '_detectCurrentGameOutcome' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5827:25 - undefined_function
+  error - The function '_send' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5829:7 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5830:7 - undefined_function
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:5831:9 - undefined_identifier
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:5832:9 - undefined_identifier
+  error - The function '_persistAnalysisSnapshotIfNeeded' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5834:7 - undefined_function
+  error - The function '_showGameResultDialog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5835:17 - undefined_function
+  error - The function '_persistAnalysisSnapshotIfNeeded' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5839:5 - undefined_function
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5840:5 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:5841:9 - undefined_identifier
+  error - The function '_maybeTriggerBotMove' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5842:17 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5847:5 - undefined_function
+  error - Undefined name '_historyIndex' - lib\features\analysis\screens\chess_analysis_page.dart:5848:7 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5850:19 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5851:9 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5851:45 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5853:7 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5853:29 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:5854:7 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5854:23 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5855:42 - undefined_identifier
+  error - Undefined name '_gameOutcome' - lib\features\analysis\screens\chess_analysis_page.dart:5856:7 - undefined_identifier
+  error - Undefined name '_currentOpening' - lib\features\analysis\screens\chess_analysis_page.dart:5857:7 - undefined_identifier
+  error - The function '_findOpeningFromHistory' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5857:25 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5858:7 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:5859:7 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5860:7 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:5861:7 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:5862:7 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:5863:7 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:5864:7 - undefined_identifier
+  error - Undefined name '_currentDepth' - lib\features\analysis\screens\chess_analysis_page.dart:5865:7 - undefined_identifier
+  error - Undefined name '_currentEval' - lib\features\analysis\screens\chess_analysis_page.dart:5866:7 - undefined_identifier
+  error - The function '_persistAnalysisSnapshotIfNeeded' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5868:5 - undefined_function
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:5869:5 - undefined_function
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5878:13 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5885:22 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5886:15 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5890:17 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5900:10 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5901:10 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5902:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5903:9 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5906:10 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5907:10 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5908:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5909:9 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5912:10 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5913:10 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5914:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5915:9 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5918:10 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:5919:10 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5920:9 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:5921:9 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:5926:26 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:5927:23 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:5928:20 - undefined_identifier
+  error - Undefined name '_introCompleted' - lib\features\analysis\screens\chess_analysis_page.dart:5932:9 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:5933:15 - undefined_identifier
+  error - Undefined name '_introCompleted' - lib\features\analysis\screens\chess_analysis_page.dart:5938:9 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:5939:15 - undefined_identifier
+  error - Undefined name '_introCompleted' - lib\features\analysis\screens\chess_analysis_page.dart:5944:9 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:5945:15 - undefined_identifier
+  error - Undefined name '_suggestionButtonKey' - lib\features\analysis\screens\chess_analysis_page.dart:5953:27 - undefined_identifier
+  error - Undefined name '_sceneKey' - lib\features\analysis\screens\chess_analysis_page.dart:5954:26 - undefined_identifier
+  error - Undefined name '_yellowMenuDotPosition' - lib\features\analysis\screens\chess_analysis_page.dart:5973:11 - undefined_identifier
+  error - Undefined name '_blueMenuDotPosition' - lib\features\analysis\screens\chess_analysis_page.dart:5974:11 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:6062:18 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:6064:19 - undefined_identifier
+  error - Undefined name '_boardKey' - lib\features\analysis\screens\chess_analysis_page.dart:6140:26 - undefined_identifier
+  error - Undefined name '_sceneKey' - lib\features\analysis\screens\chess_analysis_page.dart:6141:26 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:6157:21 - undefined_identifier
+  error - Undefined name '_humanPlaysWhite' - lib\features\analysis\screens\chess_analysis_page.dart:6158:12 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:6159:12 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:6160:16 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:6160:58 - undefined_identifier
+  error - Undefined name '_suggestionButtonKey' - lib\features\analysis\screens\chess_analysis_page.dart:6180:29 - undefined_identifier
+  error - Undefined name '_sceneKey' - lib\features\analysis\screens\chess_analysis_page.dart:6181:28 - undefined_identifier
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:6199:56 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:6209:7 - undefined_function
+  error - Undefined name '_launchStart' - lib\features\analysis\screens\chess_analysis_page.dart:6210:9 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6211:9 - undefined_identifier
+  error - Undefined name '_launchController' - lib\features\analysis\screens\chess_analysis_page.dart:6214:7 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:6215:14 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:6216:9 - undefined_function
+  error - Undefined name '_launchStart' - lib\features\analysis\screens\chess_analysis_page.dart:6217:11 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6218:11 - undefined_identifier
+  error - Undefined name '_launchStart' - lib\features\analysis\screens\chess_analysis_page.dart:6227:9 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6227:33 - undefined_identifier
+  error - Undefined name '_launchController' - lib\features\analysis\screens\chess_analysis_page.dart:6232:18 - undefined_identifier
+  error - Undefined name '_launchController' - lib\features\analysis\screens\chess_analysis_page.dart:6234:51 - undefined_identifier
+  error - Undefined name '_launchStart' - lib\features\analysis\screens\chess_analysis_page.dart:6235:23 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6243:43 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6246:27 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6247:26 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6264:33 - undefined_identifier
+  error - Undefined name '_launchTargets' - lib\features\analysis\screens\chess_analysis_page.dart:6268:36 - undefined_identifier
+  error - Undefined name '_buttonRippleCenter' - lib\features\analysis\screens\chess_analysis_page.dart:6306:9 - undefined_identifier
+  error - Undefined name '_buttonRippleController' - lib\features\analysis\screens\chess_analysis_page.dart:6308:18 - undefined_identifier
+  error - Undefined name '_buttonRippleController' - lib\features\analysis\screens\chess_analysis_page.dart:6310:44 - undefined_identifier
+  error - Undefined name '_buttonRippleCenter' - lib\features\analysis\screens\chess_analysis_page.dart:6322:29 - undefined_identifier
+  error - Undefined name '_buttonRippleCenter' - lib\features\analysis\screens\chess_analysis_page.dart:6323:28 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:6383:14 - undefined_identifier
+  error - Undefined name '_menuReady' - lib\features\analysis\screens\chess_analysis_page.dart:6397:33 - undefined_identifier
+  error - Undefined name '_menuRevealController' - lib\features\analysis\screens\chess_analysis_page.dart:6401:45 - undefined_identifier
+  error - Undefined name '_sectionTransitionController' - lib\features\analysis\screens\chess_analysis_page.dart:6413:43 - undefined_identifier
+  error - Undefined name '_menuReady' - lib\features\analysis\screens\chess_analysis_page.dart:6419:25 - undefined_identifier
+  error - Undefined name '_menuRevealController' - lib\features\analysis\screens\chess_analysis_page.dart:6423:43 - undefined_identifier
+  error - Undefined name '_sectionTransitionController' - lib\features\analysis\screens\chess_analysis_page.dart:6435:41 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:6449:33 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:6455:18 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:6460:49 - undefined_identifier
+  error - Undefined name '_blueMenuDotPosition' - lib\features\analysis\screens\chess_analysis_page.dart:6472:11 - undefined_identifier
+  error - Undefined name '_blueMenuDotPosition' - lib\features\analysis\screens\chess_analysis_page.dart:6473:11 - undefined_identifier
+  error - Undefined name '_yellowMenuDotPosition' - lib\features\analysis\screens\chess_analysis_page.dart:6476:11 - undefined_identifier
+  error - Undefined name '_yellowMenuDotPosition' - lib\features\analysis\screens\chess_analysis_page.dart:6477:11 - undefined_identifier
+  error - Undefined name '_menuSparkParticles' - lib\features\analysis\screens\chess_analysis_page.dart:6527:24 - undefined_identifier
+  error - The function '_setMute' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:6707:42 - undefined_function
+  error - Undefined name '_muteSounds' - lib\features\analysis\screens\chess_analysis_page.dart:6707:52 - undefined_identifier
+  error - Undefined name '_muteSounds' - lib\features\analysis\screens\chess_analysis_page.dart:6709:27 - undefined_identifier
+  error - Undefined name '_muteSounds' - lib\features\analysis\screens\chess_analysis_page.dart:6713:37 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:6746:28 - undefined_identifier
+  error - Undefined name '_botCharacters' - lib\features\analysis\screens\chess_analysis_page.dart:6806:25 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:6806:40 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:6807:19 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:6808:33 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:6809:28 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:6813:9 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:6814:9 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:7010:45 - undefined_identifier
+  error - Undefined name '_botCharacters' - lib\features\analysis\screens\chess_analysis_page.dart:7011:44 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7015:35 - undefined_function
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7016:43 - undefined_identifier
+  error - The function '_saveLastBotIndex' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7018:35 - undefined_function
+  error - Undefined name '_botCharacters' - lib\features\analysis\screens\chess_analysis_page.dart:7022:39 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7080:42 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7083:39 - undefined_identifier
+  error - Undefined name '_botCharacters' - lib\features\analysis\screens\chess_analysis_page.dart:7101:57 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7105:48 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7137:35 - undefined_identifier
+  error - Undefined name '_botCharacters' - lib\features\analysis\screens\chess_analysis_page.dart:7138:39 - undefined_identifier
+  error - Undefined name '_botSetupSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7141:39 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7181:39 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7185:38 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7197:44 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7208:31 - undefined_function
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7209:39 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7214:39 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7220:38 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7230:42 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7241:41 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7252:31 - undefined_function
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7253:39 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7258:39 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7262:38 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7274:44 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7285:31 - undefined_function
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7286:39 - undefined_identifier
+  error - Undefined name '_botSideChoice' - lib\features\analysis\screens\chess_analysis_page.dart:7305:43 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:7323:33 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:7324:28 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:7328:9 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:7329:9 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7339:25 - undefined_identifier
+  error - Undefined name '_quizReviewHistory' - lib\features\analysis\screens\chess_analysis_page.dart:7341:11 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7341:30 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7343:52 - undefined_identifier
+  error - Undefined name '_quizPrompt' - lib\features\analysis\screens\chess_analysis_page.dart:7344:52 - undefined_identifier
+  error - Undefined name '_quizPromptFocus' - lib\features\analysis\screens\chess_analysis_page.dart:7345:62 - undefined_identifier
+  error - Undefined name '_quizOptions' - lib\features\analysis\screens\chess_analysis_page.dart:7346:54 - undefined_identifier
+  error - Undefined name '_quizCorrectIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7348:38 - undefined_identifier
+  error - Undefined name '_quizSelectedIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7350:39 - undefined_identifier
+  error - Undefined name '_quizFeedback' - lib\features\analysis\screens\chess_analysis_page.dart:7351:56 - undefined_identifier
+  error - Undefined name '_quizContinuation' - lib\features\analysis\screens\chess_analysis_page.dart:7353:38 - undefined_identifier
+  error - Undefined name '_quizWhiteToMove' - lib\features\analysis\screens\chess_analysis_page.dart:7354:62 - undefined_identifier
+  error - Undefined name '_quizShownPly' - lib\features\analysis\screens\chess_analysis_page.dart:7355:56 - undefined_identifier
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:7358:12 - undefined_identifier
+  error - Undefined name '_quizPlayBoard' - lib\features\analysis\screens\chess_analysis_page.dart:7358:40 - undefined_identifier
+  error - Undefined name '_quizBoardState' - lib\features\analysis\screens\chess_analysis_page.dart:7358:57 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:7359:41 - undefined_identifier
+  error - Undefined name '_quizSessionStarted' - lib\features\analysis\screens\chess_analysis_page.dart:7386:10 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7465:37 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7470:36 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7475:36 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7480:46 - undefined_function
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7481:35 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7486:37 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7491:36 - undefined_identifier
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7496:36 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7501:46 - undefined_function
+  error - Undefined name '_quizMode' - lib\features\analysis\screens\chess_analysis_page.dart:7502:35 - undefined_identifier
+  error - Undefined name '_quizDifficulty' - lib\features\analysis\screens\chess_analysis_page.dart:7521:44 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:7555:46 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:7592:44 - undefined_identifier
+  error - Undefined name '_viewedGambits' - lib\features\analysis\screens\chess_analysis_page.dart:7652:20 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:7666:11 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:7667:12 - undefined_identifier
+  error - Undefined name '_quizPlayArrowCount' - lib\features\analysis\screens\chess_analysis_page.dart:7674:19 - undefined_identifier
+  error - Undefined name '_quizPlayArrowCount' - lib\features\analysis\screens\chess_analysis_page.dart:7676:25 - undefined_identifier
+  error - Undefined name '_quizReviewIndex' - lib\features\analysis\screens\chess_analysis_page.dart:7680:14 - undefined_identifier
+  error - Undefined name '_quizReviewHistory' - lib\features\analysis\screens\chess_analysis_page.dart:7681:13 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:7777:29 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:7777:53 - undefined_identifier
+  error - Undefined name '_quizFlyFrom' - lib\features\analysis\screens\chess_analysis_page.dart:7779:29 - undefined_identifier
+  error - Undefined name '_quizFlyTo' - lib\features\analysis\screens\chess_analysis_page.dart:7784:29 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:7798:44 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:7805:49 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:7817:33 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:7823:39 - undefined_identifier
+  error - Undefined name '_quizFlyProgress' - lib\features\analysis\screens\chess_analysis_page.dart:7830:39 - undefined_identifier
+  error - Undefined name '_quizFlyPiece' - lib\features\analysis\screens\chess_analysis_page.dart:7838:39 - undefined_identifier
+  error - The function '_buildMoveSequenceText' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:7900:23 - undefined_function
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:7974:19 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:7974:36 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:7974:60 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:7979:19 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:7980:26 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:7980:50 - undefined_identifier
+  error - Undefined name '_quizDifficulty' - lib\features\analysis\screens\chess_analysis_page.dart:8007:130 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:8007:151 - undefined_identifier
+  error - Undefined name '_quizSessionAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:8029:32 - undefined_identifier
+  error - Undefined name '_quizAnswered' - lib\features\analysis\screens\chess_analysis_page.dart:8029:56 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:8029:80 - undefined_identifier
+  error - Undefined name '_quizQuestionsTarget' - lib\features\analysis\screens\chess_analysis_page.dart:8029:104 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:8150:28 - undefined_identifier
+  error - Undefined name '_quizDailyQuestionsAsked' - lib\features\analysis\screens\chess_analysis_page.dart:8158:34 - undefined_identifier
+  error - Undefined name '_quizScore' - lib\features\analysis\screens\chess_analysis_page.dart:8220:17 - undefined_identifier
+  error - Undefined name '_quizStreak' - lib\features\analysis\screens\chess_analysis_page.dart:8225:17 - undefined_identifier
+  error - Undefined name '_quizBestStreak' - lib\features\analysis\screens\chess_analysis_page.dart:8230:17 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:8327:29 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:8354:9 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:8355:10 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:8392:9 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8393:20 - undefined_identifier
+  error - Undefined name '_humanPlaysWhite' - lib\features\analysis\screens\chess_analysis_page.dart:8394:12 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:8395:12 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:8396:16 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:8396:58 - undefined_identifier
+  error - Undefined name '_sceneKey' - lib\features\analysis\screens\chess_analysis_page.dart:8475:26 - undefined_identifier
+  error - Undefined name '_boardKey' - lib\features\analysis\screens\chess_analysis_page.dart:8518:64 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8572:64 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:8573:63 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:8581:65 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8604:69 - undefined_identifier
+  error - Undefined name '_currentOpening' - lib\features\analysis\screens\chess_analysis_page.dart:8605:63 - undefined_identifier
+  error - Undefined name '_currentOpening' - lib\features\analysis\screens\chess_analysis_page.dart:8613:65 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8635:70 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8649:64 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8686:43 - undefined_identifier
+  error - Undefined name '_boardKey' - lib\features\analysis\screens\chess_analysis_page.dart:8697:54 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8725:42 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8727:47 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8728:48 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8740:42 - undefined_identifier
+  error - Undefined name '_introCompleted' - lib\features\analysis\screens\chess_analysis_page.dart:8745:30 - undefined_identifier
+  error - Undefined name '_editModeHintText' - lib\features\analysis\screens\chess_analysis_page.dart:8747:29 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:8762:46 - undefined_identifier
+  error - Undefined name '_editModeHintText' - lib\features\analysis\screens\chess_analysis_page.dart:8779:37 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:8781:46 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:8808:28 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:8812:9 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:8813:9 - undefined_identifier
+  error - The function '_displayEvalForPov' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:8815:27 - undefined_function
+  error - Undefined name '_isWinningOutcomeForPov' - lib\features\analysis\screens\chess_analysis_page.dart:8819:12 - undefined_identifier
+  error - Undefined name '_isLosingOutcomeForPov' - lib\features\analysis\screens\chess_analysis_page.dart:8821:18 - undefined_identifier
+  error - The function '_evalColorForUi' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:8826:11 - undefined_function
+  error - Undefined name '_selectedBot' - lib\features\analysis\screens\chess_analysis_page.dart:8827:25 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8842:29 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8884:21 - undefined_identifier
+  error - The function '_evalTextForUi' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:8964:19 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:8980:24 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:8983:25 - undefined_function
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:8984:27 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:8984:48 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:8985:27 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:8986:27 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:8987:27 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:8988:27 - undefined_identifier
+  error - Undefined name '_editModeHintText' - lib\features\analysis\screens\chess_analysis_page.dart:8989:27 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:8989:47 - undefined_identifier
+  error - The function '_scheduleEditModeHintHide' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:8993:25 - undefined_function
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:8996:25 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:8999:32 - undefined_identifier
+  error - Undefined name '_currentDepth' - lib\features\analysis\screens\chess_analysis_page.dart:9014:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:9046:28 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:9050:9 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:9051:9 - undefined_identifier
+  error - Undefined name '_shouldKeepEvalActive' - lib\features\analysis\screens\chess_analysis_page.dart:9053:25 - undefined_identifier
+  error - The function '_displayEvalForPov' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9054:27 - undefined_function
+  error - The function '_evalColorForUi' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9057:34 - undefined_function
+  error - Undefined name '_isWinningOutcomeForPov' - lib\features\analysis\screens\chess_analysis_page.dart:9058:31 - undefined_identifier
+  error - The function '_evalFillForUi' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9059:20 - undefined_function
+  error - Undefined name '_isBlackPovActive' - lib\features\analysis\screens\chess_analysis_page.dart:9108:35 - undefined_identifier
+  error - The function '_evalFillForUi' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9115:30 - undefined_function
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:9116:34 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:9158:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:9160:9 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:9161:9 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:9162:19 - undefined_identifier
+  error - Undefined name '_currentOpening' - lib\features\analysis\screens\chess_analysis_page.dart:9162:44 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:9181:22 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:9184:25 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:9213:23 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9214:36 - undefined_identifier
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9215:34 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9216:33 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9217:43 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9219:15 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:9221:16 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9221:37 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9229:19 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:9230:19 - undefined_identifier
+  error - The function '_handleGambitDragDrop' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9231:17 - undefined_function
+  error - The function '_attemptMove' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9234:25 - undefined_function
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9246:22 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:9247:25 - undefined_identifier
+  error - The function '_handleBoardTap' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9248:23 - undefined_function
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9251:23 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:9252:24 - undefined_identifier
+  error - The function '_isCurrentTurnPiece' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9252:46 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9253:19 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9254:21 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9255:21 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9256:21 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:9259:25 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9299:33 - undefined_identifier
+  error - The function '_isCurrentTurnPiece' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9300:34 - undefined_function
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9303:33 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:9304:34 - undefined_identifier
+  error - The function '_isCurrentTurnPiece' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9305:34 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9308:29 - undefined_function
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9309:35 - undefined_identifier
+  error - The function '_selectGambitSource' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9310:33 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9312:33 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9313:33 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9314:33 - undefined_identifier
+  error - Undefined name '_analysisEditMode' - lib\features\analysis\screens\chess_analysis_page.dart:9317:37 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9321:33 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9327:31 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9328:33 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9329:33 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9330:33 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9331:33 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9341:33 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9342:33 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:9344:40 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9397:23 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:9420:24 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:9456:19 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:9457:11 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:9458:11 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:9459:33 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:9461:18 - undefined_identifier
+  error - Undefined name '_currentEval' - lib\features\analysis\screens\chess_analysis_page.dart:9470:28 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:9471:27 - undefined_identifier
+  error - Undefined name '_botGhostArrows' - lib\features\analysis\screens\chess_analysis_page.dart:9476:16 - undefined_identifier
+  error - Undefined name '_shouldShowVisualSuggestions' - lib\features\analysis\screens\chess_analysis_page.dart:9508:9 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:9508:41 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:9517:27 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:9520:41 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:9522:43 - undefined_identifier
+  error - Undefined name '_currentEval' - lib\features\analysis\screens\chess_analysis_page.dart:9574:18 - undefined_identifier
+  error - Undefined name '_historyScrollController' - lib\features\analysis\screens\chess_analysis_page.dart:9589:21 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9592:20 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9594:21 - undefined_identifier
+  error - Undefined name '_historyIndex' - lib\features\analysis\screens\chess_analysis_page.dart:9595:30 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:9606:10 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9606:24 - undefined_identifier
+  error - The function '_send' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9608:5 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9609:5 - undefined_function
+  error - Undefined name '_botThinking' - lib\features\analysis\screens\chess_analysis_page.dart:9610:7 - undefined_identifier
+  error - Undefined name '_botSearchCompleter' - lib\features\analysis\screens\chess_analysis_page.dart:9611:7 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9615:9 - undefined_identifier
+  error - Undefined name '_historyIndex' - lib\features\analysis\screens\chess_analysis_page.dart:9616:9 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9616:25 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9618:13 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:9619:11 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:9620:11 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:9623:11 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9623:33 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:9624:11 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9624:27 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9625:46 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9628:16 - undefined_identifier
+  error - Undefined name '_isHumanTurnInBotGame' - lib\features\analysis\screens\chess_analysis_page.dart:9628:44 - undefined_identifier
+  error - Undefined name '_currentOpening' - lib\features\analysis\screens\chess_analysis_page.dart:9630:7 - undefined_identifier
+  error - The function '_findOpeningFromHistory' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9630:25 - undefined_function
+  error - Undefined name '_holdSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9631:7 - undefined_identifier
+  error - Undefined name '_gambitSelectedFrom' - lib\features\analysis\screens\chess_analysis_page.dart:9632:7 - undefined_identifier
+  error - Undefined name '_legalTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9633:7 - undefined_identifier
+  error - Undefined name '_gambitAvailableTargets' - lib\features\analysis\screens\chess_analysis_page.dart:9634:7 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:9635:7 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:9636:7 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9637:7 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:9638:7 - undefined_identifier
+  error - Undefined name '_currentDepth' - lib\features\analysis\screens\chess_analysis_page.dart:9639:7 - undefined_identifier
+  error - Undefined name '_currentEval' - lib\features\analysis\screens\chess_analysis_page.dart:9640:7 - undefined_identifier
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9643:5 - undefined_function
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9647:21 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:9680:28 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:9696:16 - undefined_identifier
+  error - Undefined name '_toggleGambitMode' - lib\features\analysis\screens\chess_analysis_page.dart:9698:22 - undefined_identifier
+  error - Undefined name '_openingButtonFlashController' - lib\features\analysis\screens\chess_analysis_page.dart:9700:28 - undefined_identifier
+  error - Undefined name '_openingButtonFlashController' - lib\features\analysis\screens\chess_analysis_page.dart:9702:41 - undefined_identifier
+  error - Undefined name '_openingButtonFlashRed' - lib\features\analysis\screens\chess_analysis_page.dart:9705:45 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9707:25 - undefined_identifier
+  error - Undefined name '_openingButtonFlashRed' - lib\features\analysis\screens\chess_analysis_page.dart:9711:23 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9711:49 - undefined_identifier
+  error - Undefined name '_openingButtonFlashRed' - lib\features\analysis\screens\chess_analysis_page.dart:9744:42 - undefined_identifier
+  error - Undefined name '_openingButtonFlashRed' - lib\features\analysis\screens\chess_analysis_page.dart:9756:30 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9758:29 - undefined_identifier
+  error - Undefined name '_openingMode' - lib\features\analysis\screens\chess_analysis_page.dart:9760:29 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:9772:52 - undefined_identifier
+  error - Undefined name '_isEngineActive' - lib\features\analysis\screens\chess_analysis_page.dart:9780:9 - undefined_identifier
+  error - Undefined name '_suggestionButtonKey' - lib\features\analysis\screens\chess_analysis_page.dart:9782:14 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9784:11 - undefined_function
+  error - Undefined name '_suggestionsEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:9785:13 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:9786:13 - undefined_identifier
+  error - Undefined name '_currentDepth' - lib\features\analysis\screens\chess_analysis_page.dart:9787:13 - undefined_identifier
+  error - The function '_send' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9789:11 - undefined_function
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:9791:22 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9794:17 - undefined_function
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:9795:19 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:9795:35 - undefined_identifier
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9797:17 - undefined_function
+  error - Undefined name '_suggestionButtonKey' - lib\features\analysis\screens\chess_analysis_page.dart:9827:12 - undefined_identifier
+  error - Undefined name '_buttonUnlocked' - lib\features\analysis\screens\chess_analysis_page.dart:9828:16 - undefined_identifier
+  error - Undefined name '_suggestionLaunchInProgress' - lib\features\analysis\screens\chess_analysis_page.dart:9828:35 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:9831:19 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9832:17 - undefined_function
+  error - Undefined name '_suggestionsEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:9833:19 - undefined_identifier
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9835:17 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9836:17 - undefined_function
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:9837:19 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9844:17 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9849:15 - undefined_function
+  error - Undefined name '_suggestionLaunchInProgress' - lib\features\analysis\screens\chess_analysis_page.dart:9850:17 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:9853:19 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9854:17 - undefined_function
+  error - Undefined name '_suggestionBurstActive' - lib\features\analysis\screens\chess_analysis_page.dart:9854:32 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:9856:21 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9856:30 - undefined_function
+  error - Undefined name '_suggestionBurstActive' - lib\features\analysis\screens\chess_analysis_page.dart:9856:45 - undefined_identifier
+  error - Undefined name '_suggestionButtonKey' - lib\features\analysis\screens\chess_analysis_page.dart:9860:39 - undefined_identifier
+  error - Undefined name '_sceneKey' - lib\features\analysis\screens\chess_analysis_page.dart:9861:38 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9871:21 - undefined_function
+  error - Undefined name '_buttonRippleCenter' - lib\features\analysis\screens\chess_analysis_page.dart:9871:36 - undefined_identifier
+  error - Undefined name '_buttonRippleController' - lib\features\analysis\screens\chess_analysis_page.dart:9872:27 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:9873:25 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9873:34 - undefined_function
+  error - Undefined name '_buttonRippleCenter' - lib\features\analysis\screens\chess_analysis_page.dart:9873:49 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:9877:20 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9878:15 - undefined_function
+  error - Undefined name '_suggestionLaunchInProgress' - lib\features\analysis\screens\chess_analysis_page.dart:9879:17 - undefined_identifier
+  error - Undefined name '_suggestionsEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:9880:17 - undefined_identifier
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9882:15 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:9883:15 - undefined_function
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:9884:17 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:9891:11 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:9892:11 - undefined_identifier
+  error - Undefined name '_launchController' - lib\features\analysis\screens\chess_analysis_page.dart:9893:11 - undefined_identifier
+  error - Undefined name '_introCompleted' - lib\features\analysis\screens\chess_analysis_page.dart:9899:16 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:9901:17 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:9955:26 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:9956:26 - undefined_identifier
+  error - Undefined name '_suggestionLaunchInProgress' - lib\features\analysis\screens\chess_analysis_page.dart:9957:27 - undefined_identifier
+  error - Undefined name '_launchController' - lib\features\analysis\screens\chess_analysis_page.dart:9958:17 - undefined_identifier
+  error - Undefined name '_suggestionBurstActive' - lib\features\analysis\screens\chess_analysis_page.dart:9991:37 - undefined_identifier
+  error - Undefined name '_suggestionLaunchInProgress' - lib\features\analysis\screens\chess_analysis_page.dart:10042:21 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10111:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10128:35 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10131:18 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10132:18 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10135:25 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10143:16 - undefined_identifier
+  error - Undefined name '_logs' - lib\features\analysis\screens\chess_analysis_page.dart:10148:18 - undefined_identifier
+  error - Undefined name '_logs' - lib\features\analysis\screens\chess_analysis_page.dart:10152:30 - undefined_identifier
+  error - Undefined name '_logs' - lib\features\analysis\screens\chess_analysis_page.dart:10154:28 - undefined_identifier
+  error - Undefined name '_logs' - lib\features\analysis\screens\chess_analysis_page.dart:10164:28 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:10167:15 - undefined_function
+  error - Undefined name '_logs' - lib\features\analysis\screens\chess_analysis_page.dart:10167:58 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:10177:5 - undefined_function
+  error - Undefined name '_creditsDialogOpen' - lib\features\analysis\screens\chess_analysis_page.dart:10178:7 - undefined_identifier
+  error - The function '_initializeCreditsBackdrop' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:10179:7 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10184:18 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:10186:38 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:10192:15 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:10491:11 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:10492:9 - undefined_function
+  error - Undefined name '_creditsDialogOpen' - lib\features\analysis\screens\chess_analysis_page.dart:10493:11 - undefined_identifier
+  error - Undefined name '_creditsBackdropDots' - lib\features\analysis\screens\chess_analysis_page.dart:10494:11 - undefined_identifier
+  error - Undefined name '_blueYellowContactTime' - lib\features\analysis\screens\chess_analysis_page.dart:10495:11 - undefined_identifier
+  error - Undefined name '_creditsBackdropLastUpdate' - lib\features\analysis\screens\chess_analysis_page.dart:10496:11 - undefined_identifier
+  error - Undefined name '_creditsDialogOpen' - lib\features\analysis\screens\chess_analysis_page.dart:10499:9 - undefined_identifier
+  error - Undefined name '_creditsBackdropDots' - lib\features\analysis\screens\chess_analysis_page.dart:10500:9 - undefined_identifier
+  error - Undefined name '_blueYellowContactTime' - lib\features\analysis\screens\chess_analysis_page.dart:10501:9 - undefined_identifier
+  error - Undefined name '_creditsBackdropLastUpdate' - lib\features\analysis\screens\chess_analysis_page.dart:10502:9 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10535:18 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10537:28 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:10539:40 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10820:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:10821:29 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:10823:18 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:10825:19 - undefined_identifier
+  error - Undefined name '_creditsBackdropDots' - lib\features\analysis\screens\chess_analysis_page.dart:10948:33 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11001:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11038:16 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:11044:13 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:11045:25 - undefined_identifier
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:11147:56 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:11231:10 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:11246:25 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:11246:67 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11254:27 - undefined_identifier
+  error - Undefined name '_activeSection' - lib\features\analysis\screens\chess_analysis_page.dart:11256:9 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:11256:51 - undefined_identifier
+  error - Undefined name '_playVsBot' - lib\features\analysis\screens\chess_analysis_page.dart:11257:25 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11264:16 - undefined_identifier
+  error - The function '_setCinematicThemeEnabled' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11273:15 - undefined_function
+  error - Undefined name '_muteSounds' - lib\features\analysis\screens\chess_analysis_page.dart:11275:22 - undefined_identifier
+  error - Undefined name '_hapticsEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:11276:23 - undefined_identifier
+  error - The function '_setMute' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11278:15 - undefined_function
+  error - The function '_setHapticsEnabled' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11281:15 - undefined_function
+  error - Undefined name '_availableBoardThemes' - lib\features\analysis\screens\chess_analysis_page.dart:11288:21 - undefined_identifier
+  error - Undefined name '_availablePieceThemes' - lib\features\analysis\screens\chess_analysis_page.dart:11298:21 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11306:38 - undefined_identifier
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11342:20 - undefined_identifier
+  error - Undefined name '_maxDepthAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11343:23 - undefined_identifier
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11344:23 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11345:26 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11347:9 - undefined_function
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11347:24 - undefined_identifier
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11348:9 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11351:9 - undefined_function
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11351:24 - undefined_identifier
+  error - The function '_persistCurrentSettings' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11352:9 - undefined_function
+  error - The function '_applySuggestionCount' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11355:9 - undefined_function
+  error - The function '_applySuggestionCount' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11358:9 - undefined_function
+  error - Undefined name '_availableBoardThemes' - lib\features\analysis\screens\chess_analysis_page.dart:11369:13 - undefined_identifier
+  error - Undefined name '_availablePieceThemes' - lib\features\analysis\screens\chess_analysis_page.dart:11370:13 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:11401:22 - undefined_identifier
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:11402:21 - undefined_identifier
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:11403:21 - undefined_identifier
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11404:22 - undefined_identifier
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11405:23 - undefined_identifier
+  error - Undefined name '_isWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:11406:22 - undefined_identifier
+  error - Undefined name '_whiteKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:11407:25 - undefined_identifier
+  error - Undefined name '_blackKingMoved' - lib\features\analysis\screens\chess_analysis_page.dart:11408:25 - undefined_identifier
+  error - Undefined name '_whiteKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:11409:33 - undefined_identifier
+  error - Undefined name '_whiteQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:11410:34 - undefined_identifier
+  error - Undefined name '_blackKingsideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:11411:33 - undefined_identifier
+  error - Undefined name '_blackQueensideRookMoved' - lib\features\analysis\screens\chess_analysis_page.dart:11412:34 - undefined_identifier
+  error - Undefined name '_enPassantTarget' - lib\features\analysis\screens\chess_analysis_page.dart:11413:26 - undefined_identifier
+  error - Undefined name '_suggestionsEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:11414:29 - undefined_identifier
+  error - Undefined name '_currentEval' - lib\features\analysis\screens\chess_analysis_page.dart:11415:22 - undefined_identifier
+  error - Undefined name '_currentDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11416:23 - undefined_identifier
+  error - Undefined name '_evalWhiteTurn' - lib\features\analysis\screens\chess_analysis_page.dart:11417:24 - undefined_identifier
+  error - Undefined name '_selectedGambit' - lib\features\analysis\screens\chess_analysis_page.dart:11418:25 - undefined_identifier
+  error - Undefined name '_currentOpening' - lib\features\analysis\screens\chess_analysis_page.dart:11418:50 - undefined_identifier
+  error - Undefined name 'boardState' - lib\features\analysis\screens\chess_analysis_page.dart:11419:21 - undefined_identifier
+  error - Undefined name '_historyIndex' - lib\features\analysis\screens\chess_analysis_page.dart:11420:23 - undefined_identifier
+  error - Undefined name '_moveHistory' - lib\features\analysis\screens\chess_analysis_page.dart:11421:22 - undefined_identifier
+  error - Undefined name '_moveRecordToMap' - lib\features\analysis\screens\chess_analysis_page.dart:11421:39 - undefined_identifier
+  error - Undefined name '_topLines' - lib\features\analysis\screens\chess_analysis_page.dart:11422:19 - undefined_identifier
+  error - Undefined name '_gambitPreviewLines' - lib\features\analysis\screens\chess_analysis_page.dart:11423:29 - undefined_identifier
+  error - Undefined name '_savedDefaultSnapshotKey' - lib\features\analysis\screens\chess_analysis_page.dart:11427:27 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11429:7 - undefined_function
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11434:13 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11453:23 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11454:23 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11455:7 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11458:21 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11460:7 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11464:5 - undefined_function
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11465:7 - undefined_identifier
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11466:7 - undefined_identifier
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11466:22 - undefined_identifier
+  error - Undefined name '_maxDepthAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11466:45 - undefined_identifier
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11468:11 - undefined_function
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11469:5 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11470:5 - undefined_function
+  error - Undefined name '_maxDepthAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11471:62 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11476:9 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11477:7 - undefined_function
+  error - Undefined name '_extraSuggestionPurchases' - lib\features\analysis\screens\chess_analysis_page.dart:11480:26 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11481:21 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11483:7 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11487:5 - undefined_function
+  error - Undefined name '_extraSuggestionPurchases' - lib\features\analysis\screens\chess_analysis_page.dart:11488:7 - undefined_identifier
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11490:11 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11491:5 - undefined_function
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11491:40 - undefined_identifier
+  error - Undefined name '_themePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11496:9 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11497:21 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11499:7 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11502:5 - undefined_function
+  error - Undefined name '_themePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11503:7 - undefined_identifier
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11505:11 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11506:5 - undefined_function
+  error - Undefined name '_piecePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11511:9 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11512:21 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11514:7 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11517:5 - undefined_function
+  error - Undefined name '_piecePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11518:7 - undefined_identifier
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11520:11 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11521:5 - undefined_function
+  error - Undefined name '_adFreeOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11527:10 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11531:9 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:11534:10 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11535:5 - undefined_function
+  error - The function '_resetBoard' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11536:7 - undefined_function
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11537:7 - undefined_function
+  error - The function '_persistAnalysisSnapshotIfNeeded' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11539:5 - undefined_function
+  error - The function '_maybeTriggerBotMove' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11540:15 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:11544:10 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11545:21 - undefined_identifier
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:11551:10 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11553:28 - undefined_identifier
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11560:7 - undefined_function
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11569:5 - undefined_function
+  error - The function '_playCoinRewardSound' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11570:15 - undefined_function
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11571:11 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11572:5 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11576:21 - undefined_identifier
+  error - The function '_playCoinBagSoundL' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11579:17 - undefined_function
+  error - The function '_playCoinBagSound' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11581:17 - undefined_function
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11583:11 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11584:5 - undefined_function
+  error - Undefined name '_adFreeOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11588:9 - undefined_identifier
+  error - Undefined name '_adFreeOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11589:5 - undefined_identifier
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11590:11 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11591:5 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:11592:10 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11593:26 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11599:21 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11600:5 - undefined_function
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11601:7 - undefined_identifier
+  error - Undefined name '_extraSuggestionPurchases' - lib\features\analysis\screens\chess_analysis_page.dart:11602:7 - undefined_identifier
+  error - Undefined name '_themePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11603:7 - undefined_identifier
+  error - Undefined name '_piecePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11604:7 - undefined_identifier
+  error - Undefined name '_adFreeOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11605:7 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:11606:7 - undefined_identifier
+  error - Undefined name '_defaultPerspective' - lib\features\analysis\screens\chess_analysis_page.dart:11606:22 - undefined_identifier
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:11607:7 - undefined_identifier
+  error - Undefined name '_defaultBoardTheme' - lib\features\analysis\screens\chess_analysis_page.dart:11607:25 - undefined_identifier
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:11608:7 - undefined_identifier
+  error - Undefined name '_defaultPieceTheme' - lib\features\analysis\screens\chess_analysis_page.dart:11608:25 - undefined_identifier
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11609:7 - undefined_identifier
+  error - Undefined name '_engineDepth' - lib\features\analysis\screens\chess_analysis_page.dart:11609:22 - undefined_identifier
+  error - Undefined name '_maxDepthAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11609:45 - undefined_identifier
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11610:7 - undefined_identifier
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11610:23 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11610:46 - undefined_identifier
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11611:11 - undefined_identifier
+  error - Undefined name '_defaultMultiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11612:11 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11612:41 - undefined_identifier
+  error - Undefined name '_multiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11613:9 - undefined_identifier
+  error - Undefined name '_defaultMultiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11613:25 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11613:55 - undefined_identifier
+  error - Undefined name '_savedDefaultSnapshotKey' - lib\features\analysis\screens\chess_analysis_page.dart:11618:24 - undefined_identifier
+  error - The function '_saveStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11620:11 - undefined_function
+  error - The function '_send' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11621:5 - undefined_function
+  error - Undefined name '_effectiveMultiPvCount' - lib\features\analysis\screens\chess_analysis_page.dart:11621:42 - undefined_identifier
+  error - The function '_analyze' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11622:5 - undefined_function
+  error - The function '_addLog' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11623:5 - undefined_function
+  error - The function '_loadStoreState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:11629:11 - undefined_function
+  error - Undefined name 'mounted' - lib\features\analysis\screens\chess_analysis_page.dart:11630:10 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11634:16 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:11637:33 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:11672:15 - undefined_identifier
+  error - Undefined name '_adFreeOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11836:33 - undefined_identifier
+  error - Undefined name '_adFreeOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11840:33 - undefined_identifier
+  error - Undefined name '_adFreeOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11841:36 - undefined_identifier
+  error - Undefined name '_themePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11864:33 - undefined_identifier
+  error - Undefined name '_themePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11868:33 - undefined_identifier
+  error - Undefined name '_themePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11869:36 - undefined_identifier
+  error - Undefined name '_piecePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11881:33 - undefined_identifier
+  error - Undefined name '_piecePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11885:33 - undefined_identifier
+  error - Undefined name '_piecePackOwned' - lib\features\analysis\screens\chess_analysis_page.dart:11886:36 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11902:33 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11906:32 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11907:36 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11917:33 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11921:32 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11922:36 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11924:30 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11934:33 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11938:32 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11939:36 - undefined_identifier
+  error - Undefined name '_depthTier' - lib\features\analysis\screens\chess_analysis_page.dart:11941:30 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11952:54 - undefined_identifier
+  error - Undefined name '_extraSuggestionPurchases' - lib\features\analysis\screens\chess_analysis_page.dart:11954:37 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11955:32 - undefined_identifier
+  error - Undefined name '_maxSuggestionsAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11956:36 - undefined_identifier
+  error - Undefined name '_maxDepthAllowed' - lib\features\analysis\screens\chess_analysis_page.dart:11984:73 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12003:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12034:28 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12036:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12042:13 - undefined_identifier
+  error - The function '_storeRewardAdCountdownLabel' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12064:31 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12092:28 - undefined_identifier
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12119:40 - undefined_identifier
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12119:87 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:12119:113 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12174:29 - undefined_identifier
+  error - The function '_isBoardThemeUnlocked' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12190:22 - undefined_function
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12191:22 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12210:17 - undefined_function
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12210:32 - undefined_identifier
+  error - The function '_persistCurrentSettings' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12211:17 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12213:19 - undefined_identifier
+  error - The function '_isPieceThemeUnlocked' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12228:22 - undefined_function
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12229:22 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12248:17 - undefined_function
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12248:32 - undefined_identifier
+  error - The function '_persistCurrentSettings' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12249:17 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12251:19 - undefined_identifier
+  error - Undefined name '_isCinematicThemeEnabled' - lib\features\analysis\screens\chess_analysis_page.dart:12263:10 - undefined_identifier
+  error - The function '_setCinematicThemeEnabled' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12306:21 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12322:28 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12408:29 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12453:28 - undefined_identifier
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:12565:17 - undefined_identifier
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12566:29 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12588:9 - undefined_function
+  error - Undefined name '_perspective' - lib\features\analysis\screens\chess_analysis_page.dart:12588:24 - undefined_identifier
+  error - The function '_persistCurrentSettings' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12590:9 - undefined_function
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12621:22 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12625:9 - undefined_function
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12625:24 - undefined_identifier
+  error - The function '_persistCurrentSettings' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12627:9 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12629:11 - undefined_identifier
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12637:22 - undefined_identifier
+  error - The function 'setState' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12641:9 - undefined_function
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12641:24 - undefined_identifier
+  error - The function '_persistCurrentSettings' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12643:9 - undefined_function
+  error - Undefined name 'context' - lib\features\analysis\screens\chess_analysis_page.dart:12645:11 - undefined_identifier
+  error - Undefined name '_pieceThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12708:34 - undefined_identifier
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12803:7 - undefined_identifier
+  error - Undefined name '_boardThemeMode' - lib\features\analysis\screens\chess_analysis_page.dart:12809:7 - undefined_identifier
+  error - Undefined name '_editModeHintTimer' - lib\features\analysis\screens\chess_analysis_page.dart:12815:5 - undefined_identifier
+  error - The function '_clearBotGhostArrows' isn't defined - lib\features\analysis\screens\chess_analysis_page.dart:12816:5 - undefined_function
+  error - Undefined name '_engine' - lib\features\analysis\screens\chess_analysis_page.dart:12817:15 - undefined_identifier
+  error - Undefined name '_pulseController' - lib\features\analysis\screens\chess_analysis_page.dart:12818:5 - undefined_identifier
+  error - Undefined name '_introController' - lib\features\analysis\screens\chess_analysis_page.dart:12819:5 - undefined_identifier
+  error - Undefined name '_menuRevealController' - lib\features\analysis\screens\chess_analysis_page.dart:12820:5 - undefined_identifier
+  error - Undefined name '_launchController' - lib\features\analysis\screens\chess_analysis_page.dart:12821:5 - undefined_identifier
+  error - Undefined name '_buttonRippleController' - lib\features\analysis\screens\chess_analysis_page.dart:12822:5 - undefined_identifier
+  error - Undefined name '_menuMusicFadeController' - lib\features\analysis\screens\chess_analysis_page.dart:12823:5 - undefined_identifier
+  error - Undefined name '_sectionTransitionController' - lib\features\analysis\screens\chess_analysis_page.dart:12824:5 - undefined_identifier
+  error - Undefined name '_menuExitAnimationController' - lib\features\analysis\screens\chess_analysis_page.dart:12825:5 - undefined_identifier
+  error - Undefined name '_openingButtonFlashController' - lib\features\analysis\screens\chess_analysis_page.dart:12826:5 - undefined_identifier
+  error - Undefined name '_botSetupPageController' - lib\features\analysis\screens\chess_analysis_page.dart:12827:5 - undefined_identifier
+  error - Undefined name '_introAudioPlayer' - lib\features\analysis\screens\chess_analysis_page.dart:12828:5 - undefined_identifier
+  error - Undefined name '_menuAudioPlayer' - lib\features\analysis\screens\chess_analysis_page.dart:12829:5 - undefined_identifier
+  error - Undefined name '_sfxAudioPlayer' - lib\features\analysis\screens\chess_analysis_page.dart:12830:5 - undefined_identifier
+  error - Undefined name '_cinematicThemeNotifier' - lib\features\analysis\screens\chess_analysis_page.dart:12831:5 - undefined_identifier
+  error - Undefined name '_boardSfxPlayers' - lib\features\analysis\screens\chess_analysis_page.dart:12832:26 - undefined_identifier
+  error - Invalid context for 'super' invocation - lib\features\analysis\screens\chess_analysis_page.dart:12835:5 - super_in_invalid_context
+  error - Expected a method, getter, setter or operator declaration - lib\features\analysis\screens\chess_analysis_page.dart:12837:1 - expected_executable
+

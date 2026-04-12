@@ -17,16 +17,25 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/country_names.dart';
+import '../data/profanity_filter.dart';
+
 part 'package:chessiq/features/academy/widgets/puzzle_map_components.dart';
+
+enum _LeaderboardScope { international, national }
 
 class PuzzleMapScreen extends StatefulWidget {
   const PuzzleMapScreen({
     super.key,
     required this.onBack,
     this.cinematicThemeEnabled = false,
+    this.onShowCredits,
+    this.onOpenMainStore,
   });
 
   final VoidCallback onBack;
+  final VoidCallback? onShowCredits;
+  final VoidCallback? onOpenMainStore;
   final bool cinematicThemeEnabled;
 
   @override
@@ -39,7 +48,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
 
   bool _didPrimeUi = false;
+  bool _didShowAcademyProfilePrompt = false;
   String? _lastCelebrationKey;
+  _LeaderboardScope _leaderboardScope = _LeaderboardScope.international;
   late final ConfettiController _confettiController;
   final AudioPlayer _academyStoreSfxPlayer = AudioPlayer();
   late final Ticker _academyBlueDotTicker;
@@ -49,6 +60,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   late final double _academyBlueDotTrajectoryNoise;
   late final double _academyBlueDotRadius;
   Duration _academyBlueDotLastTick = Duration.zero;
+
+  final Set<String> _expandedSemesterTitles = <String>{};
+  bool _expandedSemesterInitialized = false;
 
   @override
   void initState() {
@@ -93,8 +107,42 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       final provider = context.read<PuzzleAcademyProvider>();
       await provider.initialize();
       if (!mounted) return;
+      await _ensureAcademyProfile(provider);
+      if (!mounted) return;
       await _showPendingEducation(provider);
     });
+  }
+
+  Future<void> _ensureAcademyProfile(PuzzleAcademyProvider provider) async {
+    if (!mounted || !provider.initialized) return;
+    if (!provider.shouldAskForProfile) return;
+    await _showAcademyProfileDialog(context, provider);
+  }
+
+  Future<void> _showAcademyProfileDialog(
+    BuildContext dialogContext,
+    PuzzleAcademyProvider provider, {
+    bool lockHandle = false,
+    bool lockCountry = false,
+  }) async {
+    final result = await showDialog<Map<String, String>>(
+      context: dialogContext,
+      barrierDismissible: false,
+      builder: (context) {
+        return _AcademyProfileDialog(
+          initialHandle: provider.progress.handle,
+          initialCountry: provider.progress.country,
+          lockHandle: lockHandle,
+          lockCountry: lockCountry,
+        );
+      },
+    );
+
+    if (result == null) return;
+    await provider.updateAcademyProfile(
+      handle: result['handle'] ?? '',
+      country: result['country'] ?? '',
+    );
   }
 
   Future<void> _showPendingEducation(PuzzleAcademyProvider provider) async {
@@ -124,6 +172,79 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       if (!mounted) return;
       provider.consumeBrainBreakTrigger();
     }
+  }
+
+  Widget _buildScoreboardSection(
+    PuzzleAcademyProvider provider,
+    bool monochrome,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final entries = provider.academyScoreboardEntries;
+    final title = _leaderboardScope == _LeaderboardScope.international
+        ? 'International Top 10'
+        : provider.progress.country.trim().isNotEmpty
+        ? '${provider.progress.country.trim()} Top 10'
+        : 'National Top 10';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton(
+                onPressed: () {
+                  setState(() {
+                    _leaderboardScope = _LeaderboardScope.international;
+                  });
+                  provider.refreshRemoteScoreboard(national: false);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      _leaderboardScope == _LeaderboardScope.international
+                      ? scheme.primary
+                      : scheme.surface,
+                  foregroundColor:
+                      _leaderboardScope == _LeaderboardScope.international
+                      ? scheme.onPrimary
+                      : scheme.onSurface,
+                ),
+                child: const Text('International'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: () {
+                  setState(() {
+                    _leaderboardScope = _LeaderboardScope.national;
+                  });
+                  provider.refreshRemoteScoreboard(national: true);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      _leaderboardScope == _LeaderboardScope.national
+                      ? scheme.primary
+                      : scheme.surface,
+                  foregroundColor:
+                      _leaderboardScope == _LeaderboardScope.national
+                      ? scheme.onPrimary
+                      : scheme.onSurface,
+                ),
+                child: const Text('National'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const SizedBox(height: 12),
+        _LeaderboardCard(
+          entries: entries,
+          title: title,
+          emptyLabel: 'Complete an exam to post your first Academy score.',
+        ),
+      ],
+    );
   }
 
   void _handleCelebration(PuzzleAcademyProvider provider) {
@@ -403,6 +524,88 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       unawaited(_playAcademyBuySound());
                     },
                   ),
+                  const SizedBox(height: 10),
+                  _StoreRow(
+                    icon: Icons.person_outline,
+                    title: 'New Nickname',
+                    subtitle: 'Clear current nickname only',
+                    price: '500 coins',
+                    onBuy: () async {
+                      final ok = await liveProvider.buyNicknameReset();
+                      if (!mounted) return;
+                      if (!ok) {
+                        ScaffoldMessenger.of(this.context)
+                          ..clearSnackBars()
+                          ..showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Not enough coins to change nickname.',
+                              ),
+                            ),
+                          );
+                        return;
+                      }
+                      unawaited(_playAcademyBuySound());
+                      _didShowAcademyProfilePrompt = true;
+                      if (!mounted) return;
+                      await _showAcademyProfileDialog(
+                        this.context,
+                        liveProvider,
+                        lockCountry: true,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _StoreRow(
+                    icon: Icons.flag_outlined,
+                    title: 'Change Country',
+                    subtitle: 'Clear current country only',
+                    price: '500 coins',
+                    onBuy: () async {
+                      final ok = await liveProvider.buyCountryReset();
+                      if (!mounted) return;
+                      if (!ok) {
+                        ScaffoldMessenger.of(this.context)
+                          ..clearSnackBars()
+                          ..showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Not enough coins to change country.',
+                              ),
+                            ),
+                          );
+                        return;
+                      }
+                      unawaited(_playAcademyBuySound());
+                      _didShowAcademyProfilePrompt = true;
+                      if (!mounted) return;
+                      await _showAcademyProfileDialog(
+                        this.context,
+                        liveProvider,
+                        lockHandle: true,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: widget.onOpenMainStore,
+                    icon: const Icon(Icons.storefront_outlined),
+                    label: const Text('Open Store'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: scheme.surface,
+                      foregroundColor: scheme.onSurface,
+                      side: BorderSide(
+                        color: scheme.outline.withValues(alpha: 0.30),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             );
@@ -449,8 +652,20 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
+          if (provider.initialized &&
+              provider.shouldAskForProfile &&
+              !_didShowAcademyProfilePrompt) {
+            _didShowAcademyProfilePrompt = true;
+            _ensureAcademyProfile(provider);
+            return;
+          }
           _handleCelebration(provider);
           _showPendingEducation(provider);
+          if (!provider.scoreboardLoaded && !provider.scoreboardSyncing) {
+            provider.refreshRemoteScoreboard(
+              national: _leaderboardScope == _LeaderboardScope.national,
+            );
+          }
         });
 
         return OrientationBuilder(
@@ -732,6 +947,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     Map<SemesterRange, List<EloNodeProgress>> grouped, {
     required bool monochrome,
   }) {
+    _ensureExpandedSemester(provider);
     return CustomScrollView(
       slivers: [
         _buildSliverAppBar(provider, monochrome: monochrome),
@@ -749,12 +965,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   onTap: () => _openTodayDailyPuzzle(provider, monochrome),
                 ),
                 const SizedBox(height: 12),
-                _LeaderboardCard(
-                  entries: provider.academyScoreboardEntries,
-                  title: 'Academy Scoreboard',
-                  emptyLabel:
-                      'Complete an exam to post your first Academy score.',
-                ),
+                _buildScoreboardSection(provider, monochrome),
               ],
             ),
           ),
@@ -766,23 +977,39 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               child: _SemesterHeader(
                 semester: entry.key,
                 progress: provider.semesterProgress(entry.key),
+                expanded: _expandedSemesterTitles.contains(entry.key.title),
+                nodeCount: entry.value.length,
+                onTap: () {
+                  setState(() {
+                    final title = entry.key.title;
+                    if (_expandedSemesterTitles.contains(title)) {
+                      _expandedSemesterTitles.remove(title);
+                    } else {
+                      _expandedSemesterTitles.add(title);
+                    }
+                  });
+                },
               ),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildNodeTile(
-                  provider,
-                  entry.value[index],
-                  compact: false,
-                  monochrome: monochrome,
+          if (_expandedSemesterTitles.contains(entry.key.title))
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildNodeTile(
+                      provider,
+                      entry.value[index],
+                      compact: true,
+                      monochrome: monochrome,
+                    ),
+                  ),
+                  childCount: entry.value.length,
                 ),
-                childCount: entry.value.length,
               ),
             ),
-          ),
         ],
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
@@ -794,6 +1021,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     Map<SemesterRange, List<EloNodeProgress>> grouped, {
     required bool monochrome,
   }) {
+    _ensureExpandedSemester(provider);
     return CustomScrollView(
       slivers: [
         _buildSliverAppBar(provider, monochrome: monochrome),
@@ -804,29 +1032,42 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               child: _SemesterHeader(
                 semester: entry.key,
                 progress: provider.semesterProgress(entry.key),
+                expanded: _expandedSemesterTitles.contains(entry.key.title),
+                nodeCount: entry.value.length,
+                onTap: () {
+                  setState(() {
+                    final title = entry.key.title;
+                    if (_expandedSemesterTitles.contains(title)) {
+                      _expandedSemesterTitles.remove(title);
+                    } else {
+                      _expandedSemesterTitles.add(title);
+                    }
+                  });
+                },
               ),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.56,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildNodeTile(
-                  provider,
-                  entry.value[index],
-                  compact: true,
-                  monochrome: monochrome,
+          if (_expandedSemesterTitles.contains(entry.key.title))
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.45,
                 ),
-                childCount: entry.value.length,
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildNodeTile(
+                    provider,
+                    entry.value[index],
+                    compact: true,
+                    monochrome: monochrome,
+                  ),
+                  childCount: entry.value.length,
+                ),
               ),
             ),
-          ),
         ],
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
@@ -869,13 +1110,29 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       ],
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsetsDirectional.only(start: 54, bottom: 12),
-        title: Text(
-          'Puzzle Academy',
-          style: TextStyle(
-            color: scheme.onSurface,
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              onTap: widget.onShowCredits,
+              child: Image.asset(
+                'assets/ChessIQ.png',
+                width: 120,
+                height: 34,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Puzzle Academy',
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w600,
+                fontSize: 18,
+              ),
+            ),
+          ],
         ),
         background: Container(
           decoration: BoxDecoration(
@@ -932,9 +1189,32 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           _DashboardPanel(
             title: 'Current Title',
             accent: const Color(0xFFD8B640),
-            child: Text(
-              provider.currentTitle,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  provider.progress.handle.isNotEmpty
+                      ? provider.progress.handle
+                      : provider.currentTitle,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (provider.progress.handle.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      provider.currentTitle,
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.72),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -989,11 +1269,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             onTap: () => _openTodayDailyPuzzle(provider, monochrome),
           ),
           const SizedBox(height: 12),
-          _LeaderboardCard(
-            entries: provider.academyScoreboardEntries,
-            title: 'Academy Scoreboard',
-            emptyLabel: 'Complete an exam to post your first Academy score.',
-          ),
+          _buildScoreboardSection(provider, monochrome),
         ],
       ),
     );
@@ -1081,9 +1357,25 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       bestExamScore: bestExamResult?.score,
       bestExamGrade: bestExamResult?.grade,
       lockedRequirementText: provider.unlockRequirementText(node),
+      previousSolveRequirementText: provider.previousNodeSolveRequirementText(
+        node,
+      ),
+      requiresPreviousSolveTarget: provider.requiresPreviousNodeSolveTarget(
+        node,
+      ),
+      requiresPreviousSemesterExamGate: provider
+          .requiresPreviousSemesterExamGate(node),
       onExamTap: !provider.canTakeExam(node)
           ? null
           : () => _startExamForNode(provider, node, heroTag, monochrome),
+      completedCount: provider.completedPuzzleCountForNode(
+        node,
+        provider.progress,
+      ),
+      masteryProgress: provider.completedProgressForNode(
+        node,
+        provider.progress,
+      ),
       onTap: !node.unlocked
           ? null
           : () async {
@@ -1127,6 +1419,23 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         ),
       ),
     );
+  }
+
+  void _ensureExpandedSemester(PuzzleAcademyProvider provider) {
+    if (_expandedSemesterInitialized) return;
+    _expandedSemesterInitialized = true;
+
+    final unlockedNodes = provider.orderedNodes.where((node) => node.unlocked);
+    if (unlockedNodes.isEmpty) {
+      if (provider.semesters.isNotEmpty) {
+        _expandedSemesterTitles.add(provider.semesters.first.title);
+      }
+      return;
+    }
+    final firstUnlocked = unlockedNodes.reduce(
+      (a, b) => a.startElo < b.startElo ? a : b,
+    );
+    _expandedSemesterTitles.add(provider.semesterForNode(firstUnlocked).title);
   }
 
   Future<void> _startExamForNode(
@@ -1195,5 +1504,184 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
     grouped.removeWhere((_, nodes) => nodes.isEmpty);
     return grouped;
+  }
+}
+
+class _AcademyProfileDialog extends StatefulWidget {
+  const _AcademyProfileDialog({
+    required this.initialHandle,
+    required this.initialCountry,
+    this.lockHandle = false,
+    this.lockCountry = false,
+  });
+
+  final String initialHandle;
+  final String initialCountry;
+  final bool lockHandle;
+  final bool lockCountry;
+
+  @override
+  State<_AcademyProfileDialog> createState() => _AcademyProfileDialogState();
+}
+
+class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
+  late final TextEditingController _handleController;
+  TextEditingController? _countryController;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _handleController = TextEditingController(text: widget.initialHandle);
+  }
+
+  @override
+  void dispose() {
+    _handleController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return AlertDialog(
+      title: const Text('Academy Leaderboard Setup'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Choose a nickname and country so you can appear on global and local leaderboards.',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.78),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _handleController,
+                enabled: !widget.lockHandle,
+                decoration: InputDecoration(
+                  labelText: 'Nickname',
+                  hintText: 'e.g. TacticTiger',
+                  counterText: '',
+                  suffixIcon: widget.lockHandle ? const Icon(Icons.lock) : null,
+                ),
+                maxLength: 20,
+                validator: (value) {
+                  final text = value?.trim() ?? '';
+                  if (text.isEmpty) {
+                    return 'Please enter a nickname.';
+                  }
+                  if (text.length < 3) {
+                    return 'Nickname needs at least 3 characters.';
+                  }
+                  if (containsProfanity(text)) {
+                    return 'Nickname contains inappropriate language.';
+                  }
+                  return null;
+                },
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              Autocomplete<String>(
+                initialValue: TextEditingValue(text: widget.initialCountry),
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.trim().isEmpty) {
+                    return const Iterable<String>.empty();
+                  }
+                  return countrySuggestions(textEditingValue.text.trim());
+                },
+                onSelected: (selection) {},
+                fieldViewBuilder:
+                    (
+                      BuildContext context,
+                      TextEditingController countryController,
+                      FocusNode focusNode,
+                      VoidCallback onFieldSubmitted,
+                    ) {
+                      _countryController = countryController;
+                      return TextFormField(
+                        controller: countryController,
+                        focusNode: focusNode,
+                        enabled: !widget.lockCountry,
+                        decoration: InputDecoration(
+                          labelText: 'Country / Region',
+                          hintText: 'e.g. Brazil',
+                          suffixIcon: widget.lockCountry
+                              ? const Icon(Icons.lock)
+                              : null,
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) {
+                            return 'Please enter a country or region.';
+                          }
+                          if (canonicalCountryName(text) == null) {
+                            return 'Please select a valid country from the list.';
+                          }
+                          return null;
+                        },
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => onFieldSubmitted(),
+                      );
+                    },
+                optionsViewBuilder:
+                    (
+                      BuildContext context,
+                      AutocompleteOnSelected<String> onSelected,
+                      Iterable<String> options,
+                    ) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4.0,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              itemCount: options.length,
+                              itemBuilder: (BuildContext context, int index) {
+                                final option = options.elementAt(index);
+                                return ListTile(
+                                  title: Text(option),
+                                  onTap: () => onSelected(option),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This information is only used for leaderboard display. No email, account details, or precise location are collected.',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () {
+            if (_formKey.currentState?.validate() != true) return;
+            final handle = _handleController.text.trim();
+            final countryText = _countryController?.text.trim() ?? '';
+            final country = canonicalCountryName(countryText) ?? countryText;
+            Navigator.of(
+              context,
+            ).pop(<String, String>{'handle': handle, 'country': country});
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
   }
 }

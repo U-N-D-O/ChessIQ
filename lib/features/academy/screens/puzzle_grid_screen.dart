@@ -184,7 +184,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Green is solved, amber is skipped, cyan is the next live puzzle, and dimmed squares stay locked until you reach them. Once you have finished 150 puzzles in this course, the course exam becomes available.',
+                                  'Green is solved, amber is skipped, cyan is the next live puzzle, and dimmed squares stay locked. Solving exam puzzles also counts as solving them.',
                                   style: TextStyle(
                                     color: scheme.onSurface.withValues(
                                       alpha: 0.72,

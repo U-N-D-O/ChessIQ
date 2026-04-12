@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/scoreboard_service.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -268,9 +269,14 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   bool _shouldShowBrainBreak = false;
   bool _shouldShowGrandmasterOracle = false;
   String? _celebrationNodeKey;
+  bool _remoteScoreboardLoaded = false;
+  List<LeaderboardEntry> _remoteScoreboardEntries = const <LeaderboardEntry>[];
+  bool _scoreboardSyncing = false;
 
   bool get initialized => _initialized;
   bool get isLoading => _isLoading;
+  bool get scoreboardLoaded => _remoteScoreboardLoaded;
+  bool get scoreboardSyncing => _scoreboardSyncing;
   bool get shouldShowBrainBreak => _shouldShowBrainBreak;
   bool get shouldShowGrandmasterOracle => _shouldShowGrandmasterOracle;
   String? get celebrationNodeKey => _celebrationNodeKey;
@@ -323,22 +329,38 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   }
 
   List<LeaderboardEntry> get academyScoreboardEntries {
-    final results = academyExamResults.take(10).toList(growable: false);
-    return List<LeaderboardEntry>.generate(results.length, (index) {
-      final result = results[index];
-      final node = progress.nodes[result.nodeKey];
-      final nodeLabel = node == null
-          ? result.nodeKey.replaceAll('_', '-')
-          : '${node.startElo}-${node.endElo}';
-      final accuracy = (result.accuracy * 100).round();
-      return LeaderboardEntry(
-        rank: index + 1,
-        handle: 'Bracket $nodeLabel',
-        score: result.score,
-        title:
-            '${result.correctCount}/${result.totalCount} correct • $accuracy% • ${_formatDurationLabel(Duration(milliseconds: result.elapsedMs))}',
-      );
-    });
+    if (_remoteScoreboardLoaded) {
+      return _remoteScoreboardEntries;
+    }
+    final results = List<AcademyExamResult>.from(progress.examResults);
+    final bestResultsByNode = <String, AcademyExamResult>{};
+    for (final result in results) {
+      final existing = bestResultsByNode[result.nodeKey];
+      if (existing == null ||
+          result.leaderboardScore > existing.leaderboardScore) {
+        bestResultsByNode[result.nodeKey] = result;
+      }
+    }
+
+    if (bestResultsByNode.isEmpty) {
+      return const <LeaderboardEntry>[];
+    }
+
+    final totalScore = bestResultsByNode.values.fold<int>(
+      0,
+      (sum, result) => sum + result.leaderboardScore,
+    );
+    final handle = progress.handle.trim().isEmpty
+        ? 'Unknown Player'
+        : progress.handle.trim();
+    return <LeaderboardEntry>[
+      LeaderboardEntry(
+        rank: 1,
+        handle: handle,
+        score: totalScore,
+        title: '${bestResultsByNode.length} exams counted',
+      ),
+    ];
   }
 
   PuzzleProgressModel get progress {
@@ -375,6 +397,33 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       highest = max(highest, node.endElo);
     }
     return highest;
+  }
+
+  bool get shouldAskForProfile =>
+      progress.handle.trim().isEmpty || progress.country.trim().isEmpty;
+
+  Future<void> updateAcademyProfile({
+    required String handle,
+    required String country,
+  }) async {
+    _progress = progress.copyWith(
+      handle: handle.trim(),
+      country: country.trim(),
+    );
+    await _saveProgress();
+    notifyListeners();
+  }
+
+  Future<void> resetAcademyScoreboard() async {
+    _progress = progress.copyWith(examResults: const <AcademyExamResult>[]);
+    await _saveProgress();
+    notifyListeners();
+  }
+
+  Future<void> resetAcademyProfile() async {
+    _progress = progress.copyWith(handle: '', country: '');
+    await _saveProgress();
+    notifyListeners();
   }
 
   String get currentTitle {
@@ -636,6 +685,33 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> buyProfileReset({int cost = 500}) async {
+    final currentCoins = _economyProvider?.coins ?? progress.coins;
+    if (currentCoins < cost) return false;
+    final updated = progress.copyWith(coins: currentCoins - cost);
+    await _saveUpdatedProgress(updated, syncCoins: true);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> buyNicknameReset({int cost = 500}) async {
+    final currentCoins = _economyProvider?.coins ?? progress.coins;
+    if (currentCoins < cost) return false;
+    final updated = progress.copyWith(coins: currentCoins - cost, handle: '');
+    await _saveUpdatedProgress(updated, syncCoins: true);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> buyCountryReset({int cost = 500}) async {
+    final currentCoins = _economyProvider?.coins ?? progress.coins;
+    if (currentCoins < cost) return false;
+    final updated = progress.copyWith(coins: currentCoins - cost, country: '');
+    await _saveUpdatedProgress(updated, syncCoins: true);
+    notifyListeners();
+    return true;
+  }
+
   Future<bool> consumeHint() async {
     if (progress.freeHints <= 0) return false;
     _progress = progress.copyWith(freeHints: progress.freeHints - 1);
@@ -723,7 +799,20 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     }
 
     final completed = completedExamCountInSemester(previousSemester);
-    return 'Unlock: $completed/$required exams in ${previousSemester.title}';
+    return '$completed/$required exams in ${previousSemester.title}';
+  }
+
+  String? previousNodeSolveRequirementText(EloNodeProgress node) {
+    if (requiresPreviousSemesterExamGate(node)) {
+      return null;
+    }
+
+    final previous = _previousNodeFor(node);
+    if (previous == null) {
+      return null;
+    }
+
+    return '${previous.solvedCount}/${previous.unlockTarget} puzzles in previous level';
   }
 
   SemesterRange? _previousSemesterFor(EloNodeProgress node) {
@@ -736,7 +825,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     return previous;
   }
 
-  bool _requiresPreviousSemesterExamGate(EloNodeProgress node) {
+  bool requiresPreviousSemesterExamGate(EloNodeProgress node) {
     return examUnlockRequirementForNode(node) > 0;
   }
 
@@ -758,8 +847,18 @@ class PuzzleAcademyProvider extends ChangeNotifier {
         required;
   }
 
-  bool _requiresPreviousNodeSolveTarget(EloNodeProgress node) {
+  bool requiresPreviousNodeSolveTarget(EloNodeProgress node) {
     return node.startElo > 450 && node.startElo <= 800;
+  }
+
+  EloNodeProgress? _previousNodeFor(EloNodeProgress node) {
+    final ordered = orderedNodes;
+    for (var i = 1; i < ordered.length; i++) {
+      if (ordered[i].key == node.key) {
+        return ordered[i - 1];
+      }
+    }
+    return null;
   }
 
   Map<String, EloNodeProgress> _normalizedNodesFor(
@@ -776,11 +875,11 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
       if (index == 0) {
         unlocked = true;
-      } else if (_requiresPreviousSemesterExamGate(node)) {
+      } else if (requiresPreviousSemesterExamGate(node)) {
         unlocked = _hasRequiredPreviousSemesterExams(snapshot, node);
       } else {
         final previous = updated[nodes[index - 1].key] ?? nodes[index - 1];
-        if (_requiresPreviousNodeSolveTarget(node)) {
+        if (requiresPreviousNodeSolveTarget(node)) {
           unlocked = previouslyUnlocked || previous.unlocked;
         } else {
           unlocked =
@@ -833,6 +932,29 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   int indexOfPuzzleInNode(EloNodeProgress node, String puzzleId) {
     final nodePuzzles = puzzlesForNode(node);
     return nodePuzzles.indexWhere((puzzle) => puzzle.puzzleId == puzzleId);
+  }
+
+  int completedPuzzleCountForNode(
+    EloNodeProgress node,
+    PuzzleProgressModel snapshot,
+  ) {
+    final nodePuzzles = puzzlesForNode(node);
+    if (nodePuzzles.isEmpty) return node.solvedCount;
+
+    final skipped = snapshot.skippedPuzzleIds;
+    final skippedCount = nodePuzzles
+        .where((puzzle) => skipped.contains(puzzle.puzzleId))
+        .length;
+    return node.solvedCount + skippedCount;
+  }
+
+  double completedProgressForNode(
+    EloNodeProgress node,
+    PuzzleProgressModel snapshot,
+  ) {
+    final target = node.masteryTarget <= 0 ? 1 : node.masteryTarget;
+    final completedCount = completedPuzzleCountForNode(node, snapshot);
+    return (completedCount.clamp(0, target) / target).clamp(0.0, 1.0);
   }
 
   int frontierPuzzleIndexForNode(EloNodeProgress node) {
@@ -891,6 +1013,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     required int correctCount,
     required int totalCount,
     required Duration remaining,
+    required int nodeElo,
     Duration timeLimit = _examDuration,
   }) {
     if (totalCount <= 0) return 0;
@@ -902,7 +1025,18 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     final speedRatio = timeLimit.inMilliseconds <= 0
         ? 0.0
         : boundedRemainingMs / timeLimit.inMilliseconds;
-    return ((accuracyRatio * 8000) + (speedRatio * 2000)).round();
+    final rawScore = (accuracyRatio * 8000) + (speedRatio * 2000);
+    return rawScore.round();
+  }
+
+  int calculateLeaderboardScore({
+    required int examScore,
+    required int nodeElo,
+  }) {
+    final normalizedElo = nodeElo.clamp(450, 3999);
+    final weight =
+        0.5 + ((normalizedElo - 450) / (3999 - 450)) * 1.0; // range 0.5..1.5
+    return (examScore * weight).round();
   }
 
   Future<void> recordExamResult(AcademyExamResult result) async {
@@ -918,6 +1052,51 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       examResults: updatedResults.take(40).toList(growable: false),
     );
     await _saveProgress();
+    notifyListeners();
+    unawaited(_submitScoreboardScore());
+  }
+
+  Future<void> _submitScoreboardScore() async {
+    if (progress.handle.trim().isEmpty || progress.country.trim().isEmpty) {
+      return;
+    }
+    final bestResultsByNode = <String, AcademyExamResult>{};
+    for (final result in progress.examResults) {
+      final existing = bestResultsByNode[result.nodeKey];
+      if (existing == null ||
+          result.leaderboardScore > existing.leaderboardScore) {
+        bestResultsByNode[result.nodeKey] = result;
+      }
+    }
+    final totalScore = bestResultsByNode.values.fold<int>(
+      0,
+      (sum, result) => sum + result.leaderboardScore,
+    );
+    if (totalScore <= 0) return;
+
+    await ScoreboardService.instance.submitScore(
+      handle: progress.handle.trim().isEmpty
+          ? 'Unknown Player'
+          : progress.handle.trim(),
+      country: progress.country.trim(),
+      score: totalScore,
+      title: '${bestResultsByNode.length} exams counted',
+    );
+  }
+
+  Future<void> refreshRemoteScoreboard({required bool national}) async {
+    if (_scoreboardSyncing) return;
+    _scoreboardSyncing = true;
+    notifyListeners();
+
+    final country = national ? progress.country.trim() : null;
+    final entries = await ScoreboardService.instance.fetchTopScores(
+      country: country,
+      limit: 10,
+    );
+    _remoteScoreboardEntries = entries;
+    _remoteScoreboardLoaded = true;
+    _scoreboardSyncing = false;
     notifyListeners();
   }
 
@@ -1051,13 +1230,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     await resolvedPrefs.setString(_sharedStoreStateKey, jsonEncode(payload));
   }
 
-  String _formatDurationLabel(Duration duration) {
-    final totalSeconds = max(0, duration.inSeconds);
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
-  }
-
   void _normalizeUnlockState() {
     _progress = progress.copyWith(nodes: _normalizedNodesFor(progress));
   }
@@ -1080,7 +1252,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
         }
       }
 
-      final crownAchieved = node.solvedCount >= node.masteryTarget;
+      final completedCount = completedPuzzleCountForNode(node, current);
+      final crownAchieved = completedCount >= node.masteryTarget;
       if (crownAchieved && !node.goldCrown) {
         _celebrationNodeKey = node.key;
         updated[node.key] = (updated[node.key] ?? node).copyWith(

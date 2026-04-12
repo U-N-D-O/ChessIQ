@@ -330,8 +330,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     BotCharacter(
       rank: 1,
       name: 'Mochi Gearheart',
-      description:
-          'I just wanted to see the pretty wooden pieces... why is the timer making that noise?',
+      description: 'I just wanted to see the pretty wooden pieces...',
       elo: 100,
       limitStrength: true,
       multiPv: 20,
@@ -375,7 +374,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       rank: 4,
       name: 'Octavian Inkveil',
       description:
-          'Oh, please. Your opening is as unrefined as a one-move threat. Witness true brilliance.',
+          'Oh, please. Your opening is so unrefined. Witness true brilliance.',
       elo: 1150,
       limitStrength: true,
       multiPv: 3,
@@ -389,8 +388,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     BotCharacter(
       rank: 5,
       name: 'Master Prime',
-      description:
-          'The engine predicted your defeat ten moves ago. The swamp consumes all.',
+      description: 'The engine predicted your defeat ten moves ago.',
       elo: 1500,
       limitStrength: true,
       multiPv: 2,
@@ -1373,6 +1371,25 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       'dailyQuestionsAsked': _quizDailyQuestionsAsked,
     };
     await prefs.setString(_quizStatsKey, jsonEncode(payload));
+  }
+
+  Future<void> _resetQuizStats() async {
+    setState(() {
+      _quizStreak = 0;
+      _quizBestStreak = 0;
+      _quizTotalAnswered = 0;
+      _quizCorrectAnswers = 0;
+      _quizScore = 0;
+      _quizDailyScore.clear();
+      _quizDailyAttempts.clear();
+      _quizDailyCorrectByDay.clear();
+      _quizNameDailyAttempts.clear();
+      _quizNameDailyCorrect.clear();
+      _quizLineDailyAttempts.clear();
+      _quizLineDailyCorrect.clear();
+      _quizDailyQuestionsAsked.clear();
+    });
+    await _saveQuizStats();
   }
 
   Future<void> _saveViewedGambits() async {
@@ -4079,6 +4096,38 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         .toList(growable: false);
   }
 
+  List<QuizAccuracyPoint> _buildQuizAttemptSeries(
+    QuizTrendFilter filter, {
+    int days = 10,
+  }) {
+    late final Map<String, int> attempts;
+    switch (filter) {
+      case QuizTrendFilter.both:
+        attempts = _quizDailyAttempts;
+        break;
+      case QuizTrendFilter.guessName:
+        attempts = _quizNameDailyAttempts;
+        break;
+      case QuizTrendFilter.guessLine:
+        attempts = _quizLineDailyAttempts;
+        break;
+    }
+
+    final keys = attempts.keys.toList()..sort();
+    if (keys.isEmpty) return const <QuizAccuracyPoint>[];
+    final recentKeys = keys.length <= days
+        ? keys
+        : keys.sublist(keys.length - days);
+
+    return recentKeys
+        .map((day) {
+          final count = attempts[day] ?? 0;
+          final label = day.length >= 10 ? day.substring(5) : day;
+          return QuizAccuracyPoint(dayLabel: label, value: count.toDouble());
+        })
+        .toList(growable: false);
+  }
+
   int _baseQuizPoints() {
     switch (_quizDifficulty) {
       case QuizDifficulty.easy:
@@ -4761,6 +4810,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               onFilterChanged: (next) {
                 setSheetState(() => filter = next);
               },
+              onReset: () async {
+                await _resetQuizStats();
+                setSheetState(() {});
+              },
             ),
           ),
         ),
@@ -5281,6 +5334,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     ? PuzzleMapScreen(
                         onBack: _goToMenu,
                         cinematicThemeEnabled: _isCinematicThemeEnabled,
+                        onShowCredits: _showCreditsDialog,
+                        onOpenMainStore: () =>
+                            _openStore(initialSection: StoreSection.general),
                       )
                     : _buildGambitQuizScreen(),
               ),
@@ -8491,12 +8547,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Widget _buildQuizStatsCard({
     required QuizTrendFilter filter,
     required ValueChanged<QuizTrendFilter> onFilterChanged,
+    required Future<void> Function() onReset,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final accuracy = _quizAccuracy();
     final series = _buildQuizAccuracySeries(filter, days: 10);
+    final amountSeries = _buildQuizAttemptSeries(filter, days: 10);
     final latest = series.isEmpty ? null : series.last.value;
 
     // Calculate average questions asked per day
@@ -8544,7 +8602,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   ),
                 ),
               ),
-              if (latest != null)
+              if (latest != null) ...[
                 Text(
                   'Latest ${latest.toStringAsFixed(1)}%',
                   style: const TextStyle(
@@ -8553,6 +8611,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     fontSize: 11.5,
                   ),
                 ),
+                const SizedBox(width: 8),
+              ],
+              TextButton.icon(
+                onPressed: onReset,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF8FD0FF),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Reset'),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -8638,9 +8709,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               child: Column(
                 children: [
                   SizedBox(
-                    height: 112,
+                    height: 132,
                     child: CustomPaint(
-                      painter: QuizAccuracyTrendPainter(series: series),
+                      painter: QuizAccuracyTrendPainter(
+                        accuracySeries: series,
+                        amountSeries: amountSeries,
+                      ),
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -8917,61 +8991,73 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                                           if (!_playVsBot &&
                                                               _selectedGambit !=
                                                                   null)
-                                                            Padding(
-                                                              padding:
-                                                                  const EdgeInsets.only(
-                                                                    bottom: 6,
+                                                            Align(
+                                                              alignment:
+                                                                  Alignment
+                                                                      .center,
+                                                              child: Padding(
+                                                                padding:
+                                                                    const EdgeInsets.only(
+                                                                      bottom: 6,
+                                                                    ),
+                                                                child: Text(
+                                                                  _selectedGambit!
+                                                                      .name,
+                                                                  style: TextStyle(
+                                                                    fontSize:
+                                                                        13,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w700,
+                                                                    color:
+                                                                        useMonochrome
+                                                                        ? scheme.onSurface.withValues(
+                                                                            alpha:
+                                                                                0.86,
+                                                                          )
+                                                                        : const Color(
+                                                                            0xFFD8B640,
+                                                                          ),
                                                                   ),
-                                                              child: Text(
-                                                                _selectedGambit!
-                                                                    .name,
-                                                                style: TextStyle(
-                                                                  fontSize: 13,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w700,
-                                                                  color:
-                                                                      useMonochrome
-                                                                      ? scheme.onSurface.withValues(
-                                                                          alpha:
-                                                                              0.86,
-                                                                        )
-                                                                      : const Color(
-                                                                          0xFFD8B640,
-                                                                        ),
+                                                                  maxLines: 2,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
                                                                 ),
-                                                                maxLines: 2,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
                                                               ),
                                                             )
                                                           else if (!_playVsBot &&
                                                               _currentOpening
                                                                   .isNotEmpty)
-                                                            Padding(
-                                                              padding:
-                                                                  const EdgeInsets.only(
-                                                                    bottom: 6,
+                                                            Align(
+                                                              alignment:
+                                                                  Alignment
+                                                                      .center,
+                                                              child: Padding(
+                                                                padding:
+                                                                    const EdgeInsets.only(
+                                                                      bottom: 6,
+                                                                    ),
+                                                                child: Text(
+                                                                  _currentOpening,
+                                                                  style: TextStyle(
+                                                                    fontSize:
+                                                                        13,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w700,
+                                                                    color: scheme
+                                                                        .onSurface
+                                                                        .withValues(
+                                                                          alpha:
+                                                                              0.72,
+                                                                        ),
                                                                   ),
-                                                              child: Text(
-                                                                _currentOpening,
-                                                                style: TextStyle(
-                                                                  fontSize: 13,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w700,
-                                                                  color: scheme
-                                                                      .onSurface
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.72,
-                                                                      ),
+                                                                  maxLines: 2,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
                                                                 ),
-                                                                maxLines: 2,
-                                                                overflow:
-                                                                    TextOverflow
-                                                                        .ellipsis,
                                                               ),
                                                             ),
                                                           _buildSuggestedMovesList(
@@ -9344,22 +9430,6 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                               fontSize: 11 * scale,
                             ),
                           ),
-                          SizedBox(width: 4 * scale),
-                          IconButton(
-                            onPressed: _showLogsDialog,
-                            icon: Icon(
-                              Icons.bug_report_outlined,
-                              color: scheme.onSurface.withValues(alpha: 0.56),
-                              size: 16 * scale,
-                            ),
-                            splashRadius: 14 * scale,
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: BoxConstraints.tightFor(
-                              width: 20 * scale,
-                              height: 20 * scale,
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -9728,30 +9798,48 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   Widget _buildHistoryMoveChip(MoveRecord move, bool active) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final backgroundColor = active
+        ? (useMonochrome
+              ? scheme.onSurface.withValues(alpha: isDark ? 0.14 : 0.12)
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: isDark ? 0.24 : 0.18),
+                  scheme.surface,
+                ))
+        : (useMonochrome
+              ? scheme.surface.withValues(alpha: isDark ? 0.24 : 0.92)
+              : scheme.surface.withValues(alpha: isDark ? 0.72 : 0.72));
+
+    final borderColor = active
+        ? (useMonochrome
+              ? scheme.onSurface.withValues(alpha: 0.18)
+              : scheme.primary.withValues(alpha: 0.35))
+        : scheme.outline.withValues(alpha: 0.12);
+
+    final textColor = active
+        ? scheme.onSurface
+        : useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.70)
+        : scheme.onSurface.withValues(alpha: 0.68);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: active
-            ? const Color(0xFF335AAE).withValues(alpha: 0.45)
-            : const Color(0xFF121724).withValues(alpha: 0.72),
-        border: Border.all(
-          color: active
-              ? const Color(0xFFB9A46A).withValues(alpha: 0.35)
-              : Colors.white12,
-        ),
+        color: backgroundColor,
+        border: Border.all(color: borderColor),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         children: [
           _pieceImage(move.pieceMoved, width: 18, height: 18),
           const SizedBox(width: 4),
-          Text(
-            move.notation,
-            style: TextStyle(
-              color: active ? Colors.white : Colors.white70,
-              fontSize: 13,
-            ),
-          ),
+          Text(move.notation, style: TextStyle(color: textColor, fontSize: 13)),
           if (move.pieceCaptured != null) ...[
             const SizedBox(width: 4),
             _pieceImage(move.pieceCaptured!, width: 16, height: 16),
@@ -10870,6 +10958,18 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                       ],
                                     ),
                                   ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _showLogsDialog,
+                                  icon: const Icon(Icons.bug_report_outlined),
+                                  label: const Text('View Logs'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: dialogHeadingAccent,
+                                  ),
                                 ),
                               ),
                             ],

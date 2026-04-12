@@ -261,10 +261,19 @@ class _LeaderboardCard extends StatelessWidget {
 }
 
 class _SemesterHeader extends StatelessWidget {
-  const _SemesterHeader({required this.semester, required this.progress});
+  const _SemesterHeader({
+    required this.semester,
+    required this.progress,
+    this.expanded = true,
+    required this.nodeCount,
+    this.onTap,
+  });
 
   final SemesterRange semester;
   final double progress;
+  final bool expanded;
+  final int nodeCount;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -275,8 +284,11 @@ class _SemesterHeader extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           decoration: BoxDecoration(
             color: Color.alphaBlend(
               scheme.primary.withValues(
@@ -290,14 +302,47 @@ class _SemesterHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${semester.title} • ${semester.minElo}-${semester.maxElo}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: scheme.onSurface,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${semester.title} • ${semester.minElo}-${semester.maxElo}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    size: 18,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    '$nodeCount Levels',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.72),
+                      fontSize: 12,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    expanded ? 'Hide' : 'Show',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.72),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               ClipRRect(
@@ -315,7 +360,7 @@ class _SemesterHeader extends StatelessWidget {
           ),
         ),
       ),
-    );
+      )  );
   }
 }
 
@@ -327,7 +372,12 @@ class _PuzzleNodeCard extends StatelessWidget {
     required this.showGhost,
     required this.onTap,
     required this.showExamButton,
+    required this.completedCount,
+    required this.masteryProgress,
     this.lockedRequirementText,
+    this.previousSolveRequirementText,
+    this.requiresPreviousSolveTarget = false,
+    this.requiresPreviousSemesterExamGate = false,
     this.bestExamScore,
     this.bestExamGrade,
     this.onExamTap,
@@ -339,7 +389,12 @@ class _PuzzleNodeCard extends StatelessWidget {
   final bool showGhost;
   final VoidCallback? onTap;
   final bool showExamButton;
+  final int completedCount;
+  final double masteryProgress;
   final String? lockedRequirementText;
+  final String? previousSolveRequirementText;
+  final bool requiresPreviousSolveTarget;
+  final bool requiresPreviousSemesterExamGate;
   final int? bestExamScore;
   final String? bestExamGrade;
   final VoidCallback? onExamTap;
@@ -394,7 +449,7 @@ class _PuzzleNodeCard extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(22),
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
               child: compact
                   ? _buildCompactContent(context, locked)
                   : _buildPortraitContent(context, locked),
@@ -428,39 +483,126 @@ class _PuzzleNodeCard extends StatelessWidget {
                     'Level ${node.title}',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      fontSize: 16,
+                      fontSize: 15,
                       color: scheme.onSurface,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '${node.solvedCount}/${node.masteryTarget} mastered',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.72),
-                      fontSize: 12,
-                    ),
-                  ),
-                  if (bestExamScore != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        bestExamGrade != null
-                            ? 'Best exam: $bestExamGrade ($bestExamScore)'
-                            : 'Best exam: $bestExamScore',
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.66),
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  Row(
+                    children: [
+                      _InfoTag(
+                        label: '${node.solvedCount}/${node.masteryTarget}',
+                        accent: const Color(0xFF5AAEE8),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      if (bestExamScore != null)
+                        _InfoTag(
+                          label: bestExamGrade != null
+                              ? '$bestExamGrade $bestExamScore'
+                              : '$bestExamScore pts',
+                          accent: const Color(0xFFD8B640),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
             _statusCluster(),
           ],
         ),
-        const Spacer(),
+        const SizedBox(height: 10),
+        if (locked || showExamButton)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                if (requiresPreviousSolveTarget)
+                  _InfoTag(
+                    label: '100 solves prev',
+                    accent: const Color(0xFF71B7FF),
+                  ),
+                if (requiresPreviousSolveTarget) const SizedBox(width: 6),
+                if (requiresPreviousSemesterExamGate)
+                  _InfoTag(
+                    label: 'Prev sem exam',
+                    accent: const Color(0xFFD8B640),
+                  ),
+              ],
+            ),
+          ),
+        Row(
+          children: [
+            if (showExamButton) ...[
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onExamTap,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFD8B640),
+                    side: const BorderSide(color: Color(0xFFD8B640)),
+                    backgroundColor:
+                        const Color(0xFFD8B640).withValues(alpha: 0.08),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  child: const Text('Exam'),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: FilledButton(
+                onPressed: onTap,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  backgroundColor: locked
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.28)
+                      : const Color(0xFF5AAEE8),
+                  foregroundColor: locked
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.70)
+                      : const Color(0xFF07131F),
+                ),
+                child: Text(
+                  locked
+                      ? (previousSolveRequirementText ??
+                          lockedRequirementText ??
+                          'Locked')
+                      : 'Train',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            if (locked && previousSolveRequirementText != null)
+              _InfoTag(
+                label: previousSolveRequirementText!,
+                accent: const Color(0xFF71B7FF),
+              ),
+            if (locked && previousSolveRequirementText != null)
+              const SizedBox(width: 6),
+            if (locked && lockedRequirementText != null)
+              _InfoTag(
+                label: lockedRequirementText!,
+                accent: const Color(0xFFD8B640),
+              ),
+            if (locked && lockedRequirementText != null)
+              const SizedBox(width: 6),
+            _InfoTag(
+              label: locked ? 'Locked' : 'Training',
+              accent: locked ? scheme.outline : const Color(0xFF5AAEE8),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
@@ -473,56 +615,6 @@ class _PuzzleNodeCard extends StatelessWidget {
                   : const Color(0xFF6FE7FF),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                locked
-                    ? (lockedRequirementText ??
-                          'Locked until previous Level reaches 100 solves.')
-                    : showExamButton
-                    ? 'Open for training and exam attempts.'
-                    : 'Open for training',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.66),
-                  fontSize: 12,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (showExamButton) ...[
-              OutlinedButton(
-                onPressed: onExamTap,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFD8B640),
-                  side: const BorderSide(color: Color(0xFFD8B640)),
-                  backgroundColor: const Color(
-                    0xFFD8B640,
-                  ).withValues(alpha: 0.08),
-                ),
-                child: const Text('Take Exam'),
-              ),
-              const SizedBox(width: 8),
-            ],
-            FilledButton(
-              onPressed: onTap,
-              style: FilledButton.styleFrom(
-                backgroundColor: locked
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.outline.withValues(alpha: 0.28)
-                    : const Color(0xFF5AAEE8),
-                foregroundColor: locked
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.70)
-                    : const Color(0xFF07131F),
-              ),
-              child: Text(locked ? 'Locked' : 'Train'),
-            ),
-          ],
         ),
       ],
     );
@@ -546,14 +638,16 @@ class _PuzzleNodeCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    'Level ${node.title}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                      color: locked
-                          ? scheme.onSurface.withValues(alpha: 0.72)
-                          : scheme.onSurface,
+                  Expanded(
+                    child: Text(
+                      'Level ${node.title}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        color: locked
+                            ? scheme.onSurface.withValues(alpha: 0.72)
+                            : scheme.onSurface,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -561,15 +655,36 @@ class _PuzzleNodeCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              Text(
-                locked && lockedRequirementText != null
-                    ? lockedRequirementText!
-                    : '${node.solvedCount}/${node.unlockTarget} to unlock next Level • ${node.solvedCount}/${node.masteryTarget} for crown',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.66),
-                  fontSize: 12,
+              if (requiresPreviousSolveTarget || requiresPreviousSemesterExamGate)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      if (requiresPreviousSolveTarget)
+                        _InfoTag(
+                          label: '100 solves prev',
+                          accent: const Color(0xFF71B7FF),
+                        ),
+                      if (requiresPreviousSolveTarget)
+                        const SizedBox(width: 6),
+                      if (requiresPreviousSemesterExamGate)
+                        _InfoTag(
+                          label: 'Prev sem exam',
+                          accent: const Color(0xFFD8B640),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+              if (!locked)
+                Text(
+                  (node.unlocked && node.startElo < 800)
+                      ? '$completedCount/${node.masteryTarget} for crown'
+                      : '${node.solvedCount}/${node.unlockTarget} to unlock next Level • $completedCount/${node.masteryTarget} for crown',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.66),
+                    fontSize: 12,
+                  ),
+                ),
               if (bestExamScore != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -584,7 +699,47 @@ class _PuzzleNodeCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: onTap,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: locked
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.outline.withValues(alpha: 0.28)
+                            : const Color(0xFF5AAEE8),
+                        foregroundColor: locked
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.70)
+                            : const Color(0xFF07131F),
+                      ),
+                      child: Text(locked ? 'Locked' : 'Train'),
+                    ),
+                  ),
+                  if (showExamButton) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: onExamTap,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          foregroundColor: const Color(0xFFD8B640),
+                          side: const BorderSide(color: Color(0xFFD8B640)),
+                          backgroundColor:
+                              const Color(0xFFD8B640).withValues(alpha: 0.08),
+                        ),
+                        child: const Text('Exam'),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
               ClipRRect(
                 borderRadius: BorderRadius.circular(999),
                 child: LinearProgressIndicator(
@@ -600,42 +755,6 @@ class _PuzzleNodeCard extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        const SizedBox(width: 10),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FilledButton(
-              onPressed: onTap,
-              style: FilledButton.styleFrom(
-                backgroundColor: locked
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.outline.withValues(alpha: 0.28)
-                    : const Color(0xFF5AAEE8),
-                foregroundColor: locked
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.70)
-                    : const Color(0xFF07131F),
-              ),
-              child: Text(locked ? 'Locked' : 'Train'),
-            ),
-            if (showExamButton) ...[
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: onExamTap,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFD8B640),
-                  side: const BorderSide(color: Color(0xFFD8B640)),
-                  backgroundColor: const Color(
-                    0xFFD8B640,
-                  ).withValues(alpha: 0.08),
-                ),
-                child: const Text('Take Exam'),
-              ),
-            ],
-          ],
         ),
       ],
     );
@@ -756,6 +875,34 @@ class _HeroBadge extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoTag extends StatelessWidget {
+  const _InfoTag({required this.label, required this.accent});
+
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: scheme.onSurface,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

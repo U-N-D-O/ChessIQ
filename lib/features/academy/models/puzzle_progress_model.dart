@@ -16,6 +16,8 @@ class PuzzleProgressModel {
   final Set<String> solvedPuzzleIds;
   final Set<String> speedDemonNodeKeys;
   final Map<String, int> bestSolveTimeMsByPuzzleId;
+  final String handle;
+  final String country;
   final List<AcademyExamResult> examResults;
 
   const PuzzleProgressModel({
@@ -34,6 +36,8 @@ class PuzzleProgressModel {
     required this.solvedPuzzleIds,
     required this.speedDemonNodeKeys,
     required this.bestSolveTimeMsByPuzzleId,
+    required this.handle,
+    required this.country,
     required this.examResults,
   });
 
@@ -56,6 +60,8 @@ class PuzzleProgressModel {
       solvedPuzzleIds: <String>{},
       speedDemonNodeKeys: <String>{},
       bestSolveTimeMsByPuzzleId: <String, int>{},
+      handle: '',
+      country: '',
       examResults: const <AcademyExamResult>[],
     );
   }
@@ -76,6 +82,8 @@ class PuzzleProgressModel {
     Set<String>? solvedPuzzleIds,
     Set<String>? speedDemonNodeKeys,
     Map<String, int>? bestSolveTimeMsByPuzzleId,
+    String? handle,
+    String? country,
     List<AcademyExamResult>? examResults,
   }) {
     return PuzzleProgressModel(
@@ -97,6 +105,8 @@ class PuzzleProgressModel {
       speedDemonNodeKeys: speedDemonNodeKeys ?? this.speedDemonNodeKeys,
       bestSolveTimeMsByPuzzleId:
           bestSolveTimeMsByPuzzleId ?? this.bestSolveTimeMsByPuzzleId,
+      handle: handle ?? this.handle,
+      country: country ?? this.country,
       examResults: examResults ?? this.examResults,
     );
   }
@@ -120,6 +130,8 @@ class PuzzleProgressModel {
       'solvedPuzzleIds': solvedPuzzleIds.toList(growable: false),
       'speedDemonNodeKeys': speedDemonNodeKeys.toList(growable: false),
       'bestSolveTimeMsByPuzzleId': bestSolveTimeMsByPuzzleId,
+      'handle': handle,
+      'country': country,
       'examResults': examResults.map((result) => result.toMap()).toList(),
     };
   }
@@ -186,6 +198,8 @@ class PuzzleProgressModel {
       bestSolveTimeMsByPuzzleId: bestSolveRaw.map(
         (key, value) => MapEntry<String, int>(key, (value as num).toInt()),
       ),
+      handle: map['handle']?.toString() ?? '',
+      country: map['country']?.toString() ?? '',
       examResults: examResultsRaw
           .whereType<Map>()
           .map(
@@ -391,6 +405,7 @@ class PuzzleItem {
 class AcademyExamResult {
   final String nodeKey;
   final int score;
+  final int leaderboardScore;
   final int correctCount;
   final int totalCount;
   final int elapsedMs;
@@ -400,6 +415,7 @@ class AcademyExamResult {
   const AcademyExamResult({
     required this.nodeKey,
     required this.score,
+    required this.leaderboardScore,
     required this.correctCount,
     required this.totalCount,
     required this.elapsedMs,
@@ -411,25 +427,26 @@ class AcademyExamResult {
 
   String get grade {
     if (score >= 9800) return 'S+';
-    if (score >= 9400) return 'S';
-    if (score >= 9000) return 'A+';
-    if (score >= 8600) return 'A';
-    if (score >= 8200) return 'A-';
-    if (score >= 7800) return 'B+';
-    if (score >= 7400) return 'B';
-    if (score >= 7000) return 'B-';
-    if (score >= 6600) return 'C+';
-    if (score >= 6200) return 'C';
-    if (score >= 5800) return 'C-';
-    if (score >= 5400) return 'D+';
-    if (score >= 5000) return 'D';
-    return 'D-';
+    if (score >= 9600) return 'S';
+    if (score >= 9400) return 'A+';
+    if (score >= 9200) return 'A';
+    if (score >= 9000) return 'A-';
+    if (score >= 8600) return 'B+';
+    if (score >= 8200) return 'B';
+    if (score >= 7800) return 'B-';
+    if (score >= 7400) return 'C+';
+    if (score >= 7000) return 'C';
+    if (score >= 6600) return 'C-';
+    if (score >= 6200) return 'D+';
+    if (score >= 6000) return 'D';
+    return 'F';
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'nodeKey': nodeKey,
       'score': score,
+      'leaderboardScore': leaderboardScore,
       'correctCount': correctCount,
       'totalCount': totalCount,
       'elapsedMs': elapsedMs,
@@ -442,6 +459,10 @@ class AcademyExamResult {
     return AcademyExamResult(
       nodeKey: map['nodeKey']?.toString() ?? '',
       score: (map['score'] as num?)?.toInt() ?? 0,
+      leaderboardScore:
+          (map['leaderboardScore'] as num?)?.toInt() ??
+          (map['score'] as num?)?.toInt() ??
+          0,
       correctCount: (map['correctCount'] as num?)?.toInt() ?? 0,
       totalCount: (map['totalCount'] as num?)?.toInt() ?? 0,
       elapsedMs: (map['elapsedMs'] as num?)?.toInt() ?? 0,
