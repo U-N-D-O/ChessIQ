@@ -23,7 +23,12 @@ def flutter_root
   flutter_root
 end
 
-require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'))
+local_podhelper = File.expand_path(File.join(__dir__, 'Flutter', 'podhelper.rb'))
+if File.exist?(local_podhelper)
+  require local_podhelper
+else
+  require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'))
+end
 
 flutter_ios_podfile_setup
 
