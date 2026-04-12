@@ -23,9 +23,9 @@ jobs:
         run: |
           set -euo pipefail
           flutter --version
-          echo "FLUTTER_ROOT=${FLUTTER_ROOT:-}" 
+          echo "FLUTTER_ROOT=${FLUTTER_ROOT:-}"
           command -v flutter
-          if [ -n "${FLUTTER_ROOT:-}" ]; then
+          if [ -n "${FLUTTER_ROOT:-}" ] && [ -f "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper" ]; then
             ls -la "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper"
           fi
 
