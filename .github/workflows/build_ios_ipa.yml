@@ -11,6 +11,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Debug current repo and Podfile
+        run: |
+          set -euo pipefail
+          echo "Current commit:"
+          git rev-parse HEAD
+          git log -1 --oneline
+          echo "Podfile head lines:"
+          sed -n '1,20p' ios/Podfile
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
