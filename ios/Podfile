@@ -1,6 +1,7 @@
 platform :ios, '15.0'
 
-use_modular_headers!
+use_frameworks! :linkage => :static
+install! 'cocoapods', :disable_input_output_paths => true
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 project 'Runner', 'Debug' => :debug, 'Profile' => :release, 'Release' => :release

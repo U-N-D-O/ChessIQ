@@ -26,7 +26,8 @@ jobs:
             sudo gem install cocoapods
           fi
           cd ios
-          pod install --repo-update
+          rm -rf Pods Podfile.lock .symlinks
+          pod install --repo-update --verbose
 
       - name: Resolve Xcode Swift package dependencies
         run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
