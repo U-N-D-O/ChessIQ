@@ -19,13 +19,34 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Verify Flutter installation
+        run: |
+          set -euo pipefail
+          flutter --version
+          echo "FLUTTER_ROOT=${FLUTTER_ROOT:-}" 
+          command -v flutter
+          if [ -n "${FLUTTER_ROOT:-}" ]; then
+            ls -la "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper"
+          fi
+
+      - name: Prepare iOS Flutter helper files
+        run: |
+          set -euo pipefail
+          mkdir -p ios/Flutter
+          if [ -n "${FLUTTER_ROOT:-}" ] && [ -f "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper" ]; then
+            cp "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper" ios/Flutter/podhelper.rb
+          fi
+          flutter pub get
+          flutter precache --ios
+          ls -la ios/Flutter
+
       - name: Install CocoaPods dependencies
+        working-directory: ios
         run: |
           set -euo pipefail
           if ! command -v pod >/dev/null; then
             sudo gem install cocoapods
           fi
-          cd ios
           rm -rf Pods Podfile.lock .symlinks
           pod install --repo-update --verbose
 
