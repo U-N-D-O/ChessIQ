@@ -22,6 +22,9 @@ jobs:
       - name: Install CocoaPods dependencies
         run: |
           set -euo pipefail
+          if ! command -v pod >/dev/null; then
+            sudo gem install cocoapods
+          fi
           cd ios
           pod install --repo-update
 
