@@ -28,7 +28,7 @@ local_podhelper = File.expand_path(File.join(__dir__, 'Flutter', 'podhelper.rb')
 if File.exist?(local_podhelper)
   require local_podhelper
 else
-  flutter_podhelper = File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'))
+  flutter_podhelper = File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper.rb'))
   if File.exist?(flutter_podhelper)
     require flutter_podhelper
   else
