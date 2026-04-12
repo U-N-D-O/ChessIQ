@@ -17,21 +17,40 @@ jobs:
           channel: stable
 
       - name: Determine and export FLUTTER_ROOT
+        shell: bash
         run: |
           set -euo pipefail
-          flutter_bin="$(command -v flutter || true)"
-          if [ -z "${flutter_bin:-}" ]; then
-            echo 'flutter not on PATH' >&2
+          flutter_root="$(python3 - <<'PY'
+import json, subprocess, sys
+try:
+    out = subprocess.check_output(['flutter', '--version', '--machine'], text=True)
+except subprocess.CalledProcessError as e:
+    print(e.stdout or e.stderr, file=sys.stderr)
+    raise
+try:
+    data = json.loads(out)
+except json.JSONDecodeError:
+    print(out, file=sys.stderr)
+    raise
+root = data.get('flutterRoot') or data.get('flutter_root') or ''
+if not root:
+    raise SystemExit('Could not detect flutter root from flutter --version --machine')
+print(root)
+PY
+)"
+          if [ -z "${flutter_root:-}" ]; then
+            echo 'Could not determine FLUTTER_ROOT from flutter' >&2
             exit 1
           fi
-          flutter_root="$(cd "$(dirname "$flutter_bin")/.." && pwd)"
           echo "Detected FLUTTER_ROOT=$flutter_root"
           echo "FLUTTER_ROOT=$flutter_root" >> "$GITHUB_ENV"
-          echo "FLUTTER_ROOT=${FLUTTER_ROOT:-}"
+          export FLUTTER_ROOT="$flutter_root"
           if [ -f "$flutter_root/packages/flutter_tools/bin/podhelper.rb" ]; then
             ls -la "$flutter_root/packages/flutter_tools/bin/podhelper.rb"
           else
-            echo "podhelper.rb missing at $flutter_root/packages/flutter_tools/bin/podhelper.rb"
+            echo "podhelper.rb missing at $flutter_root/packages/flutter_tools/bin/podhelper.rb" >&2
+            ls -la "$flutter_root/packages/flutter_tools/bin" || true
+            exit 1
           fi
           ls -la "$flutter_root/bin/cache/artifacts/engine/ios" || true
 
@@ -39,6 +58,7 @@ jobs:
         run: flutter pub get
 
       - name: Prepare iOS Flutter helper files
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p ios/Flutter
@@ -46,26 +66,46 @@ jobs:
             echo 'FLUTTER_ROOT is not set' >&2
             exit 1
           fi
+          echo "Using FLUTTER_ROOT=$FLUTTER_ROOT"
           if [ -f "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" ]; then
             cp "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" ios/Flutter/podhelper.rb
           else
             echo "podhelper.rb missing at $FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" >&2
+            ls -la "$FLUTTER_ROOT/packages/flutter_tools/bin" || true
             exit 1
           fi
           flutter pub get
           flutter precache --ios
           ls -la "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios" || true
+          if [ ! -d "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios/Flutter.xcframework" ]; then
+            echo "ERROR: Flutter.xcframework not found at $FLUTTER_ROOT/bin/cache/artifacts/engine/ios/Flutter.xcframework" >&2
+            exit 1
+          fi
           ls -la ios/Flutter
 
       - name: Install CocoaPods dependencies
         working-directory: ios
+        shell: bash
         run: |
           set -euo pipefail
           if ! command -v pod >/dev/null; then
             sudo gem install cocoapods
           fi
           rm -rf Pods Podfile.lock .symlinks
-          pod install --repo-update --verbose
+          n=0
+          until [ "$n" -ge 3 ]; do
+            pod install --repo-update --verbose && break
+            n=$((n+1))
+            echo "pod install failed, retry $n/3" >&2
+            pod cache clean --all || true
+            sleep 5
+          done
+          if [ "$n" -ge 3 ]; then
+            echo 'pod install failed after 3 retries' >&2
+            pod env || true
+            pod repo list || true
+            exit 1
+          fi
 
       - name: Resolve Xcode Swift package dependencies
         run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
