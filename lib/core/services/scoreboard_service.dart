@@ -1,3 +1,4 @@
+import 'package:chessiq/core/config.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,11 +12,14 @@ class ScoreboardService {
   bool _initialized = false;
 
   Future<void> initialize() async {
+    if (!_enabled) return;
     if (_initialized) return;
     await Firebase.initializeApp();
     await _ensureSignedIn();
     _initialized = true;
   }
+
+  bool get _enabled => kEnableRemoteScoreboard;
 
   Future<void> _ensureSignedIn() async {
     final auth = FirebaseAuth.instance;
@@ -30,6 +34,8 @@ class ScoreboardService {
     required int score,
     required String title,
   }) async {
+    if (!_enabled) return;
+
     try {
       await initialize();
       final auth = FirebaseAuth.instance;
@@ -62,6 +68,8 @@ class ScoreboardService {
     String? country,
     int limit = 10,
   }) async {
+    if (!_enabled) return const <LeaderboardEntry>[];
+
     try {
       await initialize();
       var query = FirebaseFirestore.instance
