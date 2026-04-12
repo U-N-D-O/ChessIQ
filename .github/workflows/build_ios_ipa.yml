@@ -16,28 +16,45 @@ jobs:
         with:
           channel: stable
 
-      - name: Flutter pub get
-        run: flutter pub get
-
-      - name: Verify Flutter installation
+      - name: Determine and export FLUTTER_ROOT
         run: |
           set -euo pipefail
-          flutter --version
-          echo "FLUTTER_ROOT=${FLUTTER_ROOT:-}"
-          command -v flutter
-          if [ -n "${FLUTTER_ROOT:-}" ] && [ -f "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" ]; then
-            ls -la "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb"
+          flutter_bin="$(command -v flutter || true)"
+          if [ -z "${flutter_bin:-}" ]; then
+            echo 'flutter not on PATH' >&2
+            exit 1
           fi
+          flutter_root="$(cd "$(dirname "$flutter_bin")/.." && pwd)"
+          echo "Detected FLUTTER_ROOT=$flutter_root"
+          echo "FLUTTER_ROOT=$flutter_root" >> "$GITHUB_ENV"
+          echo "FLUTTER_ROOT=${FLUTTER_ROOT:-}"
+          if [ -f "$flutter_root/packages/flutter_tools/bin/podhelper.rb" ]; then
+            ls -la "$flutter_root/packages/flutter_tools/bin/podhelper.rb"
+          else
+            echo "podhelper.rb missing at $flutter_root/packages/flutter_tools/bin/podhelper.rb"
+          fi
+          ls -la "$flutter_root/bin/cache/artifacts/engine/ios" || true
+
+      - name: Flutter pub get
+        run: flutter pub get
 
       - name: Prepare iOS Flutter helper files
         run: |
           set -euo pipefail
           mkdir -p ios/Flutter
-          if [ -n "${FLUTTER_ROOT:-}" ] && [ -f "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" ]; then
+          if [ -z "${FLUTTER_ROOT:-}" ]; then
+            echo 'FLUTTER_ROOT is not set' >&2
+            exit 1
+          fi
+          if [ -f "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" ]; then
             cp "$FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" ios/Flutter/podhelper.rb
+          else
+            echo "podhelper.rb missing at $FLUTTER_ROOT/packages/flutter_tools/bin/podhelper.rb" >&2
+            exit 1
           fi
           flutter pub get
           flutter precache --ios
+          ls -la "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios" || true
           ls -la ios/Flutter
 
       - name: Install CocoaPods dependencies
