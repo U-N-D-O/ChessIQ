@@ -23,14 +23,36 @@ def flutter_root
   flutter_root
 end
 
-require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'))
+local_podhelper = File.expand_path(File.join(__dir__, 'Flutter', 'podhelper.rb'))
+if File.exist?(local_podhelper)
+  require local_podhelper
+else
+  flutter_podhelper = File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'))
+  if File.exist?(flutter_podhelper)
+    require flutter_podhelper
+  else
+    warn "WARNING: Flutter podhelper not found at #{flutter_podhelper}; ensure Flutter SDK is installed and 'flutter pub get' was run."
+  end
+end
 
-flutter_ios_podfile_setup
+if defined?(flutter_ios_podfile_setup)
+  flutter_ios_podfile_setup
+end
 
 target 'Runner' do
-  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  if defined?(flutter_install_all_ios_pods)
+    flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
+  end
 end
 
 post_install do |installer|
-  flutter_post_install(installer)
+  if defined?(flutter_post_install)
+    flutter_post_install(installer)
+  else
+    installer.pods_project.targets.each do |target|
+      if defined?(flutter_additional_ios_build_settings)
+        flutter_additional_ios_build_settings(target)
+      end
+    end
+  end
 end
