@@ -1,6 +1,6 @@
 platform :ios, '15.0'
 
-use_frameworks! :linkage => :static
+use_modular_headers!
 install! 'cocoapods', :disable_input_output_paths => true
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -32,18 +32,17 @@ else
   if File.exist?(flutter_podhelper)
     require flutter_podhelper
   else
-    warn "WARNING: Flutter podhelper not found at #{flutter_podhelper}; ensure Flutter SDK is installed and 'flutter pub get' was run."
+    raise <<~ERROR
+      Flutter podhelper not found at #{flutter_podhelper}.
+      Ensure Flutter SDK is installed and `flutter pub get` was run before CocoaPods.
+    ERROR
   end
 end
 
-if defined?(flutter_ios_podfile_setup)
-  flutter_ios_podfile_setup
-end
+flutter_ios_podfile_setup
 
 target 'Runner' do
-  if defined?(flutter_install_all_ios_pods)
-    flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
-  end
+  flutter_install_all_ios_pods(File.dirname(File.realpath(__FILE__)))
 end
 
 post_install do |installer|
