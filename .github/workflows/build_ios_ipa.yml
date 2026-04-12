@@ -98,20 +98,7 @@ jobs:
           ls -la ../ios/Flutter || true
           rm -rf Pods Podfile.lock .symlinks
           pod repo update --silent || true
-          n=0
-          until [ "$n" -ge 4 ]; do
-            pod install --repo-update --verbose && break
-            n=$((n+1))
-            echo "pod install failed, retry $n/4" >&2
-            pod cache clean --all || true
-            sleep 10
-          done
-          if [ "$n" -ge 4 ]; then
-            echo 'pod install failed after 4 retries' >&2
-            pod env || true
-            pod repo list || true
-            exit 1
-          fi
+          pod install --repo-update --verbose
 
       - name: Resolve Xcode Swift package dependencies
         run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
