@@ -19,6 +19,12 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Install CocoaPods dependencies
+        run: |
+          set -euo pipefail
+          cd ios
+          pod install --repo-update
+
       - name: Resolve Xcode Swift package dependencies
         run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
 
