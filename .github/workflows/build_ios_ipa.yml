@@ -29,28 +29,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter_root="$(python3 - <<'PY'
-          import json, subprocess, sys
-          try:
-              out = subprocess.check_output(['flutter', '--version', '--machine'], text=True)
-          except subprocess.CalledProcessError as e:
-              print(e.stdout or e.stderr, file=sys.stderr)
-              raise
-          try:
-              data = json.loads(out)
-          except json.JSONDecodeError:
-              print(out, file=sys.stderr)
-              raise
-          root = data.get('flutterRoot') or data.get('flutter_root') or ''
-          if not root:
-              raise SystemExit('Could not detect flutter root from flutter --version --machine')
-          print(root)
-          PY
-          )"
-          if [ -z "${flutter_root:-}" ]; then
-            echo 'Could not determine FLUTTER_ROOT from flutter' >&2
+          flutter_bin="$(command -v flutter || true)"
+          if [ -z "${flutter_bin:-}" ]; then
+            echo 'flutter not on PATH' >&2
             exit 1
           fi
+          flutter_root="$(cd "$(dirname "$flutter_bin")/.." && pwd)"
           echo "Detected FLUTTER_ROOT=$flutter_root"
           echo "FLUTTER_ROOT=$flutter_root" >> "$GITHUB_ENV"
           export FLUTTER_ROOT="$flutter_root"
