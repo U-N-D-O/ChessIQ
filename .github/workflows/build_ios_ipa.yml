@@ -19,6 +19,9 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Resolve Xcode Swift package dependencies
+        run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
+
       - name: Clone Stockfish 18
         run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
 
