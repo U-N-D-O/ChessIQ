@@ -21,23 +21,23 @@ jobs:
         run: |
           set -euo pipefail
           flutter_root="$(python3 - <<'PY'
-import json, subprocess, sys
-try:
-    out = subprocess.check_output(['flutter', '--version', '--machine'], text=True)
-except subprocess.CalledProcessError as e:
-    print(e.stdout or e.stderr, file=sys.stderr)
-    raise
-try:
-    data = json.loads(out)
-except json.JSONDecodeError:
-    print(out, file=sys.stderr)
-    raise
-root = data.get('flutterRoot') or data.get('flutter_root') or ''
-if not root:
-    raise SystemExit('Could not detect flutter root from flutter --version --machine')
-print(root)
-PY
-)"
+            import json, subprocess, sys
+            try:
+                out = subprocess.check_output(['flutter', '--version', '--machine'], text=True)
+            except subprocess.CalledProcessError as e:
+                print(e.stdout or e.stderr, file=sys.stderr)
+                raise
+            try:
+                data = json.loads(out)
+            except json.JSONDecodeError:
+                print(out, file=sys.stderr)
+                raise
+            root = data.get('flutterRoot') or data.get('flutter_root') or ''
+            if not root:
+                raise SystemExit('Could not detect flutter root from flutter --version --machine')
+            print(root)
+            PY
+          )"
           if [ -z "${flutter_root:-}" ]; then
             echo 'Could not determine FLUTTER_ROOT from flutter' >&2
             exit 1
