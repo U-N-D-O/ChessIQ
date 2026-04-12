@@ -91,17 +91,23 @@ jobs:
           if ! command -v pod >/dev/null; then
             sudo gem install cocoapods
           fi
+          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
+          echo "Using Podfile:"
+          sed -n '1,80p' Podfile
+          echo "Contents of ios/Flutter:"
+          ls -la ../ios/Flutter || true
           rm -rf Pods Podfile.lock .symlinks
+          pod repo update --silent || true
           n=0
-          until [ "$n" -ge 3 ]; do
+          until [ "$n" -ge 4 ]; do
             pod install --repo-update --verbose && break
             n=$((n+1))
-            echo "pod install failed, retry $n/3" >&2
+            echo "pod install failed, retry $n/4" >&2
             pod cache clean --all || true
-            sleep 5
+            sleep 10
           done
-          if [ "$n" -ge 3 ]; then
-            echo 'pod install failed after 3 retries' >&2
+          if [ "$n" -ge 4 ]; then
+            echo 'pod install failed after 4 retries' >&2
             pod env || true
             pod repo list || true
             exit 1
