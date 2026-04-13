@@ -1,5 +1,7 @@
 platform :ios, '15.0'
 
+require 'active_support/core_ext/object/blank'
+
 use_modular_headers!
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
