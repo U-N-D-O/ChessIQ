@@ -87,6 +87,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set -x
+          echo "PWD=$(pwd)"
           echo "FLUTTER_ROOT=$FLUTTER_ROOT"
           ls -la "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios" || true
           if [ -d "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios/Flutter.xcframework" ]; then
@@ -102,7 +104,7 @@ jobs:
           ls -la ../ios/Flutter || true
           rm -rf Pods Podfile.lock .symlinks
           bundle exec pod repo update --silent || true
-          bundle exec pod install --repo-update --verbose
+          bundle exec pod install --repo-update --verbose 2>&1 | tee pod-install.log
 
       - name: Resolve Xcode Swift package dependencies
         run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
