@@ -82,8 +82,12 @@ jobs:
         run: |
           set -euo pipefail
           if ! command -v pod >/dev/null; then
-            sudo gem install cocoapods
+            sudo gem install cocoapods -v 1.12.1
+          else
+            sudo gem install cocoapods -v 1.12.1
           fi
+          sudo gem install ffi
+          pod --version
           echo "FLUTTER_ROOT=$FLUTTER_ROOT"
           echo "Using Podfile:"
           sed -n '1,80p' Podfile
