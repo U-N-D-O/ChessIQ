@@ -87,21 +87,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v pod >/dev/null; then
-            sudo gem install cocoapods -v 1.12.1
-          else
-            sudo gem install cocoapods -v 1.12.1
-          fi
-          sudo gem install ffi
-          pod --version
+          bundle install
+          bundle exec pod --version
           echo "FLUTTER_ROOT=$FLUTTER_ROOT"
           echo "Using Podfile:"
           sed -n '1,80p' Podfile
           echo "Contents of ios/Flutter:"
           ls -la ../ios/Flutter || true
           rm -rf Pods Podfile.lock .symlinks
-          pod repo update --silent || true
-          pod install --repo-update --verbose
+          bundle exec pod repo update --silent || true
+          bundle exec pod install --repo-update --verbose
 
       - name: Resolve Xcode Swift package dependencies
         run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
