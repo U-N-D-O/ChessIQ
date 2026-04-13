@@ -1,0 +1,15 @@
+{
+  "files.exclude": {
+    "**/windows/flutter/ephemeral": true
+  },
+  "search.exclude": {
+    "**/windows/flutter/ephemeral": true
+  },
+  "C_Cpp.files.exclude": {
+    "**/windows/flutter/ephemeral/**": true
+  },
+  "C_Cpp.errorSquiggles": "Disabled",
+  "C_Cpp.default.excludePath": [
+    "${workspaceFolder}/windows/flutter/ephemeral/**"
+  ]
+}
