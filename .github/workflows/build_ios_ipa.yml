@@ -76,6 +76,12 @@ jobs:
           fi
           ls -la ios/Flutter
 
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.1.4
+          bundler-cache: true
+
       - name: Install CocoaPods dependencies
         working-directory: ios
         shell: bash
