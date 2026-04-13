@@ -87,9 +87,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          flutter_bin="$(command -v flutter || true)"
+          echo "flutter_bin=$flutter_bin"
+          flutter_root="$(cd "$(dirname "$flutter_bin")/.." && pwd)"
+          echo "computed FLUTTER_ROOT=$flutter_root"
+          export FLUTTER_ROOT="$flutter_root"
+          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
+          ls -la "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios" || true
+          if [ -d "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios/Flutter.xcframework" ]; then
+            echo "Found Flutter.xcframework"
+          else
+            echo "Missing Flutter.xcframework at $FLUTTER_ROOT/bin/cache/artifacts/engine/ios/Flutter.xcframework" >&2
+          fi
           bundle install
           bundle exec pod --version
-          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
           echo "Using Podfile:"
           sed -n '1,80p' Podfile
           echo "Contents of ios/Flutter:"
