@@ -11,62 +11,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug current repo and Podfile
-        run: |
-          set -euo pipefail
-          echo "Current commit:"
-          git rev-parse HEAD
-          git log -1 --oneline
-          echo "Podfile head lines:"
-          sed -n '1,20p' ios/Podfile
-
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          channel: stable
 
-      - name: Verify flutter and environment (debug)
-        shell: bash
-        run: |
-          echo "which flutter: $(which flutter || true)"
-          command -v flutter || true
-          flutter --version || true
-          export FLUTTER_ROOT="$(dirname "$(dirname "$(command -v flutter)")")"
-          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
-          ls -la "$FLUTTER_ROOT/packages/flutter_tools/bin" || true
-          ls -la "$FLUTTER_ROOT/bin/cache/artifacts/engine/ios" || true
-          ls -la .
-
-      - name: Get Flutter packages and pre-cache iOS engine
-        shell: bash
-        run: |
-          export FLUTTER_ROOT="$(dirname "$(dirname "$(command -v flutter)")")"
-          flutter pub get
-          flutter precache --ios
-
-      - name: Install Ruby gems (Bundler) for iOS (if you use a Gemfile)
-        working-directory: ios
-        shell: bash
-        run: |
-          if [ -f Gemfile ]; then
-            gem install bundler || true
-            bundle install --jobs 4 --retry 3
-          else
-            echo "No Gemfile in ios/, skipping bundle install"
-          fi
-
-      - name: Install CocoaPods
-        working-directory: ios
-        shell: bash
-        run: |
-          if [ -f Gemfile ]; then
-            bundle exec pod install --verbose
-          else
-            pod install --verbose
-          fi
-
-      - name: Resolve Xcode Swift package dependencies
-        run: xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos -configuration Release -resolvePackageDependencies
+      - name: Flutter pub get
+        run: flutter pub get
 
       - name: Clone Stockfish 18
         run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
@@ -162,4 +113,3 @@ jobs:
           name: ChessIQ-ipa-no-sign
           path: build/ios/ipa/ChessIQ.ipa
           retention-days: 90
-
