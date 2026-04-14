@@ -1,27 +1,29 @@
+import 'dart:convert';
+
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:chessiq/firebase_options.dart';
+import 'package:http/http.dart' as http;
 
 class ScoreboardService {
   ScoreboardService._();
 
   static final ScoreboardService instance = ScoreboardService._();
 
-  bool _initialized = false;
+  static const String _databaseUrl = kFirebaseRealtimeDatabaseUrl;
+  static const String _globalPath = 'academy_scoreboard/global';
+  static const String _countryRoot = 'academy_scoreboard/by_country';
 
-  Future<void> initialize() async {
-    if (_initialized) return;
-    await Firebase.initializeApp();
-    await _ensureSignedIn();
-    _initialized = true;
+  String _countryKey(String country) {
+    final normalized = country.trim().isEmpty ? 'Unknown' : country.trim();
+    return Uri.encodeComponent(
+      normalized.replaceAll(RegExp(r'[.#$\[\]/]'), '_'),
+    );
   }
 
-  Future<void> _ensureSignedIn() async {
-    final auth = FirebaseAuth.instance;
-    final currentUser = auth.currentUser;
-    if (currentUser != null) return;
-    await auth.signInAnonymously();
+  Uri _url(String path, [Map<String, String>? query]) {
+    final uri = Uri.parse('$_databaseUrl/$path.json');
+    if (query == null) return uri;
+    return uri.replace(queryParameters: query);
   }
 
   Future<void> submitScore({
@@ -31,28 +33,27 @@ class ScoreboardService {
     required String title,
   }) async {
     try {
-      await initialize();
-      final auth = FirebaseAuth.instance;
-      final user = auth.currentUser;
-      if (user == null) return;
-      final doc = FirebaseFirestore.instance
-          .collection('academy_scoreboard')
-          .doc(user.uid);
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final snapshot = await transaction.get(doc);
-        final existingScore = snapshot.exists
-            ? (snapshot.data()?['score'] as int? ?? 0)
-            : 0;
-        if (score <= existingScore) return;
-        transaction.set(doc, {
-          'userId': user.uid,
-          'handle': handle,
-          'country': country.trim().isEmpty ? 'Unknown' : country.trim(),
-          'score': score,
-          'title': title,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      });
+      final trimmedHandle = handle.trim().isEmpty
+          ? 'Unknown Player'
+          : handle.trim();
+      final normalizedCountry = country.trim().isEmpty
+          ? 'Unknown'
+          : country.trim();
+      final payload = {
+        'handle': trimmedHandle,
+        'country': normalizedCountry,
+        'score': score,
+        'title': title,
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      final body = jsonEncode(payload);
+      final postGlobal = http.post(_url(_globalPath), body: body);
+      final postCountry = http.post(
+        _url('$_countryRoot/${_countryKey(normalizedCountry)}'),
+        body: body,
+      );
+      await Future.wait([postGlobal, postCountry]);
     } catch (_) {
       // Keep scoreboard sync best-effort and avoid crashing the app.
     }
@@ -63,29 +64,40 @@ class ScoreboardService {
     int limit = 10,
   }) async {
     try {
-      await initialize();
-      var query = FirebaseFirestore.instance
-          .collection('academy_scoreboard')
-          .orderBy('score', descending: true)
-          .limit(limit);
-      if (country != null && country.trim().isNotEmpty) {
-        query = query.where('country', isEqualTo: country.trim());
-      }
-      final snapshot = await query.get();
-      final entries = <LeaderboardEntry>[];
-      for (var i = 0; i < snapshot.docs.length; i++) {
-        final doc = snapshot.docs[i];
-        final data = doc.data();
-        final handle = (data['handle'] as String?)?.trim() ?? 'Unknown Player';
-        final score = (data['score'] as num?)?.toInt() ?? 0;
-        final title = (data['title'] as String?) ?? '';
-        entries.add(
-          LeaderboardEntry(
-            rank: i + 1,
-            handle: handle,
-            score: score,
-            title: title,
-          ),
+      final path = country == null || country.trim().isEmpty
+          ? _globalPath
+          : '$_countryRoot/${_countryKey(country)}';
+      final uri = _url(path, {
+        'orderBy': jsonEncode('score'),
+        'limitToLast': '$limit',
+      });
+      final response = await http.get(uri);
+      if (response.statusCode != 200) return const <LeaderboardEntry>[];
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>?;
+      if (data == null) return const <LeaderboardEntry>[];
+
+      final entries = data.values.whereType<Map<String, dynamic>>().map((
+        entry,
+      ) {
+        final handle = (entry['handle'] as String?)?.trim() ?? 'Unknown Player';
+        final score = (entry['score'] as num?)?.toInt() ?? 0;
+        final title = (entry['title'] as String?) ?? '';
+        return LeaderboardEntry(
+          rank: 0,
+          handle: handle,
+          score: score,
+          title: title,
+        );
+      }).toList();
+
+      entries.sort((a, b) => b.score.compareTo(a.score));
+      for (var i = 0; i < entries.length; i++) {
+        entries[i] = LeaderboardEntry(
+          rank: i + 1,
+          handle: entries[i].handle,
+          score: entries[i].score,
+          title: entries[i].title,
         );
       }
       return entries;

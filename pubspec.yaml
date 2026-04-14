@@ -42,9 +42,7 @@ dependencies:
   chess: ^0.8.1
   confetti: ^0.8.0
   google_mobile_ads: ^7.0.0
-  firebase_core: ^4.6.0
-  firebase_auth: ^6.3.0
-  cloud_firestore: ^6.2.0
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
