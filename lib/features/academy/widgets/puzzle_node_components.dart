@@ -2,23 +2,23 @@ part of 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
 
 class _PerspectiveEvalBar extends StatelessWidget {
   const _PerspectiveEvalBar({
-    required this.evalWhitePawns,
+    required this.evalFromPlayerPerspective,
     required this.playerIsBlack,
     required this.monochrome,
   });
 
-  final double evalWhitePawns;
+  final double evalFromPlayerPerspective;
   final bool playerIsBlack;
   final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final whiteShare = ((evalWhitePawns.clamp(-12.0, 12.0) + 12.0) / 24.0)
-        .clamp(0.0, 1.0);
-    final blackShare = 1.0 - whiteShare;
-
-    final playerShare = playerIsBlack ? blackShare : whiteShare;
+    final playerShare =
+        ((evalFromPlayerPerspective.clamp(-12.0, 12.0) + 12.0) / 24.0).clamp(
+          0.0,
+          1.0,
+        );
     final opponentShare = 1.0 - playerShare;
     final playerLeading = playerShare >= opponentShare;
 

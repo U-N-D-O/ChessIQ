@@ -371,6 +371,28 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     return value;
   }
 
+  bool get todayDailyChallengeRewardClaimed {
+    return progress.claimedDailyChallengeRewardDates.contains(
+      _dateStamp(DateTime.now()),
+    );
+  }
+
+  Future<void> markTodayDailyChallengeRewardClaimed() async {
+    final stamp = _dateStamp(DateTime.now());
+    if (progress.claimedDailyChallengeRewardDates.contains(stamp)) {
+      return;
+    }
+    final updated = progress.copyWith(
+      claimedDailyChallengeRewardDates: {
+        ...progress.claimedDailyChallengeRewardDates,
+        stamp,
+      },
+    );
+    _progress = updated;
+    notifyListeners();
+    await _saveProgress(mirrorStoreCoins: false);
+  }
+
   void attachEconomyProvider(EconomyProvider economyProvider) {
     _economyProvider = economyProvider;
     if (!_initialized || _progress == null || !economyProvider.loaded) {

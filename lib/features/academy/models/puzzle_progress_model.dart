@@ -14,6 +14,7 @@ class PuzzleProgressModel {
   final Set<String> skippedPuzzleIds;
   final Set<String> unlockedThemeRewards;
   final Set<String> solvedPuzzleIds;
+  final Set<String> claimedDailyChallengeRewardDates;
   final Set<String> speedDemonNodeKeys;
   final Map<String, int> bestSolveTimeMsByPuzzleId;
   final String handle;
@@ -34,6 +35,7 @@ class PuzzleProgressModel {
     required this.skippedPuzzleIds,
     required this.unlockedThemeRewards,
     required this.solvedPuzzleIds,
+    required this.claimedDailyChallengeRewardDates,
     required this.speedDemonNodeKeys,
     required this.bestSolveTimeMsByPuzzleId,
     required this.handle,
@@ -58,6 +60,7 @@ class PuzzleProgressModel {
       skippedPuzzleIds: <String>{},
       unlockedThemeRewards: <String>{},
       solvedPuzzleIds: <String>{},
+      claimedDailyChallengeRewardDates: <String>{},
       speedDemonNodeKeys: <String>{},
       bestSolveTimeMsByPuzzleId: <String, int>{},
       handle: '',
@@ -80,6 +83,7 @@ class PuzzleProgressModel {
     Set<String>? skippedPuzzleIds,
     Set<String>? unlockedThemeRewards,
     Set<String>? solvedPuzzleIds,
+    Set<String>? claimedDailyChallengeRewardDates,
     Set<String>? speedDemonNodeKeys,
     Map<String, int>? bestSolveTimeMsByPuzzleId,
     String? handle,
@@ -102,6 +106,9 @@ class PuzzleProgressModel {
       skippedPuzzleIds: skippedPuzzleIds ?? this.skippedPuzzleIds,
       unlockedThemeRewards: unlockedThemeRewards ?? this.unlockedThemeRewards,
       solvedPuzzleIds: solvedPuzzleIds ?? this.solvedPuzzleIds,
+      claimedDailyChallengeRewardDates:
+          claimedDailyChallengeRewardDates ??
+          this.claimedDailyChallengeRewardDates,
       speedDemonNodeKeys: speedDemonNodeKeys ?? this.speedDemonNodeKeys,
       bestSolveTimeMsByPuzzleId:
           bestSolveTimeMsByPuzzleId ?? this.bestSolveTimeMsByPuzzleId,
@@ -128,6 +135,8 @@ class PuzzleProgressModel {
       'skippedPuzzleIds': skippedPuzzleIds.toList(growable: false),
       'unlockedThemeRewards': unlockedThemeRewards.toList(growable: false),
       'solvedPuzzleIds': solvedPuzzleIds.toList(growable: false),
+      'claimedDailyChallengeRewardDates': claimedDailyChallengeRewardDates
+          .toList(growable: false),
       'speedDemonNodeKeys': speedDemonNodeKeys.toList(growable: false),
       'bestSolveTimeMsByPuzzleId': bestSolveTimeMsByPuzzleId,
       'handle': handle,
@@ -191,6 +200,11 @@ class PuzzleProgressModel {
       solvedPuzzleIds: ((map['solvedPuzzleIds'] as List?) ?? const <dynamic>[])
           .map((e) => e.toString())
           .toSet(),
+      claimedDailyChallengeRewardDates:
+          ((map['claimedDailyChallengeRewardDates'] as List?) ??
+                  const <dynamic>[])
+              .map((e) => e.toString())
+              .toSet(),
       speedDemonNodeKeys:
           ((map['speedDemonNodeKeys'] as List?) ?? const <dynamic>[])
               .map((e) => e.toString())

@@ -1414,7 +1414,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           sequenceTitle: 'Daily Challenge',
           cinematicThemeEnabled: monochrome,
           onExitToMap: () {
-            Navigator.of(context).pop();
+            Navigator.of(context, rootNavigator: true).pop();
           },
         ),
       ),

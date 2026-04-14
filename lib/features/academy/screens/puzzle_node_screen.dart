@@ -76,11 +76,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   bool _solved = false;
   bool _focusModeActive = false;
   bool _playerIsBlack = false;
+  bool _evalBarPlayerIsBlack = false;
+  bool _evalBarPlayerColorInitialized = false;
   bool _userMovesOnOddPly = true;
   bool _coachingOffScript = false;
   bool _muteSounds = false;
-  bool _dailyRewardClaimed = false;
-
   int _pendingRegretHalfMoves = 0;
   final List<PuzzleItem> _examMistakePuzzles = <PuzzleItem>[];
   final Set<String> _examMistakePuzzleIds = <String>{};
@@ -209,6 +209,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       _evalWhitePawns = 0.0;
       _game = game;
       _playerIsBlack = playerIsBlack;
+      if (!_evalBarPlayerColorInitialized) {
+        _evalBarPlayerIsBlack = playerIsBlack;
+        _evalBarPlayerColorInitialized = true;
+      }
       _userMovesOnOddPly = setupMoveApplied;
       _coachingOffScript = false;
       _pendingRegretHalfMoves = 0;
@@ -1186,8 +1190,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     const rewardAmount = 200;
-    _dailyRewardClaimed = true;
     await economy.addCoins(rewardAmount);
+    await provider.markTodayDailyChallengeRewardClaimed();
     await provider.syncCoinsFromStoreState(notify: true);
 
     if (!mounted) return;
@@ -1302,20 +1306,24 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     final callback = widget.onExitToMap;
+    final isReviewMistakeExit =
+        widget.initialReviewMode && widget.sequenceTitle == 'Review Mistakes';
     if (callback != null) {
-      if (widget.initialReviewMode &&
-          widget.sequenceTitle == 'Review Mistakes') {
+      if (isReviewMistakeExit) {
         await AdService.instance.showInterstitialAd();
       }
       callback();
       return;
     }
     final navigator = Navigator.of(context);
-    if (widget.initialReviewMode && widget.sequenceTitle == 'Review Mistakes') {
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    if (isReviewMistakeExit) {
       await AdService.instance.showInterstitialAd();
     }
     if (!mounted) return;
-    await navigator.maybePop();
+    if (!await navigator.maybePop()) {
+      await rootNavigator.maybePop();
+    }
   }
 
   List<String> _legalTargetsForSquare(String from) {
@@ -1691,7 +1699,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               child: Column(
                 children: [
                   Text(
-                    _formatEval(_evalWhitePawns),
+                    _formatEval(
+                      _evalBarPlayerIsBlack
+                          ? -_evalWhitePawns
+                          : _evalWhitePawns,
+                    ),
                     style: TextStyle(
                       color: scheme.onSurface,
                       fontSize: 11,
@@ -1702,8 +1714,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                   Expanded(
                     child: Center(
                       child: _PerspectiveEvalBar(
-                        evalWhitePawns: _evalWhitePawns,
-                        playerIsBlack: _playerIsBlack,
+                        evalFromPlayerPerspective: _evalBarPlayerIsBlack
+                            ? -_evalWhitePawns
+                            : _evalWhitePawns,
+                        playerIsBlack: _evalBarPlayerIsBlack,
                         monochrome: monochrome,
                       ),
                     ),
@@ -1991,12 +2005,23 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                   ? 'Coach Review'
                                   : 'Solving')),
                 ),
-                _InfoLine(label: 'Eval', value: _formatEval(_evalWhitePawns)),
+                _InfoLine(
+                  label: 'Eval',
+                  value: _formatEval(
+                    _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
+                  ),
+                ),
+                _InfoLine(
+                  label: 'Eval',
+                  value: _formatEval(
+                    _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
+                  ),
+                ),
                 if (_lastMistakeFromEval != null && _lastMistakeToEval != null)
                   _InfoLine(
                     label: 'Swing',
                     value:
-                        '${_formatEval(_lastMistakeFromEval!)} -> ${_formatEval(_lastMistakeToEval!)}',
+                        '${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeFromEval! : _lastMistakeFromEval!)} -> ${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeToEval! : _lastMistakeToEval!)}',
                   ),
                 const SizedBox(height: 8),
                 Expanded(
@@ -2122,7 +2147,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         : canAdvanceToNext;
     final canClaimDailyReward =
         isDailyEndSequence &&
-        !_dailyRewardClaimed &&
+        !provider.todayDailyChallengeRewardClaimed &&
         (_solved || currentSolvedHistorically || currentSkippedHistorically) &&
         !isReviewMistakeSequence;
     final showDailyRewardButton =

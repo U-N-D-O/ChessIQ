@@ -25,9 +25,9 @@ class PuzzleEngineService {
   Completer<void>? _readyOk;
   Completer<PuzzleEngineAnalysis>? _pendingAnalysis;
   int _activeDepth = 20;
-  bool _whiteToMove = true;
   String? _lastBestMove;
   double? _latestEvalWhitePawns;
+  bool _whiteToMove = true; // Added variable to track turn perspective
   void Function(double evalWhitePawns)? _onEval;
   bool _started = false;
 
@@ -58,8 +58,8 @@ class PuzzleEngineService {
         depth: _activeDepth,
       ),
     );
+    _whiteToMove = whiteToMove; // Save the perspective for the engine output
     _activeDepth = depth;
-    _whiteToMove = whiteToMove;
     _lastBestMove = null;
     _onEval = onEval;
     _pendingAnalysis = Completer<PuzzleEngineAnalysis>();
@@ -124,7 +124,13 @@ class PuzzleEngineService {
       eval = rawValue / 100.0;
     }
 
-    _latestEvalWhitePawns = _whiteToMove ? eval : -eval;
+    // Engine evaluations are always from the perspective of the side to move.
+    // We flip the evaluation here if it's Black's turn to make it absolute for White.
+    if (!_whiteToMove) {
+      eval = -eval;
+    }
+
+    _latestEvalWhitePawns = eval;
     final callback = _onEval;
     if (callback != null && _latestEvalWhitePawns != null) {
       callback(_latestEvalWhitePawns!);
