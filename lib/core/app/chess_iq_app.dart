@@ -1,5 +1,6 @@
 import 'package:chessiq/core/navigation/app_routes.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/analysis/screens/chess_analysis_page.dart';
@@ -17,7 +18,11 @@ class ChessIQApp extends StatelessWidget {
           create: (_) => AppThemeProvider()..load(),
         ),
         ChangeNotifierProvider<EconomyProvider>(
-          create: (_) => EconomyProvider()..load(),
+          create: (_) {
+            final economy = EconomyProvider()..load();
+            PurchaseService.instance.attachEconomy(economy);
+            return economy;
+          },
         ),
         ChangeNotifierProxyProvider<EconomyProvider, PuzzleAcademyProvider>(
           create: (_) => PuzzleAcademyProvider(),

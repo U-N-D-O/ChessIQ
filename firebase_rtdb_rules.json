@@ -1,0 +1,26 @@
+{
+    "rules": {
+        ".read": false,
+        ".write": false,
+        "academy_scoreboard": {
+            ".read": true,
+            ".write": false,
+            "global": {
+                ".indexOn": [
+                    "score"
+                ]
+            },
+            "by_country": {
+                "$country": {
+                    ".indexOn": [
+                        "score"
+                    ]
+                }
+            }
+        },
+        "handle_registry": {
+            ".read": false,
+            ".write": false
+        }
+    }
+}

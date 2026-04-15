@@ -19,7 +19,7 @@ class _DashboardPanel extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -28,7 +28,7 @@ class _DashboardPanel extends StatelessWidget {
                 alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
               ),
               scheme.surface,
-            ).withValues(alpha: 0.92),
+            ).withValues(alpha: 0.70),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: Color.alphaBlend(
@@ -283,84 +283,85 @@ class _SemesterHeader extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              scheme.primary.withValues(
-                alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
-              ),
-              scheme.surface,
-            ).withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${semester.title} • ${semester.minElo}-${semester.maxElo}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: scheme.onSurface,
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                scheme.primary.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
+                ),
+                scheme.surface,
+              ).withValues(alpha: 0.70),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${semester.title} • ${semester.minElo}-${semester.maxElo}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    color: scheme.onSurface.withValues(alpha: 0.72),
-                    size: 18,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Text(
-                    '$nodeCount Levels',
-                    style: TextStyle(
+                    const SizedBox(width: 8),
+                    Icon(
+                      expanded ? Icons.expand_less : Icons.expand_more,
                       color: scheme.onSurface.withValues(alpha: 0.72),
-                      fontSize: 12,
+                      size: 18,
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    expanded ? 'Hide' : 'Show',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.72),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      '$nodeCount Levels',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.72),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  minHeight: 7,
-                  value: progress,
-                  backgroundColor: scheme.outline.withValues(alpha: 0.22),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    Color(0xFF6FE7FF),
+                    const Spacer(),
+                    Text(
+                      expanded ? 'Hide' : 'Show',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.72),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    minHeight: 7,
+                    value: progress,
+                    backgroundColor: scheme.outline.withValues(alpha: 0.22),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Color(0xFF6FE7FF),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-      )  );
+    );
   }
 }
 
@@ -416,7 +417,7 @@ class _PuzzleNodeCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -424,18 +425,18 @@ class _PuzzleNodeCard extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: locked
                   ? [
-                      cardBase.withValues(alpha: 0.90),
+                      cardBase.withValues(alpha: 0.70),
                       Color.alphaBlend(
                         scheme.primary.withValues(alpha: 0.02),
                         scheme.surface,
-                      ).withValues(alpha: 0.90),
+                      ).withValues(alpha: 0.70),
                     ]
                   : [
-                      cardBase.withValues(alpha: 0.90),
+                      cardBase.withValues(alpha: 0.70),
                       Color.alphaBlend(
                         scheme.secondary.withValues(alpha: 0.05),
                         scheme.surface,
-                      ).withValues(alpha: 0.90),
+                      ).withValues(alpha: 0.70),
                     ],
             ),
             borderRadius: BorderRadius.circular(22),
@@ -541,8 +542,9 @@ class _PuzzleNodeCard extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFD8B640),
                     side: const BorderSide(color: Color(0xFFD8B640)),
-                    backgroundColor:
-                        const Color(0xFFD8B640).withValues(alpha: 0.08),
+                    backgroundColor: const Color(
+                      0xFFD8B640,
+                    ).withValues(alpha: 0.08),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   child: const Text('Exam'),
@@ -569,8 +571,8 @@ class _PuzzleNodeCard extends StatelessWidget {
                 child: Text(
                   locked
                       ? (previousSolveRequirementText ??
-                          lockedRequirementText ??
-                          'Locked')
+                            lockedRequirementText ??
+                            'Locked')
                       : 'Train',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -655,7 +657,8 @@ class _PuzzleNodeCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              if (requiresPreviousSolveTarget || requiresPreviousSemesterExamGate)
+              if (requiresPreviousSolveTarget ||
+                  requiresPreviousSemesterExamGate)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -665,8 +668,7 @@ class _PuzzleNodeCard extends StatelessWidget {
                           label: '100 solves prev',
                           accent: const Color(0xFF71B7FF),
                         ),
-                      if (requiresPreviousSolveTarget)
-                        const SizedBox(width: 6),
+                      if (requiresPreviousSolveTarget) const SizedBox(width: 6),
                       if (requiresPreviousSemesterExamGate)
                         _InfoTag(
                           label: 'Prev sem exam',
@@ -730,8 +732,9 @@ class _PuzzleNodeCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           foregroundColor: const Color(0xFFD8B640),
                           side: const BorderSide(color: Color(0xFFD8B640)),
-                          backgroundColor:
-                              const Color(0xFFD8B640).withValues(alpha: 0.08),
+                          backgroundColor: const Color(
+                            0xFFD8B640,
+                          ).withValues(alpha: 0.08),
                         ),
                         child: const Text('Exam'),
                       ),

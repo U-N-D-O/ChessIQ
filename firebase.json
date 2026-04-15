@@ -1,0 +1,10 @@
+{
+    "functions": {
+        "source": "functions",
+        "codebase": "default",
+        "runtime": "nodejs20"
+    },
+    "database": {
+        "rules": "firebase_rtdb_rules.json"
+    }
+}

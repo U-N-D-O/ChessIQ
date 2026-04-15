@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:chessiq/core/services/scoreboard_service.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:flutter/foundation.dart';
@@ -127,6 +128,8 @@ class PuzzleSolveResult {
 class PuzzleAcademyProvider extends ChangeNotifier {
   static const String _progressKey = 'puzzle_academy_progress_v2';
   static const String _sharedStoreStateKey = 'store_state_v1';
+  static const String _progressIntegrityScope = 'academy_progress';
+  static const String _storeIntegrityScope = 'economy_store';
   static const int _coinsPerAdWatch = 10;
   static const int _brainBreakSolveInterval = 15;
   static const int _dailyPuzzleReward = 40;
@@ -337,7 +340,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     for (final result in results) {
       final existing = bestResultsByNode[result.nodeKey];
       if (existing == null ||
-          result.leaderboardScore > existing.leaderboardScore) {
+          _effectiveLeaderboardScore(result) >
+              _effectiveLeaderboardScore(existing)) {
         bestResultsByNode[result.nodeKey] = result;
       }
     }
@@ -348,7 +352,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
     final totalScore = bestResultsByNode.values.fold<int>(
       0,
-      (sum, result) => sum + result.leaderboardScore,
+      (sum, result) => sum + _effectiveLeaderboardScore(result),
     );
     final handle = progress.handle.trim().isEmpty
         ? 'Unknown Player'
@@ -436,6 +440,16 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<HandleAvailabilityStatus> checkHandleAvailability({
+    required String handle,
+    String? currentHandle,
+  }) async {
+    return ScoreboardService.instance.checkHandleAvailability(
+      handle: handle,
+      currentHandle: currentHandle,
+    );
+  }
+
   Future<void> resetAcademyScoreboard() async {
     _progress = progress.copyWith(examResults: const <AcademyExamResult>[]);
     await _saveProgress();
@@ -489,10 +503,24 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       if (raw == null || raw.trim().isEmpty) {
         _progress = PuzzleProgressModel.initial(nodes: fallbackNodes);
       } else {
-        _progress = PuzzleProgressModel.fromJson(
+        final signed = LocalIntegrityService.decodeJson(
           raw,
-          fallbackNodes: fallbackNodes,
+          scope: _progressIntegrityScope,
         );
+        if (signed.data == null) {
+          _progress = PuzzleProgressModel.initial(nodes: fallbackNodes);
+        } else if (signed.isSigned && !signed.isValid) {
+          _progress = PuzzleProgressModel.initial(nodes: fallbackNodes)
+              .copyWith(
+                handle: signed.data!['handle']?.toString().trim() ?? '',
+                country: signed.data!['country']?.toString().trim() ?? '',
+              );
+        } else {
+          _progress = PuzzleProgressModel.fromMap(
+            signed.data!,
+            fallbackNodes: fallbackNodes,
+          );
+        }
       }
 
       _normalizeUnlockState();
@@ -1031,6 +1059,17 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     return results.isEmpty ? null : results.first;
   }
 
+  int _effectiveLeaderboardScore(AcademyExamResult result) {
+    final node = progress.nodes[result.nodeKey];
+    if (node == null) {
+      return result.leaderboardScore;
+    }
+    return calculateLeaderboardScore(
+      examScore: result.score,
+      nodeElo: node.startElo,
+    );
+  }
+
   int calculateExamScore({
     required int correctCount,
     required int totalCount,
@@ -1086,13 +1125,14 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     for (final result in progress.examResults) {
       final existing = bestResultsByNode[result.nodeKey];
       if (existing == null ||
-          result.leaderboardScore > existing.leaderboardScore) {
+          _effectiveLeaderboardScore(result) >
+              _effectiveLeaderboardScore(existing)) {
         bestResultsByNode[result.nodeKey] = result;
       }
     }
     final totalScore = bestResultsByNode.values.fold<int>(
       0,
-      (sum, result) => sum + result.leaderboardScore,
+      (sum, result) => sum + _effectiveLeaderboardScore(result),
     );
     if (totalScore <= 0) return;
 
@@ -1164,20 +1204,17 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     if (_progress == null) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sharedStoreStateKey);
-    if (raw == null || raw.trim().isEmpty) {
+    final signed = LocalIntegrityService.decodeJson(
+      prefs.getString(_sharedStoreStateKey),
+      scope: _storeIntegrityScope,
+    );
+    if (signed.data == null || (signed.isSigned && !signed.isValid)) {
       await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
       return;
     }
 
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
-        return;
-      }
-
-      final storeCoins = (decoded['coins'] as num?)?.toInt();
+      final storeCoins = (signed.data!['coins'] as num?)?.toInt();
       if (storeCoins == null) {
         await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
         return;
@@ -1206,7 +1243,13 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
   Future<void> _saveProgress({bool mirrorStoreCoins = true}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_progressKey, progress.toJson());
+    await prefs.setString(
+      _progressKey,
+      LocalIntegrityService.wrapJson(
+        progress.toMap(),
+        scope: _progressIntegrityScope,
+      ),
+    );
     if (mirrorStoreCoins) {
       await _mirrorCoinsToStoreState(progress.coins, prefs: prefs);
     }
@@ -1232,24 +1275,19 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     SharedPreferences? prefs,
   }) async {
     final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
-    final raw = resolvedPrefs.getString(_sharedStoreStateKey);
-
-    Map<String, dynamic> payload = <String, dynamic>{};
-    if (raw != null && raw.trim().isNotEmpty) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is Map) {
-          payload = decoded.map(
-            (key, value) => MapEntry(key.toString(), value),
-          );
-        }
-      } catch (_) {
-        payload = <String, dynamic>{};
-      }
-    }
+    final signed = LocalIntegrityService.decodeJson(
+      resolvedPrefs.getString(_sharedStoreStateKey),
+      scope: _storeIntegrityScope,
+    );
+    final payload = (signed.isSigned && !signed.isValid)
+        ? <String, dynamic>{}
+        : <String, dynamic>{...?signed.data};
 
     payload['coins'] = max(0, coins);
-    await resolvedPrefs.setString(_sharedStoreStateKey, jsonEncode(payload));
+    await resolvedPrefs.setString(
+      _sharedStoreStateKey,
+      LocalIntegrityService.wrapJson(payload, scope: _storeIntegrityScope),
+    );
   }
 
   void _normalizeUnlockState() {

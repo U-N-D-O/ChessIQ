@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
+import 'package:chessiq/core/services/purchase_service.dart';
+import 'package:chessiq/core/services/scoreboard_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
@@ -46,6 +49,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     with TickerProviderStateMixin {
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
+  static const String _storeStateKey = 'store_state_v1';
+  static const String _academyTuitionPassKey = 'academyTuitionPassOwned';
 
   bool _didPrimeUi = false;
   bool _didShowAcademyProfilePrompt = false;
@@ -116,33 +121,107 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   Future<void> _ensureAcademyProfile(PuzzleAcademyProvider provider) async {
     if (!mounted || !provider.initialized) return;
     if (!provider.shouldAskForProfile) return;
-    await _showAcademyProfileDialog(context, provider);
+    await _showAcademyProfileDialog(provider);
   }
 
-  Future<void> _showAcademyProfileDialog(
-    BuildContext dialogContext,
-    PuzzleAcademyProvider provider, {
-    bool lockHandle = false,
-    bool lockCountry = false,
-  }) async {
-    final result = await showDialog<Map<String, String>>(
-      context: dialogContext,
+  Future<Map<String, String>?> _promptAcademyProfileDialog({
+    required String initialHandle,
+    required String initialCountry,
+    required bool lockHandle,
+    required bool lockCountry,
+  }) {
+    return showDialog<Map<String, String>>(
+      context: context,
       barrierDismissible: false,
       builder: (context) {
         return _AcademyProfileDialog(
-          initialHandle: provider.progress.handle,
-          initialCountry: provider.progress.country,
+          initialHandle: initialHandle,
+          initialCountry: initialCountry,
           lockHandle: lockHandle,
           lockCountry: lockCountry,
         );
       },
     );
+  }
 
-    if (result == null) return;
-    await provider.updateAcademyProfile(
-      handle: result['handle'] ?? '',
-      country: result['country'] ?? '',
-    );
+  Future<void> _showAcademyProfileDialog(
+    PuzzleAcademyProvider provider, {
+    bool lockHandle = false,
+    bool lockCountry = false,
+  }) async {
+    var initialHandle = provider.progress.handle;
+    var initialCountry = provider.progress.country;
+
+    while (mounted) {
+      final result = await _promptAcademyProfileDialog(
+        initialHandle: initialHandle,
+        initialCountry: initialCountry,
+        lockHandle: lockHandle,
+        lockCountry: lockCountry,
+      );
+
+      if (!mounted) return;
+      if (result == null) return;
+
+      final handle = (result['handle'] ?? '').trim();
+      final country = (result['country'] ?? '').trim();
+
+      final currentHandle = provider.progress.handle.trim();
+      final handleChanged = handle.toLowerCase() != currentHandle.toLowerCase();
+
+      if (handleChanged) {
+        final status = await provider.checkHandleAvailability(
+          handle: handle,
+          currentHandle: provider.progress.handle,
+        );
+        if (!mounted) return;
+
+        if (status == HandleAvailabilityStatus.verificationUnavailable) {
+          await showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Internet Required'),
+              content: const Text(
+                'You need to be online to create or change a nickname so ChessIQ can verify it is unique. You can still change your country while offline.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          initialHandle = handle;
+          initialCountry = country;
+          continue;
+        }
+
+        if (status == HandleAvailabilityStatus.taken) {
+          await showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Nickname Already In Use'),
+              content: const Text(
+                'That nickname is already used on the leaderboard. Please choose a different one.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          initialHandle = handle;
+          initialCountry = country;
+          continue;
+        }
+      }
+
+      await provider.updateAcademyProfile(handle: handle, country: country);
+      return;
+    }
   }
 
   Future<void> _showPendingEducation(PuzzleAcademyProvider provider) async {
@@ -322,20 +401,58 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   Future<void> _showBrainBreakDialog(PuzzleAcademyProvider provider) async {
-    final shown = await AdService.instance.showInterstitialAd();
-    if (!shown || !mounted) {
-      return;
-    }
+    final academyAdFree = await _isAcademyTuitionPassOwned();
+    final shown = academyAdFree
+        ? true
+        : await AdService.instance.showInterstitialAd();
+    if (!shown || !mounted) return;
 
     final economy = context.read<EconomyProvider>();
     await economy.awardAcademyInterstitialCoins();
     await provider.syncCoinsFromStoreState(notify: true);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(content: Text('Academy break complete. +10 coins.')),
-      );
+    await _showStatusDialog(
+      title: 'Academy Break Complete',
+      message: '+10 coins.',
+    );
+  }
+
+  Future<bool> _isAcademyTuitionPassOwned() async {
+    // Check IAP delivery flag first (survives reinstall / restore).
+    if (await PurchaseService.instance.isOwned(IapProducts.academyPass)) {
+      return true;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_storeStateKey);
+    if (raw == null || raw.isEmpty) {
+      return false;
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      return false;
+    }
+    final owned = decoded[_academyTuitionPassKey];
+    return owned == true;
+  }
+
+  Future<void> _showStatusDialog({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showGrandmasterOracleDialog() async {
@@ -549,22 +666,16 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           final ok = await liveProvider.buyNicknameReset();
                           if (!mounted) return;
                           if (!ok) {
-                            ScaffoldMessenger.of(this.context)
-                              ..clearSnackBars()
-                              ..showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Not enough coins to change nickname.',
-                                  ),
-                                ),
-                              );
+                            await _showStatusDialog(
+                              title: 'Not Enough Coins',
+                              message: 'Not enough coins to change nickname.',
+                            );
                             return;
                           }
                           unawaited(_playAcademyBuySound());
                           _didShowAcademyProfilePrompt = true;
                           if (!mounted) return;
                           await _showAcademyProfileDialog(
-                            this.context,
                             liveProvider,
                             lockCountry: true,
                           );
@@ -580,22 +691,16 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           final ok = await liveProvider.buyCountryReset();
                           if (!mounted) return;
                           if (!ok) {
-                            ScaffoldMessenger.of(this.context)
-                              ..clearSnackBars()
-                              ..showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Not enough coins to change country.',
-                                  ),
-                                ),
-                              );
+                            await _showStatusDialog(
+                              title: 'Not Enough Coins',
+                              message: 'Not enough coins to change country.',
+                            );
                             return;
                           }
                           unawaited(_playAcademyBuySound());
                           _didShowAcademyProfilePrompt = true;
                           if (!mounted) return;
                           await _showAcademyProfileDialog(
-                            this.context,
                             liveProvider,
                             lockHandle: true,
                           );
@@ -1126,30 +1231,33 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsetsDirectional.only(start: 54, bottom: 12),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            GestureDetector(
-              onTap: widget.onShowCredits,
-              child: Image.asset(
-                'assets/ChessIQ.png',
-                width: 120,
-                height: 34,
-                fit: BoxFit.contain,
+        expandedTitleScale: 1.0,
+        titlePadding: const EdgeInsetsDirectional.only(bottom: 12),
+        title: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: widget.onShowCredits,
+                child: Image.asset(
+                  'assets/ChessIQ.png',
+                  width: 120,
+                  height: 34,
+                  fit: BoxFit.contain,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Puzzle Academy',
-              style: TextStyle(
-                color: scheme.onSurface,
-                fontWeight: FontWeight.w600,
-                fontSize: 18,
+              const SizedBox(height: 2),
+              Text(
+                'Puzzle Academy',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         background: Container(
           decoration: BoxDecoration(
@@ -1239,43 +1347,53 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             title: 'Semester Progress',
             accent: const Color(0xFF6FE7FF),
             child: Column(
-              children: provider.semesters
-                  .map(
-                    (semester) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
+              children: provider.semesters.map((semester) {
+                final pct = (provider.semesterProgress(semester) * 100).round();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
                           Expanded(
                             child: Text(
                               semester.title,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
+                                fontSize: 13,
                               ),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              softWrap: false,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 110,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: LinearProgressIndicator(
-                                minHeight: 7,
-                                value: provider.semesterProgress(semester),
-                                backgroundColor: Colors.white10,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF6FE7FF),
-                                ),
-                              ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$pct%',
+                            style: const TextStyle(
+                              color: Color(0xFF6FE7FF),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  )
-                  .toList(),
+                      const SizedBox(height: 5),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          minHeight: 6,
+                          value: provider.semesterProgress(semester),
+                          backgroundColor: Colors.white10,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFF6FE7FF),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           ),
           const SizedBox(height: 12),
@@ -1299,7 +1417,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1308,7 +1426,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 alpha: theme.brightness == Brightness.dark ? 0.12 : 0.04,
               ),
               scheme.surface,
-            ).withValues(alpha: 0.88),
+            ).withValues(alpha: 0.70),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
           ),
@@ -1431,7 +1549,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           sequenceTitle: 'Daily Challenge',
           cinematicThemeEnabled: monochrome,
           onExitToMap: () {
-            Navigator.of(context, rootNavigator: true).pop();
+            Navigator.of(context).pop();
           },
         ),
       ),

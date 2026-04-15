@@ -20,19 +20,14 @@ class _PerspectiveEvalBar extends StatelessWidget {
           1.0,
         );
     final opponentShare = 1.0 - playerShare;
-    final playerLeading = playerShare >= opponentShare;
 
     final lightMonoFill = const Color(0xFFE6E6E6);
     final darkMonoFill = const Color(0xFF111111);
     final lightFill = monochrome ? lightMonoFill : Colors.white;
     final darkFill = monochrome ? darkMonoFill : const Color(0xFF1F2732);
 
-    final playerFill = monochrome
-        ? (playerLeading ? lightFill : darkFill)
-        : (playerIsBlack ? darkFill : lightFill);
-    final opponentFill = monochrome
-        ? (playerLeading ? darkFill : lightFill)
-        : (playerIsBlack ? lightFill : darkFill);
+    final playerFill = playerIsBlack ? darkFill : lightFill;
+    final opponentFill = playerIsBlack ? lightFill : darkFill;
 
     final topFlex = max(1, (opponentShare * 100).round());
     final bottomFlex = max(1, (playerShare * 100).round());

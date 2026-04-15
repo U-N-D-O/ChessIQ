@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
 
@@ -6,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
+import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
@@ -54,6 +56,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     with SingleTickerProviderStateMixin {
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
+  static const String _storeStateKey = 'store_state_v1';
+  static const String _academyTuitionPassKey = 'academyTuitionPassOwned';
   static const int _boardSfxPlayerPoolSize = 4;
 
   final PuzzleEngineService _engine = PuzzleEngineService();
@@ -403,21 +407,101 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     if (elapsed < const Duration(minutes: 3)) return;
 
     final economy = context.read<EconomyProvider>();
-    final messenger = ScaffoldMessenger.of(context);
     if (elapsed >= const Duration(minutes: 20)) {
       final rewarded = await AdService.instance.showRewardedAd();
       if (rewarded && mounted) {
         await economy.addCoins(50);
-        messenger
-          ..clearSnackBars()
-          ..showSnackBar(
-            const SnackBar(content: Text('Reward earned! +50 coins.')),
-          );
+        await _showStatusDialog(title: 'Reward Earned', message: '+50 coins.');
       }
       return;
     }
 
     await AdService.instance.showInterstitialAd();
+  }
+
+  Future<void> _showRewardAdUnavailableDialog() async {
+    if (!mounted) return;
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
+    final panelColor = useMonochrome
+        ? (isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7))
+        : Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
+            scheme.surface,
+          );
+    final accent = useMonochrome
+        ? (isDark ? const Color(0xFFD0D0D0) : const Color(0xFF4A4A4A))
+        : const Color(0xFF5AAEE8);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: panelColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
+        contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, color: accent, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Ad Unavailable',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Rewarded ad is unavailable or was not completed.\n\nTry again when you have internet connection.',
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.88),
+            height: 1.3,
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            style: FilledButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: useMonochrome
+                  ? (isDark ? Colors.black : Colors.white)
+                  : const Color(0xFF07131F),
+            ),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showStatusDialog({
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openReviewMistakes() async {
@@ -989,17 +1073,31 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
 
+    final academyAdFree = await _isAcademyTuitionPassOwned();
+    if (academyAdFree) {
+      if (!mounted) return;
+      final economy = context.read<EconomyProvider>();
+      await economy.awardAcademyInterstitialCoins();
+      await provider.syncCoinsFromStoreState(notify: true);
+      if (!mounted) return;
+      await _showStatusDialog(
+        title: 'Academy Break Complete',
+        message: '+10 coins.',
+      );
+      provider.consumeBrainBreakTrigger();
+      return;
+    }
+
     final shown = await AdService.instance.showInterstitialAd();
     if (shown && mounted) {
       final economy = context.read<EconomyProvider>();
       await economy.awardAcademyInterstitialCoins();
       await provider.syncCoinsFromStoreState(notify: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(content: Text('Academy break complete. +10 coins.')),
-        );
+      await _showStatusDialog(
+        title: 'Academy Break Complete',
+        message: '+10 coins.',
+      );
     }
 
     provider.consumeBrainBreakTrigger();
@@ -1047,9 +1145,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final consumed = await provider.consumeHint();
     if (!mounted) return;
     if (!consumed) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(const SnackBar(content: Text('No hints available.')));
+      await _showStatusDialog(
+        title: 'Hints Unavailable',
+        message: 'No hints available.',
+      );
       return;
     }
 
@@ -1069,15 +1168,17 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final skipped = await provider.skipPuzzle(puzzle);
     if (!mounted) return;
     if (!skipped) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(const SnackBar(content: Text('No skips available.')));
+      await _showStatusDialog(
+        title: 'Skips Unavailable',
+        message: 'No skips available.',
+      );
       return;
     }
 
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(const SnackBar(content: Text('Puzzle skipped.')));
+    await _showStatusDialog(
+      title: 'Puzzle Skipped',
+      message: 'Puzzle skipped.',
+    );
     await _openNextPuzzle(allowUncleared: true);
   }
 
@@ -1173,27 +1274,23 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   Future<void> _claimDailySequenceReward(PuzzleAcademyProvider provider) async {
     if (provider.todayDailyChallengeRewardClaimed) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Today\'s daily reward is already claimed.'),
-          ),
-        );
+      await _showStatusDialog(
+        title: 'Already Claimed',
+        message: 'Today\'s daily reward is already claimed.',
+      );
       return;
     }
 
     final economy = context.read<EconomyProvider>();
-    final messenger = ScaffoldMessenger.of(context);
-    final rewardEarned = await AdService.instance.showRewardedAd();
-    if (!rewardEarned || !mounted) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Reward ad unavailable or not completed.'),
-          ),
-        );
+    final academyAdFree = await _isAcademyTuitionPassOwned();
+    final rewardEarned = academyAdFree
+        ? true
+        : await AdService.instance.showRewardedAd();
+    if (!mounted) {
+      return;
+    }
+    if (!rewardEarned) {
+      await _showRewardAdUnavailableDialog();
       return;
     }
 
@@ -1238,14 +1335,26 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       },
     );
 
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(content: Text('Reward claimed! +200 coins.')),
-      );
-
     if (!mounted) return;
     await _exitToMap();
+  }
+
+  Future<bool> _isAcademyTuitionPassOwned() async {
+    // Check IAP delivery flag first (survives reinstall / restore).
+    if (await PurchaseService.instance.isOwned(IapProducts.academyPass)) {
+      return true;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_storeStateKey);
+    if (raw == null || raw.isEmpty) {
+      return false;
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      return false;
+    }
+    final owned = decoded[_academyTuitionPassKey];
+    return owned == true;
   }
 
   Future<void> _handleSquareTap(String square) async {

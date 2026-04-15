@@ -46,6 +46,58 @@ class EnergyArrowPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     const double boardInset = 2.0;
     final sq = (size.width - (boardInset * 2)) / 8;
+
+    // Pre-compute badge positions with greedy collision avoidance.
+    // The best line (multiPv == 1) picks its preferred spot first; subsequent
+    // lines try alternative t-values along their own arrow until the gap to
+    // every already-placed badge is at least minSafeGap pixels.
+    final Map<int, Offset> badgeCenters = {};
+    if (showSequenceNumbers) {
+      const double badgeR = 9.2;
+      const double minSafeGap = badgeR * 2 + 3.0;
+      const List<double> tCandidates = [
+        0.50, 0.35, 0.65, 0.28, 0.72, 0.20, 0.80,
+      ];
+      final sortedLines = [...lines]
+        ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      for (final line in sortedLines) {
+        final lStart =
+            _getOffset(line.move.substring(0, 2), sq, size, boardInset);
+        final lEnd =
+            _getOffset(line.move.substring(2, 4), sq, size, boardInset);
+        final ldx = lEnd.dx - lStart.dx;
+        final ldy = lEnd.dy - lStart.dy;
+        final ldist = sqrt(ldx * ldx + ldy * ldy);
+        if (ldist < 0.001) {
+          badgeCenters[line.multiPv] = lStart;
+          continue;
+        }
+        final lUnitX = ldx / ldist;
+        final lUnitY = ldy / ldist;
+        final lLineEnd =
+            Offset(lEnd.dx - lUnitX * 10, lEnd.dy - lUnitY * 10);
+
+        Offset bestPos = Offset.lerp(lStart, lLineEnd, 0.5)!;
+        double bestMinDist = -1.0;
+        for (final t in tCandidates) {
+          final candidate = Offset.lerp(lStart, lLineEnd, t)!;
+          var minDist = double.infinity;
+          for (final placed in badgeCenters.values) {
+            final d = (candidate - placed).distance;
+            if (d < minDist) minDist = d;
+          }
+          // No existing badges yet → first line always succeeds immediately.
+          if (badgeCenters.isEmpty) minDist = double.infinity;
+          if (minDist > bestMinDist) {
+            bestMinDist = minDist;
+            bestPos = candidate;
+            if (minDist >= minSafeGap) break; // clear spot found
+          }
+        }
+        badgeCenters[line.multiPv] = bestPos;
+      }
+    }
+
     for (final line in lines.reversed) {
       final start = _getOffset(line.move.substring(0, 2), sq, size, boardInset);
       final end = _getOffset(line.move.substring(2, 4), sq, size, boardInset);
@@ -179,7 +231,8 @@ class EnergyArrowPainter extends CustomPainter {
 
       if (isGambitMode) {
         const badgeRadius = 9.2;
-        final markerCenter = Offset.lerp(start, lineEnd, 0.5)!;
+        final markerCenter =
+            badgeCenters[line.multiPv] ?? Offset.lerp(start, lineEnd, 0.5)!;
 
         if (useStaticStyle) {
           canvas.drawCircle(

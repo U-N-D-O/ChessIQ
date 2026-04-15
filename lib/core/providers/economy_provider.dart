@@ -1,11 +1,12 @@
-import 'dart:convert';
 import 'dart:math';
 
+import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class EconomyProvider extends ChangeNotifier {
   static const String storeStateKey = 'store_state_v1';
+  static const String _storeIntegrityScope = 'economy_store';
   static const String storeRewardAdLastWatchKey =
       'store_reward_ad_last_watch_v1';
   static const String storeRewardAdWatchCountTodayKey =
@@ -231,21 +232,19 @@ class EconomyProvider extends ChangeNotifier {
   }
 
   Map<String, dynamic> _readStorePayload(SharedPreferences prefs) {
-    final raw = prefs.getString(storeStateKey);
-    if (raw == null || raw.trim().isEmpty) {
+    final signed = LocalIntegrityService.decodeJson(
+      prefs.getString(storeStateKey),
+      scope: _storeIntegrityScope,
+    );
+    if (signed.data == null) {
       return <String, dynamic>{};
     }
 
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map) {
-        return decoded.map((key, value) => MapEntry(key.toString(), value));
-      }
-    } catch (_) {
+    if (signed.isSigned && !signed.isValid) {
       return <String, dynamic>{};
     }
 
-    return <String, dynamic>{};
+    return signed.data!;
   }
 
   Future<void> _persistStorePayload(
@@ -253,6 +252,9 @@ class EconomyProvider extends ChangeNotifier {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final nextPayload = update(_readStorePayload(prefs));
-    await prefs.setString(storeStateKey, jsonEncode(nextPayload));
+    await prefs.setString(
+      storeStateKey,
+      LocalIntegrityService.wrapJson(nextPayload, scope: _storeIntegrityScope),
+    );
   }
 }

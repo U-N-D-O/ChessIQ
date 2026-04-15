@@ -6,7 +6,7 @@ enum PieceThemeMode { classic, ember, frost, tuttiFrutti, spectral }
 
 enum AppSection { menu, analysis, gambitQuiz, botSetup, puzzleAcademy }
 
-enum OpeningMode { off, yellowGlow, blueGlow }
+enum OpeningMode { off, yellowGlow, blueGlow, violetGlow }
 
 class MoveRecord {
   final String notation;

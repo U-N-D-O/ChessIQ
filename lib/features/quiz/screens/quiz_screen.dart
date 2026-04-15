@@ -1779,7 +1779,7 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                             selected: _quizMode == GambitQuizMode.guessName,
                             selectedColor: const Color(
                               0xFF5AAEE8,
-                            ).withValues(alpha: 0.20),
+                            ).withValues(alpha: isDark ? 0.20 : 0.28),
                             side: BorderSide(
                               color: _quizMode == GambitQuizMode.guessName
                                   ? const Color(0xFF5AAEE8)
@@ -1787,7 +1787,9 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                             ),
                             labelStyle: TextStyle(
                               color: _quizMode == GambitQuizMode.guessName
-                                  ? const Color(0xFF8FD0FF)
+                                  ? (isDark
+                                        ? const Color(0xFF8FD0FF)
+                                        : const Color(0xFF1040A0))
                                   : chipUnselectedText,
                               fontWeight: FontWeight.w700,
                             ),
@@ -1799,7 +1801,7 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                             selected: _quizMode == GambitQuizMode.guessLine,
                             selectedColor: const Color(
                               0xFF5AAEE8,
-                            ).withValues(alpha: 0.20),
+                            ).withValues(alpha: isDark ? 0.20 : 0.28),
                             side: BorderSide(
                               color: _quizMode == GambitQuizMode.guessLine
                                   ? const Color(0xFF5AAEE8)
@@ -1807,7 +1809,9 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                             ),
                             labelStyle: TextStyle(
                               color: _quizMode == GambitQuizMode.guessLine
-                                  ? const Color(0xFF8FD0FF)
+                                  ? (isDark
+                                        ? const Color(0xFF8FD0FF)
+                                        : const Color(0xFF1040A0))
                                   : chipUnselectedText,
                               fontWeight: FontWeight.w700,
                             ),
