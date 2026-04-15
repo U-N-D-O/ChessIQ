@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -62,6 +63,11 @@ class PurchaseService {
   bool _initialized = false;
   bool _storeAvailable = false;
 
+  bool get _isSupportedPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   /// Whether the platform billing client is reachable.
   bool get storeAvailable => _storeAvailable;
 
@@ -74,6 +80,12 @@ class PurchaseService {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
+
+    if (!_isSupportedPlatform) {
+      // in_app_purchase is not available on desktop/web.
+      _storeAvailable = false;
+      return;
+    }
 
     _storeAvailable = await InAppPurchase.instance.isAvailable();
     if (!_storeAvailable) {
@@ -169,6 +181,7 @@ class PurchaseService {
   /// Returns `true` when the purchase is confirmed or restored, `false` if
   /// cancelled, errored, or the store is unavailable.
   Future<bool> buy(String productId) async {
+    if (!_isSupportedPlatform) return false;
     if (!_storeAvailable) return false;
     if (_products.isEmpty) await _loadProducts();
 
@@ -205,6 +218,7 @@ class PurchaseService {
 
   /// Asks the platform to re-deliver previously purchased non-consumables.
   Future<void> restorePurchases() async {
+    if (!_isSupportedPlatform) return;
     if (!_storeAvailable) return;
     await InAppPurchase.instance.restorePurchases();
   }

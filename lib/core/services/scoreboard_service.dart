@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:chessiq/core/services/firebase_auth_service.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/firebase_options.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -82,11 +83,22 @@ class ScoreboardService {
       body: jsonEncode({'data': data}),
     );
 
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    Map<String, dynamic> body = const <String, dynamic>{};
+    if (response.body.isNotEmpty) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        body = decoded;
+      }
+    }
     if (response.statusCode != 200) {
-      final error = body['error'] as Map<String, dynamic>?;
+      final error = body['error'];
+      final message = error is Map<String, dynamic>
+          ? (error['message']?.toString() ?? '')
+          : '';
       throw Exception(
-        error?['message'] ?? 'Cloud Function error ${response.statusCode}',
+        message.isEmpty
+            ? 'Cloud Function error ${response.statusCode}'
+            : message,
       );
     }
     return (body['result'] as Map<String, dynamic>?) ?? const {};
@@ -120,7 +132,7 @@ class ScoreboardService {
       }
 
       // ── Primary: Cloud Function write ─────────────────────────────────────
-      bool wroteViaFunction = false;
+      bool submitted = false;
       try {
         await _callFunction('submitAcademyScore', {
           'handle': trimmedHandle,
@@ -128,18 +140,21 @@ class ScoreboardService {
           'score': score,
           'title': title,
         });
-        wroteViaFunction = true;
+        submitted = true;
       } catch (_) {
         // CF not deployed yet or offline – fall through to direct REST writes.
       }
 
       // ── Fallback: direct RTDB writes (pre-deployment / offline) ──────────
-      if (!wroteViaFunction) {
+      if (!submitted) {
         final previousCountry = (cachedHandle == handleKey)
             ? cachedCountry
             : null;
         final token = await FirebaseAuthService.instance.getIdToken();
-        final authParam = token != null ? {'auth': token} : null;
+        if (token == null) {
+          throw Exception('No Firebase auth token available for score submit');
+        }
+        final authParam = <String, String>{'auth': token};
 
         final body = jsonEncode({
           'handle': trimmedHandle,
@@ -173,16 +188,29 @@ class ScoreboardService {
           );
         }
 
-        await Future.wait(pending);
+        final responses = await Future.wait(pending);
+        final allSucceeded = responses.every(
+          (response) => response.statusCode >= 200 && response.statusCode < 300,
+        );
+        if (!allSucceeded) {
+          final codes = responses
+              .map((response) => response.statusCode.toString())
+              .join(',');
+          throw Exception('RTDB fallback write failed with status: $codes');
+        }
+        submitted = true;
       }
 
       // ── Persist cache ─────────────────────────────────────────────────────
-      await Future.wait([
-        prefs.setString(_prefHandle, handleKey),
-        prefs.setString(_prefCountry, normalizedCountry),
-        prefs.setInt(_prefScore, score),
-      ]);
-    } catch (_) {
+      if (submitted) {
+        await Future.wait([
+          prefs.setString(_prefHandle, handleKey),
+          prefs.setString(_prefCountry, normalizedCountry),
+          prefs.setInt(_prefScore, score),
+        ]);
+      }
+    } catch (e) {
+      debugPrint('Scoreboard submit failed: $e');
       // Best-effort; don't surface leaderboard errors to the user.
     }
   }

@@ -1898,6 +1898,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         final square = '${String.fromCharCode(97 + boardFile)}$boardRank';
         final piece = _game.get(square);
         final dark = (boardFile + boardRank).isEven;
+        final showFileLabel = visualRankFromTop == 7;
+        final showRankLabel = visualFile == 0;
+        final labelColor = dark ? palette.lightSquare : palette.darkSquare;
 
         final isTarget =
             _dragFromSquare != null &&
@@ -1944,6 +1947,39 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                   )
                                 : null,
                           ),
+                        ),
+                      ),
+                    if (showFileLabel || showRankLabel)
+                      Positioned(
+                        left: 3,
+                        bottom: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (showRankLabel)
+                              Text(
+                                '$boardRank',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  height: 1,
+                                  letterSpacing: 0.1,
+                                  fontWeight: FontWeight.w600,
+                                  color: labelColor.withValues(alpha: 0.92),
+                                ),
+                              ),
+                            if (showFileLabel)
+                              Text(
+                                String.fromCharCode(97 + boardFile),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  height: 1,
+                                  letterSpacing: 0.1,
+                                  fontWeight: FontWeight.w600,
+                                  color: labelColor.withValues(alpha: 0.92),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     if (piece != null) _buildPiece(square, piece, theme),

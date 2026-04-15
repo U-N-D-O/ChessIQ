@@ -385,6 +385,8 @@ mixin _QuizComponents on _QuizScreen {
       ),
       itemCount: 64,
       itemBuilder: (context, i) {
+        final visualFile = i % 8;
+        final visualRankFromTop = i ~/ 8;
         int row, col;
         if (reverse) {
           row = i ~/ 8;
@@ -396,12 +398,53 @@ mixin _QuizComponents on _QuizScreen {
         final sq = '${String.fromCharCode(97 + col)}${row + 1}';
         final isDark = (row + col) % 2 == 0;
         final piece = boardState[sq];
+        final showFileLabel = visualRankFromTop == 7;
+        final showRankLabel = visualFile == 0;
+        final labelColor = isDark ? lightSquareColor : darkSquareColor;
 
         return Container(
           decoration: BoxDecoration(
             color: isDark ? darkSquareColor : lightSquareColor,
           ),
-          child: piece == null ? null : Center(child: _pieceImage(piece)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (showFileLabel || showRankLabel)
+                Positioned(
+                  left: 3,
+                  bottom: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (showRankLabel)
+                        Text(
+                          '${row + 1}',
+                          style: TextStyle(
+                            fontSize: 8,
+                            height: 1,
+                            letterSpacing: 0.1,
+                            fontWeight: FontWeight.w600,
+                            color: labelColor.withValues(alpha: 0.92),
+                          ),
+                        ),
+                      if (showFileLabel)
+                        Text(
+                          String.fromCharCode(97 + col),
+                          style: TextStyle(
+                            fontSize: 8,
+                            height: 1,
+                            letterSpacing: 0.1,
+                            fontWeight: FontWeight.w600,
+                            color: labelColor.withValues(alpha: 0.92),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              if (piece != null) Center(child: _pieceImage(piece)),
+            ],
+          ),
         );
       },
     );

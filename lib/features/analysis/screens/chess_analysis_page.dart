@@ -7619,11 +7619,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ),
         itemCount: 64,
         itemBuilder: (context, i) {
+          final visualFile = i % 8;
+          final visualRankFromTop = i ~/ 8;
           int row = reverse ? (i ~/ 8) : (7 - i ~/ 8);
           int col = reverse ? (7 - i % 8) : (i % 8);
           String sq = String.fromCharCode(97 + col) + (row + 1).toString();
           bool isDark = (row + col) % 2 == 0;
           String? p = boardState[sq];
+          final showFileLabel = visualRankFromTop == 7;
+          final showRankLabel = visualFile == 0;
+          final labelColor = isDark ? lightSquareColor : darkSquareColor;
           final isGambitSelected = _gambitSelectedFrom == sq;
           final isHoldSelected = _holdSelectedFrom == sq;
           final isLegalTarget = _legalTargets.contains(sq);
@@ -7700,6 +7705,39 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   )
                                 : null,
                           ),
+                        ),
+                      ),
+                    if (showFileLabel || showRankLabel)
+                      Positioned(
+                        left: 3,
+                        bottom: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (showRankLabel)
+                              Text(
+                                (row + 1).toString(),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  height: 1,
+                                  letterSpacing: 0.1,
+                                  fontWeight: FontWeight.w600,
+                                  color: labelColor.withValues(alpha: 0.92),
+                                ),
+                              ),
+                            if (showFileLabel)
+                              Text(
+                                String.fromCharCode(97 + col),
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  height: 1,
+                                  letterSpacing: 0.1,
+                                  fontWeight: FontWeight.w600,
+                                  color: labelColor.withValues(alpha: 0.92),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     if (p != null)
