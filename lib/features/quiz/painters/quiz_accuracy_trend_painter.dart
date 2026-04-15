@@ -7,16 +7,25 @@ import 'package:flutter/material.dart';
 class QuizAccuracyTrendPainter extends CustomPainter {
   final List<QuizAccuracyPoint> accuracySeries;
   final List<QuizAccuracyPoint> amountSeries;
+  final bool isDarkMode;
 
   QuizAccuracyTrendPainter({
     required this.accuracySeries,
     required this.amountSeries,
+    required this.isDarkMode,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final axisLabelColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.78)
+        : Colors.black.withValues(alpha: 0.82);
+    final gridColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.12);
+
     final gridPaint = Paint()
-      ..color = Colors.white10
+      ..color = gridColor
       ..strokeWidth = 1;
 
     for (final y in [0.25, 0.5, 0.75]) {
@@ -115,10 +124,7 @@ class QuizAccuracyTrendPainter extends CustomPainter {
       );
     }
 
-    final labelStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.72),
-      fontSize: 10,
-    );
+    final labelStyle = TextStyle(color: axisLabelColor, fontSize: 10);
     final tpLeftTop = TextPainter(
       text: TextSpan(text: '100%', style: labelStyle),
       textDirection: TextDirection.ltr,
@@ -157,6 +163,7 @@ class QuizAccuracyTrendPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant QuizAccuracyTrendPainter oldDelegate) {
     return oldDelegate.accuracySeries != accuracySeries ||
-        oldDelegate.amountSeries != amountSeries;
+        oldDelegate.amountSeries != amountSeries ||
+        oldDelegate.isDarkMode != isDarkMode;
   }
 }

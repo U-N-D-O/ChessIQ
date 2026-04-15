@@ -150,7 +150,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       minElo: 450,
       maxElo: 950,
       intro:
-          'Checks, captures, and forcing lines. Build fast tactical habits before the clock becomes a weapon against you.',
+          'Checks, captures, and forcing lines. Master the basics and find the best moves to build your chess foundation. You can take exams once you have solved 150 puzzles at your current level.',
     ),
     SemesterRange(
       id: 'tactician',

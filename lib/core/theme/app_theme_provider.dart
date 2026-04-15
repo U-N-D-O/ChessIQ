@@ -193,7 +193,7 @@ class AppThemeProvider extends ChangeNotifier {
             ? const Color(0xFFFFD38A)
             : _brighten(const Color(0xFF9F4E2A), 0.20),
       2 => isWhitePiece ? const Color(0xFFDDF7FF) : const Color(0xFF4D6F94),
-      3 => isWhitePiece ? const Color(0xFFFFC8E8) : const Color(0xFF6AB89F),
+      3 => isWhitePiece ? const Color(0xFFFFC8E8) : const Color(0xFF85E6C7),
       4 => isWhitePiece ? const Color(0xFFB9B6FF) : const Color(0xFF95F0FF),
       _ => Colors.white,
     };

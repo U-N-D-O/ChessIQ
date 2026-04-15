@@ -475,143 +475,160 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => SafeArea(
-        top: false,
-        child: Consumer<PuzzleAcademyProvider>(
-          builder: (context, liveProvider, _) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 22),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Academy Store',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
+      builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        return SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: mediaQuery.size.height * 0.9,
+            ),
+            child: Consumer<PuzzleAcademyProvider>(
+              builder: (context, liveProvider, _) {
+                return SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    22 + mediaQuery.padding.bottom,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Coins: ${liveProvider.progress.coins}',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.82),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _StoreRow(
-                    icon: Icons.lightbulb_outline,
-                    title: 'Hint Pack',
-                    subtitle: '+3 Smart Hints',
-                    price: '25 coins',
-                    onBuy: () async {
-                      final ok = await liveProvider.buyHintPack();
-                      if (!mounted || !ok) return;
-                      unawaited(_playAcademyBuySound());
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _StoreRow(
-                    icon: Icons.skip_next_rounded,
-                    title: 'Skip Pack',
-                    subtitle: '+2 Tactical Skips',
-                    price: '35 coins',
-                    onBuy: () async {
-                      final ok = await liveProvider.buySkipPack();
-                      if (!mounted || !ok) return;
-                      unawaited(_playAcademyBuySound());
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _StoreRow(
-                    icon: Icons.person_outline,
-                    title: 'New Nickname',
-                    subtitle: 'Clear current nickname only',
-                    price: '500 coins',
-                    onBuy: () async {
-                      final ok = await liveProvider.buyNicknameReset();
-                      if (!mounted) return;
-                      if (!ok) {
-                        ScaffoldMessenger.of(this.context)
-                          ..clearSnackBars()
-                          ..showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Not enough coins to change nickname.',
-                              ),
-                            ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Academy Store',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Coins: ${liveProvider.progress.coins}',
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.82),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _StoreRow(
+                        icon: Icons.lightbulb_outline,
+                        title: 'Hint Pack',
+                        subtitle: '+3 Smart Hints',
+                        price: '25 coins',
+                        onBuy: () async {
+                          final ok = await liveProvider.buyHintPack();
+                          if (!mounted || !ok) return;
+                          unawaited(_playAcademyBuySound());
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _StoreRow(
+                        icon: Icons.skip_next_rounded,
+                        title: 'Skip Pack',
+                        subtitle: '+2 Tactical Skips',
+                        price: '35 coins',
+                        onBuy: () async {
+                          final ok = await liveProvider.buySkipPack();
+                          if (!mounted || !ok) return;
+                          unawaited(_playAcademyBuySound());
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _StoreRow(
+                        icon: Icons.person_outline,
+                        title: 'New Nickname',
+                        subtitle: 'Clear current nickname only',
+                        price: '500 coins',
+                        onBuy: () async {
+                          final ok = await liveProvider.buyNicknameReset();
+                          if (!mounted) return;
+                          if (!ok) {
+                            ScaffoldMessenger.of(this.context)
+                              ..clearSnackBars()
+                              ..showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Not enough coins to change nickname.',
+                                  ),
+                                ),
+                              );
+                            return;
+                          }
+                          unawaited(_playAcademyBuySound());
+                          _didShowAcademyProfilePrompt = true;
+                          if (!mounted) return;
+                          await _showAcademyProfileDialog(
+                            this.context,
+                            liveProvider,
+                            lockCountry: true,
                           );
-                        return;
-                      }
-                      unawaited(_playAcademyBuySound());
-                      _didShowAcademyProfilePrompt = true;
-                      if (!mounted) return;
-                      await _showAcademyProfileDialog(
-                        this.context,
-                        liveProvider,
-                        lockCountry: true,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _StoreRow(
-                    icon: Icons.flag_outlined,
-                    title: 'Change Country',
-                    subtitle: 'Clear current country only',
-                    price: '500 coins',
-                    onBuy: () async {
-                      final ok = await liveProvider.buyCountryReset();
-                      if (!mounted) return;
-                      if (!ok) {
-                        ScaffoldMessenger.of(this.context)
-                          ..clearSnackBars()
-                          ..showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Not enough coins to change country.',
-                              ),
-                            ),
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _StoreRow(
+                        icon: Icons.flag_outlined,
+                        title: 'Change Country',
+                        subtitle: 'Clear current country only',
+                        price: '500 coins',
+                        onBuy: () async {
+                          final ok = await liveProvider.buyCountryReset();
+                          if (!mounted) return;
+                          if (!ok) {
+                            ScaffoldMessenger.of(this.context)
+                              ..clearSnackBars()
+                              ..showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Not enough coins to change country.',
+                                  ),
+                                ),
+                              );
+                            return;
+                          }
+                          unawaited(_playAcademyBuySound());
+                          _didShowAcademyProfilePrompt = true;
+                          if (!mounted) return;
+                          await _showAcademyProfileDialog(
+                            this.context,
+                            liveProvider,
+                            lockHandle: true,
                           );
-                        return;
-                      }
-                      unawaited(_playAcademyBuySound());
-                      _didShowAcademyProfilePrompt = true;
-                      if (!mounted) return;
-                      await _showAcademyProfileDialog(
-                        this.context,
-                        liveProvider,
-                        lockHandle: true,
-                      );
-                    },
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: widget.onOpenMainStore,
+                        icon: const Icon(Icons.storefront_outlined),
+                        label: const Text('Open Store'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: scheme.surface,
+                          foregroundColor: scheme.onSurface,
+                          side: BorderSide(
+                            color: scheme.outline.withValues(alpha: 0.30),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: widget.onOpenMainStore,
-                    icon: const Icon(Icons.storefront_outlined),
-                    label: const Text('Open Store'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: scheme.surface,
-                      foregroundColor: scheme.onSurface,
-                      side: BorderSide(
-                        color: scheme.outline.withValues(alpha: 0.30),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 14,
-                        horizontal: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

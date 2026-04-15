@@ -120,7 +120,6 @@ class _RegularPolygonPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final radius = size.shortestSide / 2 - strokeWidth / 2;
     final center = Offset(size.width / 2, size.height / 2);
-
     final paint = Paint()
       ..color = strokeColor
       ..style = PaintingStyle.stroke
@@ -280,6 +279,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   late ScrollController _historyScrollController;
   final Map<String, String> _ecoOpenings = {};
   final List<EcoLine> _ecoLines = [];
+  int _quizEligibleCount = 0;
+  final Map<String, List<EcoLine>> _quizEligiblePoolCache =
+      <String, List<EcoLine>>{};
+  final Map<String, Set<String>> _quizEligibleNameCache =
+      <String, Set<String>>{};
+  bool _quizPoolsPrecomputed = false;
   String _currentOpening = '';
   final List<String> _logs = [];
   OpeningMode _openingMode = OpeningMode.off;
@@ -401,7 +406,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     ),
   ];
 
-  int _depthTier = 1; // 1=pro,2=expert,3=grandmaster,4=wilder
+  int _depthTier = 1; // 1=pro,2=expert,3=grandmaster,4=oracle
   int _extraSuggestionPurchases = 0; // each +1 up to max 10 suggestions
   bool _themePackOwned = false;
   bool _sakuraBoardOwned = false;
@@ -451,6 +456,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   double _quizFlyProgress = 0.0;
   bool _quizAnswered = false;
   int _quizSelectedIndex = -1;
+  List<EngineLine> _quizPreviewContinuation = <EngineLine>[];
   final List<_QuizRoundReview> _quizReviewHistory = <_QuizRoundReview>[];
   int? _quizReviewIndex;
   QuizDifficulty _quizDifficulty = QuizDifficulty.medium;
@@ -467,6 +473,15 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   Map<String, int> _quizLineDailyAttempts = <String, int>{};
   Map<String, int> _quizLineDailyCorrect = <String, int>{};
   Map<String, int> _quizDailyQuestionsAsked = <String, int>{};
+  // Per-difficulty daily stat maps
+  Map<String, int> _quizEasyDailyAttempts = <String, int>{};
+  Map<String, int> _quizEasyDailyCorrect = <String, int>{};
+  Map<String, int> _quizMediumDailyAttempts = <String, int>{};
+  Map<String, int> _quizMediumDailyCorrect = <String, int>{};
+  Map<String, int> _quizHardDailyAttempts = <String, int>{};
+  Map<String, int> _quizHardDailyCorrect = <String, int>{};
+  Map<String, int> _quizVeryHardDailyAttempts = <String, int>{};
+  Map<String, int> _quizVeryHardDailyCorrect = <String, int>{};
   int _quizQuestionsTarget = 10;
   int _quizSessionAnswered = 0;
   int _quizSessionCorrect = 0;
@@ -479,6 +494,78 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _logs.removeAt(0);
       }
     });
+  }
+
+  Future<void> _showThemedErrorDialog({
+    required String message,
+    String title = 'Something went wrong',
+    bool includeInternetHint = false,
+  }) async {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final panelColor = useMonochrome
+        ? (isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7))
+        : Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
+            scheme.surface,
+          );
+    final accent = useMonochrome
+        ? (isDark ? const Color(0xFFD0D0D0) : const Color(0xFF4A4A4A))
+        : const Color(0xFF5AAEE8);
+
+    final text = includeInternetHint
+        ? '$message\n\nTry again when you have internet connection.'
+        : message;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: panelColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
+        contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, color: accent, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          text,
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.88),
+            height: 1.3,
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: FilledButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: useMonochrome
+                  ? (isDark ? Colors.black : Colors.white)
+                  : const Color(0xFF07131F),
+            ),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _scheduleEditModeHintHide() {
@@ -1345,6 +1432,31 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               (k, v) => MapEntry(k, v is int ? max(0, v) : 0),
             );
           }
+
+          void loadDiffMap(String key, void Function(Map<String, int>) setter) {
+            final raw = decoded[key];
+            if (raw is Map<String, dynamic>) {
+              setter(raw.map((k, v) => MapEntry(k, v is int ? max(0, v) : 0)));
+            }
+          }
+
+          loadDiffMap('easyDailyAttempts', (m) => _quizEasyDailyAttempts = m);
+          loadDiffMap('easyDailyCorrect', (m) => _quizEasyDailyCorrect = m);
+          loadDiffMap(
+            'mediumDailyAttempts',
+            (m) => _quizMediumDailyAttempts = m,
+          );
+          loadDiffMap('mediumDailyCorrect', (m) => _quizMediumDailyCorrect = m);
+          loadDiffMap('hardDailyAttempts', (m) => _quizHardDailyAttempts = m);
+          loadDiffMap('hardDailyCorrect', (m) => _quizHardDailyCorrect = m);
+          loadDiffMap(
+            'veryHardDailyAttempts',
+            (m) => _quizVeryHardDailyAttempts = m,
+          );
+          loadDiffMap(
+            'veryHardDailyCorrect',
+            (m) => _quizVeryHardDailyCorrect = m,
+          );
         }
       }
     } catch (e) {
@@ -1369,6 +1481,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       'lineDailyAttempts': _quizLineDailyAttempts,
       'lineDailyCorrect': _quizLineDailyCorrect,
       'dailyQuestionsAsked': _quizDailyQuestionsAsked,
+      'easyDailyAttempts': _quizEasyDailyAttempts,
+      'easyDailyCorrect': _quizEasyDailyCorrect,
+      'mediumDailyAttempts': _quizMediumDailyAttempts,
+      'mediumDailyCorrect': _quizMediumDailyCorrect,
+      'hardDailyAttempts': _quizHardDailyAttempts,
+      'hardDailyCorrect': _quizHardDailyCorrect,
+      'veryHardDailyAttempts': _quizVeryHardDailyAttempts,
+      'veryHardDailyCorrect': _quizVeryHardDailyCorrect,
     };
     await prefs.setString(_quizStatsKey, jsonEncode(payload));
   }
@@ -1388,6 +1508,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizLineDailyAttempts.clear();
       _quizLineDailyCorrect.clear();
       _quizDailyQuestionsAsked.clear();
+      _quizEasyDailyAttempts.clear();
+      _quizEasyDailyCorrect.clear();
+      _quizMediumDailyAttempts.clear();
+      _quizMediumDailyCorrect.clear();
+      _quizHardDailyAttempts.clear();
+      _quizHardDailyCorrect.clear();
+      _quizVeryHardDailyAttempts.clear();
+      _quizVeryHardDailyCorrect.clear();
     });
     await _saveQuizStats();
   }
@@ -2406,6 +2534,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     _ecoLines.clear();
     _ecoOpenings.clear();
+    _quizEligiblePoolCache.clear();
+    _quizEligibleNameCache.clear();
+    _quizPoolsPrecomputed = false;
 
     for (final path in fileNames) {
       try {
@@ -2457,6 +2588,17 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       }
     }
     _addLog('Loaded ECO openings: ${_ecoOpenings.length} entries');
+
+    _precomputeQuizEligiblePools();
+
+    final eligible = _quizEligiblePool(
+      mode: _quizMode,
+      difficulty: _quizDifficulty,
+    );
+    if (mounted) {
+      setState(() => _quizEligibleCount = eligible.length);
+    }
+    _addLog('Quiz-eligible openings: ${eligible.length}');
   }
 
   String _normalizeSan(String raw) {
@@ -3525,21 +3667,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     if (gambits.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              content: const Text(
-                'No openings for this move',
-                style: TextStyle(fontSize: 12, color: Colors.white54),
-              ),
-              duration: const Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: const Color(0xFF1A1B22),
-              elevation: 2,
-              margin: const EdgeInsets.symmetric(horizontal: 60, vertical: 8),
-            ),
-          );
+        unawaited(
+          _showThemedErrorDialog(
+            title: 'No Openings Found',
+            message: 'No openings are available for this move.',
+          ),
+        );
       }
       setState(() {
         _gambitSelectedFrom = null;
@@ -3912,14 +4045,271 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     );
   }
 
-  List<EcoLine> _uniqueGambits() {
-    final map = <String, EcoLine>{};
-    for (final line in _ecoLines.where((line) => line.isGambit)) {
-      map.putIfAbsent(line.name, () => line);
+  /// Returns an approximate popularity score [0.0 – 1.0] for an opening by
+  /// name, based on known over-the-board frequency (Lichess / Chess.com data).
+  double _openingPopularityScore(String name) {
+    final lower = name.toLowerCase();
+    // Tier 1 – Top ~15%: universally played, household names
+    if (_anyKeyword(lower, const [
+      'sicilian',
+      'ruy lopez',
+      'spanish game',
+      'berlin defense',
+      'berlin defence',
+      'french defense',
+      'french defence',
+      'italian game',
+      'giuoco piano',
+      "queen's gambit",
+      "king's indian",
+      'caro-kann',
+      'caro kann',
+      'english opening',
+      'nimzo-indian',
+      'nimzo indian',
+      'london system',
+      'petroff',
+      'petrov',
+      'vienna game',
+      'vienna gambit',
+    ])) {
+      return 0.92;
     }
-    final values = map.values.toList();
-    values.sort((a, b) => a.name.compareTo(b.name));
-    return values;
+    // Tier 2 – ~15-35%: popular but not universal
+    if (_anyKeyword(lower, const [
+      'slav',
+      'dutch',
+      "queen's indian",
+      'scotch game',
+      'scotch gambit',
+      "king's gambit",
+      'grünfeld',
+      'grunfeld',
+      'pirc',
+      'modern defense',
+      'modern defence',
+      'four knights',
+      'catalan',
+      'bogo-indian',
+      'bogo indian',
+      'semi-slav',
+      'ponziani',
+      'reti opening',
+      'réti',
+      'colle',
+      'stonewall',
+      'alapin',
+      'smith-morra',
+      'max lange',
+      'evans gambit',
+      'four knights',
+    ])) {
+      return 0.70;
+    }
+    // Tier 3 – ~35-50%: moderate / club-level
+    if (_anyKeyword(lower, const [
+      'alekhine',
+      'benoni',
+      'budapest',
+      'bird',
+      'scandinavian',
+      'nimzowitsch',
+      'nimzovich',
+      'torre',
+      'trompowsky',
+      'benko',
+      'polish',
+      'hungarian',
+      'latvian',
+      'danish',
+      'from gambit',
+      'bowdler',
+      'philidor',
+      'owen',
+      'blackmar',
+      'jerome gambit',
+      'center game',
+    ])) {
+      return 0.50;
+    }
+    // Tier 4 – bottom ~50%: rare / exotic lines
+    return 0.25;
+  }
+
+  bool _anyKeyword(String lower, List<String> kws) {
+    for (final kw in kws) {
+      if (lower.contains(kw)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _openingPassesDifficultyFilter(double score, QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return score >= 0.86; // top ~15%
+      case QuizDifficulty.medium:
+        return score >= 0.65; // top ~35%
+      case QuizDifficulty.hard:
+        return score >= 0.45 && score < 0.86; // 15-50%
+      case QuizDifficulty.veryHard:
+        return score < 0.45; // bottom 50%
+    }
+  }
+
+  String _quizPoolKey(GambitQuizMode mode, QuizDifficulty difficulty) {
+    return '${mode.index}:${difficulty.index}';
+  }
+
+  ({int min, int max}) _quizTotalPlyRange(QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return (min: 2, max: 8);
+      case QuizDifficulty.medium:
+        return (min: 6, max: 10);
+      case QuizDifficulty.hard:
+        return (min: 8, max: 14);
+      case QuizDifficulty.veryHard:
+        return (min: 10, max: 18);
+    }
+  }
+
+  bool _lineWithinTotalPlyRange(EcoLine line, QuizDifficulty difficulty) {
+    final range = _quizTotalPlyRange(difficulty);
+    final totalPly = line.moveTokens.length;
+    return totalPly >= range.min && totalPly <= range.max;
+  }
+
+  bool _lineFullyReplayable(EcoLine line) {
+    if (line.moveTokens.length < 2) return false;
+    var state = _initialBoardState();
+    var whiteToMove = true;
+    for (final token in line.moveTokens) {
+      final uciMove = _resolveSanToUci(state, token, whiteToMove);
+      if (uciMove == null) return false;
+      state = _applyUciMove(state, uciMove);
+      whiteToMove = !whiteToMove;
+    }
+    return true;
+  }
+
+  String? _openingNameAnnotationKey(String name) {
+    final match = RegExp(
+      r'(\d+\.(?:\.\.)?\s*(?:O-O-O|O-O|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?)(?:\s+(?:O-O-O|O-O|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?))*)',
+      caseSensitive: false,
+    ).firstMatch(name);
+    if (match == null) return null;
+    return match.group(1)?.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  bool _hasOpeningNameAnnotation(String name) {
+    final key = _openingNameAnnotationKey(name);
+    return key != null && key.isNotEmpty;
+  }
+
+  void _precomputeQuizEligiblePools() {
+    final allUniqueByName = <String, EcoLine>{};
+    for (final line in _ecoLines) {
+      allUniqueByName.putIfAbsent(line.name, () => line);
+    }
+
+    final allUniqueSortedByRarity = allUniqueByName.values.toList()
+      ..sort((a, b) {
+        final s = _openingPopularityScore(
+          a.name,
+        ).compareTo(_openingPopularityScore(b.name));
+        if (s != 0) return s;
+        return a.name.compareTo(b.name);
+      });
+
+    final replayableByName = <String, bool>{};
+    bool isReplayable(EcoLine line) {
+      return replayableByName.putIfAbsent(line.name, () {
+        return _lineFullyReplayable(line);
+      });
+    }
+
+    final noAnnotationReplayable = allUniqueSortedByRarity
+        .where((line) => !_hasOpeningNameAnnotation(line.name))
+        .where(isReplayable)
+        .toList(growable: false);
+
+    _quizEligiblePoolCache.clear();
+    _quizEligibleNameCache.clear();
+
+    for (final difficulty in QuizDifficulty.values) {
+      final ranged = noAnnotationReplayable
+          .where((line) => _lineWithinTotalPlyRange(line, difficulty))
+          .toList();
+
+      var base = ranged
+          .where(
+            (line) => _openingPassesDifficultyFilter(
+              _openingPopularityScore(line.name),
+              difficulty,
+            ),
+          )
+          .toList();
+
+      if (difficulty == QuizDifficulty.veryHard && base.length < 250) {
+        for (final line in ranged) {
+          if (base.length >= 250) break;
+          if (base.any((e) => e.name == line.name)) continue;
+          base.add(line);
+        }
+      }
+
+      final guessNamePool = List<EcoLine>.unmodifiable(base);
+      final guessNameKey = _quizPoolKey(GambitQuizMode.guessName, difficulty);
+      _quizEligiblePoolCache[guessNameKey] = guessNamePool;
+      _quizEligibleNameCache[guessNameKey] = guessNamePool
+          .map((line) => line.name)
+          .toSet();
+
+      final grouped = <String, int>{};
+      for (final line in base) {
+        if (line.moveTokens.length < 3) continue;
+        final key = '${line.moveTokens[0]} ${line.moveTokens[1]}';
+        grouped[key] = (grouped[key] ?? 0) + 1;
+      }
+
+      final guessLinePool = List<EcoLine>.unmodifiable(
+        base.where((line) {
+          if (line.moveTokens.length < 3) return false;
+          final key = '${line.moveTokens[0]} ${line.moveTokens[1]}';
+          return (grouped[key] ?? 0) >= 3;
+        }),
+      );
+      final guessLineKey = _quizPoolKey(GambitQuizMode.guessLine, difficulty);
+      _quizEligiblePoolCache[guessLineKey] = guessLinePool;
+      _quizEligibleNameCache[guessLineKey] = guessLinePool
+          .map((line) => line.name)
+          .toSet();
+    }
+
+    _quizPoolsPrecomputed = true;
+  }
+
+  List<EcoLine> _quizEligiblePool({
+    required GambitQuizMode mode,
+    required QuizDifficulty difficulty,
+  }) {
+    if (!_quizPoolsPrecomputed) {
+      _precomputeQuizEligiblePools();
+    }
+    return _quizEligiblePoolCache[_quizPoolKey(mode, difficulty)] ??
+        const <EcoLine>[];
+  }
+
+  int _currentViewedEligibleCount() {
+    if (!_quizPoolsPrecomputed) {
+      _precomputeQuizEligiblePools();
+    }
+    final names =
+        _quizEligibleNameCache[_quizPoolKey(_quizMode, _quizDifficulty)] ??
+        const <String>{};
+    return _viewedGambits.where(names.contains).length;
   }
 
   void _markGambitViewed(String name) {
@@ -3998,6 +4388,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return 4;
       case QuizDifficulty.hard:
         return 5;
+      case QuizDifficulty.veryHard:
+        return 5;
     }
   }
 
@@ -4009,6 +4401,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return 'Medium';
       case QuizDifficulty.hard:
         return 'Hard';
+      case QuizDifficulty.veryHard:
+        return 'Very Hard';
     }
   }
 
@@ -4020,6 +4414,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return const Color(0xFFD8B640);
       case QuizDifficulty.hard:
         return const Color(0xFFFF8A80);
+      case QuizDifficulty.veryHard:
+        return const Color(0xFFD07EFF);
     }
   }
 
@@ -4046,7 +4442,86 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
   }
 
-  void _trimDailyMap(Map<String, int> values, {int keepDays = 21}) {
+  Map<String, int> _quizAttemptsMapForFilter(QuizTrendFilter filter) {
+    switch (filter) {
+      case QuizTrendFilter.both:
+        return _quizDailyAttempts;
+      case QuizTrendFilter.guessName:
+        return _quizNameDailyAttempts;
+      case QuizTrendFilter.guessLine:
+        return _quizLineDailyAttempts;
+    }
+  }
+
+  Map<String, int> _quizCorrectMapForFilter(QuizTrendFilter filter) {
+    switch (filter) {
+      case QuizTrendFilter.both:
+        return _quizDailyCorrectByDay;
+      case QuizTrendFilter.guessName:
+        return _quizNameDailyCorrect;
+      case QuizTrendFilter.guessLine:
+        return _quizLineDailyCorrect;
+    }
+  }
+
+  Map<String, int> _attemptsMapForFilters(
+    QuizTrendFilter modeFilter,
+    QuizStatsDifficultyFilter difficultyFilter,
+  ) {
+    if (difficultyFilter != QuizStatsDifficultyFilter.all) {
+      switch (difficultyFilter) {
+        case QuizStatsDifficultyFilter.easy:
+          return _quizEasyDailyAttempts;
+        case QuizStatsDifficultyFilter.medium:
+          return _quizMediumDailyAttempts;
+        case QuizStatsDifficultyFilter.hard:
+          return _quizHardDailyAttempts;
+        case QuizStatsDifficultyFilter.veryHard:
+          return _quizVeryHardDailyAttempts;
+        case QuizStatsDifficultyFilter.all:
+          break;
+      }
+    }
+    return _quizAttemptsMapForFilter(modeFilter);
+  }
+
+  Map<String, int> _correctMapForFilters(
+    QuizTrendFilter modeFilter,
+    QuizStatsDifficultyFilter difficultyFilter,
+  ) {
+    if (difficultyFilter != QuizStatsDifficultyFilter.all) {
+      switch (difficultyFilter) {
+        case QuizStatsDifficultyFilter.easy:
+          return _quizEasyDailyCorrect;
+        case QuizStatsDifficultyFilter.medium:
+          return _quizMediumDailyCorrect;
+        case QuizStatsDifficultyFilter.hard:
+          return _quizHardDailyCorrect;
+        case QuizStatsDifficultyFilter.veryHard:
+          return _quizVeryHardDailyCorrect;
+        case QuizStatsDifficultyFilter.all:
+          break;
+      }
+    }
+    return _quizCorrectMapForFilter(modeFilter);
+  }
+
+  String _statsDifficultyFilterLabel(QuizStatsDifficultyFilter filter) {
+    switch (filter) {
+      case QuizStatsDifficultyFilter.all:
+        return 'All';
+      case QuizStatsDifficultyFilter.easy:
+        return 'Easy';
+      case QuizStatsDifficultyFilter.medium:
+        return 'Medium';
+      case QuizStatsDifficultyFilter.hard:
+        return 'Hard';
+      case QuizStatsDifficultyFilter.veryHard:
+        return 'Very Hard';
+    }
+  }
+
+  void _trimDailyMap(Map<String, int> values, {int keepDays = 400}) {
     final keys = values.keys.toList()..sort();
     if (keys.length <= keepDays) return;
     for (final key in keys.take(keys.length - keepDays)) {
@@ -4056,29 +4531,16 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   List<QuizAccuracyPoint> _buildQuizAccuracySeries(
     QuizTrendFilter filter, {
-    int days = 10,
+    int? days,
+    QuizStatsDifficultyFilter difficultyFilter = QuizStatsDifficultyFilter.all,
   }) {
-    late final Map<String, int> attempts;
-    late final Map<String, int> correct;
-    switch (filter) {
-      case QuizTrendFilter.both:
-        attempts = _quizDailyAttempts;
-        correct = _quizDailyCorrectByDay;
-        break;
-      case QuizTrendFilter.guessName:
-        attempts = _quizNameDailyAttempts;
-        correct = _quizNameDailyCorrect;
-        break;
-      case QuizTrendFilter.guessLine:
-        attempts = _quizLineDailyAttempts;
-        correct = _quizLineDailyCorrect;
-        break;
-    }
+    final attempts = _attemptsMapForFilters(filter, difficultyFilter);
+    final correct = _correctMapForFilters(filter, difficultyFilter);
 
     final keys = attempts.keys.toSet().union(correct.keys.toSet()).toList()
       ..sort();
     if (keys.isEmpty) return const <QuizAccuracyPoint>[];
-    final recentKeys = keys.length <= days
+    final recentKeys = (days == null || keys.length <= days)
         ? keys
         : keys.sublist(keys.length - days);
 
@@ -4098,24 +4560,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   List<QuizAccuracyPoint> _buildQuizAttemptSeries(
     QuizTrendFilter filter, {
-    int days = 10,
+    int? days,
+    QuizStatsDifficultyFilter difficultyFilter = QuizStatsDifficultyFilter.all,
   }) {
-    late final Map<String, int> attempts;
-    switch (filter) {
-      case QuizTrendFilter.both:
-        attempts = _quizDailyAttempts;
-        break;
-      case QuizTrendFilter.guessName:
-        attempts = _quizNameDailyAttempts;
-        break;
-      case QuizTrendFilter.guessLine:
-        attempts = _quizLineDailyAttempts;
-        break;
-    }
+    final attempts = _attemptsMapForFilters(filter, difficultyFilter);
 
     final keys = attempts.keys.toList()..sort();
     if (keys.isEmpty) return const <QuizAccuracyPoint>[];
-    final recentKeys = keys.length <= days
+    final recentKeys = (days == null || keys.length <= days)
         ? keys
         : keys.sublist(keys.length - days);
 
@@ -4136,6 +4588,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         return 95;
       case QuizDifficulty.hard:
         return 130;
+      case QuizDifficulty.veryHard:
+        return 175;
     }
   }
 
@@ -4329,15 +4783,68 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _trimDailyMap(_quizLineDailyAttempts);
     _trimDailyMap(_quizLineDailyCorrect);
 
+    _recordPerDifficulty(day, isCorrect);
     unawaited(_saveQuizStats());
+  }
+
+  void _recordPerDifficulty(String day, bool isCorrect) {
+    switch (_quizDifficulty) {
+      case QuizDifficulty.easy:
+        _quizEasyDailyAttempts[day] = (_quizEasyDailyAttempts[day] ?? 0) + 1;
+        if (isCorrect) {
+          _quizEasyDailyCorrect[day] = (_quizEasyDailyCorrect[day] ?? 0) + 1;
+        }
+      case QuizDifficulty.medium:
+        _quizMediumDailyAttempts[day] =
+            (_quizMediumDailyAttempts[day] ?? 0) + 1;
+        if (isCorrect) {
+          _quizMediumDailyCorrect[day] =
+              (_quizMediumDailyCorrect[day] ?? 0) + 1;
+        }
+      case QuizDifficulty.hard:
+        _quizHardDailyAttempts[day] = (_quizHardDailyAttempts[day] ?? 0) + 1;
+        if (isCorrect) {
+          _quizHardDailyCorrect[day] = (_quizHardDailyCorrect[day] ?? 0) + 1;
+        }
+      case QuizDifficulty.veryHard:
+        _quizVeryHardDailyAttempts[day] =
+            (_quizVeryHardDailyAttempts[day] ?? 0) + 1;
+        if (isCorrect) {
+          _quizVeryHardDailyCorrect[day] =
+              (_quizVeryHardDailyCorrect[day] ?? 0) + 1;
+        }
+    }
+    _trimDailyMap(_quizEasyDailyAttempts);
+    _trimDailyMap(_quizEasyDailyCorrect);
+    _trimDailyMap(_quizMediumDailyAttempts);
+    _trimDailyMap(_quizMediumDailyCorrect);
+    _trimDailyMap(_quizHardDailyAttempts);
+    _trimDailyMap(_quizHardDailyCorrect);
+    _trimDailyMap(_quizVeryHardDailyAttempts);
+    _trimDailyMap(_quizVeryHardDailyCorrect);
   }
 
   void _setQuizDifficulty(QuizDifficulty difficulty) {
     if (_quizDifficulty == difficulty) return;
     setState(() {
       _quizDifficulty = difficulty;
+      _quizEligibleCount = _quizEligiblePool(
+        mode: _quizMode,
+        difficulty: _quizDifficulty,
+      ).length;
     });
     unawaited(_saveQuizStats());
+  }
+
+  void _setQuizMode(GambitQuizMode mode) {
+    if (_quizMode == mode) return;
+    setState(() {
+      _quizMode = mode;
+      _quizEligibleCount = _quizEligiblePool(
+        mode: _quizMode,
+        difficulty: _quizDifficulty,
+      ).length;
+    });
   }
 
   void _setQuizQuestionTarget(int target) {
@@ -4410,6 +4917,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     _quizShownPly = 0;
     _quizAnswered = false;
     _quizSelectedIndex = -1;
+    _quizPreviewContinuation = <EngineLine>[];
     _quizPlayActive = false;
     _quizPlayArrowCount = 0;
     _quizPlayBoard = <String, String>{};
@@ -4784,39 +5292,66 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       return;
     }
     if (!_quizAnswered) {
-      _appendQuizReviewEntry(
-        selectedIndex: -1,
-        feedback: 'Skipped. Review the position and continue when ready.',
-        skipped: true,
-      );
+      _submitSelectedQuizGuess();
+      return;
     }
     _startQuizRound();
   }
 
   void _openQuizStatsSheet() {
     var filter = QuizTrendFilter.both;
+    int? days = 7;
+    var difficultyFilter = QuizStatsDifficultyFilter.all;
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: const Color(0xFF10131B),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setSheetState) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-            child: _buildQuizStatsCard(
-              filter: filter,
-              onFilterChanged: (next) {
-                setSheetState(() => filter = next);
-              },
-              onReset: () async {
-                await _resetQuizStats();
-                setSheetState(() {});
-              },
+        builder: (context, setSheetState) {
+          final screenHeight = MediaQuery.sizeOf(ctx).height;
+          return SafeArea(
+            child: SizedBox(
+              height: screenHeight,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        tooltip: 'Close stats',
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ),
+                    _buildQuizStatsCard(
+                      filter: filter,
+                      difficultyFilter: difficultyFilter,
+                      days: days,
+                      onFilterChanged: (next) {
+                        setSheetState(() => filter = next);
+                      },
+                      onDifficultyFilterChanged: (next) {
+                        setSheetState(() => difficultyFilter = next);
+                      },
+                      onDaysChanged: (next) {
+                        setSheetState(() => days = next);
+                      },
+                      onReset: () async {
+                        await _resetQuizStats();
+                        setSheetState(() {});
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -4828,6 +5363,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   ) {
     final tokens = gambit.moveTokens;
     if (tokens.length < 2) return null;
+    final plyRange = _quizTotalPlyRange(_quizDifficulty);
+    if (tokens.length < plyRange.min || tokens.length > plyRange.max) {
+      return null;
+    }
 
     final maxPrefix = tokens.length - 1;
     final int prefix;
@@ -4850,6 +5389,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         case QuizDifficulty.hard:
           minPrefix = 1;
           maxHintPrefix = 4;
+          break;
+        case QuizDifficulty.veryHard:
+          minPrefix = 1;
+          maxHintPrefix = 3;
           break;
       }
       minPrefix = minPrefix.clamp(1, maxPrefix);
@@ -4893,6 +5436,10 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
     if (continuation.isEmpty) return null;
 
+    // Avoid partial lines in quiz mode: if SAN->UCI parsing breaks mid-line,
+    // skip this candidate and pick another opening.
+    if (continuation.length != tokens.length - prefix) return null;
+
     return QuizBoardSnapshot(
       boardState: state,
       whiteToMove: whiteToMove,
@@ -4902,7 +5449,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
   }
 
   void _startQuizRound({GambitQuizMode? mode}) {
-    final gambits = _uniqueGambits();
+    final activeMode = mode ?? _quizMode;
+    final gambits = _quizEligiblePool(
+      mode: activeMode,
+      difficulty: _quizDifficulty,
+    );
     if (gambits.length < 3) {
       setState(() {
         _quizPrompt = 'Not enough gambits loaded yet.';
@@ -4916,12 +5467,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizShownPly = 0;
         _quizAnswered = false;
         _quizSelectedIndex = -1;
+        _quizPreviewContinuation = <EngineLine>[];
         if (mode != null) _quizMode = mode;
       });
       return;
     }
 
-    final activeMode = mode ?? _quizMode;
     final random = Random();
     final candidates = List<EcoLine>.from(gambits)..shuffle(random);
     EcoLine? correct;
@@ -4996,11 +5547,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       }
     } else {
       final targetOptions = min(_quizOptionCount(), gambits.length);
-      while (options.length < targetOptions) {
-        final candidate = gambits[random.nextInt(gambits.length)];
-        if (!options.any((entry) => entry.name == candidate.name)) {
-          options.add(candidate);
-        }
+      final namePool =
+          gambits.where((entry) => entry.name != resolvedCorrect.name).toList()
+            ..shuffle(random);
+      for (final candidate in namePool) {
+        if (options.length >= targetOptions) break;
+        options.add(candidate);
       }
     }
     options.shuffle(random);
@@ -5018,6 +5570,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       _quizShownPly = resolvedSnapshot.shownPly;
       _quizAnswered = false;
       _quizSelectedIndex = -1;
+      _quizPreviewContinuation = <EngineLine>[];
       _quizPlayActive = false;
       _quizPlayArrowCount = 0;
       _quizPlayBoard = <String, String>{};
@@ -5065,7 +5618,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     if (!mounted || _quizContinuation.isEmpty || _quizBoardState.isEmpty) {
       return;
     }
-    await Future.delayed(const Duration(milliseconds: 420));
+    const speedFactor = 0.14;
+    final initialDelayMs = max(1, (280 * speedFactor).round());
+    final stepDelayMs = max(1, (9 * speedFactor).round());
+    final betweenMovesDelayMs = max(1, (225 * speedFactor).round());
+    const stepCount = 36;
+
+    await Future.delayed(Duration(milliseconds: initialDelayMs));
     if (!mounted || !_quizAnswered) return;
 
     var board = Map<String, String>.from(_quizBoardState);
@@ -5098,13 +5657,13 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         _quizFlyProgress = 0.0;
       });
 
-      for (var stepIndex = 1; stepIndex <= 24; stepIndex++) {
+      for (var stepIndex = 1; stepIndex <= stepCount; stepIndex++) {
         if (!mounted || !_quizPlayActive) return;
-        final step = stepIndex / 24.0;
+        final step = stepIndex / stepCount;
         setState(() {
           _quizFlyProgress = step;
         });
-        await Future.delayed(const Duration(milliseconds: 20));
+        await Future.delayed(Duration(milliseconds: stepDelayMs));
       }
       if (!mounted || !_quizPlayActive) return;
 
@@ -5120,7 +5679,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       unawaited(_playBoardMoveSound(isCapture: isCapture));
 
       if (i < _quizContinuation.length - 1) {
-        await Future.delayed(const Duration(milliseconds: 340));
+        await Future.delayed(Duration(milliseconds: betweenMovesDelayMs));
         if (!mounted || !_quizPlayActive) return;
       }
     }
@@ -5153,6 +5712,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     setState(() {
       _quizSelectedIndex = index;
       _quizAnswered = true;
+      _quizPreviewContinuation = <EngineLine>[];
       _quizSessionAnswered += 1;
       if (isCorrect) {
         _quizSessionCorrect += 1;
@@ -5172,6 +5732,60 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     if (_quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty) {
       unawaited(_startQuizPlayback());
     }
+  }
+
+  List<EngineLine> _buildQuizPreviewContinuationForOption(int optionIndex) {
+    if (_quizMode != GambitQuizMode.guessLine) return const <EngineLine>[];
+    if (_quizBoardState.isEmpty || _quizOptions.isEmpty) {
+      return const <EngineLine>[];
+    }
+    if (optionIndex < 0 || optionIndex >= _quizOptions.length) {
+      return const <EngineLine>[];
+    }
+
+    final tokens = _moveSequenceTokens(_quizOptions[optionIndex]);
+    if (tokens.length <= _quizShownPly) return const <EngineLine>[];
+
+    final continuation = <EngineLine>[];
+    var state = Map<String, String>.from(_quizBoardState);
+    var whiteToMove = _quizWhiteToMove;
+    for (int i = _quizShownPly; i < tokens.length; i++) {
+      final uciMove = _resolveSanToUci(state, tokens[i], whiteToMove);
+      if (uciMove == null) break;
+      continuation.add(
+        EngineLine(
+          uciMove,
+          -90 * continuation.length,
+          max(1, tokens.length - i),
+          continuation.length + 1,
+        ),
+      );
+      state = _applyUciMove(state, uciMove);
+      whiteToMove = !whiteToMove;
+    }
+    return continuation;
+  }
+
+  void _selectQuizAnswerOption(int index) {
+    if (_quizAnswered || _quizReviewIndex != null) return;
+    setState(() {
+      _quizSelectedIndex = index;
+      _quizFeedback = '';
+      _quizPreviewContinuation = _quizMode == GambitQuizMode.guessLine
+          ? _buildQuizPreviewContinuationForOption(index)
+          : <EngineLine>[];
+    });
+  }
+
+  void _submitSelectedQuizGuess() {
+    if (_quizAnswered) return;
+    if (_quizSelectedIndex < 0 || _quizSelectedIndex >= _quizOptions.length) {
+      setState(() {
+        _quizFeedback = 'Choose an option first, then tap Guess.';
+      });
+      return;
+    }
+    _submitQuizAnswer(_quizSelectedIndex);
   }
 
   Future<void> _enterAnalysisBoard() async {
@@ -5696,6 +6310,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   String _sanitizeSanToken(String san) {
     var cleaned = san.replaceAll(RegExp(r'[+#?!]+$'), '');
+    // ECO data is lowercased during normalization, so castling tokens arrive as
+    // 'o-o' / 'o-o-o' (letter o) rather than 'O-O'. Handle both digit-zero and
+    // letter-o variants. Order: longer match first to avoid partial replacement.
+    cleaned = cleaned.replaceAll('o-o-o', 'O-O-O');
+    cleaned = cleaned.replaceAll('o-o', 'O-O');
     cleaned = cleaned.replaceAll('0-0-0', 'O-O-O');
     cleaned = cleaned.replaceAll('0-0', 'O-O');
     return cleaned;
@@ -7709,6 +8328,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final displayedFeedback = reviewEntry?.feedback ?? _quizFeedback;
     final displayedContinuation =
         reviewEntry?.continuation ?? _quizContinuation;
+    final previewContinuation =
+        !reviewMode &&
+            !_quizAnswered &&
+            displayedQuizMode == GambitQuizMode.guessLine
+        ? _quizPreviewContinuation
+        : const <EngineLine>[];
     final displayedWhiteToMove = reviewEntry?.whiteToMove ?? _quizWhiteToMove;
     final displayedShownPly = reviewEntry?.shownPly ?? _quizShownPly;
     final displayedBoardState = reviewMode
@@ -7719,7 +8344,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
         displayedBoardState.isNotEmpty && displayedContinuation.isNotEmpty;
     final revealContinuation =
         hasQuizBoard &&
-        (displayedQuizMode == GambitQuizMode.guessName || answersLocked);
+        (displayedQuizMode == GambitQuizMode.guessName ||
+            answersLocked ||
+            previewContinuation.isNotEmpty);
     final isCorrectAnswer =
         answersLocked && displayedSelectedIndex == displayedCorrectIndex;
     final sideBySideLayout =
@@ -7874,9 +8501,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   : chipUnselectedText,
                               fontWeight: FontWeight.w700,
                             ),
-                            onSelected: (_) => setState(
-                              () => _quizMode = GambitQuizMode.guessName,
-                            ),
+                            onSelected: (_) =>
+                                _setQuizMode(GambitQuizMode.guessName),
                           ),
                           ChoiceChip(
                             label: const Text('Guess Opening Line'),
@@ -7895,9 +8521,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   : chipUnselectedText,
                               fontWeight: FontWeight.w700,
                             ),
-                            onSelected: (_) => setState(
-                              () => _quizMode = GambitQuizMode.guessLine,
-                            ),
+                            onSelected: (_) =>
+                                _setQuizMode(GambitQuizMode.guessLine),
                           ),
                         ],
                       ),
@@ -8048,12 +8673,27 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                   ),
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  '${_viewedGambits.length}/${_ecoOpenings.length} openings viewed',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.52),
-                    fontSize: 12,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${_currentViewedEligibleCount()}/${_quizEligibleCount > 0 ? _quizEligibleCount : _ecoOpenings.length} openings viewed',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.52),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkResponse(
+                      onTap: _showOpeningsViewedInfoDialog,
+                      radius: 14,
+                      child: Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: scheme.onSurface.withValues(alpha: 0.60),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -8066,7 +8706,14 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final reverse =
           _perspective == BoardPerspective.black ||
           (_perspective == BoardPerspective.auto && !displayedWhiteToMove);
-      final visibleArrows = !answersLocked
+      final showingLivePreview =
+          !answersLocked &&
+          !reviewMode &&
+          displayedQuizMode == GambitQuizMode.guessLine &&
+          previewContinuation.isNotEmpty;
+      final visibleArrows = showingLivePreview
+          ? previewContinuation
+          : !answersLocked
           ? displayedContinuation
           : reviewMode
           ? displayedContinuation
@@ -8264,7 +8911,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             child: SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: answersLocked ? null : () => _submitQuizAnswer(i),
+                onPressed: answersLocked
+                    ? null
+                    : () => _selectQuizAnswerOption(i),
                 icon: answersLocked
                     ? Icon(
                         i == displayedCorrectIndex
@@ -8280,22 +8929,32 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                                   : scheme.onSurface.withValues(alpha: 0.36)),
                       )
                     : Icon(
-                        Icons.help_outline,
+                        i == displayedSelectedIndex
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
                         size: 17,
-                        color: scheme.onSurface.withValues(alpha: 0.48),
+                        color: i == displayedSelectedIndex
+                            ? const Color(0xFF8FD0FF)
+                            : scheme.onSurface.withValues(alpha: 0.48),
                       ),
                 style: OutlinedButton.styleFrom(
                   alignment: Alignment.centerLeft,
                   side: BorderSide(
                     color: answersLocked && i == displayedCorrectIndex
                         ? const Color(0xFF7EDC8A).withValues(alpha: 0.7)
-                        : chipBorderColor,
+                        : (!answersLocked && i == displayedSelectedIndex
+                              ? const Color(0xFF5AAEE8).withValues(alpha: 0.75)
+                              : chipBorderColor),
                   ),
                   backgroundColor: answersLocked && i == displayedCorrectIndex
                       ? const Color(0xFF7EDC8A).withValues(alpha: 0.12)
                       : (answersLocked && i == displayedSelectedIndex
                             ? const Color(0xFFFF8A80).withValues(alpha: 0.08)
-                            : null),
+                            : (!answersLocked && i == displayedSelectedIndex
+                                  ? const Color(
+                                      0xFF5AAEE8,
+                                    ).withValues(alpha: 0.10)
+                                  : null)),
                 ),
                 label: displayedQuizMode == GambitQuizMode.guessLine
                     ? _buildMoveSequenceText(
@@ -8361,6 +9020,8 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     }
 
     Widget buildQuizPrimaryActionButton() {
+      final canSubmitGuess =
+          _quizSelectedIndex >= 0 && _quizSelectedIndex < _quizOptions.length;
       return Align(
         alignment: Alignment.centerRight,
         child: reviewMode
@@ -8370,18 +9031,23 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 label: const Text('Return to Current'),
               )
             : FilledButton.icon(
-                onPressed: _handleQuizPrimaryAction,
+                onPressed: !_quizAnswered && !canSubmitGuess
+                    ? null
+                    : _handleQuizPrimaryAction,
                 icon: Icon(
-                  _quizAnswered && _quizSessionAnswered >= _quizQuestionsTarget
-                      ? Icons.flag_rounded
-                      : Icons.navigate_next_rounded,
+                  !_quizAnswered
+                      ? Icons.check_rounded
+                      : (_quizAnswered &&
+                                _quizSessionAnswered >= _quizQuestionsTarget
+                            ? Icons.flag_rounded
+                            : Icons.navigate_next_rounded),
                 ),
                 label: Text(
-                  _quizAnswered
-                      ? (_quizSessionAnswered >= _quizQuestionsTarget
+                  !_quizAnswered
+                      ? 'Guess'
+                      : (_quizSessionAnswered >= _quizQuestionsTarget
                             ? 'Finish Session'
-                            : 'Next Puzzle')
-                      : 'Skip Puzzle',
+                            : 'Next Puzzle'),
                 ),
               ),
       );
@@ -8546,16 +9212,64 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
 
   Widget _buildQuizStatsCard({
     required QuizTrendFilter filter,
+    required QuizStatsDifficultyFilter difficultyFilter,
+    required int? days,
     required ValueChanged<QuizTrendFilter> onFilterChanged,
+    required ValueChanged<QuizStatsDifficultyFilter> onDifficultyFilterChanged,
+    required ValueChanged<int?> onDaysChanged,
     required Future<void> Function() onReset,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final accuracy = _quizAccuracy();
-    final series = _buildQuizAccuracySeries(filter, days: 10);
-    final amountSeries = _buildQuizAttemptSeries(filter, days: 10);
+    final series = _buildQuizAccuracySeries(
+      filter,
+      days: days,
+      difficultyFilter: difficultyFilter,
+    );
+    final amountSeries = _buildQuizAttemptSeries(
+      filter,
+      days: days,
+      difficultyFilter: difficultyFilter,
+    );
     final latest = series.isEmpty ? null : series.last.value;
+
+    final attemptsMap = _attemptsMapForFilters(filter, difficultyFilter);
+    final correctMap = _correctMapForFilters(filter, difficultyFilter);
+    final dateKeys =
+        attemptsMap.keys.toSet().union(correctMap.keys.toSet()).toList()
+          ..sort();
+    final recentKeys = (days == null || dateKeys.length <= days)
+        ? dateKeys
+        : dateKeys.sublist(dateKeys.length - days);
+
+    final windowAttempts = recentKeys.fold<int>(
+      0,
+      (sum, key) => sum + (attemptsMap[key] ?? 0),
+    );
+    final windowCorrect = recentKeys.fold<int>(
+      0,
+      (sum, key) => sum + (correctMap[key] ?? 0),
+    );
+    final windowAccuracy = windowAttempts <= 0
+        ? 0.0
+        : (windowCorrect / windowAttempts) * 100.0;
+    final attemptsPerDay = recentKeys.isEmpty
+        ? 0.0
+        : windowAttempts / recentKeys.length;
+
+    String bestDayLabel = '--';
+    double bestDayAccuracy = 0.0;
+    for (final key in recentKeys) {
+      final tries = attemptsMap[key] ?? 0;
+      if (tries <= 0) continue;
+      final acc = ((correctMap[key] ?? 0) / tries) * 100.0;
+      if (acc >= bestDayAccuracy) {
+        bestDayAccuracy = acc;
+        bestDayLabel = key.length >= 10 ? key.substring(5) : key;
+      }
+    }
 
     // Calculate average questions asked per day
     final questionsAskedValues = _quizDailyQuestionsAsked.values.toList();
@@ -8642,7 +9356,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                 const Color(0xFF7EDC8A),
               ),
               _quizMetricChip(
-                'Best',
+                'Best Streak',
                 _quizBestStreak.toString(),
                 const Color(0xFF5AAEE8),
               ),
@@ -8684,7 +9398,89 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
               );
             }).toList(),
           ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: QuizStatsDifficultyFilter.values.map((entry) {
+              final selected = entry == difficultyFilter;
+              return ChoiceChip(
+                label: Text(_statsDifficultyFilterLabel(entry)),
+                selected: selected,
+                selectedColor: const Color(0xFFD8B640).withValues(alpha: 0.20),
+                side: BorderSide(
+                  color: selected
+                      ? const Color(0xFFD8B640)
+                      : scheme.outline.withValues(alpha: 0.34),
+                ),
+                labelStyle: TextStyle(
+                  color: selected
+                      ? const Color(0xFFFFE29A)
+                      : scheme.onSurface.withValues(alpha: 0.82),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+                onSelected: (_) => onDifficultyFilterChanged(entry),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: const <int?>[7, 30, 365, null].map((entry) {
+              final selected = entry == days;
+              final label = entry == null
+                  ? 'Max'
+                  : entry == 7
+                  ? '1 Week'
+                  : entry == 30
+                  ? '1 Month'
+                  : '1 Year';
+              return ChoiceChip(
+                label: Text(label),
+                selected: selected,
+                selectedColor: const Color(0xFF7EDC8A).withValues(alpha: 0.20),
+                side: BorderSide(
+                  color: selected
+                      ? const Color(0xFF7EDC8A)
+                      : scheme.outline.withValues(alpha: 0.34),
+                ),
+                labelStyle: TextStyle(
+                  color: selected
+                      ? const Color(0xFFA7F0B2)
+                      : scheme.onSurface.withValues(alpha: 0.82),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+                onSelected: (_) => onDaysChanged(entry),
+              );
+            }).toList(),
+          ),
           const SizedBox(height: 10),
+          if (recentKeys.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _quizMetricChip(
+                  'Window Accuracy',
+                  '${windowAccuracy.toStringAsFixed(1)}%',
+                  const Color(0xFF5AAEE8),
+                ),
+                _quizMetricChip(
+                  'Attempts/Day',
+                  attemptsPerDay.toStringAsFixed(1),
+                  const Color(0xFF7EDC8A),
+                ),
+                _quizMetricChip(
+                  'Best Day',
+                  '$bestDayLabel (${bestDayAccuracy.toStringAsFixed(0)}%)',
+                  const Color(0xFFD8B640),
+                ),
+              ],
+            ),
+          if (recentKeys.isNotEmpty) const SizedBox(height: 10),
           if (series.isEmpty)
             Text(
               'Play puzzles in this mode to build your accuracy trend.',
@@ -8697,10 +9493,9 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
             Container(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
               decoration: BoxDecoration(
-                color: Color.alphaBlend(
-                  scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
-                  scheme.surface,
-                ).withValues(alpha: 0.90),
+                color: isDark
+                    ? const Color(0xFF000000)
+                    : const Color(0xFFFFFFFF),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: scheme.outline.withValues(alpha: 0.30),
@@ -8714,25 +9509,19 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                       painter: QuizAccuracyTrendPainter(
                         accuracySeries: series,
                         amountSeries: amountSeries,
+                        isDarkMode: isDark,
                       ),
                       child: const SizedBox.expand(),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      for (final point in series)
-                        Expanded(
-                          child: Text(
-                            point.dayLabel,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.50),
-                              fontSize: 9.5,
-                            ),
-                          ),
-                        ),
-                    ],
+                  const SizedBox(height: 6),
+                  Text(
+                    'Blue/green line: accuracy. Gold line: attempts. Use filters and date range above to compare progress.',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.62),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -8760,6 +9549,29 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
           fontWeight: FontWeight.w700,
         ),
       ),
+    );
+  }
+
+  void _showOpeningsViewedInfoDialog() {
+    final eligible = _quizEligibleCount > 0
+        ? _quizEligibleCount
+        : _ecoOpenings.length;
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Curated Opening Library'),
+          content: Text(
+            'We have picked $eligible lines from the complete library of ${_ecoOpenings.length} known openings. \n\nThe counter above tracks how many of these you have already explored. Can you find them all?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Let\'s go!'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -11968,7 +12780,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       case 3:
         return 'Grandmaster';
       case 4:
-        return 'Wilder';
+        return 'Oracle';
       default:
         return 'Pro';
     }
@@ -11983,7 +12795,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     };
     if (targetTier <= _depthTier || targetTier < 2 || targetTier > 4) return;
     if (targetTier != _depthTier + 1) {
-      _addLog('Unlock tiers in order: Pro -> Expert -> Grandmaster -> Wilder');
+      _addLog('Unlock tiers in order: Pro -> Expert -> Grandmaster -> Oracle');
       return;
     }
     final economy = context.read<EconomyProvider>();
@@ -12120,6 +12932,12 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
       final shown = await adService.maybeShowBoardResetInterstitial();
       if (!shown) {
         _addLog('Reset interstitial unavailable; continuing without ad');
+        await _showThemedErrorDialog(
+          title: 'Ad Unavailable',
+          message:
+              'The sponsored ad could not be played right now. The board was reset anyway.',
+          includeInternetHint: true,
+        );
       }
     }
     if (!mounted) return;
@@ -12141,13 +12959,11 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
     final rewardEarned = await AdService.instance.showRewardedAd();
     if (!mounted) return;
     if (!rewardEarned) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Rewarded ad unavailable or not completed.'),
-          ),
-        );
+      await _showThemedErrorDialog(
+        title: 'Ad Unavailable',
+        message: 'Rewarded ad is unavailable or was not completed.',
+        includeInternetHint: true,
+      );
       _addLog('Rewarded store ad unavailable or not completed');
       return;
     }
@@ -12613,7 +13429,7 @@ class _ChessAnalysisPageState extends State<ChessAnalysisPage>
                     ),
                     _storeItemCard(
                       icon: Icons.whatshot_outlined,
-                      title: 'Wilder Mode',
+                      title: 'Oracle Mode',
                       subtitle: _depthTier >= 4
                           ? 'Unlocked (max ply depth 35)'
                           : 'Unlock ply depth 33-35',

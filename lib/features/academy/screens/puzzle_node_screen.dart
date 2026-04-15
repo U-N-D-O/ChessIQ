@@ -77,7 +77,6 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   bool _focusModeActive = false;
   bool _playerIsBlack = false;
   bool _evalBarPlayerIsBlack = false;
-  bool _evalBarPlayerColorInitialized = false;
   bool _userMovesOnOddPly = true;
   bool _coachingOffScript = false;
   bool _muteSounds = false;
@@ -209,10 +208,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       _evalWhitePawns = 0.0;
       _game = game;
       _playerIsBlack = playerIsBlack;
-      if (!_evalBarPlayerColorInitialized) {
-        _evalBarPlayerIsBlack = playerIsBlack;
-        _evalBarPlayerColorInitialized = true;
-      }
+      _evalBarPlayerIsBlack = playerIsBlack;
       _userMovesOnOddPly = setupMoveApplied;
       _coachingOffScript = false;
       _pendingRegretHalfMoves = 0;
@@ -1175,6 +1171,18 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Future<void> _claimDailySequenceReward(PuzzleAcademyProvider provider) async {
+    if (provider.todayDailyChallengeRewardClaimed) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Today\'s daily reward is already claimed.'),
+          ),
+        );
+      return;
+    }
+
     final economy = context.read<EconomyProvider>();
     final messenger = ScaffoldMessenger.of(context);
     final rewardEarned = await AdService.instance.showRewardedAd();
@@ -1237,11 +1245,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       );
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(content: Text('Reward claimed! +200 coins.')),
-      );
+    await _exitToMap();
   }
 
   Future<void> _handleSquareTap(String square) async {
@@ -1877,7 +1881,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
           );
 
     final isBlackPiece = assetId.endsWith('_b');
-    if (theme.useClassicPieces || !isBlackPiece) {
+    if (!isBlackPiece) {
       return Padding(padding: const EdgeInsets.all(2), child: tinted);
     }
 

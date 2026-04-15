@@ -2,9 +2,11 @@ import 'package:chessiq/features/analysis/models/analysis_models.dart';
 
 enum GambitQuizMode { guessName, guessLine }
 
-enum QuizDifficulty { easy, medium, hard }
+enum QuizDifficulty { easy, medium, hard, veryHard }
 
 enum QuizTrendFilter { both, guessName, guessLine }
+
+enum QuizStatsDifficultyFilter { all, easy, medium, hard, veryHard }
 
 class QuizAccuracyPoint {
   final String dayLabel;
