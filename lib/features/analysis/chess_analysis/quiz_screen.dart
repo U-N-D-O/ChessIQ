@@ -1,4 +1,4 @@
-﻿part of '../../analysis/screens/chess_analysis_page.dart';
+﻿part of '../screens/chess_analysis_page.dart';
 
 mixin _QuizScreen on _ChessAnalysisPageStateBase {
   @override
@@ -1403,7 +1403,8 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
     if (!mounted || _quizContinuation.isEmpty || _quizBoardState.isEmpty) {
       return;
     }
-    const speedFactor = 0.14;
+    // Keep reveal speed at 30% of the previous pace.
+    const speedFactor = 0.14 / 0.30;
     final initialDelayMs = max(1, (280 * speedFactor).round());
     final stepDelayMs = max(1, (9 * speedFactor).round());
     final betweenMovesDelayMs = max(1, (225 * speedFactor).round());
@@ -1475,7 +1476,7 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
   void _submitQuizAnswer(int index) {
     if (_quizAnswered) return;
     final isCorrect = index == _quizCorrectIndex;
-    final shouldShowMilestoneInterstitial = (_quizTotalAnswered + 1) % 15 == 0;
+    final shouldShowMilestoneInterstitial = (_quizTotalAnswered + 1) % 10 == 0;
     final nextAnswered = _quizSessionAnswered + 1;
     final nextCorrect = _quizSessionCorrect + (isCorrect ? 1 : 0);
     final nextStreak = isCorrect ? _quizStreak + 1 : 0;
@@ -1515,19 +1516,31 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
       }
     }
 
-    if (_quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty) {
-      unawaited(_startQuizPlayback());
-    }
+    unawaited(
+      _handlePostAnswerEffects(
+        shouldPlayReveal:
+            _quizBoardState.isNotEmpty && _quizContinuation.isNotEmpty,
+        shouldShowMilestoneInterstitial: shouldShowMilestoneInterstitial,
+      ),
+    );
+  }
 
+  Future<void> _handlePostAnswerEffects({
+    required bool shouldPlayReveal,
+    required bool shouldShowMilestoneInterstitial,
+  }) async {
+    if (shouldPlayReveal) {
+      await _startQuizPlayback();
+    }
     if (shouldShowMilestoneInterstitial) {
-      unawaited(_showQuizMilestoneInterstitial());
+      await _showQuizMilestoneInterstitial();
     }
   }
 
   Future<void> _showQuizMilestoneInterstitial() async {
     final shown = await AdService.instance.showInterstitialAd();
     if (!shown) {
-      _addLog('Quiz interstitial unavailable at 15-guess milestone.');
+      _addLog('Quiz interstitial unavailable at 10-guess milestone.');
     }
   }
 

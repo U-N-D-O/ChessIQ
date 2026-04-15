@@ -1,4 +1,4 @@
-﻿part of '../../features/analysis/screens/chess_analysis_page.dart';
+﻿part of '../screens/chess_analysis_page.dart';
 
 class _RenderedMoveToken {
   final String notation;

@@ -18,8 +18,6 @@ enum HandleAvailabilityStatus { available, taken, verificationUnavailable }
 /// attached when one is available.
 ///
 /// Cache short-circuits write calls when score/handle/country are unchanged.
-///
-/// Cache short-circuits write calls when score/handle/country are unchanged.
 class ScoreboardService {
   ScoreboardService._();
 
@@ -37,6 +35,10 @@ class ScoreboardService {
   static const String _prefHandle = 'sb_last_handle';
   static const String _prefCountry = 'sb_last_country';
   static const String _prefScore = 'sb_last_score';
+
+  String? _lastFunctionError;
+
+  String? get lastFunctionError => _lastFunctionError;
 
   String _handleKey(String handle) {
     final normalized = handle.trim().isEmpty
@@ -73,35 +75,75 @@ class ScoreboardService {
     String name,
     Map<String, dynamic> data,
   ) async {
+    _lastFunctionError = null;
     final token = await FirebaseAuthService.instance.getIdToken();
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null) headers['Authorization'] = 'Bearer $token';
 
-    final response = await http.post(
-      Uri.parse('$_cfBase/$name'),
-      headers: headers,
-      body: jsonEncode({'data': data}),
-    );
+    final uri = Uri.parse('$_cfBase/$name');
+    debugPrint('[ScoreboardService] Calling Cloud Function: $uri');
+    
+    try {
+      final response = await http.post(
+        uri,
+        headers: headers,
+        body: jsonEncode({'data': data}),
+      ).timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('Cloud Function request timed out');
+      });
 
-    Map<String, dynamic> body = const <String, dynamic>{};
-    if (response.body.isNotEmpty) {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        body = decoded;
+      Map<String, dynamic> body = const <String, dynamic>{};
+      final trimmedBody = response.body.trim();
+      final contentType = response.headers['content-type'] ?? '';
+      final looksLikeJson = trimmedBody.startsWith('{') ||
+          trimmedBody.startsWith('[');
+
+      if (trimmedBody.isNotEmpty && looksLikeJson) {
+        final decoded = jsonDecode(trimmedBody);
+        if (decoded is Map<String, dynamic>) {
+          body = decoded;
+        }
       }
+      if (response.statusCode != 200) {
+        final error = body['error'];
+        final message = error is Map<String, dynamic>
+            ? (error['message']?.toString() ?? '')
+            : '';
+        final bodyPreview = trimmedBody.isEmpty
+            ? ''
+            : trimmedBody.replaceAll(RegExp(r'\s+'), ' ').substring(
+                  0,
+                  trimmedBody.length > 160 ? 160 : trimmedBody.length,
+                );
+        final errorMsg = message.isNotEmpty
+            ? message
+            : contentType.contains('text/html')
+                ? 'Cloud Function returned HTML (${response.statusCode}) instead of JSON. The endpoint may be unavailable, blocked by a firewall/proxy, or serving an error page. Preview: $bodyPreview'
+                : bodyPreview.isNotEmpty
+                    ? 'Cloud Function error ${response.statusCode}: $bodyPreview'
+                    : 'Cloud Function error ${response.statusCode}';
+        _lastFunctionError = errorMsg;
+        debugPrint('[ScoreboardService] Error: $errorMsg');
+        throw Exception(errorMsg);
+      }
+      if (trimmedBody.isNotEmpty && !looksLikeJson) {
+        final preview = trimmedBody.replaceAll(RegExp(r'\s+'), ' ').substring(
+              0,
+              trimmedBody.length > 160 ? 160 : trimmedBody.length,
+            );
+        final errorMsg = contentType.contains('text/html')
+            ? 'Cloud Function returned HTML instead of JSON. The endpoint may be unavailable, blocked by a firewall/proxy, or serving an error page. Preview: $preview'
+            : 'Cloud Function returned a non-JSON response. Preview: $preview';
+        _lastFunctionError = errorMsg;
+        throw Exception(errorMsg);
+      }
+      debugPrint('[ScoreboardService] Success');
+      return (body['result'] as Map<String, dynamic>?) ?? const {};
+    } catch (e) {
+      _lastFunctionError ??= e.toString();
+      debugPrint('[ScoreboardService] Exception: $e');
+      rethrow;
     }
-    if (response.statusCode != 200) {
-      final error = body['error'];
-      final message = error is Map<String, dynamic>
-          ? (error['message']?.toString() ?? '')
-          : '';
-      throw Exception(
-        message.isEmpty
-            ? 'Cloud Function error ${response.statusCode}'
-            : message,
-      );
-    }
-    return (body['result'] as Map<String, dynamic>?) ?? const {};
   }
 
   Future<void> submitScore({
@@ -212,6 +254,45 @@ class ScoreboardService {
     } catch (e) {
       debugPrint('Scoreboard submit failed: $e');
       // Best-effort; don't surface leaderboard errors to the user.
+    }
+  }
+
+  /// Atomically reserves/updates a player's leaderboard profile on backend.
+  ///
+  /// This calls `submitAcademyScore` directly so nickname ownership is
+  /// validated server-side before the app accepts the profile locally.
+  Future<HandleAvailabilityStatus> registerProfile({
+    required String handle,
+    required String country,
+    required int score,
+    required String title,
+  }) async {
+    final trimmedHandle = handle.trim();
+    if (trimmedHandle.isEmpty) {
+      return HandleAvailabilityStatus.verificationUnavailable;
+    }
+
+    final normalizedCountry = country.trim().isEmpty
+        ? 'Unknown'
+        : country.trim();
+
+    try {
+      await _callFunction('submitAcademyScore', {
+        'handle': trimmedHandle,
+        'country': normalizedCountry,
+        'score': score,
+        'title': title,
+      });
+      return HandleAvailabilityStatus.available;
+    } catch (e) {
+      final message = e.toString().toLowerCase();
+      if (message.contains('already-exists') ||
+          message.contains('already taken') ||
+          message.contains('nickname is already taken')) {
+        return HandleAvailabilityStatus.taken;
+      }
+      _lastFunctionError ??= e.toString();
+      return HandleAvailabilityStatus.verificationUnavailable;
     }
   }
 

@@ -1,4 +1,4 @@
-﻿part of '../../analysis/screens/chess_analysis_page.dart';
+﻿part of '../screens/chess_analysis_page.dart';
 
 mixin _QuizComponents on _QuizScreen {
   @override

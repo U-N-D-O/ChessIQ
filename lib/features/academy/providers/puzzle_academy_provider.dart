@@ -4,13 +4,13 @@ import 'dart:math';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/firebase_auth_service.dart';
 import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:chessiq/core/services/scoreboard_service.dart';
-import 'package:chessiq/core/services/firebase_auth_service.dart';
-import 'package:http/http.dart' as http;
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String _basePuzzleAssetPath = 'assets/puzzles/base_puzzles.json';
@@ -258,6 +258,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   ];
 
   PuzzleProgressModel? _progress;
+  String? _lastRegistrationError;
   Map<String, int> _basePuzzleCountsByNode = const <String, int>{};
   final Map<String, List<PuzzleItem>> _basePuzzleCacheByNode =
       <String, List<PuzzleItem>>{};
@@ -287,6 +288,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   bool get shouldShowBrainBreak => _shouldShowBrainBreak;
   bool get shouldShowGrandmasterOracle => _shouldShowGrandmasterOracle;
   String? get celebrationNodeKey => _celebrationNodeKey;
+  String? get lastRegistrationError => _lastRegistrationError;
   List<PuzzleItem> get dailyPuzzles => _dailyPuzzles;
   Duration get examDuration => _examDuration;
   int get examPuzzleCount => _examPuzzleCount;
@@ -380,9 +382,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   }
 
   bool get todayDailyChallengeRewardClaimed {
-    return progress.claimedDailyChallengeRewardDates.contains(
-      _todayStamp(),
-    );
+    return progress.claimedDailyChallengeRewardDates.contains(_todayStamp());
   }
 
   Future<void> markTodayDailyChallengeRewardClaimed() async {
@@ -442,6 +442,38 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     );
     await _saveProgress();
     notifyListeners();
+  }
+
+  Future<HandleAvailabilityStatus> registerAcademyProfile({
+    required String handle,
+    required String country,
+  }) async {
+    _lastRegistrationError = null;
+    final bestResultsByNode = <String, AcademyExamResult>{};
+    for (final result in progress.examResults) {
+      final existing = bestResultsByNode[result.nodeKey];
+      if (existing == null ||
+          _effectiveLeaderboardScore(result) >
+              _effectiveLeaderboardScore(existing)) {
+        bestResultsByNode[result.nodeKey] = result;
+      }
+    }
+
+    final totalScore = bestResultsByNode.values.fold<int>(
+      0,
+      (sum, result) => sum + _effectiveLeaderboardScore(result),
+    );
+
+    final status = await ScoreboardService.instance.registerProfile(
+      handle: handle,
+      country: country,
+      score: totalScore,
+      title: '${bestResultsByNode.length} exams counted',
+    );
+    if (status == HandleAvailabilityStatus.verificationUnavailable) {
+      _lastRegistrationError = ScoreboardService.instance.lastFunctionError;
+    }
+    return status;
   }
 
   Future<HandleAvailabilityStatus> checkHandleAvailability({

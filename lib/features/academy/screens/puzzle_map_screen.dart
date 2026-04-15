@@ -112,7 +112,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       final provider = context.read<PuzzleAcademyProvider>();
       await provider.initialize();
       if (!mounted) return;
-      await _ensureAcademyProfile(provider);
+      _didShowAcademyProfilePrompt = true;
+      try {
+        await _ensureAcademyProfile(provider);
+      } finally {
+        _didShowAcademyProfilePrompt = false;
+      }
       if (!mounted) return;
       await _showPendingEducation(provider);
     });
@@ -120,8 +125,18 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   Future<void> _ensureAcademyProfile(PuzzleAcademyProvider provider) async {
     if (!mounted || !provider.initialized) return;
-    if (!provider.shouldAskForProfile) return;
-    await _showAcademyProfileDialog(provider);
+    if (!provider.shouldAskForProfile) {
+      // Best-effort sync for existing local profiles created before strict
+      // backend registration was enforced.
+      unawaited(
+        provider.registerAcademyProfile(
+          handle: provider.progress.handle,
+          country: provider.progress.country,
+        ),
+      );
+      return;
+    }
+    await _showAcademyProfileDialog(provider, allowExitToMenu: true);
   }
 
   Future<Map<String, String>?> _promptAcademyProfileDialog({
@@ -129,6 +144,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required String initialCountry,
     required bool lockHandle,
     required bool lockCountry,
+    bool allowExitToMenu = false,
   }) {
     return showDialog<Map<String, String>>(
       context: context,
@@ -139,6 +155,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           initialCountry: initialCountry,
           lockHandle: lockHandle,
           lockCountry: lockCountry,
+          allowExitToMenu: allowExitToMenu,
         );
       },
     );
@@ -148,6 +165,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     PuzzleAcademyProvider provider, {
     bool lockHandle = false,
     bool lockCountry = false,
+    bool allowExitToMenu = false,
   }) async {
     var initialHandle = provider.progress.handle;
     var initialCountry = provider.progress.country;
@@ -158,65 +176,88 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         initialCountry: initialCountry,
         lockHandle: lockHandle,
         lockCountry: lockCountry,
+        allowExitToMenu: allowExitToMenu,
       );
 
       if (!mounted) return;
-      if (result == null) return;
+      if (result == null) {
+        if (allowExitToMenu) {
+          widget.onBack();
+        }
+        return;
+      }
 
       final handle = (result['handle'] ?? '').trim();
       final country = (result['country'] ?? '').trim();
 
-      final currentHandle = provider.progress.handle.trim();
-      final handleChanged = handle.toLowerCase() != currentHandle.toLowerCase();
+      final status = await provider.registerAcademyProfile(
+        handle: handle,
+        country: country,
+      );
+      if (!mounted) return;
 
-      if (handleChanged) {
-        final status = await provider.checkHandleAvailability(
-          handle: handle,
-          currentHandle: provider.progress.handle,
-        );
+      if (status == HandleAvailabilityStatus.verificationUnavailable) {
+        final errorDetail = provider.lastRegistrationError ?? 'Unknown error';
+        final shouldRetry = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Registration Failed'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ChessIQ could not register this profile right now. Please check your connection and try again.',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Details: $errorDetail',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Back to Menu'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Try Again'),
+              ),
+            ],
+          ),
+        ) ?? false;
+        
         if (!mounted) return;
+        if (!shouldRetry) return;
+        continue;
+      }
 
-        if (status == HandleAvailabilityStatus.verificationUnavailable) {
-          await showDialog<void>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Internet Required'),
-              content: const Text(
-                'You need to be online to create or change a nickname so ChessIQ can verify it is unique. You can still change your country while offline.',
-              ),
-              actions: [
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
+      if (status == HandleAvailabilityStatus.taken) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Nickname Already In Use'),
+            content: const Text(
+              'That nickname is already used on the leaderboard. Please choose a different one.',
             ),
-          );
-          initialHandle = handle;
-          initialCountry = country;
-          continue;
-        }
-
-        if (status == HandleAvailabilityStatus.taken) {
-          await showDialog<void>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Nickname Already In Use'),
-              content: const Text(
-                'That nickname is already used on the leaderboard. Please choose a different one.',
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
               ),
-              actions: [
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          initialHandle = handle;
-          initialCountry = country;
-          continue;
-        }
+            ],
+          ),
+        );
+        initialHandle = handle;
+        initialCountry = country;
+        continue;
       }
 
       await provider.updateAcademyProfile(handle: handle, country: country);
@@ -226,6 +267,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   Future<void> _showPendingEducation(PuzzleAcademyProvider provider) async {
     if (!mounted || !provider.initialized) return;
+    if (provider.shouldAskForProfile) return;
 
     final unlockedNodes = provider.orderedNodes.where((node) => node.unlocked);
     final firstUnlocked = unlockedNodes.isEmpty
@@ -338,6 +380,18 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   Future<void> _showSemesterIntroDialog(SemesterRange semester) async {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final panelTop = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.24 : 0.12),
+      scheme.surface,
+    );
+    final panelBottom = Color.alphaBlend(
+      scheme.secondary.withValues(alpha: isDark ? 0.18 : 0.10),
+      scheme.surface,
+    );
+
     await showDialog<void>(
       context: context,
       builder: (context) => Dialog(
@@ -352,14 +406,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF102036).withValues(alpha: 0.92),
-                    const Color(0xFF0A1321).withValues(alpha: 0.94),
-                  ],
+                  colors: [panelTop, panelBottom],
                 ),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: const Color(0xFF6FE7FF).withValues(alpha: 0.35),
+                  color: scheme.outline.withValues(alpha: 0.38),
                 ),
               ),
               child: Column(
@@ -368,8 +419,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 children: [
                   Text(
                     semester.title,
-                    style: const TextStyle(
-                      color: Color(0xFF6FE7FF),
+                    style: TextStyle(
+                      color: scheme.primary,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
@@ -377,7 +428,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   const SizedBox(height: 10),
                   Text(
                     semester.intro,
-                    style: const TextStyle(color: Colors.white70, height: 1.35),
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.82),
+                      height: 1.35,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Align(
@@ -385,8 +439,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                     child: FilledButton(
                       onPressed: () => Navigator.of(context).pop(),
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFD8B640),
-                        foregroundColor: Colors.black,
+                        backgroundColor: scheme.primary,
+                        foregroundColor: scheme.onPrimary,
                       ),
                       child: const Text('Enter Semester'),
                     ),
@@ -674,11 +728,15 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           }
                           unawaited(_playAcademyBuySound());
                           _didShowAcademyProfilePrompt = true;
-                          if (!mounted) return;
-                          await _showAcademyProfileDialog(
-                            liveProvider,
-                            lockCountry: true,
-                          );
+                          try {
+                            if (!mounted) return;
+                            await _showAcademyProfileDialog(
+                              liveProvider,
+                              lockCountry: true,
+                            );
+                          } finally {
+                            _didShowAcademyProfilePrompt = false;
+                          }
                         },
                       ),
                       const SizedBox(height: 10),
@@ -699,11 +757,15 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           }
                           unawaited(_playAcademyBuySound());
                           _didShowAcademyProfilePrompt = true;
-                          if (!mounted) return;
-                          await _showAcademyProfileDialog(
-                            liveProvider,
-                            lockHandle: true,
-                          );
+                          try {
+                            if (!mounted) return;
+                            await _showAcademyProfileDialog(
+                              liveProvider,
+                              lockHandle: true,
+                            );
+                          } finally {
+                            _didShowAcademyProfilePrompt = false;
+                          }
                         },
                       ),
                       const SizedBox(height: 20),
@@ -774,11 +836,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          if (provider.initialized &&
-              provider.shouldAskForProfile &&
-              !_didShowAcademyProfilePrompt) {
-            _didShowAcademyProfilePrompt = true;
-            _ensureAcademyProfile(provider);
+          if (provider.initialized && provider.shouldAskForProfile) {
+            if (!_didShowAcademyProfilePrompt) {
+              _didShowAcademyProfilePrompt = true;
+              _ensureAcademyProfile(provider).whenComplete(() {
+                _didShowAcademyProfilePrompt = false;
+              });
+            }
             return;
           }
           _handleCelebration(provider);
@@ -1648,12 +1712,14 @@ class _AcademyProfileDialog extends StatefulWidget {
     required this.initialCountry,
     this.lockHandle = false,
     this.lockCountry = false,
+    this.allowExitToMenu = false,
   });
 
   final String initialHandle;
   final String initialCountry;
   final bool lockHandle;
   final bool lockCountry;
+  final bool allowExitToMenu;
 
   @override
   State<_AcademyProfileDialog> createState() => _AcademyProfileDialogState();
@@ -1804,6 +1870,10 @@ class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
         ),
       ),
       actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(widget.allowExitToMenu ? 'Back to Menu' : 'Cancel'),
+        ),
         FilledButton(
           onPressed: () {
             if (_formKey.currentState?.validate() != true) return;
