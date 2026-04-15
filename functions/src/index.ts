@@ -1,5 +1,5 @@
 import * as admin from "firebase-admin";
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 
 admin.initializeApp();
 
@@ -179,3 +179,20 @@ export const checkHandleAvailability = functions.https.onCall(
         return { available: false };
     },
 );
+
+// ---------------------------------------------------------------------------
+// getServerDate
+//
+// Returns the current UTC calendar date as { date: "YYYYMMDD" }.
+// Called by the Flutter app on startup so that daily-challenge selection is
+// based on server time rather than the device clock (prevents date-
+// manipulation cheating). Auth is optional - anonymous calls are fine.
+// ---------------------------------------------------------------------------
+
+export const getServerDate = functions.https.onCall(async () => {
+    const now = new Date();
+    const yyyy = now.getUTCFullYear().toString().padStart(4, "0");
+    const mm = (now.getUTCMonth() + 1).toString().padStart(2, "0");
+    const dd = now.getUTCDate().toString().padStart(2, "0");
+    return { date: `${yyyy}${mm}${dd}` };
+});

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -6,6 +6,8 @@ import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:chessiq/core/services/scoreboard_service.dart';
+import 'package:chessiq/core/services/firebase_auth_service.dart';
+import 'package:http/http.dart' as http;
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -269,6 +271,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
   bool _initialized = false;
   bool _isLoading = false;
+  String? _serverDateStamp;
+  DateTime? _serverDateFetchedAt;
   bool _shouldShowBrainBreak = false;
   bool _shouldShowGrandmasterOracle = false;
   String? _celebrationNodeKey;
@@ -377,12 +381,12 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
   bool get todayDailyChallengeRewardClaimed {
     return progress.claimedDailyChallengeRewardDates.contains(
-      _dateStamp(DateTime.now()),
+      _todayStamp(),
     );
   }
 
   Future<void> markTodayDailyChallengeRewardClaimed() async {
-    final stamp = _dateStamp(DateTime.now());
+    final stamp = _todayStamp();
     if (progress.claimedDailyChallengeRewardDates.contains(stamp)) {
       return;
     }
@@ -494,6 +498,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     try {
       _basePuzzleCountsByNode = await _loadBasePuzzleCounts();
       _dailyPuzzleAssetPaths = await _loadDailyAssetPaths();
+      await _initServerDate();
       await _refreshTodayDailyPuzzle(notify: false);
 
       final fallbackNodes = _buildInitialNodes(_basePuzzleCountsByNode);
@@ -1519,7 +1524,17 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshTodayDailyPuzzle({required bool notify}) async {
-    final todayStamp = _dateStamp(DateTime.now());
+    if (_serverDateStamp == null) {
+      await _initServerDate();
+    }
+    if (_serverDateStamp == null) {
+      _todayDailyPuzzleAssetPath = null;
+      _todayDailyPuzzle = null;
+      _dailyPuzzles = const <PuzzleItem>[];
+      if (notify) notifyListeners();
+      return;
+    }
+    final todayStamp = _todayStamp();
     final matchedPath = _dailyPuzzleAssetPaths.lastWhere(
       (path) => path.contains('daily_puzzles_${todayStamp}_'),
       orElse: () => '',
@@ -1543,5 +1558,47 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     final month = value.month.toString().padLeft(2, '0');
     final day = value.day.toString().padLeft(2, '0');
     return '$year$month$day';
+  }
+
+  String _todayStamp() {
+    final stamp = _serverDateStamp;
+    final fetchedAt = _serverDateFetchedAt;
+    if (stamp == null || fetchedAt == null) {
+      return _dateStamp(DateTime.now().toUtc());
+    }
+    final year = int.parse(stamp.substring(0, 4));
+    final month = int.parse(stamp.substring(4, 6));
+    final day = int.parse(stamp.substring(6, 8));
+    final serverMidnight = DateTime.utc(year, month, day);
+    final elapsed = DateTime.now().toUtc().difference(fetchedAt);
+    return _dateStamp(serverMidnight.add(elapsed));
+  }
+
+  static const String _cfBase =
+      'https://us-central1-chessiq-89b45.cloudfunctions.net';
+
+  Future<void> _initServerDate() async {
+    try {
+      final token = await FirebaseAuthService.instance.getIdToken();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (token != null) headers['Authorization'] = 'Bearer $token';
+      final response = await http
+          .post(
+            Uri.parse('$_cfBase/getServerDate'),
+            headers: headers,
+            body: jsonEncode({'data': {}}),
+          )
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final date = (body['result'] as Map?)?['date'] as String?;
+        if (date != null && date.length == 8) {
+          _serverDateStamp = date;
+          _serverDateFetchedAt = DateTime.now().toUtc();
+        }
+      }
+    } catch (_) {
+      // Network unavailable - fall back to device clock silently.
+    }
   }
 }

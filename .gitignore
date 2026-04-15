@@ -46,3 +46,12 @@ app.*.map.json
 
 # Local engine binary exceeds GitHub file size limits.
 engine/stockfish.exe
+
+# Firebase config files containing API keys.
+# Provide these locally or inject via CI secrets – do NOT commit them.
+ios/Runner/GoogleService-Info.plist
+android/app/google-services.json
+
+# Firebase Functions generated artifacts
+functions/node_modules/
+functions/lib/
