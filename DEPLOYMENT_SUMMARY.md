@@ -108,6 +108,13 @@ gcloud projects add-iam-policy-binding chessiq-89b45 \
 3. **Verify:** Test Cloud Function endpoints
 4. **Continue Development:** Proceed with remaining feature work
 
+## Upgrade Reminder
+
+- **Deployment status:** Cloud Functions are now deployed and active.
+- **Schedule:** Revisit the functions runtime/package upgrade by **2026-04-22** before the next release cycle is forgotten.
+- **Why:** Node.js 20 for these Gen1 functions is nearing deprecation, and `firebase-functions` should be upgraded intentionally to avoid a rushed breaking change later.
+- **Upgrade target:** Move off the current Node.js 20 Gen1 setup and upgrade `firebase-functions` in a dedicated follow-up task with deployment verification.
+
 ---
 
 ## Error Reference
