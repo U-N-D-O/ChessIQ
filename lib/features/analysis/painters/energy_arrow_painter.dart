@@ -56,15 +56,29 @@ class EnergyArrowPainter extends CustomPainter {
       const double badgeR = 9.2;
       const double minSafeGap = badgeR * 2 + 3.0;
       const List<double> tCandidates = [
-        0.50, 0.35, 0.65, 0.28, 0.72, 0.20, 0.80,
+        0.50,
+        0.35,
+        0.65,
+        0.28,
+        0.72,
+        0.20,
+        0.80,
       ];
       final sortedLines = [...lines]
         ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
       for (final line in sortedLines) {
-        final lStart =
-            _getOffset(line.move.substring(0, 2), sq, size, boardInset);
-        final lEnd =
-            _getOffset(line.move.substring(2, 4), sq, size, boardInset);
+        final lStart = _getOffset(
+          line.move.substring(0, 2),
+          sq,
+          size,
+          boardInset,
+        );
+        final lEnd = _getOffset(
+          line.move.substring(2, 4),
+          sq,
+          size,
+          boardInset,
+        );
         final ldx = lEnd.dx - lStart.dx;
         final ldy = lEnd.dy - lStart.dy;
         final ldist = sqrt(ldx * ldx + ldy * ldy);
@@ -74,8 +88,7 @@ class EnergyArrowPainter extends CustomPainter {
         }
         final lUnitX = ldx / ldist;
         final lUnitY = ldy / ldist;
-        final lLineEnd =
-            Offset(lEnd.dx - lUnitX * 10, lEnd.dy - lUnitY * 10);
+        final lLineEnd = Offset(lEnd.dx - lUnitX * 10, lEnd.dy - lUnitY * 10);
 
         Offset bestPos = Offset.lerp(lStart, lLineEnd, 0.5)!;
         double bestMinDist = -1.0;

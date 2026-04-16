@@ -77,26 +77,57 @@ class ScoreboardService {
   ) async {
     _lastFunctionError = null;
     final token = await FirebaseAuthService.instance.getIdToken();
+    if (token == null || token.isEmpty) {
+      final authError = FirebaseAuthService.instance.lastError;
+      final message = authError != null && authError.isNotEmpty
+          ? 'Authentication required before scoreboard registration. $authError'
+          : 'Authentication required before scoreboard registration. Ensure anonymous auth is enabled in Firebase Auth > Sign-in method and try again.';
+      _lastFunctionError = message;
+      throw Exception(message);
+    }
     final headers = <String, String>{'Content-Type': 'application/json'};
-    if (token != null) headers['Authorization'] = 'Bearer $token';
+    headers['Authorization'] = 'Bearer $token';
 
     final uri = Uri.parse('$_cfBase/$name');
     debugPrint('[ScoreboardService] Calling Cloud Function: $uri');
-    
+
     try {
-      final response = await http.post(
-        uri,
-        headers: headers,
-        body: jsonEncode({'data': data}),
-      ).timeout(const Duration(seconds: 10), onTimeout: () {
-        throw Exception('Cloud Function request timed out');
-      });
+      final bodyPayload = jsonEncode({'data': data});
+      http.Response? response;
+      Object? lastTimeoutError;
+
+      // Cold starts on newly deployed functions can exceed short client timeouts,
+      // so we give one retry before surfacing an error to the profile dialog.
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await http
+              .post(uri, headers: headers, body: bodyPayload)
+              .timeout(
+                const Duration(seconds: 20),
+                onTimeout: () {
+                  throw Exception('Cloud Function request timed out');
+                },
+              );
+          break;
+        } catch (e) {
+          if (e.toString().toLowerCase().contains('timed out') &&
+              attempt == 0) {
+            lastTimeoutError = e;
+            continue;
+          }
+          rethrow;
+        }
+      }
+
+      if (response == null) {
+        throw lastTimeoutError ?? Exception('Cloud Function request timed out');
+      }
 
       Map<String, dynamic> body = const <String, dynamic>{};
       final trimmedBody = response.body.trim();
       final contentType = response.headers['content-type'] ?? '';
-      final looksLikeJson = trimmedBody.startsWith('{') ||
-          trimmedBody.startsWith('[');
+      final looksLikeJson =
+          trimmedBody.startsWith('{') || trimmedBody.startsWith('[');
 
       if (trimmedBody.isNotEmpty && looksLikeJson) {
         final decoded = jsonDecode(trimmedBody);
@@ -111,26 +142,27 @@ class ScoreboardService {
             : '';
         final bodyPreview = trimmedBody.isEmpty
             ? ''
-            : trimmedBody.replaceAll(RegExp(r'\s+'), ' ').substring(
-                  0,
-                  trimmedBody.length > 160 ? 160 : trimmedBody.length,
-                );
+            : trimmedBody
+                  .replaceAll(RegExp(r'\s+'), ' ')
+                  .substring(
+                    0,
+                    trimmedBody.length > 160 ? 160 : trimmedBody.length,
+                  );
         final errorMsg = message.isNotEmpty
             ? message
             : contentType.contains('text/html')
-                ? 'Cloud Function returned HTML (${response.statusCode}) instead of JSON. The endpoint may be unavailable, blocked by a firewall/proxy, or serving an error page. Preview: $bodyPreview'
-                : bodyPreview.isNotEmpty
-                    ? 'Cloud Function error ${response.statusCode}: $bodyPreview'
-                    : 'Cloud Function error ${response.statusCode}';
+            ? 'Cloud Function returned HTML (${response.statusCode}) instead of JSON. The endpoint may be unavailable, blocked by a firewall/proxy, or serving an error page. Preview: $bodyPreview'
+            : bodyPreview.isNotEmpty
+            ? 'Cloud Function error ${response.statusCode}: $bodyPreview'
+            : 'Cloud Function error ${response.statusCode}';
         _lastFunctionError = errorMsg;
         debugPrint('[ScoreboardService] Error: $errorMsg');
         throw Exception(errorMsg);
       }
       if (trimmedBody.isNotEmpty && !looksLikeJson) {
-        final preview = trimmedBody.replaceAll(RegExp(r'\s+'), ' ').substring(
-              0,
-              trimmedBody.length > 160 ? 160 : trimmedBody.length,
-            );
+        final preview = trimmedBody
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .substring(0, trimmedBody.length > 160 ? 160 : trimmedBody.length);
         final errorMsg = contentType.contains('text/html')
             ? 'Cloud Function returned HTML instead of JSON. The endpoint may be unavailable, blocked by a firewall/proxy, or serving an error page. Preview: $preview'
             : 'Cloud Function returned a non-JSON response. Preview: $preview';

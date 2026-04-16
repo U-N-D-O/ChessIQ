@@ -33,9 +33,13 @@ class FirebaseAuthService {
   String? _idToken;
   String? _refreshToken;
   DateTime? _expiry;
+  String? _lastError;
 
   /// Firebase UID for the anonymous user, or null before initialisation.
   String? get uid => _uid;
+
+  /// Last auth error captured from Identity Toolkit / Secure Token endpoints.
+  String? get lastError => _lastError;
 
   /// Loads persisted credentials and refreshes or creates a new account as
   /// needed. Should be called once in [main] before [runApp].
@@ -59,6 +63,7 @@ class FirebaseAuthService {
   /// Returns a valid ID token, refreshing it if it expires within 5 minutes.
   /// Returns null if offline or if sign-in failed.
   Future<String?> getIdToken() async {
+    _lastError = null;
     if (_idToken != null && !_isExpiredOrSoon()) return _idToken;
     if (_refreshToken != null) {
       await _refreshIdToken();
@@ -88,8 +93,11 @@ class FirebaseAuthService {
           refreshToken: data['refreshToken'] as String,
           expiresIn: int.parse(data['expiresIn'] as String),
         );
+      } else {
+        _lastError = _extractFirebaseError(response.body);
       }
-    } catch (_) {
+    } catch (e) {
+      _lastError = 'Anonymous sign-in failed: $e';
       // Best-effort. App continues with unauthenticated public RTDB reads.
     }
   }
@@ -110,13 +118,39 @@ class FirebaseAuthService {
           expiresIn: int.parse(data['expires_in'] as String),
         );
       } else {
+        _lastError = _extractFirebaseError(response.body);
         // Refresh token revoked – create a new anonymous account.
         _refreshToken = null;
         await _signInAnonymously();
       }
-    } catch (_) {
+    } catch (e) {
+      _lastError = 'Token refresh failed: $e';
       // Best-effort.
     }
+  }
+
+  String _extractFirebaseError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final error = decoded['error'];
+        if (error is Map<String, dynamic>) {
+          final message = error['message']?.toString();
+          if (message != null && message.isNotEmpty) {
+            if (message == 'CONFIGURATION_NOT_FOUND') {
+              return 'Firebase Auth error: CONFIGURATION_NOT_FOUND. Open Firebase Console > Authentication, click Get started, then enable Anonymous sign-in.';
+            }
+            if (message == 'OPERATION_NOT_ALLOWED') {
+              return 'Firebase Auth error: OPERATION_NOT_ALLOWED. Anonymous sign-in is disabled in Firebase Console > Authentication > Sign-in method.';
+            }
+            return 'Firebase Auth error: $message';
+          }
+        }
+      }
+    } catch (_) {
+      // Keep fallback below.
+    }
+    return 'Firebase Auth request failed with non-JSON response.';
   }
 
   Future<void> _persist({
@@ -129,6 +163,7 @@ class FirebaseAuthService {
     _idToken = idToken;
     _refreshToken = refreshToken;
     _expiry = DateTime.now().add(Duration(seconds: expiresIn));
+    _lastError = null;
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
       prefs.setString(_prefUid, uid),

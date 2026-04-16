@@ -13,6 +13,8 @@ class EconomyProvider extends ChangeNotifier {
       'store_reward_ad_watch_count_today_v1';
   static const String storeRewardAdLastWatchDayKey =
       'store_reward_ad_last_watch_day_v1';
+  static const String storeRewardAdMaxSeenTimeKey =
+      'store_reward_ad_max_seen_time_v1';
   static const int academyInterstitialRewardCoins = 10;
   static const int storeRewardCoins = 120;
   static const int defaultCoins = 120;
@@ -28,18 +30,20 @@ class EconomyProvider extends ChangeNotifier {
   DateTime? _lastStoreRewardAdAt;
   int _watchCountToday = 0;
   String _lastWatchDay = '';
+  DateTime _maxSeenDeviceTime = DateTime.fromMillisecondsSinceEpoch(0);
   bool _loaded = false;
 
   int get coins => _coins;
   bool get loaded => _loaded;
   DateTime? get lastStoreRewardAdAt => _lastStoreRewardAdAt;
   int get watchCountToday => _watchCountToday;
+  bool get storeRewardLockedUntilTomorrow {
+    final now = _trustedNow();
+    _rollStoreRewardDayIfNeeded(now);
+    return _watchCountToday >= 3;
+  }
 
   Duration get _currentCooldownDuration {
-    // If already watched 3 times today, locked until tomorrow
-    if (_watchCountToday >= 3) {
-      return const Duration(days: 1);
-    }
     // Use progressive cooldown based on watch count
     return progressiveCooldowns[_watchCountToday.clamp(
       0,
@@ -52,17 +56,20 @@ class EconomyProvider extends ChangeNotifier {
     if (lastWatch == null) {
       return Duration.zero;
     }
-    // Check if day has changed, reset watch count if so
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month}-${today.day}';
-    if (_lastWatchDay != todayStr) {
-      _watchCountToday = 0;
-      _lastWatchDay = todayStr;
+    final now = _trustedNow();
+    _rollStoreRewardDayIfNeeded(now);
+
+    // After the third watch, lock until the next local midnight.
+    if (_watchCountToday >= 3) {
+      final midnight = DateTime(now.year, now.month, now.day + 1);
+      final remaining = midnight.difference(now);
+      if (remaining.isNegative) {
+        return Duration.zero;
+      }
+      return remaining;
     }
 
-    final remaining = lastWatch
-        .add(_currentCooldownDuration)
-        .difference(DateTime.now());
+    final remaining = lastWatch.add(_currentCooldownDuration).difference(now);
     if (remaining.isNegative) {
       return Duration.zero;
     }
@@ -86,10 +93,14 @@ class EconomyProvider extends ChangeNotifier {
     final nextLastWatch = lastWatchMs == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(lastWatchMs);
+    final maxSeenMs = prefs.getInt(storeRewardAdMaxSeenTimeKey);
+    if (maxSeenMs != null) {
+      _maxSeenDeviceTime = DateTime.fromMillisecondsSinceEpoch(maxSeenMs);
+    }
+    final trustedNow = _trustedNow();
 
     // Load watch count and last watch day
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month}-${today.day}';
+    final todayStr = _dayStamp(trustedNow);
     final savedLastWatchDay =
         prefs.getString(storeRewardAdLastWatchDayKey) ?? '';
     int nextWatchCountToday =
@@ -116,6 +127,11 @@ class EconomyProvider extends ChangeNotifier {
     _watchCountToday = nextWatchCountToday;
     _lastWatchDay = nextLastWatchDay;
     _loaded = true;
+
+    await prefs.setInt(
+      storeRewardAdMaxSeenTimeKey,
+      _maxSeenDeviceTime.millisecondsSinceEpoch,
+    );
 
     if (notify && changed) {
       notifyListeners();
@@ -162,16 +178,17 @@ class EconomyProvider extends ChangeNotifier {
   }
 
   Future<bool> claimStoreRewardAd({bool notify = true}) async {
+    final now = _trustedNow();
+    _rollStoreRewardDayIfNeeded(now);
     if (!canClaimStoreReward) {
       return false;
     }
 
-    _lastStoreRewardAdAt = DateTime.now();
+    _lastStoreRewardAdAt = now;
     _coins = max(0, _coins + storeRewardCoins);
 
     // Increment watch count (reset if day changed)
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month}-${today.day}';
+    final todayStr = _dayStamp(now);
     if (_lastWatchDay != todayStr) {
       _watchCountToday = 1;
       _lastWatchDay = todayStr;
@@ -193,6 +210,10 @@ class EconomyProvider extends ChangeNotifier {
     );
     await prefs.setInt(storeRewardAdWatchCountTodayKey, _watchCountToday);
     await prefs.setString(storeRewardAdLastWatchDayKey, _lastWatchDay);
+    await prefs.setInt(
+      storeRewardAdMaxSeenTimeKey,
+      _maxSeenDeviceTime.millisecondsSinceEpoch,
+    );
 
     if (notify) {
       notifyListeners();
@@ -219,12 +240,22 @@ class EconomyProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     if (clearStoreRewardCooldown) {
       await prefs.remove(storeRewardAdLastWatchKey);
+      await prefs.remove(storeRewardAdWatchCountTodayKey);
+      await prefs.remove(storeRewardAdLastWatchDayKey);
     } else if (_lastStoreRewardAdAt != null) {
       await prefs.setInt(
         storeRewardAdLastWatchKey,
         _lastStoreRewardAdAt!.millisecondsSinceEpoch,
       );
+      await prefs.setInt(storeRewardAdWatchCountTodayKey, _watchCountToday);
+      await prefs.setString(storeRewardAdLastWatchDayKey, _lastWatchDay);
     }
+
+    _maxSeenDeviceTime = _trustedNow();
+    await prefs.setInt(
+      storeRewardAdMaxSeenTimeKey,
+      _maxSeenDeviceTime.millisecondsSinceEpoch,
+    );
 
     if (notify) {
       notifyListeners();
@@ -256,5 +287,30 @@ class EconomyProvider extends ChangeNotifier {
       storeStateKey,
       LocalIntegrityService.wrapJson(nextPayload, scope: _storeIntegrityScope),
     );
+  }
+
+  String _dayStamp(DateTime value) {
+    final year = value.year.toString().padLeft(4, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  DateTime _trustedNow() {
+    final now = DateTime.now();
+    if (_maxSeenDeviceTime.isAfter(now)) {
+      return _maxSeenDeviceTime;
+    }
+    _maxSeenDeviceTime = now;
+    return now;
+  }
+
+  void _rollStoreRewardDayIfNeeded(DateTime now) {
+    final today = _dayStamp(now);
+    if (_lastWatchDay == today) {
+      return;
+    }
+    _watchCountToday = 0;
+    _lastWatchDay = today;
   }
 }

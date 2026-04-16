@@ -145,6 +145,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   final Map<int, Timer> _botGhostArrowTimers = <int, Timer>{};
   int _ghostArrowIdSeed = 0;
   BotCharacter? _selectedBot;
+  int _vsBotSessionWins = 0;
+  int _vsBotSessionLosses = 0;
+  int _vsBotSessionDraws = 0;
   Completer<List<EngineLine>>? _botSearchCompleter;
   final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
   int _botSearchMultiPv = 1;
@@ -1267,6 +1270,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   String _storeRewardAdCountdownLabel(Duration remaining) {
+    final economy = context.read<EconomyProvider>();
+    if (economy.storeRewardLockedUntilTomorrow) {
+      return 'tomorrow';
+    }
     final totalMinutes = max(
       1,
       remaining.inMinutes + (remaining.inSeconds % 60 == 0 ? 0 : 1),
@@ -2677,7 +2684,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Score',
+                        'Session',
                         style: TextStyle(
                           color: Colors.white54,
                           fontSize: 12,
@@ -2685,14 +2692,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ),
                       Text(
-                        isDraw
-                            ? '½ - ½'
-                            : outcome == GameOutcome.whiteWin
-                            ? '1 - 0'
-                            : '0 - 1',
+                        'W $_vsBotSessionWins · L $_vsBotSessionLosses · D $_vsBotSessionDraws',
                         style: TextStyle(
                           color: accent,
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -3550,6 +3553,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _playVsBot = false;
       _selectedBot = null;
       _botThinking = false;
+      _vsBotSessionWins = 0;
+      _vsBotSessionLosses = 0;
+      _vsBotSessionDraws = 0;
       _gameOutcome = null;
       _activeSection = AppSection.puzzleAcademy;
     });
@@ -3560,6 +3566,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _playVsBot = false;
       _selectedBot = null;
       _botThinking = false;
+      _vsBotSessionWins = 0;
+      _vsBotSessionLosses = 0;
+      _vsBotSessionDraws = 0;
       _gameOutcome = null;
       _botSideChoice = BotSideChoice.random;
       _activeSection = AppSection.botSetup;
@@ -3802,11 +3811,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         BotSideChoice.black => false,
         BotSideChoice.random => _rng.nextBool(),
       };
+      final switchedOpponent = _selectedBot?.name != bot.name;
 
       setState(() {
         _activeSection = AppSection.analysis;
         _playVsBot = true;
         _selectedBot = bot;
+        if (switchedOpponent) {
+          _vsBotSessionWins = 0;
+          _vsBotSessionLosses = 0;
+          _vsBotSessionDraws = 0;
+        }
         _humanPlaysWhite = humanPlaysWhite;
         _botThinking = false;
         _analysisEditMode = false;
@@ -3846,6 +3861,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _playVsBot = false;
         _selectedBot = null;
         _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
       });
       await _restoreAnalysisWorkspace();
       unawaited(_ensureEngineStarted());
@@ -3862,6 +3880,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _playVsBot = false;
         _selectedBot = null;
         _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
         _gameOutcome = null;
         _resetQuizToSetupState();
         _activeSection = AppSection.menu;
@@ -3875,6 +3896,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _playVsBot = false;
         _selectedBot = null;
         _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
         _gameOutcome = null;
         _clearBotGhostArrows();
         _activeSection = AppSection.menu;
@@ -3887,6 +3911,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _playVsBot = false;
         _selectedBot = null;
         _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
         _gameOutcome = null;
         _activeSection = AppSection.menu;
       });
@@ -3916,6 +3943,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _playVsBot = false;
         _selectedBot = null;
         _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
         _gameOutcome = null;
         _activeSection = AppSection.menu;
       });
@@ -3938,6 +3968,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _playVsBot = false;
         _selectedBot = null;
         _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
         _menuReady = true;
         _introCompleted = true;
         _buttonUnlocked = true;
@@ -4702,6 +4735,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (gameOutcome != null) {
       _send('stop');
       setState(() {
+        _recordVsBotSessionResult(gameOutcome);
         _gameOutcome = gameOutcome;
         _botThinking = false;
       });
@@ -7069,44 +7103,48 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   if (_playVsBot && selectedBot != null)
                     Align(
                       alignment: Alignment.centerRight,
-                      child: Container(
-                        width: 34 * scale,
-                        height: 34 * scale,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(
-                              0xFF9ED8FF,
-                            ).withValues(alpha: 0.38),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: isDark ? 0.24 : 0.10,
-                              ),
-                              blurRadius: 10 * scale,
-                              offset: const Offset(0, 3),
+                      child: InkWell(
+                        onTap: _onBotAvatarTapped,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          width: 34 * scale,
+                          height: 34 * scale,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(
+                                0xFF9ED8FF,
+                              ).withValues(alpha: 0.38),
                             ),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: selectedBot.avatarAsset != null
-                              ? Image.asset(
-                                  selectedBot.avatarAsset!,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  color: Color.alphaBlend(
-                                    scheme.primary.withValues(alpha: 0.08),
-                                    scheme.surface,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    Icons.smart_toy_outlined,
-                                    color: const Color(0xFF9ED8FF),
-                                    size: 18 * scale,
-                                  ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha: isDark ? 0.24 : 0.10,
                                 ),
+                                blurRadius: 10 * scale,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: selectedBot.avatarAsset != null
+                                ? Image.asset(
+                                    selectedBot.avatarAsset!,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    color: Color.alphaBlend(
+                                      scheme.primary.withValues(alpha: 0.08),
+                                      scheme.surface,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      Icons.smart_toy_outlined,
+                                      color: const Color(0xFF9ED8FF),
+                                      size: 18 * scale,
+                                    ),
+                                  ),
+                          ),
                         ),
                       ),
                     ),
@@ -10229,6 +10267,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               _isCinematicThemeEnabled;
           final rewardAdRemaining = economy.remainingStoreRewardCooldown;
           final canWatchRewardAd = economy.canClaimStoreReward;
+          final lockedUntilTomorrow = economy.storeRewardLockedUntilTomorrow;
           final storeCoins = economy.coins;
           final sheetSurface = useMonochrome
               ? (isDark ? const Color(0xFF050505) : Colors.white)
@@ -10343,6 +10382,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       title: 'Watch Ad For Coins',
                       subtitle: canWatchRewardAd
                           ? 'Watch and earn +120 coins'
+                          : lockedUntilTomorrow
+                          ? 'Come back tomorrow for +120 coins'
                           : 'Earn +120 coins (cooldown active)',
                       priceLabel: 'Free',
                       enabled: canWatchRewardAd,
@@ -10350,6 +10391,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           ? null
                           : _buildStoreRewardCooldownPreview(
                               rewardAdRemaining,
+                              lockedUntilTomorrow: lockedUntilTomorrow,
                               useMonochrome: useMonochrome,
                             ),
                       actionLabel: canWatchRewardAd ? 'Watch' : 'Cooldown',
@@ -10701,12 +10743,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Widget _buildStoreRewardCooldownPreview(
     Duration remaining, {
+    required bool lockedUntilTomorrow,
     required bool useMonochrome,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final currentCooldown = context.read<EconomyProvider>().watchCountToday >= 3
-        ? const Duration(days: 1)
+        ? remaining
         : const [
             Duration(minutes: 5),
             Duration(minutes: 15),
@@ -10733,7 +10776,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             Icon(Icons.timer_outlined, size: 14, color: accent),
             const SizedBox(width: 6),
             Text(
-              'Available in ${_storeRewardAdCountdownLabel(remaining)}',
+              lockedUntilTomorrow
+                  ? 'Come back tomorrow'
+                  : 'Available in ${_storeRewardAdCountdownLabel(remaining)}',
               style: TextStyle(
                 color: scheme.onSurface.withValues(alpha: 0.72),
                 fontSize: 11.5,
@@ -10754,6 +10799,48 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ),
       ],
     );
+  }
+
+  void _recordVsBotSessionResult(GameOutcome outcome) {
+    if (!_playVsBot || _selectedBot == null) {
+      return;
+    }
+    if (outcome == GameOutcome.draw) {
+      _vsBotSessionDraws += 1;
+      return;
+    }
+    final humanWon =
+        outcome == GameOutcome.whiteWin && _humanPlaysWhite ||
+        outcome == GameOutcome.blackWin && !_humanPlaysWhite;
+    if (humanWon) {
+      _vsBotSessionWins += 1;
+    } else {
+      _vsBotSessionLosses += 1;
+    }
+  }
+
+  Future<void> _onBotAvatarTapped() async {
+    final bot = _selectedBot;
+    if (bot == null || !_playVsBot || !mounted) {
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    final messages = <String>[
+      '${bot.name} says: "I saw that move coming."',
+      '${bot.name} says: "Press me again for extra luck."',
+      '${bot.name} says: "Play bold. I dare you."',
+      '${bot.name} says: "I am calculating... dramatically."',
+    ];
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(messages[_rng.nextInt(messages.length)]),
+          duration: const Duration(milliseconds: 1700),
+        ),
+      );
   }
 
   Widget _buildThemeVaultCard(

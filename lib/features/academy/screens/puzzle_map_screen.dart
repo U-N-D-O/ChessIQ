@@ -54,6 +54,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   bool _didPrimeUi = false;
   bool _didShowAcademyProfilePrompt = false;
+  bool _pendingEducationInFlight = false;
+  bool _dismissedProfileSetupToMenu = false;
   String? _lastCelebrationKey;
   _LeaderboardScope _leaderboardScope = _LeaderboardScope.international;
   late final ConfettiController _confettiController;
@@ -109,9 +111,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      if (_dismissedProfileSetupToMenu) return;
       final provider = context.read<PuzzleAcademyProvider>();
       await provider.initialize();
       if (!mounted) return;
+      if (_dismissedProfileSetupToMenu) return;
       _didShowAcademyProfilePrompt = true;
       try {
         await _ensureAcademyProfile(provider);
@@ -125,6 +129,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   Future<void> _ensureAcademyProfile(PuzzleAcademyProvider provider) async {
     if (!mounted || !provider.initialized) return;
+    if (_dismissedProfileSetupToMenu) return;
     if (!provider.shouldAskForProfile) {
       // Best-effort sync for existing local profiles created before strict
       // backend registration was enforced.
@@ -182,6 +187,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       if (!mounted) return;
       if (result == null) {
         if (allowExitToMenu) {
+          _dismissedProfileSetupToMenu = true;
           widget.onBack();
         }
         return;
@@ -189,6 +195,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
       final handle = (result['handle'] ?? '').trim();
       final country = (result['country'] ?? '').trim();
+
+      // Keep the latest typed values so transient backend errors do not force
+      // the user to re-enter profile details on retry.
+      initialHandle = handle;
+      initialCountry = country;
 
       final status = await provider.registerAcademyProfile(
         handle: handle,
@@ -198,42 +209,44 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
       if (status == HandleAvailabilityStatus.verificationUnavailable) {
         final errorDetail = provider.lastRegistrationError ?? 'Unknown error';
-        final shouldRetry = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text('Registration Failed'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'ChessIQ could not register this profile right now. Please check your connection and try again.',
+        final shouldRetry =
+            await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: const Text('Registration Failed'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'ChessIQ could not register this profile right now. Please check your connection and try again.',
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Details: $errorDetail',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Details: $errorDetail',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey,
-                    ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Back to Menu'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Try Again'),
                   ),
                 ],
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Back to Menu'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Try Again'),
-              ),
-            ],
-          ),
-        ) ?? false;
-        
+            ) ??
+            false;
+
         if (!mounted) return;
         if (!shouldRetry) return;
         continue;
@@ -266,32 +279,40 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   Future<void> _showPendingEducation(PuzzleAcademyProvider provider) async {
-    if (!mounted || !provider.initialized) return;
-    if (provider.shouldAskForProfile) return;
+    if (_pendingEducationInFlight) return;
+    _pendingEducationInFlight = true;
+    try {
+      if (!mounted || !provider.initialized) return;
+      if (provider.shouldAskForProfile) return;
 
-    final unlockedNodes = provider.orderedNodes.where((node) => node.unlocked);
-    final firstUnlocked = unlockedNodes.isEmpty
-        ? null
-        : unlockedNodes.reduce((a, b) => a.startElo < b.startElo ? a : b);
-    if (firstUnlocked != null) {
-      final semester = provider.semesterForNode(firstUnlocked);
-      if (provider.shouldShowSemesterIntro(semester.id)) {
-        await _showSemesterIntroDialog(semester);
-        if (!mounted) return;
-        await provider.markSemesterSeen(semester.id);
+      final unlockedNodes = provider.orderedNodes.where(
+        (node) => node.unlocked,
+      );
+      final firstUnlocked = unlockedNodes.isEmpty
+          ? null
+          : unlockedNodes.reduce((a, b) => a.startElo < b.startElo ? a : b);
+      if (firstUnlocked != null) {
+        final semester = provider.semesterForNode(firstUnlocked);
+        if (provider.shouldShowSemesterIntro(semester.id)) {
+          await _showSemesterIntroDialog(semester);
+          if (!mounted) return;
+          await provider.markSemesterSeen(semester.id);
+        }
       }
-    }
 
-    if (provider.shouldShowGrandmasterOracle) {
-      await _showGrandmasterOracleDialog();
-      if (!mounted) return;
-      provider.consumeGrandmasterOracleTrigger();
-    }
+      if (provider.shouldShowGrandmasterOracle) {
+        await _showGrandmasterOracleDialog();
+        if (!mounted) return;
+        provider.consumeGrandmasterOracleTrigger();
+      }
 
-    if (provider.shouldShowBrainBreak) {
-      await _showBrainBreakDialog(provider);
-      if (!mounted) return;
-      provider.consumeBrainBreakTrigger();
+      if (provider.shouldShowBrainBreak) {
+        await _showBrainBreakDialog(provider);
+        if (!mounted) return;
+        provider.consumeBrainBreakTrigger();
+      }
+    } finally {
+      _pendingEducationInFlight = false;
     }
   }
 
@@ -836,6 +857,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
+          if (_dismissedProfileSetupToMenu) return;
           if (provider.initialized && provider.shouldAskForProfile) {
             if (!_didShowAcademyProfilePrompt) {
               _didShowAcademyProfilePrompt = true;

@@ -1,4 +1,4 @@
-﻿part of '../screens/chess_analysis_page.dart';
+﻿part of '../../analysis/screens/chess_analysis_page.dart';
 
 const String _viewedGambitsKey = 'viewed_gambits_v1';
 const String _quizStatsKey = 'quiz_stats_v1';
