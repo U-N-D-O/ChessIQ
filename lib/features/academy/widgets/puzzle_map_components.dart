@@ -632,6 +632,7 @@ class _PuzzleNodeCard extends StatelessWidget {
 
   Widget _buildCompactContent(BuildContext context, bool locked) {
     final scheme = Theme.of(context).colorScheme;
+    final hasStatusBadges = node.goldCrown || showGhost;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -661,13 +662,14 @@ class _PuzzleNodeCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       _InfoTag(
                         label: '${node.solvedCount}/${node.masteryTarget}',
                         accent: _accentBlue(context),
                       ),
-                      const SizedBox(width: 6),
                       if (bestExamScore != null)
                         _InfoTag(
                           label: bestExamGrade != null
@@ -680,21 +682,25 @@ class _PuzzleNodeCard extends StatelessWidget {
                 ],
               ),
             ),
-            _statusCluster(context),
           ],
         ),
+        if (hasStatusBadges) ...[
+          const SizedBox(height: 8),
+          _statusCluster(context),
+        ],
         const SizedBox(height: 10),
         if (locked || showExamButton)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 if (requiresPreviousSolveTarget)
                   _InfoTag(
                     label: '100 solves prev',
                     accent: _accentBlue(context),
                   ),
-                if (requiresPreviousSolveTarget) const SizedBox(width: 6),
                 if (requiresPreviousSemesterExamGate)
                   _InfoTag(
                     label: 'Prev sem exam',
@@ -757,22 +763,20 @@ class _PuzzleNodeCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Row(
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
           children: [
             if (locked && previousSolveRequirementText != null)
               _InfoTag(
                 label: previousSolveRequirementText!,
                 accent: _accentBlue(context),
               ),
-            if (locked && previousSolveRequirementText != null)
-              const SizedBox(width: 6),
             if (locked && lockedRequirementText != null)
               _InfoTag(
                 label: lockedRequirementText!,
                 accent: _accentGold(context),
               ),
-            if (locked && lockedRequirementText != null)
-              const SizedBox(width: 6),
             _InfoTag(
               label: locked ? 'Locked' : 'Training',
               accent: locked ? scheme.outline : _accentBlue(context),

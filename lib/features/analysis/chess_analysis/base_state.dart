@@ -4074,8 +4074,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _analysisEditMode = false;
       });
 
-      await _ensureEngineStarted();
       _resetBoard(initialLaunch: false, withIntro: true);
+      await _ensureEngineStarted();
 
       if (!mounted) return;
       setState(() {
@@ -8908,7 +8908,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 _topLines = [];
                 _currentDepth = 0;
               });
-              await _triggerButtonRipple();
               if (!mounted) return;
               _analyze();
               _addLog('Stockfish eval bar activated');
@@ -8982,59 +8981,86 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     size: 22,
                   )
                 : isEvalOnlyStage
-                ? Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Transform.translate(
-                        offset: Offset(
-                          cos(pulseT * pi * 2 * 3.0) * 10,
-                          sin(pulseT * pi * 2 * 3.0) * 10,
-                        ),
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD8B640),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFFD8B640,
-                                ).withValues(alpha: 0.72),
-                                blurRadius: 9,
+                ? Builder(
+                    builder: (context) {
+                      final Offset yellowOffset;
+                      final Offset blueOffset;
+                      if (introT < 0.32) {
+                        final p = Curves.easeOutCubic.transform(introT / 0.32);
+                        yellowOffset = Offset(-6 + (6 * p), -82 + (82 * p));
+                        blueOffset = Offset(6 - (6 * p), -62 + (62 * p));
+                      } else if (introT < 0.74) {
+                        final q = (introT - 0.32) / 0.42;
+                        final radius = (14 - (11 * Curves.easeIn.transform(q)))
+                            .clamp(3.0, 14.0);
+                        final fastAngle = q * pi * 2 * 5.5;
+                        yellowOffset = Offset(
+                          cos(fastAngle) * radius,
+                          sin(fastAngle) * radius,
+                        );
+                        blueOffset = Offset(
+                          cos(fastAngle + pi) * radius,
+                          sin(fastAngle + pi) * radius,
+                        );
+                      } else {
+                        final orbit = 12.0;
+                        final speed = 1.8;
+                        final angle = pulseT * pi * 2 * speed;
+                        yellowOffset = Offset(
+                          cos(angle) * orbit,
+                          sin(angle) * orbit,
+                        );
+                        blueOffset = Offset(
+                          cos(angle + pi) * orbit,
+                          sin(angle + pi) * orbit,
+                        );
+                      }
+
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Transform.translate(
+                            offset: yellowOffset,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD8B640),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFFD8B640,
+                                    ).withValues(alpha: 0.72),
+                                    blurRadius: 9,
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                      Transform.translate(
-                        offset: Offset(
-                          cos((pulseT * pi * 2 * 3.0) + pi) * 10,
-                          sin((pulseT * pi * 2 * 3.0) + pi) * 10,
-                        ),
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF3F6ED8),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF3F6ED8,
-                                ).withValues(alpha: 0.72),
-                                blurRadius: 9,
+                          Transform.translate(
+                            offset: blueOffset,
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3F6ED8),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF3F6ED8,
+                                    ).withValues(alpha: 0.72),
+                                    blurRadius: 9,
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                      Icon(
-                        Icons.bolt_rounded,
-                        size: 20,
-                        color: Colors.white.withValues(alpha: 0.88),
-                      ),
-                    ],
+                          _buildVsBotEvalBarGlyph(),
+                        ],
+                      );
+                    },
                   )
                 : _buildVsBotEvalBarGlyph(),
           );
@@ -9072,47 +9098,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final isMono = appTheme.isMonochrome || _isCinematicThemeEnabled;
     return Center(
       child: Container(
-        width: 24,
-        height: 12,
+        width: 34,
+        height: 16,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(3),
-          border: Border.all(
-            color: const Color(0xFFB9A46A).withValues(alpha: 0.65),
+          borderRadius: BorderRadius.circular(6),
+          gradient: LinearGradient(
+            colors: isMono
+                ? const [Color(0xFFFFFFFF), Color(0xFFFFFFFF)]
+                : const [
+                    Color(0xFFFF4F4F),
+                    Color(0xFFFF9148),
+                    Color(0xFFFFD74A),
+                    Color(0xFF7EDC8A),
+                  ],
+            stops: isMono ? null : [0.0, 0.33, 0.66, 1.0],
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFB9A46A).withValues(alpha: 0.24),
-              blurRadius: 6,
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
           ],
+          border: Border.all(
+            color: const Color(
+              0xFFFFFFFF,
+            ).withValues(alpha: isMono ? 0.9 : 0.16),
+            width: 1.2,
+          ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: Row(
-            children: isMono
-                ? const [
-                    Expanded(child: ColoredBox(color: Color(0xFFF5F7FA))),
-                    Expanded(child: ColoredBox(color: Color(0xFF12161D))),
-                  ]
-                : [
-                    Expanded(
-                      flex: 30,
-                      child: ColoredBox(color: const Color(0xFFFF4F4F)),
-                    ),
-                    Expanded(
-                      flex: 15,
-                      child: ColoredBox(color: const Color(0xFFFF9148)),
-                    ),
-                    Expanded(
-                      flex: 15,
-                      child: ColoredBox(color: const Color(0xFFFFD74A)),
-                    ),
-                    Expanded(
-                      flex: 40,
-                      child: ColoredBox(color: const Color(0xFF7EDC8A)),
-                    ),
-                  ],
-          ),
+          borderRadius: BorderRadius.circular(6),
+          child: CustomPaint(painter: _VsBotEvalBarPainter(isMono: isMono)),
         ),
       ),
     );
@@ -12323,5 +12340,63 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       player.dispose();
     }
     super.dispose();
+  }
+}
+
+class _VsBotEvalBarPainter extends CustomPainter {
+  const _VsBotEvalBarPainter({required this.isMono});
+
+  final bool isMono;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    if (isMono) {
+      paint.color = const Color(0xFFFFFFFF);
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width / 2, size.height), paint);
+      paint.color = const Color(0xFF000000);
+      canvas.drawRect(
+        Rect.fromLTWH(size.width / 2, 0, size.width / 2, size.height),
+        paint,
+      );
+    } else {
+      final segmentColors = <Color>[
+        const Color(0xFFFF4F4F),
+        const Color(0xFFFF9148),
+        const Color(0xFFFFD74A),
+        const Color(0xFF7EDC8A),
+      ];
+      final segmentWidth = size.width / segmentColors.length;
+      for (var i = 0; i < segmentColors.length; i++) {
+        paint.color = segmentColors[i];
+        canvas.drawRect(
+          Rect.fromLTWH(i * segmentWidth, 0, segmentWidth, size.height),
+          paint,
+        );
+      }
+    }
+
+    paint.color = Colors.white.withValues(alpha: 0.18);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(1.5, 2.0, size.width - 3.0, size.height - 4.0),
+        const Radius.circular(5),
+      ),
+      paint,
+    );
+
+    paint.color = Colors.black.withValues(alpha: 0.08);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(1.5, 1.5, size.width - 3.0, size.height - 3.0),
+        const Radius.circular(5),
+      ),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _VsBotEvalBarPainter oldDelegate) {
+    return oldDelegate.isMono != isMono;
   }
 }

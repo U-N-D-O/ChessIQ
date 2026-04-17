@@ -1,0 +1,7 @@
+00:00 +0: loading C:/src/ChessIQ/chessiq/test/features/academy/puzzle_map_screen_test.dart
+00:00 +0: Puzzle map builds in compact landscape without throwing
+10:00 +0 -1: Puzzle map builds in compact landscape without throwing [E]
+  TimeoutException after 0:10:00.000000: Test timed out after 10 minutes.
+  dart:isolate  _RawReceivePort._handleMessage
+  
+10:00 +0 -1: Some tests failed.

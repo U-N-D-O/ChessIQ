@@ -60,7 +60,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   String? _lastCelebrationKey;
   _LeaderboardScope _leaderboardScope = _LeaderboardScope.international;
   late final ConfettiController _confettiController;
-  final AudioPlayer _academyStoreSfxPlayer = AudioPlayer();
+  AudioPlayer? _academyStoreSfxPlayer;
   late final Ticker _academyBlueDotTicker;
   late final ValueNotifier<double> _academyBlueDotTime;
   late final double _academyBlueDotPhase;
@@ -100,7 +100,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     _confettiController.dispose();
     _academyBlueDotTicker.dispose();
     _academyBlueDotTime.dispose();
-    _academyStoreSfxPlayer.dispose();
+    _academyStoreSfxPlayer?.dispose();
     super.dispose();
   }
 
@@ -297,7 +297,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       final firstUnlocked = unlockedNodes.isEmpty
           ? null
           : unlockedNodes.reduce((a, b) => a.startElo < b.startElo ? a : b);
-      if (firstUnlocked != null) {
+      if (firstUnlocked != null && provider.semesters.isNotEmpty) {
         final semester = provider.semesterForNode(firstUnlocked);
         if (provider.shouldShowSemesterIntro(semester.id)) {
           await _showSemesterIntroDialog(semester);
@@ -912,9 +912,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     }
 
     try {
-      await _academyStoreSfxPlayer.stop();
-      await _academyStoreSfxPlayer.setReleaseMode(ReleaseMode.stop);
-      await _academyStoreSfxPlayer.play(
+      final player = _academyStoreSfxPlayer ??= AudioPlayer();
+      await player.stop();
+      await player.setReleaseMode(ReleaseMode.stop);
+      await player.play(
         AssetSource('sounds/academybuy.mp3'),
         mode: PlayerMode.lowLatency,
         volume: 1.0,
@@ -926,113 +927,127 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PuzzleAcademyProvider>(
-      builder: (context, provider, _) {
-        final materialTheme = Theme.of(context);
-        final scheme = materialTheme.colorScheme;
-        final isDark = materialTheme.brightness == Brightness.dark;
-        final themeProvider = context.watch<AppThemeProvider>();
-        final monochrome =
-            themeProvider.isMonochrome || widget.cinematicThemeEnabled;
+    return SafeArea(
+      child: Consumer<PuzzleAcademyProvider>(
+        builder: (context, provider, _) {
+          final materialTheme = Theme.of(context);
+          final scheme = materialTheme.colorScheme;
+          final isDark = materialTheme.brightness == Brightness.dark;
+          final themeProvider = context.watch<AppThemeProvider>();
+          final monochrome =
+              themeProvider.isMonochrome || widget.cinematicThemeEnabled;
 
-        if (provider.isLoading || !provider.initialized) {
-          return Center(child: _buildAcademyLoadingIndicator(materialTheme));
-        }
+          if (provider.isLoading || !provider.initialized) {
+            return Center(child: _buildAcademyLoadingIndicator(materialTheme));
+          }
 
-        _queuePostFrameWork(provider);
+          _queuePostFrameWork(provider);
 
-        return OrientationBuilder(
-          builder: (context, orientation) {
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 980;
-                final landscape = orientation == Orientation.landscape;
-                final grouped = _groupBySemester(provider);
-                final leadTone = monochrome
-                    ? const Color(0xFF808080)
-                    : scheme.primary;
-                final altTone = monochrome
-                    ? const Color(0xFFA6A6A6)
-                    : scheme.secondary;
-                final rootContent = Stack(
-                  children: [
-                    Positioned.fill(child: _buildAtmosphere(monochrome)),
-                    if (wide || landscape)
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: min(360, constraints.maxWidth * 0.34),
-                            child: _buildMasteryDashboard(
-                              provider,
-                              monochrome: monochrome,
+          return OrientationBuilder(
+            builder: (context, orientation) {
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 980;
+                  final aspectRatio =
+                      constraints.maxWidth / max(1.0, constraints.maxHeight);
+                  final useDualPaneLayout = wide || aspectRatio >= 1.0;
+                  final grouped = _groupBySemester(provider);
+                  final leadTone = monochrome
+                      ? const Color(0xFF808080)
+                      : scheme.primary;
+                  final altTone = monochrome
+                      ? const Color(0xFFA6A6A6)
+                      : scheme.secondary;
+                  final rootContent = Stack(
+                    children: [
+                      Positioned.fill(child: _buildAtmosphere(monochrome)),
+                      if (useDualPaneLayout)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Flexible(
+                              flex: 3,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: min(
+                                    360,
+                                    constraints.maxWidth * 0.34,
+                                  ),
+                                ),
+                                child: _buildMasteryDashboard(
+                                  provider,
+                                  monochrome: monochrome,
+                                ),
+                              ),
                             ),
+                            Flexible(
+                              flex: 7,
+                              child: _buildLandscapeMap(
+                                provider,
+                                grouped,
+                                themeProvider: themeProvider,
+                                monochrome: monochrome,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        _buildPortraitMap(
+                          provider,
+                          grouped,
+                          themeProvider: themeProvider,
+                          monochrome: monochrome,
+                        ),
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: IgnorePointer(
+                          child: ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirectionality: BlastDirectionality.explosive,
+                            emissionFrequency: 0.06,
+                            numberOfParticles: 22,
+                            maxBlastForce: 28,
+                            minBlastForce: 12,
+                            gravity: 0.14,
+                            colors: const [
+                              Color(0xFFD8B640),
+                              Color(0xFFECCF7A),
+                              Color(0xFFF4E9C2),
+                              Color(0xFFB98A1B),
+                            ],
                           ),
-                          Expanded(
-                            child: _buildLandscapeMap(
-                              provider,
-                              grouped,
-                              themeProvider: themeProvider,
-                              monochrome: monochrome,
-                            ),
+                        ),
+                      ),
+                    ],
+                  );
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color.alphaBlend(
+                            leadTone.withValues(alpha: isDark ? 0.16 : 0.12),
+                            scheme.surface,
+                          ),
+                          scheme.surface,
+                          Color.alphaBlend(
+                            altTone.withValues(alpha: isDark ? 0.10 : 0.08),
+                            scheme.surface,
                           ),
                         ],
-                      )
-                    else
-                      _buildPortraitMap(
-                        provider,
-                        grouped,
-                        themeProvider: themeProvider,
-                        monochrome: monochrome,
-                      ),
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: IgnorePointer(
-                        child: ConfettiWidget(
-                          confettiController: _confettiController,
-                          blastDirectionality: BlastDirectionality.explosive,
-                          emissionFrequency: 0.06,
-                          numberOfParticles: 22,
-                          maxBlastForce: 28,
-                          minBlastForce: 12,
-                          gravity: 0.14,
-                          colors: const [
-                            Color(0xFFD8B640),
-                            Color(0xFFECCF7A),
-                            Color(0xFFF4E9C2),
-                            Color(0xFFB98A1B),
-                          ],
-                        ),
+                        stops: const [0.0, 0.52, 1.0],
                       ),
                     ),
-                  ],
-                );
-
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color.alphaBlend(
-                          leadTone.withValues(alpha: isDark ? 0.16 : 0.12),
-                          scheme.surface,
-                        ),
-                        scheme.surface,
-                        Color.alphaBlend(
-                          altTone.withValues(alpha: isDark ? 0.10 : 0.08),
-                          scheme.surface,
-                        ),
-                      ],
-                      stops: const [0.0, 0.52, 1.0],
-                    ),
-                  ),
-                  child: rootContent,
-                );
-              },
-            );
-          },
-        );
-      },
+                    child: rootContent,
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -1064,9 +1079,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF5AAEE8).withValues(
-                      alpha: isDark ? 0.45 : 0.80,
-                    ),
+                    color: const Color(
+                      0xFF5AAEE8,
+                    ).withValues(alpha: isDark ? 0.45 : 0.80),
                     blurRadius: isDark ? 18 : 28,
                     spreadRadius: isDark ? 3 : 6,
                   ),
@@ -1081,24 +1096,26 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (cinematic
-                        ? const Color(0xFFB6BCC5)
-                        : const Color(0xFF6FE7FF))
-                    .withValues(
-                  alpha: cinematic
-                      ? (isDark ? 0.06 : 0.09)
-                      : (isDark ? 0.10 : 0.32),
-                ),
+                color:
+                    (cinematic
+                            ? const Color(0xFFB6BCC5)
+                            : const Color(0xFF6FE7FF))
+                        .withValues(
+                          alpha: cinematic
+                              ? (isDark ? 0.06 : 0.09)
+                              : (isDark ? 0.10 : 0.32),
+                        ),
                 boxShadow: [
                   BoxShadow(
-                    color: (cinematic
-                            ? const Color(0xFFB6BCC5)
-                            : const Color(0xFF0E7490))
-                        .withValues(
-                      alpha: cinematic
-                          ? (isDark ? 0.12 : 0.16)
-                          : (isDark ? 0.22 : 0.45),
-                    ),
+                    color:
+                        (cinematic
+                                ? const Color(0xFFB6BCC5)
+                                : const Color(0xFF0E7490))
+                            .withValues(
+                              alpha: cinematic
+                                  ? (isDark ? 0.12 : 0.16)
+                                  : (isDark ? 0.22 : 0.45),
+                            ),
                     blurRadius: cinematic ? 110 : (isDark ? 110 : 140),
                   ),
                 ],
@@ -1112,24 +1129,26 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               height: 220,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (cinematic
-                        ? const Color(0xFF9DA3AD)
-                        : const Color(0xFFD8B640))
-                    .withValues(
-                  alpha: cinematic
-                      ? (isDark ? 0.06 : 0.09)
-                      : (isDark ? 0.08 : 0.28),
-                ),
+                color:
+                    (cinematic
+                            ? const Color(0xFF9DA3AD)
+                            : const Color(0xFFD8B640))
+                        .withValues(
+                          alpha: cinematic
+                              ? (isDark ? 0.06 : 0.09)
+                              : (isDark ? 0.08 : 0.28),
+                        ),
                 boxShadow: [
                   BoxShadow(
-                    color: (cinematic
-                            ? const Color(0xFF9DA3AD)
-                            : const Color(0xFFBF8C00))
-                        .withValues(
-                      alpha: cinematic
-                          ? (isDark ? 0.10 : 0.14)
-                          : (isDark ? 0.16 : 0.42),
-                    ),
+                    color:
+                        (cinematic
+                                ? const Color(0xFF9DA3AD)
+                                : const Color(0xFFBF8C00))
+                            .withValues(
+                              alpha: cinematic
+                                  ? (isDark ? 0.10 : 0.14)
+                                  : (isDark ? 0.16 : 0.42),
+                            ),
                     blurRadius: cinematic ? 90 : (isDark ? 90 : 120),
                   ),
                 ],
@@ -1324,60 +1343,78 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required bool monochrome,
   }) {
     _ensureExpandedSemester(provider);
-    return CustomScrollView(
-      slivers: [
-        _buildSliverAppBar(
-          provider,
-          themeProvider: themeProvider,
-          monochrome: monochrome,
-        ),
-        for (final entry in grouped.entries) ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-              child: _SemesterHeader(
-                semester: entry.key,
-                progress: provider.semesterProgress(entry.key),
-                expanded: _expandedSemesterTitles.contains(entry.key.title),
-                nodeCount: entry.value.length,
-                monochrome: monochrome,
-                onTap: () {
-                  setState(() {
-                    final title = entry.key.title;
-                    if (_expandedSemesterTitles.contains(title)) {
-                      _expandedSemesterTitles.remove(title);
-                    } else {
-                      _expandedSemesterTitles.add(title);
-                    }
-                  });
-                },
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const horizontalPadding = 28.0;
+        const gridSpacing = 10.0;
+        const minTwoColumnTileWidth = 150.0;
+        final usableWidth = max(
+          220.0,
+          constraints.maxWidth - horizontalPadding,
+        );
+        final crossAxisCount =
+            usableWidth >= (minTwoColumnTileWidth * 2) + gridSpacing ? 2 : 1;
+        final totalSpacing = (crossAxisCount - 1) * gridSpacing;
+        final tileWidth = (usableWidth - totalSpacing) / crossAxisCount;
+        final targetTileHeight = crossAxisCount == 1 ? 190.0 : 228.0;
+        final childAspectRatio = tileWidth / targetTileHeight;
+
+        return CustomScrollView(
+          slivers: [
+            _buildSliverAppBar(
+              provider,
+              themeProvider: themeProvider,
+              monochrome: monochrome,
             ),
-          ),
-          if (_expandedSemesterTitles.contains(entry.key.title))
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 1.45,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _buildNodeTile(
-                    provider,
-                    entry.value[index],
-                    compact: true,
+            for (final entry in grouped.entries) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                  child: _SemesterHeader(
+                    semester: entry.key,
+                    progress: provider.semesterProgress(entry.key),
+                    expanded: _expandedSemesterTitles.contains(entry.key.title),
+                    nodeCount: entry.value.length,
                     monochrome: monochrome,
+                    onTap: () {
+                      setState(() {
+                        final title = entry.key.title;
+                        if (_expandedSemesterTitles.contains(title)) {
+                          _expandedSemesterTitles.remove(title);
+                        } else {
+                          _expandedSemesterTitles.add(title);
+                        }
+                      });
+                    },
                   ),
-                  childCount: entry.value.length,
                 ),
               ),
-            ),
-        ],
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-      ],
+              if (_expandedSemesterTitles.contains(entry.key.title))
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: childAspectRatio,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _buildNodeTile(
+                        provider,
+                        entry.value[index],
+                        compact: true,
+                        monochrome: monochrome,
+                      ),
+                      childCount: entry.value.length,
+                    ),
+                  ),
+                ),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
+        );
+      },
     );
   }
 
@@ -1780,6 +1817,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       }
       return;
     }
+
+    if (provider.semesters.isEmpty) {
+      return;
+    }
+
     final firstUnlocked = unlockedNodes.reduce(
       (a, b) => a.startElo < b.startElo ? a : b,
     );
@@ -1850,6 +1892,21 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       grouped[semester] = <EloNodeProgress>[];
     }
 
+    if (provider.semesters.isEmpty) {
+      // No semester metadata yet; keep the map stable by placing all nodes
+      // into a single fallback bucket.
+      grouped[SemesterRange(
+        id: 'fallback',
+        title: 'Academy',
+        minElo: 0,
+        maxElo: 9999,
+        intro: 'All available academy puzzles',
+      )] = List<EloNodeProgress>.from(
+        provider.orderedNodes,
+      );
+      return grouped;
+    }
+
     for (final node in provider.orderedNodes) {
       final semester = provider.semesterForNode(node);
       grouped.putIfAbsent(semester, () => <EloNodeProgress>[]).add(node);
@@ -1860,9 +1917,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     // Defensive fallback: keep portrait map stable even if semester metadata
     // and node ranges are temporarily out-of-sync during provider refresh.
     if (grouped.isEmpty && provider.orderedNodes.isNotEmpty) {
-      final fallback = provider.semesters.isNotEmpty
-          ? provider.semesters.first
-          : provider.semesterForNode(provider.orderedNodes.first);
+      final fallback = provider.semesters.first;
       grouped[fallback] = List<EloNodeProgress>.from(provider.orderedNodes);
     }
 

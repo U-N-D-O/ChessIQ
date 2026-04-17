@@ -117,7 +117,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
         title: 'Scoring',
         preview: '0.5x – 1.5x weight',
         detail:
-          'Exam score is out of 10,000: 80% comes from accuracy (correct answers out of 50) and 20% from speed (time remaining when finished). That raw score is then multiplied by an ELO weight: 0.5× at ELO 450 (lowest bracket) up to 1.5× at ELO 3999 (highest bracket). Higher brackets earn more leaderboard points for the same performance. Formula: weight = 0.5 + ((bracketELO − 450) / (3999 − 450)).',
+            'Exam score is out of 10,000: 80% comes from accuracy (correct answers out of 50) and 20% from speed (time remaining when finished). That raw score is then multiplied by an ELO weight: 0.5× at ELO 450 (lowest bracket) up to 1.5× at ELO 3999 (highest bracket). Higher brackets earn more leaderboard points for the same performance. Formula: weight = 0.5 + ((bracketELO − 450) / (3999 − 450)).',
         tone: const Color(0xFF92B7E6),
         icon: Icons.query_stats_rounded,
       ),
@@ -475,8 +475,8 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     final scale = tileScale.clamp(0.2, 1.0);
     final rawCount = max(baseCount, (baseCount / scale).round());
     final crossAxisCount = maxCrossAxisCount != null
-      ? rawCount.clamp(1, maxCrossAxisCount)
-      : rawCount;
+        ? rawCount.clamp(1, maxCrossAxisCount)
+        : rawCount;
     final totalSpacing = (crossAxisCount - 1) * _gridSpacing;
     final tileSize = (gridWidth - totalSpacing) / crossAxisCount;
     return _GridMetrics(
@@ -714,14 +714,37 @@ class _GridBackdropState extends State<_GridBackdrop>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = widget.isDark;
+    final baseSurface = scheme.surface;
+    final gradientStart = widget.monochrome
+        ? (isDark ? const Color(0xFF070707) : const Color(0xFFF8F5F0))
+        : Color.alphaBlend(
+            scheme.primary.withValues(alpha: isDark ? 0.24 : 0.08),
+            baseSurface,
+          );
+    final gradientEnd = widget.monochrome
+        ? (isDark ? const Color(0xFF141414) : const Color(0xFFECE8E2))
+        : Color.alphaBlend(
+            scheme.secondary.withValues(alpha: isDark ? 0.18 : 0.08),
+            baseSurface,
+          );
+    final accentTop = widget.monochrome
+        ? Colors.white10
+        : scheme.primary.withValues(alpha: isDark ? 0.12 : 0.16);
+    final accentBottom = widget.monochrome
+        ? Colors.white12
+        : scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.12);
+    final dotColor = isDark ? const Color(0xFF5AAEE8) : const Color(0xFF6FE7FF);
+    final dotShadowColor = dotColor.withValues(alpha: isDark ? 0.45 : 0.72);
+
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: widget.monochrome
-              ? const [Color(0xFF070707), Color(0xFF141414)]
-              : const [Color(0xFF06111B), Color(0xFF0E2234)],
+          colors: [gradientStart, gradientEnd],
         ),
       ),
       child: Stack(
@@ -734,9 +757,7 @@ class _GridBackdropState extends State<_GridBackdrop>
               height: 220,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.monochrome
-                    ? Colors.white10
-                    : const Color(0xFF6FE7FF).withValues(alpha: 0.12),
+                color: accentTop,
               ),
             ),
           ),
@@ -748,9 +769,7 @@ class _GridBackdropState extends State<_GridBackdrop>
               height: 260,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.monochrome
-                    ? Colors.white12
-                    : const Color(0xFFD8B640).withValues(alpha: 0.10),
+                color: accentBottom,
               ),
             ),
           ),
@@ -775,12 +794,10 @@ class _GridBackdropState extends State<_GridBackdrop>
               height: 16,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                color: dotColor.withValues(alpha: 0.92),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF5AAEE8).withValues(
-                      alpha: widget.isDark ? 0.45 : 0.72,
-                    ),
+                    color: dotShadowColor,
                     blurRadius: 18,
                     spreadRadius: 3,
                   ),
@@ -938,7 +955,9 @@ class _ModeChip extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // Use a visible cyan in dark mode, a deeper teal in light mode.
-    final accentCyan = isDark ? const Color(0xFF6FE7FF) : const Color(0xFF0E7490);
+    final accentCyan = isDark
+        ? const Color(0xFF6FE7FF)
+        : const Color(0xFF0E7490);
     final tone = selected ? accentCyan : scheme.onSurface;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
@@ -1091,9 +1110,7 @@ class _GridTile extends StatelessWidget {
       _ => (isDark ? Colors.white : Colors.black87).withValues(alpha: 0.90),
     };
     // In light mode use stronger fill alpha so tiles stand out.
-    final tileAlpha = enabled
-        ? (isDark ? 0.32 : 0.52)
-        : (isDark ? 0.18 : 0.35);
+    final tileAlpha = enabled ? (isDark ? 0.32 : 0.52) : (isDark ? 0.18 : 0.35);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
