@@ -80,20 +80,23 @@ class _GreyArrowPainter extends CustomPainter {
 
     final fromCenter = _squareCenter(size, from, flipped);
     final toCenter = _squareCenter(size, to, flipped);
+    final direction = toCenter - fromCenter;
+    final length = direction.distance;
+    if (length <= 0.001) return;
+    final unit = direction / length;
 
     final paint = Paint()
       ..color = const Color(0xFFBFC5CE).withValues(alpha: opacity)
       ..strokeWidth = size.width * 0.018
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-
-    canvas.drawLine(fromCenter, toCenter, paint);
-
-    final direction = toCenter - fromCenter;
-    final length = direction.distance;
-    if (length <= 0.001) return;
-    final unit = direction / length;
     final headBase = toCenter - unit * (size.width * 0.04);
+
+    // With round caps, trim by half the stroke so the visible shaft ends
+    // exactly at the arrowhead base instead of protruding into the tip.
+    final shaftEnd = headBase - unit * (paint.strokeWidth * 0.5);
+    canvas.drawLine(fromCenter, shaftEnd, paint);
+
     final perp = Offset(-unit.dy, unit.dx);
     final wing = size.width * 0.016;
 

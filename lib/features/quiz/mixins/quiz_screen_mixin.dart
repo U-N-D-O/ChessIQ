@@ -2267,8 +2267,14 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                     ? _buildMoveSequenceText(
                         displayedOptions[i],
                         fontSize: 14,
-                        color: scheme.onSurface.withValues(alpha: 0.90),
-                        fontWeight: FontWeight.w600,
+                        color: answersLocked && i == displayedCorrectIndex
+                            ? (isDark
+                                  ? const Color(0xFFE9FFF0)
+                                  : const Color(0xFF143522))
+                            : scheme.onSurface.withValues(alpha: 0.90),
+                        fontWeight: answersLocked && i == displayedCorrectIndex
+                            ? FontWeight.w800
+                            : FontWeight.w600,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       )
@@ -2276,6 +2282,17 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                         displayedOptions[i],
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: answersLocked && i == displayedCorrectIndex
+                              ? (isDark
+                                    ? const Color(0xFFE9FFF0)
+                                    : const Color(0xFF143522))
+                              : scheme.onSurface.withValues(alpha: 0.90),
+                          fontWeight:
+                              answersLocked && i == displayedCorrectIndex
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                        ),
                       ),
               ),
             ),
@@ -2287,33 +2304,59 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
       if (displayedPrompt.isEmpty) {
         return const SizedBox.shrink();
       }
+      final isGuessLine = displayedQuizMode == GambitQuizMode.guessLine;
       return Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
         decoration: BoxDecoration(
-          color: Color.alphaBlend(
-            scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
-            scheme.surface,
-          ).withValues(alpha: 0.90),
+          color: isGuessLine
+              ? Color.alphaBlend(
+                  const Color(
+                    0xFF5AAEE8,
+                  ).withValues(alpha: isDark ? 0.14 : 0.07),
+                  scheme.surface,
+                ).withValues(alpha: 0.95)
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+                  scheme.surface,
+                ).withValues(alpha: 0.90),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+          border: Border.all(
+            color: isGuessLine
+                ? const Color(
+                    0xFF5AAEE8,
+                  ).withValues(alpha: isDark ? 0.55 : 0.45)
+                : scheme.outline.withValues(alpha: 0.30),
+            width: isGuessLine ? 1.5 : 1.0,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (isGuessLine) ...[
+              Text(
+                'Complete this opening line:',
+                style: TextStyle(
+                  color: const Color(
+                    0xFF5AAEE8,
+                  ).withValues(alpha: isDark ? 0.85 : 0.75),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(height: 5),
+            ],
             Text(
               displayedPrompt,
               style: TextStyle(
-                color: displayedQuizMode == GambitQuizMode.guessLine
-                    ? scheme.onSurface.withValues(alpha: 0.92)
+                color: isGuessLine
+                    ? scheme.onSurface
                     : scheme.onSurface.withValues(alpha: 0.74),
-                fontSize: displayedQuizMode == GambitQuizMode.guessLine
-                    ? 14
-                    : 12,
-                fontWeight: displayedQuizMode == GambitQuizMode.guessLine
-                    ? FontWeight.w800
-                    : FontWeight.w600,
+                fontSize: isGuessLine ? 17 : 12,
+                fontWeight: isGuessLine ? FontWeight.w800 : FontWeight.w600,
+                height: isGuessLine ? 1.25 : null,
               ),
             ),
             if (displayedPromptFocus.isNotEmpty) ...[
@@ -2321,16 +2364,12 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
               Text(
                 displayedPromptFocus,
                 style: TextStyle(
-                  color: displayedQuizMode == GambitQuizMode.guessLine
+                  color: isGuessLine
                       ? const Color(0xFFFFE09E)
                       : const Color(0xFFFFD88A),
-                  fontSize: displayedQuizMode == GambitQuizMode.guessLine
-                      ? 18
-                      : 14,
+                  fontSize: isGuessLine ? 18 : 14,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: displayedQuizMode == GambitQuizMode.guessLine
-                      ? 0.2
-                      : 0.0,
+                  letterSpacing: isGuessLine ? 0.2 : 0.0,
                 ),
               ),
             ],
@@ -2370,6 +2409,17 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                             : 'Next Puzzle'),
                 ),
               ),
+      );
+    }
+
+    Widget buildQuizFeedbackText() {
+      // High-contrast colours that read clearly on both light and dark backgrounds.
+      final feedbackColor = isCorrectAnswer
+          ? (isDark ? const Color(0xFF6EF08A) : const Color(0xFF2F9E44))
+          : (isDark ? const Color(0xFFFFB347) : const Color(0xFFC97100));
+      return Text(
+        displayedFeedback,
+        style: TextStyle(color: feedbackColor, fontWeight: FontWeight.w700),
       );
     }
 
@@ -2465,15 +2515,7 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                                         top: 2,
                                         bottom: 8,
                                       ),
-                                      child: Text(
-                                        displayedFeedback,
-                                        style: TextStyle(
-                                          color: isCorrectAnswer
-                                              ? const Color(0xFF7EDC8A)
-                                              : const Color(0xFFFFB26A),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                                      child: buildQuizFeedbackText(),
                                     ),
                                   buildQuizPrimaryActionButton(),
                                 ],
@@ -2497,15 +2539,7 @@ mixin _QuizScreen on _ChessAnalysisPageStateBase {
                 if (displayedFeedback.isNotEmpty && !sideBySideLayout)
                   Padding(
                     padding: const EdgeInsets.only(top: 2, bottom: 8),
-                    child: Text(
-                      displayedFeedback,
-                      style: TextStyle(
-                        color: isCorrectAnswer
-                            ? const Color(0xFF7EDC8A)
-                            : const Color(0xFFFFB26A),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: buildQuizFeedbackText(),
                   ),
                 if (!sideBySideLayout) buildQuizPrimaryActionButton(),
               ],

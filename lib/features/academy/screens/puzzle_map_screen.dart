@@ -326,7 +326,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     PuzzleAcademyProvider provider,
     bool monochrome,
   ) {
-    final scheme = Theme.of(context).colorScheme;
+    final selectedInternational =
+        _leaderboardScope == _LeaderboardScope.international;
+    final selectedNational = _leaderboardScope == _LeaderboardScope.national;
+    final internationalTone = _accentCyan(context);
+    final nationalTone = _accentGold(context);
     final entries = provider.academyScoreboardEntries;
     final title = _leaderboardScope == _LeaderboardScope.international
         ? 'International Top 10'
@@ -347,15 +351,24 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   });
                   provider.refreshRemoteScoreboard(national: false);
                 },
-                style: FilledButton.styleFrom(
-                  backgroundColor:
-                      _leaderboardScope == _LeaderboardScope.international
-                      ? scheme.primary
-                      : scheme.surface,
-                  foregroundColor:
-                      _leaderboardScope == _LeaderboardScope.international
-                      ? scheme.onPrimary
-                      : scheme.onSurface,
+                style: _academyFilledButtonStyle(
+                  backgroundColor: selectedInternational
+                      ? internationalTone.withValues(
+                          alpha: monochrome ? 0.88 : 0.94,
+                        )
+                      : internationalTone.withValues(
+                          alpha: monochrome ? 0.20 : 0.14,
+                        ),
+                  foregroundColor: selectedInternational
+                      ? const Color(0xFF081517)
+                      : internationalTone,
+                  monochrome: monochrome,
+                  side: BorderSide(
+                    color: internationalTone.withValues(
+                      alpha: selectedInternational ? 0.92 : 0.42,
+                    ),
+                  ),
+                  radius: 18,
                 ),
                 child: const Text('International'),
               ),
@@ -369,15 +382,22 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   });
                   provider.refreshRemoteScoreboard(national: true);
                 },
-                style: FilledButton.styleFrom(
-                  backgroundColor:
-                      _leaderboardScope == _LeaderboardScope.national
-                      ? scheme.primary
-                      : scheme.surface,
-                  foregroundColor:
-                      _leaderboardScope == _LeaderboardScope.national
-                      ? scheme.onPrimary
-                      : scheme.onSurface,
+                style: _academyFilledButtonStyle(
+                  backgroundColor: selectedNational
+                      ? nationalTone.withValues(alpha: monochrome ? 0.88 : 0.94)
+                      : nationalTone.withValues(
+                          alpha: monochrome ? 0.22 : 0.15,
+                        ),
+                  foregroundColor: selectedNational
+                      ? const Color(0xFF191204)
+                      : nationalTone,
+                  monochrome: monochrome,
+                  side: BorderSide(
+                    color: nationalTone.withValues(
+                      alpha: selectedNational ? 0.92 : 0.44,
+                    ),
+                  ),
+                  radius: 18,
                 ),
                 child: const Text('National'),
               ),
@@ -389,6 +409,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         _LeaderboardCard(
           entries: entries,
           title: title,
+          monochrome: monochrome,
           emptyLabel: 'Complete an exam to post your first Academy score.',
         ),
       ],
@@ -555,6 +576,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required String message,
   }) async {
     if (!mounted) return;
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -563,6 +587,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
+            style: _academyFilledButtonStyle(
+              backgroundColor: Theme.of(dialogContext).colorScheme.primary,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onPrimary,
+              monochrome: monochrome,
+            ),
             child: const Text('OK'),
           ),
         ],
@@ -753,6 +782,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         title: 'Hint Pack',
                         subtitle: '+3 Smart Hints',
                         price: '25 coins',
+                        monochrome:
+                            context.read<AppThemeProvider>().isMonochrome ||
+                            widget.cinematicThemeEnabled,
                         onBuy: () async {
                           final ok = await liveProvider.buyHintPack();
                           if (!mounted || !ok) return;
@@ -765,6 +797,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         title: 'Skip Pack',
                         subtitle: '+2 Tactical Skips',
                         price: '35 coins',
+                        monochrome:
+                            context.read<AppThemeProvider>().isMonochrome ||
+                            widget.cinematicThemeEnabled,
                         onBuy: () async {
                           final ok = await liveProvider.buySkipPack();
                           if (!mounted || !ok) return;
@@ -778,6 +813,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         subtitle:
                             'Ready for a new identity? Change your nickname.',
                         price: '500 coins',
+                        monochrome:
+                            context.read<AppThemeProvider>().isMonochrome ||
+                            widget.cinematicThemeEnabled,
                         onBuy: () async {
                           final ok = await liveProvider.buyNicknameReset();
                           if (!mounted) return;
@@ -808,6 +846,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         subtitle:
                             'Moved to a new place? Update your country/region.',
                         price: '500 coins',
+                        monochrome:
+                            context.read<AppThemeProvider>().isMonochrome ||
+                            widget.cinematicThemeEnabled,
                         onBuy: () async {
                           final ok = await liveProvider.buyCountryReset();
                           if (!mounted) return;
@@ -836,9 +877,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         onPressed: widget.onOpenMainStore,
                         icon: const Icon(Icons.storefront_outlined),
                         label: const Text('Open Store'),
-                        style: FilledButton.styleFrom(
+                        style: _academyFilledButtonStyle(
                           backgroundColor: scheme.surface,
                           foregroundColor: scheme.onSurface,
+                          monochrome:
+                              context.read<AppThemeProvider>().isMonochrome ||
+                              widget.cinematicThemeEnabled,
                           side: BorderSide(
                             color: scheme.outline.withValues(alpha: 0.30),
                           ),
@@ -846,9 +890,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                             vertical: 14,
                             horizontal: 16,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                          radius: 16,
                         ),
                       ),
                     ],
@@ -889,9 +931,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         final materialTheme = Theme.of(context);
         final scheme = materialTheme.colorScheme;
         final isDark = materialTheme.brightness == Brightness.dark;
+        final themeProvider = context.watch<AppThemeProvider>();
         final monochrome =
-            context.watch<AppThemeProvider>().isMonochrome ||
-            widget.cinematicThemeEnabled;
+            themeProvider.isMonochrome || widget.cinematicThemeEnabled;
 
         if (provider.isLoading || !provider.initialized) {
           return Center(child: _buildAcademyLoadingIndicator(materialTheme));
@@ -929,6 +971,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                             child: _buildLandscapeMap(
                               provider,
                               grouped,
+                              themeProvider: themeProvider,
                               monochrome: monochrome,
                             ),
                           ),
@@ -938,6 +981,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       _buildPortraitMap(
                         provider,
                         grouped,
+                        themeProvider: themeProvider,
                         monochrome: monochrome,
                       ),
                     Align(
@@ -970,12 +1014,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       end: Alignment.bottomRight,
                       colors: [
                         Color.alphaBlend(
-                          leadTone.withValues(alpha: isDark ? 0.16 : 0.06),
+                          leadTone.withValues(alpha: isDark ? 0.16 : 0.12),
                           scheme.surface,
                         ),
                         scheme.surface,
                         Color.alphaBlend(
-                          altTone.withValues(alpha: isDark ? 0.10 : 0.04),
+                          altTone.withValues(alpha: isDark ? 0.10 : 0.08),
                           scheme.surface,
                         ),
                       ],
@@ -993,6 +1037,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   Widget _buildAtmosphere(bool cinematic) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return IgnorePointer(
       child: Stack(
         children: [
@@ -1019,9 +1064,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF5AAEE8).withValues(alpha: 0.45),
-                    blurRadius: 18,
-                    spreadRadius: 3,
+                    color: const Color(0xFF5AAEE8).withValues(
+                      alpha: isDark ? 0.45 : 0.80,
+                    ),
+                    blurRadius: isDark ? 18 : 28,
+                    spreadRadius: isDark ? 3 : 6,
                   ),
                 ],
               ),
@@ -1034,19 +1081,25 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color:
-                    (cinematic
-                            ? const Color(0xFFB6BCC5)
-                            : const Color(0xFF6FE7FF))
-                        .withValues(alpha: cinematic ? 0.06 : 0.10),
+                color: (cinematic
+                        ? const Color(0xFFB6BCC5)
+                        : const Color(0xFF6FE7FF))
+                    .withValues(
+                  alpha: cinematic
+                      ? (isDark ? 0.06 : 0.09)
+                      : (isDark ? 0.10 : 0.32),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color:
-                        (cinematic
-                                ? const Color(0xFFB6BCC5)
-                                : const Color(0xFF6FE7FF))
-                            .withValues(alpha: cinematic ? 0.12 : 0.22),
-                    blurRadius: 110,
+                    color: (cinematic
+                            ? const Color(0xFFB6BCC5)
+                            : const Color(0xFF0E7490))
+                        .withValues(
+                      alpha: cinematic
+                          ? (isDark ? 0.12 : 0.16)
+                          : (isDark ? 0.22 : 0.45),
+                    ),
+                    blurRadius: cinematic ? 110 : (isDark ? 110 : 140),
                   ),
                 ],
               ),
@@ -1059,19 +1112,25 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               height: 220,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color:
-                    (cinematic
-                            ? const Color(0xFF9DA3AD)
-                            : const Color(0xFFD8B640))
-                        .withValues(alpha: cinematic ? 0.06 : 0.08),
+                color: (cinematic
+                        ? const Color(0xFF9DA3AD)
+                        : const Color(0xFFD8B640))
+                    .withValues(
+                  alpha: cinematic
+                      ? (isDark ? 0.06 : 0.09)
+                      : (isDark ? 0.08 : 0.28),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color:
-                        (cinematic
-                                ? const Color(0xFF9DA3AD)
-                                : const Color(0xFFD8B640))
-                            .withValues(alpha: cinematic ? 0.10 : 0.16),
-                    blurRadius: 90,
+                    color: (cinematic
+                            ? const Color(0xFF9DA3AD)
+                            : const Color(0xFFBF8C00))
+                        .withValues(
+                      alpha: cinematic
+                          ? (isDark ? 0.10 : 0.14)
+                          : (isDark ? 0.16 : 0.42),
+                    ),
+                    blurRadius: cinematic ? 90 : (isDark ? 90 : 120),
                   ),
                 ],
               ),
@@ -1176,12 +1235,17 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   Widget _buildPortraitMap(
     PuzzleAcademyProvider provider,
     Map<SemesterRange, List<EloNodeProgress>> grouped, {
+    required AppThemeProvider themeProvider,
     required bool monochrome,
   }) {
     _ensureExpandedSemester(provider, autoExpandFirstUnlocked: false);
     return CustomScrollView(
       slivers: [
-        _buildSliverAppBar(provider, monochrome: monochrome),
+        _buildSliverAppBar(
+          provider,
+          themeProvider: themeProvider,
+          monochrome: monochrome,
+        ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -1195,6 +1259,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               total: provider.dailyPuzzles.length,
               completed: provider.completedTodayDailyCount,
               hasTodayPuzzle: provider.hasTodayDailyPuzzle,
+              monochrome: monochrome,
               onTap: () => _openTodayDailyPuzzle(provider, monochrome),
             ),
           ),
@@ -1214,6 +1279,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 progress: provider.semesterProgress(entry.key),
                 expanded: _expandedSemesterTitles.contains(entry.key.title),
                 nodeCount: entry.value.length,
+                monochrome: monochrome,
                 onTap: () {
                   setState(() {
                     final title = entry.key.title;
@@ -1254,12 +1320,17 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   Widget _buildLandscapeMap(
     PuzzleAcademyProvider provider,
     Map<SemesterRange, List<EloNodeProgress>> grouped, {
+    required AppThemeProvider themeProvider,
     required bool monochrome,
   }) {
     _ensureExpandedSemester(provider);
     return CustomScrollView(
       slivers: [
-        _buildSliverAppBar(provider, monochrome: monochrome),
+        _buildSliverAppBar(
+          provider,
+          themeProvider: themeProvider,
+          monochrome: monochrome,
+        ),
         for (final entry in grouped.entries) ...[
           SliverToBoxAdapter(
             child: Padding(
@@ -1269,6 +1340,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 progress: provider.semesterProgress(entry.key),
                 expanded: _expandedSemesterTitles.contains(entry.key.title),
                 nodeCount: entry.value.length,
+                monochrome: monochrome,
                 onTap: () {
                   setState(() {
                     final title = entry.key.title;
@@ -1311,6 +1383,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   SliverAppBar _buildSliverAppBar(
     PuzzleAcademyProvider provider, {
+    required AppThemeProvider themeProvider,
     required bool monochrome,
   }) {
     final theme = Theme.of(context);
@@ -1332,7 +1405,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       actions: [
         IconButton(
           tooltip: 'Settings',
-          onPressed: () => _openQuickThemeSettings(),
+          onPressed: () => _openQuickThemeSettings(themeProvider),
           icon: const Icon(Icons.settings_outlined),
         ),
         Padding(
@@ -1367,6 +1440,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   color: scheme.onSurface,
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
+                  letterSpacing: monochrome ? 0.22 : 0,
+                  shadows: _academyMonoTextGlow(
+                    monochrome ? const Color(0xFFDCE5EE) : scheme.primary,
+                    monochrome: monochrome,
+                    strength: 1.1,
+                  ),
                 ),
               ),
             ],
@@ -1413,10 +1492,21 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Mastery Dashboard',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: monochrome ? 0.24 : 0,
+                    shadows: _academyMonoTextGlow(
+                      monochrome
+                          ? const Color(0xFFE7E2DA)
+                          : Theme.of(context).colorScheme.primary,
+                      monochrome: monochrome,
+                      strength: 1.15,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1427,6 +1517,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           _DashboardPanel(
             title: 'Current Title',
             accent: const Color(0xFFD8B640),
+            monochrome: monochrome,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1459,6 +1550,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           _DashboardPanel(
             title: 'Semester Progress',
             accent: const Color(0xFF6FE7FF),
+            monochrome: monochrome,
             child: Column(
               children: provider.semesters.map((semester) {
                 final pct = (provider.semesterProgress(semester) * 100).round();
@@ -1514,6 +1606,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             total: provider.dailyPuzzles.length,
             completed: provider.completedTodayDailyCount,
             hasTodayPuzzle: provider.hasTodayDailyPuzzle,
+            monochrome: monochrome,
             onTap: () => _openTodayDailyPuzzle(provider, monochrome),
           ),
           const SizedBox(height: 12),
@@ -1624,6 +1717,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         node,
         provider.progress,
       ),
+      monochrome: monochrome,
       onTap: !node.unlocked
           ? null
           : () async {
@@ -1719,25 +1813,33 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  Future<void> _openQuickThemeSettings() async {
-    final theme = context.read<AppThemeProvider>();
+  Future<void> _openQuickThemeSettings(AppThemeProvider themeProvider) async {
+    if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
     final soundEnabled = !(prefs.getBool(_muteSoundsKey) ?? false);
     final hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
 
     if (!mounted) return;
-    await showAcademyThemeSettingsSheet(
-      context: context,
-      themeProvider: theme,
-      soundEnabled: soundEnabled,
-      hapticsEnabled: hapticsEnabled,
-      onSoundEnabledChanged: (enabled) async {
-        await prefs.setBool(_muteSoundsKey, !enabled);
-      },
-      onHapticsEnabledChanged: (enabled) async {
-        await prefs.setBool(_hapticsEnabledKey, enabled);
-      },
-    );
+    try {
+      await showAcademyThemeSettingsSheet(
+        context: context,
+        themeProvider: themeProvider,
+        soundEnabled: soundEnabled,
+        hapticsEnabled: hapticsEnabled,
+        onSoundEnabledChanged: (enabled) async {
+          await prefs.setBool(_muteSoundsKey, !enabled);
+        },
+        onHapticsEnabledChanged: (enabled) async {
+          await prefs.setBool(_hapticsEnabledKey, enabled);
+        },
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await _showStatusDialog(
+        title: 'Settings Unavailable',
+        message: 'Academy settings could not be opened right now.',
+      );
+    }
   }
 
   Map<SemesterRange, List<EloNodeProgress>> _groupBySemester(

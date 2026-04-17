@@ -106,6 +106,367 @@ String? _knownOpeningNameForRank(int rank, String openingName) {
   return _knowsOpeningNameForRank(rank, openingName) ? openingName : null;
 }
 
+String _normalizeNotationForScenario(String notation) {
+  var cleaned = notation.trim();
+  cleaned = cleaned.replaceAll(RegExp(r'[+#?!]+$'), '');
+  return cleaned;
+}
+
+String? _detectMoveSequenceScenario({
+  required String? lastNotation,
+  required int moveCount,
+  required bool isEndgame,
+}) {
+  if (lastNotation == null || lastNotation.trim().isEmpty) {
+    return null;
+  }
+
+  final raw = lastNotation.trim();
+  final norm = _normalizeNotationForScenario(raw);
+  if (norm == 'O-O' || norm == 'O-O-O') {
+    return null;
+  }
+
+  final isCapture = norm.contains('x');
+  final isCheck = raw.contains('+');
+  if (isCapture && isCheck) {
+    return 'captureWithCheck';
+  }
+
+  if (moveCount <= 8) {
+    const centralMoves = {
+      'e4',
+      'd4',
+      'e5',
+      'd5',
+      'c4',
+      'c5',
+      'f4',
+      'f5',
+      'exd5',
+      'dxe5',
+      'cxd5',
+      'dxc4',
+    };
+    if (centralMoves.contains(norm)) {
+      return 'openingCentralClaim';
+    }
+  }
+
+  if (moveCount <= 10 && RegExp(r'^[NB][a-h][1-8]$').hasMatch(norm)) {
+    return 'minorPieceDevelopment';
+  }
+
+  if (moveCount <= 12 && norm.startsWith('Q')) {
+    return 'earlyQueenSortie';
+  }
+
+  if (moveCount >= 14 && norm.startsWith('R')) {
+    return 'rookActivation';
+  }
+
+  if (isEndgame && RegExp(r'^K[a-h][1-8]$').hasMatch(norm)) {
+    return 'kingActivationEndgame';
+  }
+
+  if (isEndgame && RegExp(r'^[a-h][1-8](=[QRBN])?$').hasMatch(norm)) {
+    final rank = norm[1];
+    if (rank == '2' || rank == '7' || rank == '1' || rank == '8') {
+      return 'pawnRaceEndgame';
+    }
+  }
+
+  if (isCheck && moveCount >= 10) {
+    return 'forcingCheck';
+  }
+
+  return null;
+}
+
+// ignore: unused_element
+String? _moveSequenceScenarioLine({
+  required int rank,
+  required int seed,
+  required String? lastNotation,
+  required int moveCount,
+  required bool isEndgame,
+  required bool lastByHuman,
+}) {
+  final scenario = _detectMoveSequenceScenario(
+    lastNotation: lastNotation,
+    moveCount: moveCount,
+    isEndgame: isEndgame,
+  );
+  if (scenario == null) {
+    return null;
+  }
+
+  switch (rank) {
+    case 1:
+      switch (scenario) {
+        case 'openingCentralClaim':
+          return _p(seed, [
+            'Oh!! Center pawns already?? This got serious so fast 🐹',
+            'The middle squares are crowded now!! I am overwhelmed but excited 🌸',
+            'Big center move!! Is this where the real chess starts?? 🐹',
+          ]);
+        case 'minorPieceDevelopment':
+          return _p(seed, [
+            'The horsey/hat piece came out early!! Very professional vibes 🐹',
+            'Development move!! I know that word from tutorials!! 🌸',
+            'You are bringing pieces out nicely!! I am still naming mine 😵',
+          ]);
+        case 'earlyQueenSortie':
+          return _p(seed, [
+            'Queen out already?! She is so brave!! 👑',
+            'Early queen adventure!! That feels dangerous and cool 🐹',
+            'Wow straight to queen business!! No warmup, huh?? 🌸',
+          ]);
+        case 'captureWithCheck':
+          return _p(seed, [
+            'You took something AND gave check?? That is so mean!! 😱',
+            'Double trouble move!! Capture plus check is wild 🐹💥',
+            'That move did two things at once!! I can barely do one 😵',
+          ]);
+        case 'rookActivation':
+          return _p(seed, [
+            'The tower is active now!! The board is getting spicy 🏰',
+            'Rook move!! Big straight-line energy incoming 🐹',
+            'The rook joined the party!! Everyone stay calm 🌸',
+          ]);
+        case 'kingActivationEndgame':
+          return _p(seed, [
+            'King is walking around now?! Endgame is so weird 🐹',
+            'The king is fighting too!! I forgot kings do that later 🌸',
+            'Endgame king march!! Tiny steps, huge stress 😵',
+          ]);
+        case 'pawnRaceEndgame':
+          return _p(seed, [
+            'Pawn race!! GO LITTLE GUY GOOO 🐹💨',
+            'That pawn is almost famous now!! Keep running 🌸',
+            'Endgame sprint!! Someone is about to promote 😱',
+          ]);
+        case 'forcingCheck':
+          return _p(seed, [
+            'Another check?! My king needs a vacation 🐹',
+            'Check pressure again!! No one can relax here 😵',
+            'The checks keep coming!! This feels like a puzzle 🌸',
+          ]);
+      }
+      break;
+    case 2:
+      switch (scenario) {
+        case 'openingCentralClaim':
+          return _p(seed, [
+            'Central pawns. Solid fundamentals. I should try those sometime.',
+            'Center claimed early. This is already more principled than my usual games.',
+            'Good central structure. I can still ruin this somehow, but still.',
+          ]);
+        case 'minorPieceDevelopment':
+          return _p(seed, [
+            'Minor pieces developed on time. A concept I deeply respect and rarely execute.',
+            'Nice development. Coordinated pieces usually beat my improvisation.',
+            'Clean development sequence. I should be worried. I am worried.',
+          ]);
+        case 'earlyQueenSortie':
+          return _p(seed, [
+            'Early queen move. Brave. Also usually punishable. Unless I miss it.',
+            'Queen out early. I should gain tempo. I probably will not.',
+            'That queen sortie is ambitious. My response will be... questionable.',
+          ]);
+        case 'captureWithCheck':
+          return _p(seed, [
+            'Capture with check. Efficient and painful. Nice move.',
+            'You took material and forced king movement. That is textbook misery for me.',
+            'Tactical double hit. This is exactly the kind of thing I miss.',
+          ]);
+        case 'rookActivation':
+          return _p(seed, [
+            'Rook activated. Open files are usually where I blunder fastest.',
+            'Your rook found activity. Mine are still filing paperwork.',
+            'Rook lift or file pressure. Great. Exactly what I needed against me.',
+          ]);
+        case 'kingActivationEndgame':
+          return _p(seed, [
+            'King activity in the endgame. Correct technique. Annoyingly correct.',
+            'Centralized king. I know this principle. I still forget it in practice.',
+            'Endgame king march. Sharp play. My king is usually late to that party.',
+          ]);
+        case 'pawnRaceEndgame':
+          return _p(seed, [
+            'Pawn race. One tempo decides everything. I hate this phase.',
+            'Passed pawn sprint. Time to calculate accurately. I am in danger.',
+            'Endgame pawn race. This is where my confidence goes to die.',
+          ]);
+        case 'forcingCheck':
+          return _p(seed, [
+            'Another forcing check. My king is getting evicted square by square.',
+            'Checks in sequence. Comfortable for you, stressful for me.',
+            'You keep checking. I keep pretending this is under control.',
+          ]);
+      }
+      break;
+    case 3:
+      switch (scenario) {
+        case 'openingCentralClaim':
+          return _p(seed, [
+            'CENTER PAWNS CLAIMED!! THAT IS CORE STRENGTH FOR THE POSITION!! 💪',
+            'EARLY CENTER CONTROL!! WE ARE BUILDING A CHESS PHYSIQUE!! 🐕💪',
+            'CENTRE GAME STRONG!! THIS IS FUNDAMENTAL TRAINING!! 💪',
+          ]);
+        case 'minorPieceDevelopment':
+          return _p(seed, [
+            'MINOR PIECES OUT EARLY!! PERFECT WARM-UP SETS!! 🐕',
+            'KNIGHTS AND BISHOPS ACTIVATED!! COORDINATION GAINS!! 💪',
+            'DEVELOPMENT SEQUENCE CLEAN!! THAT IS PROFESSIONAL FORM!! 🐕💪',
+          ]);
+        case 'earlyQueenSortie':
+          return _p(seed, [
+            'EARLY QUEEN RAID!! BIG LIFT, BIG RISK!! 💪',
+            'QUEEN OUT FAST!! AGGRESSIVE TRAINING STYLE!! 🐕🔥',
+            'EARLY QUEEN PRESSURE!! NO FEAR CHESS!! 💪',
+          ]);
+        case 'captureWithCheck':
+          return _p(seed, [
+            'CAPTURE PLUS CHECK!! THAT IS A SUPERSET TACTIC!! 🐕💥',
+            'DOUBLE IMPACT MOVE!! YOU LIFTED MATERIAL AND INITIATIVE!! 💪',
+            'CHECK WITH A CAPTURE?! THAT IS MAX-INTENSITY CHESS!! 🐕💪',
+          ]);
+        case 'rookActivation':
+          return _p(seed, [
+            'ROOK ACTIVATED ON THE FILE!! HEAVY EQUIPMENT IS ONLINE!! 💪',
+            'ROOK LIFT ENERGY!! THIS IS THE DEADLIFT OF MIDDLEGAMES!! 🐕',
+            'THE ROOK IS WORKING NOW!! BIG BOARD PRESSURE!! 💪',
+          ]);
+        case 'kingActivationEndgame':
+          return _p(seed, [
+            'KING IN THE FIGHT!! ENDGAME CARDIO MODE!! 🐕💨',
+            'ACTIVE KING!! FINAL SET MENTALITY!! 💪',
+            'ENDGAME KING MARCH!! NO SPECTATORS, ONLY GRIND!! 🐕💪',
+          ]);
+        case 'pawnRaceEndgame':
+          return _p(seed, [
+            'PAWN RACE!! SPRINT TO PROMOTION!! MOVE THOSE LEGS!! 💪',
+            'PASSED PAWN DASH!! THIS IS PURE CHESS ATHLETICISM!! 🐕',
+            'ENDGAME FOOTRACE!! EVERY TEMPO IS A REP!! 💪💪',
+          ]);
+        case 'forcingCheck':
+          return _p(seed, [
+            'FORCING CHECKS IN A ROW!! THAT IS PRESSURE TRAINING!! 🐕',
+            'CHECK SEQUENCE!! YOU ARE PUSHING THE PACE HARD!! 💪',
+            'KING PRESSURE COMBO!! NO REST BETWEEN REPS!! 🐕💪',
+          ]);
+      }
+      break;
+    case 4:
+      switch (scenario) {
+        case 'openingCentralClaim':
+          return _p(seed, [
+            'Central claim registered. A principled opening trajectory.',
+            'The centre is contested early. A statistically critical phase.',
+            'Your central footprint expands. I have updated the model.',
+          ]);
+        case 'minorPieceDevelopment':
+          return _p(seed, [
+            'Efficient minor-piece development. Your coordination index improves.',
+            'A coherent development sequence. You are delaying tactical liabilities.',
+            'Knight and bishop deployment on schedule. Respectable.',
+          ]);
+        case 'earlyQueenSortie':
+          return _p(seed, [
+            'Early queen excursion detected. High variance, high volatility.',
+            'Queen sortie before full development. Ambitious, if unstable.',
+            'Your queen advances early. I have generated punitive branches.',
+          ]);
+        case 'captureWithCheck':
+          return _p(seed, [
+            'Capture with check. A forcing tempo plus material swing.',
+            'Tactical compression achieved: check and capture in one operation.',
+            'You combined material gain with initiative. Efficient.',
+          ]);
+        case 'rookActivation':
+          return _p(seed, [
+            'Rook activation detected. Open-file pressure probability increases.',
+            'Heavy pieces now participate. The position enters a sharper regime.',
+            'Rook manoeuvre logged. This often precedes decisive penetration.',
+          ]);
+        case 'kingActivationEndgame':
+          return _p(seed, [
+            'Endgame king activation. Correct and dangerous.',
+            'Your king advances in the reduced state-space. Sound method.',
+            'Active king protocol detected. Endgame precision required.',
+          ]);
+        case 'pawnRaceEndgame':
+          return _p(seed, [
+            'Passed-pawn race initiated. Tempo arithmetic is now absolute.',
+            'Endgame pawn sprint. Conversion window is narrow.',
+            'Race condition detected: promotion threats on both vectors.',
+          ]);
+        case 'forcingCheck':
+          return _p(seed, [
+            'Forcing checks continue. You are constraining my branch width.',
+            'Sequential check pressure. My king trajectory is being channelled.',
+            'Another check in sequence. Initiative remains with the attacker.',
+          ]);
+      }
+      break;
+    case 5:
+      switch (scenario) {
+        case 'openingCentralClaim':
+          return _p(seed, [
+            'The centre is claimed. Roots planted deep in fertile ground.',
+            'Early central space. The swamp approves this discipline.',
+            'A strong central step. The position will grow from here.',
+          ]);
+        case 'minorPieceDevelopment':
+          return _p(seed, [
+            'Pieces awaken in harmony. This is how plans are born.',
+            'Minor pieces developed with purpose. The mist favors coordination.',
+            'A clean development rhythm. The board breathes easier.',
+          ]);
+        case 'earlyQueenSortie':
+          return _p(seed, [
+            'The queen steps out early. Power seeks the front too soon.',
+            'An early queen path through the fog. Brave, and exposed.',
+            'Your queen wanders before the army is ready. Interesting.',
+          ]);
+        case 'captureWithCheck':
+          return _p(seed, [
+            'A capture with check. One motion, two currents altered.',
+            'Material taken, king disturbed. A precise tactical tide.',
+            'You strike and check in one breath. The swamp notes this.',
+          ]);
+        case 'rookActivation':
+          return _p(seed, [
+            'The rook awakens. Heavy water now flows through open channels.',
+            'Rook activity rises. Files become rivers of force.',
+            'Your tower joins the storm. Pressure will follow.',
+          ]);
+        case 'kingActivationEndgame':
+          return _p(seed, [
+            'The king walks in the endgame. As all rulers must, eventually.',
+            'Endgame king activity. The swamp calls this true courage.',
+            'The king leaves shelter and enters work. Correct.',
+          ]);
+        case 'pawnRaceEndgame':
+          return _p(seed, [
+            'A pawn race begins. Every step echoes in the mist.',
+            'Passed pawns run for destiny. The swamp counts every tempo.',
+            'Promotion race. No move can be wasted now.',
+          ]);
+        case 'forcingCheck':
+          return _p(seed, [
+            'Checks flow one after another. The king must keep walking.',
+            'A forcing sequence through the fog. No quiet squares remain.',
+            'You keep the check-net tight. The swamp respects that craft.',
+          ]);
+      }
+      break;
+  }
+
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +510,7 @@ String buildBotContextualLine({
         humanPlaysWhite: humanPlaysWhite,
         inCheck: inCheck,
         humanToMove: humanToMove,
+        lastNotation: lastNotation,
         capturedLabel: lastCapturedPieceLabel,
         lastByHuman: lastByHuman,
         currentOpening: currentOpening,
@@ -169,6 +531,7 @@ String buildBotContextualLine({
         humanPlaysWhite: humanPlaysWhite,
         inCheck: inCheck,
         humanToMove: humanToMove,
+        lastNotation: lastNotation,
         capturedLabel: lastCapturedPieceLabel,
         lastByHuman: lastByHuman,
         currentOpening: currentOpening,
@@ -189,6 +552,7 @@ String buildBotContextualLine({
         humanPlaysWhite: humanPlaysWhite,
         inCheck: inCheck,
         humanToMove: humanToMove,
+        lastNotation: lastNotation,
         capturedLabel: lastCapturedPieceLabel,
         lastByHuman: lastByHuman,
         currentOpening: currentOpening,
@@ -209,6 +573,7 @@ String buildBotContextualLine({
         humanPlaysWhite: humanPlaysWhite,
         inCheck: inCheck,
         humanToMove: humanToMove,
+        lastNotation: lastNotation,
         capturedLabel: lastCapturedPieceLabel,
         lastByHuman: lastByHuman,
         currentOpening: currentOpening,
@@ -229,6 +594,7 @@ String buildBotContextualLine({
         humanPlaysWhite: humanPlaysWhite,
         inCheck: inCheck,
         humanToMove: humanToMove,
+        lastNotation: lastNotation,
         capturedLabel: lastCapturedPieceLabel,
         lastByHuman: lastByHuman,
         currentOpening: currentOpening,
@@ -258,6 +624,7 @@ String _mochi({
   required bool humanPlaysWhite,
   required bool inCheck,
   required bool humanToMove,
+  required String? lastNotation,
   required String? capturedLabel,
   required bool lastByHuman,
   required String currentOpening,
@@ -379,6 +746,18 @@ String _mochi({
       'The biggest piece just disappeared!! Wild!! 🌸',
       'Bye queen!! You were very pretty!! 🐹',
     ]);
+  }
+
+  final sequenceScenario = _moveSequenceScenarioLine(
+    rank: 1,
+    seed: seed,
+    lastNotation: lastNotation,
+    moveCount: moveCount,
+    isEndgame: isEndgame,
+    lastByHuman: lastByHuman,
+  );
+  if (sequenceScenario != null) {
+    return sequenceScenario;
   }
 
   if (inCheck) {
@@ -503,6 +882,7 @@ String _carl({
   required bool humanPlaysWhite,
   required bool inCheck,
   required bool humanToMove,
+  required String? lastNotation,
   required String? capturedLabel,
   required bool lastByHuman,
   required String currentOpening,
@@ -634,6 +1014,18 @@ String _carl({
           ]);
   }
 
+  final sequenceScenario = _moveSequenceScenarioLine(
+    rank: 2,
+    seed: seed,
+    lastNotation: lastNotation,
+    moveCount: moveCount,
+    isEndgame: isEndgame,
+    lastByHuman: lastByHuman,
+  );
+  if (sequenceScenario != null) {
+    return sequenceScenario;
+  }
+
   if (inCheck) {
     return humanToMove
         ? _p(seed, [
@@ -756,6 +1148,7 @@ String _rex({
   required bool humanPlaysWhite,
   required bool inCheck,
   required bool humanToMove,
+  required String? lastNotation,
   required String? capturedLabel,
   required bool lastByHuman,
   required String currentOpening,
@@ -880,6 +1273,18 @@ String _rex({
             'QUEEN CAPTURED!! THAT IS THE BENCH PRESS OF CHESS MOVES!! 🐕💪',
             'THE QUEEN IS MINE!! BIGGEST PIECE GAINS OF THE GAME!! 💪👑',
           ]);
+  }
+
+  final sequenceScenario = _moveSequenceScenarioLine(
+    rank: 3,
+    seed: seed,
+    lastNotation: lastNotation,
+    moveCount: moveCount,
+    isEndgame: isEndgame,
+    lastByHuman: lastByHuman,
+  );
+  if (sequenceScenario != null) {
+    return sequenceScenario;
   }
 
   if (inCheck) {
@@ -1012,6 +1417,7 @@ String _octavian({
   required bool humanPlaysWhite,
   required bool inCheck,
   required bool humanToMove,
+  required String? lastNotation,
   required String? capturedLabel,
   required bool lastByHuman,
   required String currentOpening,
@@ -1140,6 +1546,18 @@ String _octavian({
             'Queen captured. Material superiority confirmed. Proceeding as projected.',
             'The queen is gone. The game is now in my preferred data range.',
           ]);
+  }
+
+  final sequenceScenario = _moveSequenceScenarioLine(
+    rank: 4,
+    seed: seed,
+    lastNotation: lastNotation,
+    moveCount: moveCount,
+    isEndgame: isEndgame,
+    lastByHuman: lastByHuman,
+  );
+  if (sequenceScenario != null) {
+    return sequenceScenario;
   }
 
   if (inCheck) {
@@ -1273,6 +1691,7 @@ String _masterPrime({
   required bool humanPlaysWhite,
   required bool inCheck,
   required bool humanToMove,
+  required String? lastNotation,
   required String? capturedLabel,
   required bool lastByHuman,
   required String currentOpening,
@@ -1402,6 +1821,18 @@ String _masterPrime({
             'I reached out and took the queen. The board is quieter now. As intended.',
             'The queen is gone. The swamp grows stronger in the silence.',
           ]);
+  }
+
+  final sequenceScenario = _moveSequenceScenarioLine(
+    rank: 5,
+    seed: seed,
+    lastNotation: lastNotation,
+    moveCount: moveCount,
+    isEndgame: isEndgame,
+    lastByHuman: lastByHuman,
+  );
+  if (sequenceScenario != null) {
+    return sequenceScenario;
   }
 
   if (inCheck) {

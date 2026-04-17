@@ -1780,29 +1780,38 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   Future<void> _openBoardAndPieceThemeSettings(
     AppThemeProvider themeProvider,
   ) async {
+    if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
     final soundEnabled = !(prefs.getBool(_muteSoundsKey) ?? false);
     final hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
 
     if (!mounted) return;
-    await showAcademyThemeSettingsSheet(
-      context: context,
-      themeProvider: themeProvider,
-      soundEnabled: soundEnabled,
-      hapticsEnabled: hapticsEnabled,
-      onSoundEnabledChanged: (enabled) async {
-        await prefs.setBool(_muteSoundsKey, !enabled);
-        if (mounted) {
-          setState(() {
-            _muteSounds = !enabled;
-          });
-        }
-      },
-      onHapticsEnabledChanged: (enabled) async {
-        await prefs.setBool(_hapticsEnabledKey, enabled);
-        if (mounted) setState(() => _hapticsEnabled = enabled);
-      },
-    );
+    try {
+      await showAcademyThemeSettingsSheet(
+        context: context,
+        themeProvider: themeProvider,
+        soundEnabled: soundEnabled,
+        hapticsEnabled: hapticsEnabled,
+        onSoundEnabledChanged: (enabled) async {
+          await prefs.setBool(_muteSoundsKey, !enabled);
+          if (mounted) {
+            setState(() {
+              _muteSounds = !enabled;
+            });
+          }
+        },
+        onHapticsEnabledChanged: (enabled) async {
+          await prefs.setBool(_hapticsEnabledKey, enabled);
+          if (mounted) setState(() => _hapticsEnabled = enabled);
+        },
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await _showStatusDialog(
+        title: 'Settings Unavailable',
+        message: 'Academy settings could not be opened right now.',
+      );
+    }
   }
 
   Widget _buildBoardCard(AppThemeProvider theme, {required bool monochrome}) {

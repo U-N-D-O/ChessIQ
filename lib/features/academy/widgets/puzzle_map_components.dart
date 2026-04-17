@@ -1,10 +1,139 @@
 part of 'package:chessiq/features/academy/screens/puzzle_map_screen.dart';
 
+List<BoxShadow> _academyMonoSurfaceGlow(
+  Color color, {
+  required bool monochrome,
+  double strength = 1.0,
+}) {
+  if (!monochrome) {
+    return const <BoxShadow>[];
+  }
+  return <BoxShadow>[
+    BoxShadow(
+      color: color.withValues(alpha: 0.14 * strength),
+      blurRadius: 22 * strength,
+      spreadRadius: 0.6 * strength,
+      offset: Offset(0, 8 * strength),
+    ),
+    BoxShadow(
+      color: Colors.white.withValues(alpha: 0.05 * strength),
+      blurRadius: 10 * strength,
+      spreadRadius: -2 * strength,
+      offset: Offset(0, -1.5 * strength),
+    ),
+  ];
+}
+
+List<Shadow> _academyMonoTextGlow(
+  Color color, {
+  required bool monochrome,
+  double strength = 1.0,
+}) {
+  if (!monochrome) {
+    return const <Shadow>[];
+  }
+  return <Shadow>[
+    Shadow(
+      color: color.withValues(alpha: 0.26 * strength),
+      blurRadius: 10 * strength,
+    ),
+    Shadow(
+      color: Colors.white.withValues(alpha: 0.08 * strength),
+      blurRadius: 18 * strength,
+    ),
+  ];
+}
+
+TextStyle _academyHeaderStyle(
+  BuildContext context, {
+  required Color color,
+  required bool monochrome,
+  double size = 14,
+  FontWeight weight = FontWeight.w800,
+}) {
+  return TextStyle(
+    color: color,
+    fontSize: size,
+    fontWeight: weight,
+    letterSpacing: monochrome ? 0.18 : 0,
+    shadows: _academyMonoTextGlow(
+      color,
+      monochrome: monochrome,
+      strength: size >= 18 ? 1.15 : 0.9,
+    ),
+  );
+}
+
+ButtonStyle _academyFilledButtonStyle({
+  required Color backgroundColor,
+  required Color foregroundColor,
+  required bool monochrome,
+  Color? disabledBackgroundColor,
+  Color? disabledForegroundColor,
+  BorderSide? side,
+  EdgeInsetsGeometry? padding,
+  double radius = 16,
+}) {
+  return FilledButton.styleFrom(
+    backgroundColor: backgroundColor,
+    foregroundColor: foregroundColor,
+    disabledBackgroundColor: disabledBackgroundColor,
+    disabledForegroundColor: disabledForegroundColor,
+    shadowColor: monochrome
+        ? backgroundColor.withValues(alpha: 0.34)
+        : backgroundColor.withValues(alpha: 0.18),
+    elevation: monochrome ? 3.2 : 1.2,
+    surfaceTintColor: monochrome ? Colors.white.withValues(alpha: 0.05) : null,
+    padding: padding,
+    side: side,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+  ).copyWith(
+    overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.pressed)) {
+        return Colors.white.withValues(alpha: monochrome ? 0.12 : 0.08);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return Colors.white.withValues(alpha: monochrome ? 0.08 : 0.04);
+      }
+      return null;
+    }),
+  );
+}
+
+ButtonStyle _academyOutlinedButtonStyle({
+  required Color accent,
+  required bool monochrome,
+  EdgeInsetsGeometry? padding,
+  double radius = 16,
+}) {
+  return OutlinedButton.styleFrom(
+    foregroundColor: accent,
+    side: BorderSide(color: accent.withValues(alpha: monochrome ? 0.82 : 1)),
+    backgroundColor: accent.withValues(alpha: monochrome ? 0.18 : 0.12),
+    shadowColor: monochrome
+        ? accent.withValues(alpha: 0.28)
+        : accent.withValues(alpha: 0.14),
+    elevation: monochrome ? 2.4 : 0.6,
+    padding: padding,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+  ).copyWith(
+    overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.pressed)) {
+        return accent.withValues(alpha: monochrome ? 0.16 : 0.10);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return accent.withValues(alpha: monochrome ? 0.10 : 0.05);
+      }
+      return null;
+    }),
+  );
+}
+
 // Theme-aware accent colours for academy widgets.
 Color _accentCyan(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   if (context.read<AppThemeProvider>().isMonochrome) {
-    return isDark ? const Color(0xFF9E9E9E) : const Color(0xFF616161);
+    return isDark ? const Color(0xFF8FD8DE) : const Color(0xFF3E7B83);
   }
   return isDark ? const Color(0xFF6FE7FF) : const Color(0xFF0E7490);
 }
@@ -12,7 +141,7 @@ Color _accentCyan(BuildContext context) {
 Color _accentGold(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   if (context.read<AppThemeProvider>().isMonochrome) {
-    return isDark ? const Color(0xFFBDBDBD) : const Color(0xFF424242);
+    return isDark ? const Color(0xFFD8C78D) : const Color(0xFF8D7442);
   }
   return isDark ? const Color(0xFFD8B640) : const Color(0xFF9A7B0A);
 }
@@ -20,7 +149,7 @@ Color _accentGold(BuildContext context) {
 Color _accentBlue(BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   if (context.read<AppThemeProvider>().isMonochrome) {
-    return isDark ? const Color(0xFF9E9E9E) : const Color(0xFF616161);
+    return isDark ? const Color(0xFF92B7E6) : const Color(0xFF496B93);
   }
   return isDark ? const Color(0xFF5AAEE8) : const Color(0xFF1565C0);
 }
@@ -30,11 +159,13 @@ class _DashboardPanel extends StatelessWidget {
     required this.title,
     required this.accent,
     required this.child,
+    this.monochrome = false,
   });
 
   final String title;
   final Color accent;
   final Widget child;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
@@ -57,13 +188,22 @@ class _DashboardPanel extends StatelessWidget {
             scheme.outline,
           ),
         ),
+        boxShadow: _academyMonoSurfaceGlow(
+          accent,
+          monochrome: monochrome,
+          strength: 0.95,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: TextStyle(color: accent, fontWeight: FontWeight.w800),
+            style: _academyHeaderStyle(
+              context,
+              color: accent,
+              monochrome: monochrome,
+            ),
           ),
           const SizedBox(height: 10),
           child,
@@ -79,12 +219,14 @@ class _DailyChallengeCard extends StatelessWidget {
     required this.completed,
     required this.hasTodayPuzzle,
     required this.onTap,
+    this.monochrome = false,
   });
 
   final int total;
   final int completed;
   final bool hasTodayPuzzle;
   final VoidCallback onTap;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +259,11 @@ class _DailyChallengeCard extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+        boxShadow: _academyMonoSurfaceGlow(
+          _accentBlue(context),
+          monochrome: monochrome,
+          strength: 1.0,
+        ),
       ),
       child: InkWell(
         onTap: onTap,
@@ -126,13 +273,14 @@ class _DailyChallengeCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.calendar_month_rounded, color: scheme.primary),
+                Icon(Icons.calendar_month_rounded, color: _accentGold(context)),
                 const SizedBox(width: 8),
                 Text(
                   'Daily Challenge',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: scheme.onSurface,
+                  style: _academyHeaderStyle(
+                    context,
+                    color: monochrome ? _accentGold(context) : scheme.onSurface,
+                    monochrome: monochrome,
                   ),
                 ),
               ],
@@ -159,21 +307,29 @@ class _DailyChallengeCard extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
                 onPressed: hasTodayPuzzle ? onTap : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _accentBlue(context),
-                  foregroundColor: theme.brightness == Brightness.dark
-                      ? const Color(0xFF07131F)
-                      : Colors.white,
-                  disabledBackgroundColor: scheme.outline.withValues(
-                    alpha: 0.20,
-                  ),
-                  disabledForegroundColor: scheme.onSurface.withValues(
-                    alpha: 0.42,
-                  ),
-                ),
+                style:
+                    FilledButton.styleFrom(
+                      backgroundColor: _accentBlue(context),
+                    ).merge(
+                      _academyFilledButtonStyle(
+                        backgroundColor: _accentBlue(context),
+                        foregroundColor: theme.brightness == Brightness.dark
+                            ? const Color(0xFF07131F)
+                            : Colors.white,
+                        disabledBackgroundColor: scheme.outline.withValues(
+                          alpha: 0.20,
+                        ),
+                        disabledForegroundColor: scheme.onSurface.withValues(
+                          alpha: 0.42,
+                        ),
+                        monochrome: monochrome,
+                      ),
+                    ),
                 icon: const Icon(Icons.play_arrow_rounded),
                 label: Text(
-                  hasTodayPuzzle ? "Solve Today's Puzzle" : 'Check Back Later!',
+                  hasTodayPuzzle
+                      ? "Solve Today's Puzzles"
+                      : 'Check Back Later!',
                 ),
               ),
             ),
@@ -189,11 +345,13 @@ class _LeaderboardCard extends StatelessWidget {
     required this.entries,
     this.title = 'Top 10 Global',
     this.emptyLabel = 'No scores yet.',
+    this.monochrome = false,
   });
 
   final List<LeaderboardEntry> entries;
   final String title;
   final String emptyLabel;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
@@ -202,6 +360,7 @@ class _LeaderboardCard extends StatelessWidget {
     return _DashboardPanel(
       title: title,
       accent: _accentCyan(context),
+      monochrome: monochrome,
       child: entries.isEmpty
           ? Text(
               emptyLabel,
@@ -276,6 +435,7 @@ class _SemesterHeader extends StatelessWidget {
     this.expanded = true,
     required this.nodeCount,
     this.onTap,
+    this.monochrome = false,
   });
 
   final SemesterRange semester;
@@ -283,6 +443,7 @@ class _SemesterHeader extends StatelessWidget {
   final bool expanded;
   final int nodeCount;
   final VoidCallback? onTap;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
@@ -303,6 +464,11 @@ class _SemesterHeader extends StatelessWidget {
           ).withValues(alpha: 0.70),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+          boxShadow: _academyMonoSurfaceGlow(
+            _accentCyan(context),
+            monochrome: monochrome,
+            strength: 0.9,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,9 +478,10 @@ class _SemesterHeader extends StatelessWidget {
                 Expanded(
                   child: Text(
                     '${semester.title} • ${semester.minElo}-${semester.maxElo}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
+                    style: _academyHeaderStyle(
+                      context,
                       color: scheme.onSurface,
+                      monochrome: monochrome,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -380,6 +547,7 @@ class _PuzzleNodeCard extends StatelessWidget {
     this.previousSolveRequirementText,
     this.requiresPreviousSolveTarget = false,
     this.requiresPreviousSemesterExamGate = false,
+    this.monochrome = false,
     this.bestExamScore,
     this.bestExamGrade,
     this.onExamTap,
@@ -397,6 +565,7 @@ class _PuzzleNodeCard extends StatelessWidget {
   final String? previousSolveRequirementText;
   final bool requiresPreviousSolveTarget;
   final bool requiresPreviousSemesterExamGate;
+  final bool monochrome;
   final int? bestExamScore;
   final String? bestExamGrade;
   final VoidCallback? onExamTap;
@@ -442,6 +611,11 @@ class _PuzzleNodeCard extends StatelessWidget {
               ? scheme.outline.withValues(alpha: 0.25)
               : scheme.outline.withValues(alpha: 0.34),
         ),
+        boxShadow: _academyMonoSurfaceGlow(
+          locked ? scheme.outline : _accentBlue(context),
+          monochrome: monochrome,
+          strength: locked ? 0.45 : 0.95,
+        ),
       ),
       child: InkWell(
         onTap: onTap,
@@ -477,10 +651,11 @@ class _PuzzleNodeCard extends StatelessWidget {
                 children: [
                   Text(
                     'Level ${node.title}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
+                    style: _academyHeaderStyle(
+                      context,
                       color: scheme.onSurface,
+                      monochrome: monochrome,
+                      size: 15,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -534,14 +709,16 @@ class _PuzzleNodeCard extends StatelessWidget {
               Expanded(
                 child: OutlinedButton(
                   onPressed: onExamTap,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _accentGold(context),
-                    side: BorderSide(color: _accentGold(context)),
-                    backgroundColor: _accentGold(
-                      context,
-                    ).withValues(alpha: 0.08),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
+                  style:
+                      OutlinedButton.styleFrom(
+                        foregroundColor: _accentGold(context),
+                      ).merge(
+                        _academyOutlinedButtonStyle(
+                          accent: _accentGold(context),
+                          monochrome: monochrome,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
                   child: const Text('Exam'),
                 ),
               ),
@@ -550,7 +727,7 @@ class _PuzzleNodeCard extends StatelessWidget {
             Expanded(
               child: FilledButton(
                 onPressed: onTap,
-                style: FilledButton.styleFrom(
+                style: _academyFilledButtonStyle(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   backgroundColor: locked
                       ? Theme.of(
@@ -564,6 +741,7 @@ class _PuzzleNodeCard extends StatelessWidget {
                       : Theme.of(context).brightness == Brightness.dark
                       ? const Color(0xFF07131F)
                       : Colors.white,
+                  monochrome: monochrome,
                 ),
                 child: Text(
                   locked
@@ -638,12 +816,13 @@ class _PuzzleNodeCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Level ${node.title}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
+                      style: _academyHeaderStyle(
+                        context,
                         color: locked
                             ? scheme.onSurface.withValues(alpha: 0.72)
                             : scheme.onSurface,
+                        monochrome: monochrome,
+                        size: 17,
                       ),
                     ),
                   ),
@@ -702,7 +881,7 @@ class _PuzzleNodeCard extends StatelessWidget {
                   Expanded(
                     child: FilledButton(
                       onPressed: onTap,
-                      style: FilledButton.styleFrom(
+                      style: _academyFilledButtonStyle(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         backgroundColor: locked
                             ? Theme.of(
@@ -716,6 +895,7 @@ class _PuzzleNodeCard extends StatelessWidget {
                             : Theme.of(context).brightness == Brightness.dark
                             ? const Color(0xFF07131F)
                             : Colors.white,
+                        monochrome: monochrome,
                       ),
                       child: Text(locked ? 'Locked' : 'Train'),
                     ),
@@ -725,13 +905,10 @@ class _PuzzleNodeCard extends StatelessWidget {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: onExamTap,
-                        style: OutlinedButton.styleFrom(
+                        style: _academyOutlinedButtonStyle(
+                          accent: _accentGold(context),
+                          monochrome: monochrome,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          foregroundColor: _accentGold(context),
-                          side: BorderSide(color: _accentGold(context)),
-                          backgroundColor: _accentGold(
-                            context,
-                          ).withValues(alpha: 0.08),
                         ),
                         child: const Text('Exam'),
                       ),
@@ -981,6 +1158,7 @@ class _StoreRow extends StatelessWidget {
     required this.subtitle,
     required this.price,
     required this.onBuy,
+    this.monochrome = false,
   });
 
   final IconData icon;
@@ -988,6 +1166,7 @@ class _StoreRow extends StatelessWidget {
   final String subtitle;
   final String price;
   final VoidCallback onBuy;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
@@ -1005,6 +1184,11 @@ class _StoreRow extends StatelessWidget {
         ).withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
+        boxShadow: _academyMonoSurfaceGlow(
+          _accentGold(context),
+          monochrome: monochrome,
+          strength: 0.72,
+        ),
       ),
       child: Row(
         children: [
@@ -1016,9 +1200,10 @@ class _StoreRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
+                  style: _academyHeaderStyle(
+                    context,
                     color: scheme.onSurface,
+                    monochrome: monochrome,
                   ),
                 ),
                 Text(
@@ -1039,7 +1224,19 @@ class _StoreRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          FilledButton(onPressed: onBuy, child: const Text('Buy')),
+          FilledButton(
+            onPressed: onBuy,
+            style: _academyFilledButtonStyle(
+              backgroundColor: _accentBlue(context),
+              foregroundColor: theme.brightness == Brightness.dark
+                  ? const Color(0xFF07131F)
+                  : Colors.white,
+              monochrome: monochrome,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              radius: 14,
+            ),
+            child: const Text('Buy'),
+          ),
         ],
       ),
     );
