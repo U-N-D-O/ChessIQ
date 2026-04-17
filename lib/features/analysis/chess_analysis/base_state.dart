@@ -412,6 +412,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             setState(() {
               _introCompleted = true;
             });
+            if (_playVsBot &&
+                !_isHumanTurnInBotGame &&
+                !_botThinking &&
+                _gameOutcome == null) {
+              unawaited(_maybeTriggerBotMove());
+            }
           }
         });
     _menuRevealController = AnimationController(
@@ -945,7 +951,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       await _introAudioPlayer.stop();
       await _introAudioPlayer.setReleaseMode(ReleaseMode.stop);
       await _introAudioPlayer.play(
-        AssetSource('sounds/intro.mp3'),
+        AssetSource(_introSoundAssetPath),
         mode: PlayerMode.mediaPlayer,
         volume: 1.0,
       );
@@ -1162,7 +1168,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool get _shouldKeepEvalActive => _isEngineActive;
 
-  bool get _shouldShowDepthCounter => _shouldKeepEvalActive;
+  bool get _shouldShowCenterEvalCounter =>
+      _shouldKeepEvalActive && !(_playVsBot && _vsBotEvalBarOnly);
+
+  bool get _shouldShowDepthCounter => _shouldShowCenterEvalCounter;
 
   void _disableEngineInsights() {
     setState(() {
@@ -1172,23 +1181,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _currentDepth = 0;
     });
     _send('stop');
-  }
-
-  void _toggleVsBotEvalBar() {
-    if (!_playVsBot) return;
-    if (_isEngineActive && _vsBotEvalBarOnly) {
-      _disableEngineInsights();
-      return;
-    }
-
-    setState(() {
-      _suggestionsEnabled = true;
-      _vsBotEvalBarOnly = true;
-      _topLines = [];
-      _currentDepth = 0;
-    });
-    _analyze();
-    _addLog('Stockfish evaluation activated');
   }
 
   bool _isBoardThemeUnlocked(BoardThemeMode mode) {
@@ -2066,6 +2058,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_gameOutcome != null) return;
     if (kIsWeb) return;
 
+    final introDelay = _remainingBotAvatarIntroDelay();
+    if (introDelay > Duration.zero) {
+      unawaited(
+        Future<void>.delayed(introDelay, () async {
+          if (!mounted ||
+              !_playVsBot ||
+              _selectedBot == null ||
+              _activeSection != AppSection.analysis ||
+              _isHumanTurnInBotGame ||
+              _botThinking ||
+              _gameOutcome != null ||
+              !_hasBotAvatarIntroArrived) {
+            return;
+          }
+          await _maybeTriggerBotMove();
+        }),
+      );
+      return;
+    }
+
     setState(() {
       _botThinking = true;
     });
@@ -2677,20 +2689,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 74,
-                  height: 74,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        accent.withValues(alpha: 0.35),
-                        accent.withValues(alpha: 0.08),
-                      ],
-                    ),
-                    border: Border.all(color: accent.withValues(alpha: 0.45)),
-                  ),
-                  child: Icon(icon, color: accent, size: 34),
+                _buildVsBotResultAnimation(
+                  outcome: outcome,
+                  isWin: isWin,
+                  accent: accent,
+                  icon: icon,
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -2702,40 +2705,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     letterSpacing: 0.35,
                   ),
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Session',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                      Text(
-                        'W $_vsBotSessionWins · L $_vsBotSessionLosses · D $_vsBotSessionDraws',
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 6),
+                Text(
+                  isDraw
+                      ? 'Evenly matched. This one stays on the board.'
+                      : isWin
+                      ? 'Excellent conversion. You closed it with style.'
+                      : 'Tough one. Reset and strike back.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: 12.5,
+                    letterSpacing: 0.24,
                   ),
                 ),
+                const SizedBox(height: 16),
+                _buildVsBotSessionScoreboard(accent),
                 const SizedBox(height: 18),
                 SizedBox(
                   width: double.infinity,
@@ -2810,6 +2795,233 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     _goToMenu();
+  }
+
+  Widget _buildVsBotResultAnimation({
+    required GameOutcome outcome,
+    required bool isWin,
+    required Color accent,
+    required IconData icon,
+  }) {
+    return SizedBox(
+      width: 96,
+      height: 96,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 1150),
+        curve: Curves.easeOutCubic,
+        builder: (context, progress, child) {
+          final isDraw = outcome == GameOutcome.draw;
+          final glowAlpha = 0.12 + ((1 - progress) * 0.34);
+          final ringOpacity = ((1 - progress) * 0.55).clamp(0.0, 1.0);
+          final ringScale = 0.78 + (progress * 0.62);
+          final winIconScale =
+              0.70 + (0.30 * Curves.easeOutBack.transform(progress));
+          final drawIconScale = 0.88 + (0.12 * progress);
+
+          double lossShake = 0;
+          if (!isWin && !isDraw) {
+            if (progress < 0.20) {
+              lossShake = -12 * (progress / 0.20);
+            } else if (progress < 0.40) {
+              lossShake = 12 * ((progress - 0.20) / 0.20);
+            } else if (progress < 0.60) {
+              lossShake = -8 * ((progress - 0.40) / 0.20);
+            } else if (progress < 0.80) {
+              lossShake = 8 * ((progress - 0.60) / 0.20);
+            }
+          }
+
+          final iconScale = isDraw
+              ? drawIconScale
+              : isWin
+              ? winIconScale
+              : 1.0;
+
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      accent.withValues(alpha: glowAlpha),
+                      accent.withValues(alpha: 0.03),
+                    ],
+                  ),
+                ),
+              ),
+              if (isDraw)
+                Transform.scale(
+                  scale: ringScale,
+                  child: Opacity(
+                    opacity: ringOpacity,
+                    child: Container(
+                      width: 94,
+                      height: 94,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.40),
+                          width: 2.0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (isWin)
+                Opacity(
+                  opacity: (1 - progress).clamp(0.0, 1.0),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: const [
+                      Positioned(
+                        top: 6,
+                        child: Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFFF0AA),
+                          size: 14,
+                        ),
+                      ),
+                      Positioned(
+                        left: 7,
+                        child: Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFFF0AA),
+                          size: 11,
+                        ),
+                      ),
+                      Positioned(
+                        right: 7,
+                        child: Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFFFF0AA),
+                          size: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Transform.translate(
+                offset: Offset(lossShake, 0),
+                child: Transform.scale(
+                  scale: iconScale,
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          accent.withValues(alpha: 0.38),
+                          accent.withValues(alpha: 0.08),
+                        ],
+                      ),
+                      border: Border.all(color: accent.withValues(alpha: 0.48)),
+                    ),
+                    child: Icon(icon, color: accent, size: 34),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildVsBotSessionScoreboard(Color accent) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Session Score',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.62),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildVsBotScoreTile(
+                  label: 'Wins',
+                  value: _vsBotSessionWins,
+                  valueColor: const Color(0xFF4BE38F),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildVsBotScoreTile(
+                  label: 'Losses',
+                  value: _vsBotSessionLosses,
+                  valueColor: const Color(0xFFFF7E7E),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildVsBotScoreTile(
+                  label: 'Draws',
+                  value: _vsBotSessionDraws,
+                  valueColor: accent,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVsBotScoreTile({
+    required String label,
+    required int value,
+    required Color valueColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$value',
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.65),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAllPossibleOpenings() {
@@ -3910,6 +4122,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _goToMenu() {
+    if (!mounted) return;
     if (_activeSection == AppSection.gambitQuiz) {
       setState(() {
         _playVsBot = false;
@@ -5165,10 +5378,50 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return _buildPremiumIntroOverlay(scene);
   }
 
+  String get _introSoundAssetPath => 'sounds/intro.mp3';
+
+  double get _botAvatarIntroArrivalProgress => 0.0;
+
+  double get _botAvatarIntroOpacity => 1.0;
+
+  bool get _botAvatarOverlayOnRight => false;
+
   Key? get _botAvatarWidgetKey => null;
 
   Widget _buildBotAvatarOverlay(double scale) {
     return const SizedBox.shrink();
+  }
+
+  Widget _buildTopMostOverlay(Size scene, double scale) {
+    return const SizedBox.shrink();
+  }
+
+  Widget _wrapBotAvatarInteractive(double scale, Widget child) {
+    return child;
+  }
+
+  bool get _hasBotAvatarIntroArrived {
+    if (!_playVsBot || _introCompleted) {
+      return true;
+    }
+    return _introController.value >= _botAvatarIntroArrivalProgress;
+  }
+
+  Duration _remainingBotAvatarIntroDelay() {
+    if (_hasBotAvatarIntroArrived) {
+      return Duration.zero;
+    }
+    final duration = _introController.duration;
+    if (duration == null) {
+      return Duration.zero;
+    }
+    final remainingProgress =
+        (_botAvatarIntroArrivalProgress -
+                _introController.value.clamp(0.0, 1.0))
+            .clamp(0.0, 1.0);
+    return Duration(
+      microseconds: (duration.inMicroseconds * remainingProgress).round(),
+    );
   }
 
   void _clearVsBotOverlayState() {}
@@ -6803,17 +7056,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                       ),
                                                                     if (_shouldShowDepthCounter)
                                                                       const SizedBox(
-                                                                        width: 6,
+                                                                        width:
+                                                                            6,
                                                                       ),
                                                                     if (_shouldShowDepthCounter)
                                                                       Text(
                                                                         'Depth $_currentDepth',
                                                                         style: TextStyle(
-                                                                          color: scheme
-                                                                              .onSurface
-                                                                              .withValues(
-                                                                                alpha: 0.54,
-                                                                              ),
+                                                                          color: scheme.onSurface.withValues(
+                                                                            alpha:
+                                                                                0.54,
+                                                                          ),
                                                                           fontSize:
                                                                               11 *
                                                                               scale,
@@ -7060,6 +7313,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         _buildSuggestionLaunchOverlay(),
                         _buildButtonRippleOverlay(),
                         _buildStoreCoinGainOverlay(),
+                        _buildTopMostOverlay(Size(width, height), scale),
                       ],
                     ),
                   );
@@ -7161,53 +7415,62 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         alignment: Alignment.centerRight,
                         children: [
                           Positioned(
-                            right: 42 * scale,
+                            left: _botAvatarOverlayOnRight ? 42 * scale : null,
+                            right: _botAvatarOverlayOnRight ? null : 42 * scale,
                             child: IgnorePointer(
                               child: _buildBotAvatarOverlay(scale),
                             ),
                           ),
-                          InkWell(
-                            onTap: _onBotAvatarTapped,
-                            borderRadius: BorderRadius.circular(999),
-                            child: Container(
-                              key: _botAvatarWidgetKey,
-                              width: 34 * scale,
-                              height: 34 * scale,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFF9ED8FF,
-                                  ).withValues(alpha: 0.38),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(
-                                      alpha: isDark ? 0.24 : 0.10,
+                          _wrapBotAvatarInteractive(
+                            scale,
+                            InkWell(
+                              onTap: _onBotAvatarTapped,
+                              borderRadius: BorderRadius.circular(999),
+                              child: Opacity(
+                                opacity: _botAvatarIntroOpacity,
+                                child: Container(
+                                  key: _botAvatarWidgetKey,
+                                  width: 34 * scale,
+                                  height: 34 * scale,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(
+                                        0xFF9ED8FF,
+                                      ).withValues(alpha: 0.38),
                                     ),
-                                    blurRadius: 10 * scale,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: ClipOval(
-                                child: selectedBot.avatarAsset != null
-                                    ? Image.asset(
-                                        selectedBot.avatarAsset!,
-                                        fit: BoxFit.cover,
-                                      )
-                                    : Container(
-                                        color: Color.alphaBlend(
-                                          scheme.primary.withValues(alpha: 0.08),
-                                          scheme.surface,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: isDark ? 0.24 : 0.10,
                                         ),
-                                        alignment: Alignment.center,
-                                        child: Icon(
-                                          Icons.smart_toy_outlined,
-                                          color: const Color(0xFF9ED8FF),
-                                          size: 18 * scale,
-                                        ),
+                                        blurRadius: 10 * scale,
+                                        offset: const Offset(0, 3),
                                       ),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child: selectedBot.avatarAsset != null
+                                        ? Image.asset(
+                                            selectedBot.avatarAsset!,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Container(
+                                            color: Color.alphaBlend(
+                                              scheme.primary.withValues(
+                                                alpha: 0.08,
+                                              ),
+                                              scheme.surface,
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Icon(
+                                              Icons.smart_toy_outlined,
+                                              color: const Color(0xFF9ED8FF),
+                                              size: 18 * scale,
+                                            ),
+                                          ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -7221,7 +7484,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             Expanded(
               child: Center(
                 child: Visibility(
-                  visible: _shouldKeepEvalActive,
+                  visible: _shouldShowCenterEvalCounter,
                   maintainSize: true,
                   maintainAnimation: true,
                   maintainState: true,
@@ -7307,43 +7570,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           constraints: BoxConstraints.tightFor(
                             width: 20 * scale,
                             height: 20 * scale,
-                          ),
-                        ),
-                      ),
-                    if (_playVsBot)
-                      IconButton(
-                        onPressed: _toggleVsBotEvalBar,
-                        tooltip: _isEngineActive && _vsBotEvalBarOnly
-                            ? 'Turn off eval bar'
-                            : 'Turn on eval bar',
-                        icon: Icon(
-                          Icons.analytics_outlined,
-                          size: 16 * scale,
-                          color: _isEngineActive && _vsBotEvalBarOnly
-                              ? const Color(0xFF9ED8FF)
-                              : scheme.onSurface.withValues(alpha: 0.62),
-                        ),
-                        style: IconButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
-                          fixedSize: Size(20 * scale, 20 * scale),
-                          backgroundColor: _isEngineActive && _vsBotEvalBarOnly
-                              ? Color.alphaBlend(
-                                  const Color(
-                                    0xFF9ED8FF,
-                                  ).withValues(alpha: isDark ? 0.16 : 0.10),
-                                  scheme.surface,
-                                )
-                              : Colors.transparent,
-                          side: BorderSide(
-                            color: _isEngineActive && _vsBotEvalBarOnly
-                                ? const Color(
-                                    0xFF9ED8FF,
-                                  ).withValues(alpha: 0.42)
-                                : scheme.outline.withValues(alpha: 0.26),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8 * scale),
                           ),
                         ),
                       ),
@@ -8318,6 +8544,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildSuggestionTriggerButton() {
+    if (_playVsBot) {
+      return _buildVsBotSuggestionTriggerButton();
+    }
+
     if (_isEngineActive) {
       return GestureDetector(
         key: _suggestionButtonKey,
@@ -8638,6 +8868,252 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildVsBotSuggestionTriggerButton() {
+    final isEvalOnlyStage = _isEngineActive && _vsBotEvalBarOnly;
+    final isFullSuggestionStage = _isEngineActive && !_vsBotEvalBarOnly;
+
+    return GestureDetector(
+      key: _suggestionButtonKey,
+      onTap: (!_buttonUnlocked || _suggestionLaunchInProgress)
+          ? null
+          : () async {
+              if (isFullSuggestionStage) {
+                _disableEngineInsights();
+                return;
+              }
+
+              if (isEvalOnlyStage) {
+                setState(() {
+                  _vsBotEvalBarOnly = false;
+                  _suggestionsEnabled = true;
+                });
+                await _triggerButtonRipple();
+                if (!mounted) return;
+                _analyze();
+                _addLog(
+                  _multiPvCount > 0
+                      ? 'Stockfish suggestions activated'
+                      : 'Stockfish evaluation activated',
+                );
+                return;
+              }
+
+              setState(() {
+                _suggestionsEnabled = true;
+                _vsBotEvalBarOnly = true;
+                _topLines = [];
+                _currentDepth = 0;
+              });
+              await _triggerButtonRipple();
+              if (!mounted) return;
+              _analyze();
+              _addLog('Stockfish eval bar activated');
+            },
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_pulseController, _introController]),
+        builder: (context, child) {
+          final buttonOpacity = _buttonIntroOpacity();
+          final buttonScale = _buttonIntroScale();
+          final introT = _introController.value.clamp(0.0, 1.0);
+          final ignition = Curves.easeOut.transform(
+            ((introT - 0.58) / 0.42).clamp(0.0, 1.0),
+          );
+          final pulseT = _pulseController.value;
+
+          final base = Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isFullSuggestionStage
+                  ? const Color(0xFF2A0F13)
+                  : const Color(0xFF101621),
+              gradient: isFullSuggestionStage
+                  ? null
+                  : RadialGradient(
+                      colors: [
+                        Color.lerp(
+                          const Color(0xFF1A2131),
+                          const Color(0xFF2A6CF0),
+                          ignition,
+                        )!.withValues(alpha: isEvalOnlyStage ? 0.62 : 0.34),
+                        const Color(0xFF101621),
+                      ],
+                    ),
+              border: Border.all(
+                color: isFullSuggestionStage
+                    ? const Color(0xFFE06A79).withValues(alpha: 0.75)
+                    : const Color(
+                        0xFFB9A46A,
+                      ).withValues(alpha: isEvalOnlyStage ? 0.45 : 0.38),
+                width: 2,
+              ),
+              boxShadow: isFullSuggestionStage
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFE06A79).withValues(alpha: 0.24),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: const Color(
+                          0xFF3F6ED8,
+                        ).withValues(alpha: isEvalOnlyStage ? 0.34 : 0.18),
+                        blurRadius: isEvalOnlyStage ? 16 : 10,
+                      ),
+                      BoxShadow(
+                        color: const Color(
+                          0xFFD8B640,
+                        ).withValues(alpha: isEvalOnlyStage ? 0.28 : 0.14),
+                        blurRadius: isEvalOnlyStage ? 16 : 10,
+                      ),
+                    ],
+            ),
+            child: isFullSuggestionStage
+                ? const Icon(
+                    Icons.power_settings_new_rounded,
+                    color: Color(0xFFFFA3AF),
+                    size: 22,
+                  )
+                : isEvalOnlyStage
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Transform.translate(
+                        offset: Offset(
+                          cos(pulseT * pi * 2 * 3.0) * 10,
+                          sin(pulseT * pi * 2 * 3.0) * 10,
+                        ),
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD8B640),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFFD8B640,
+                                ).withValues(alpha: 0.72),
+                                blurRadius: 9,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Transform.translate(
+                        offset: Offset(
+                          cos((pulseT * pi * 2 * 3.0) + pi) * 10,
+                          sin((pulseT * pi * 2 * 3.0) + pi) * 10,
+                        ),
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF3F6ED8),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF3F6ED8,
+                                ).withValues(alpha: 0.72),
+                                blurRadius: 9,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.bolt_rounded,
+                        size: 20,
+                        color: Colors.white.withValues(alpha: 0.88),
+                      ),
+                    ],
+                  )
+                : _buildVsBotEvalBarGlyph(),
+          );
+
+          return Opacity(
+            opacity: buttonOpacity,
+            child: Transform.scale(scale: buttonScale, child: base),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _triggerButtonRipple() async {
+    final buttonContext = _suggestionButtonKey.currentContext;
+    final sceneContext = _sceneKey.currentContext;
+    if (buttonContext == null || sceneContext == null) return;
+
+    final buttonBox = _renderBoxFromContext(buttonContext);
+    final sceneBox = _renderBoxFromContext(sceneContext);
+    if (buttonBox == null || sceneBox == null) return;
+
+    final center = sceneBox.globalToLocal(
+      buttonBox.localToGlobal(buttonBox.size.center(Offset.zero)),
+    );
+
+    setState(() => _buttonRippleCenter = center);
+    await _buttonRippleController.forward(from: 0);
+    if (!mounted) return;
+    setState(() => _buttonRippleCenter = null);
+  }
+
+  Widget _buildVsBotEvalBarGlyph() {
+    final appTheme = context.watch<AppThemeProvider>();
+    final isMono = appTheme.isMonochrome || _isCinematicThemeEnabled;
+    return Center(
+      child: Container(
+        width: 24,
+        height: 12,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(
+            color: const Color(0xFFB9A46A).withValues(alpha: 0.65),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFB9A46A).withValues(alpha: 0.24),
+              blurRadius: 6,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: Row(
+            children: isMono
+                ? const [
+                    Expanded(child: ColoredBox(color: Color(0xFFF5F7FA))),
+                    Expanded(child: ColoredBox(color: Color(0xFF12161D))),
+                  ]
+                : [
+                    Expanded(
+                      flex: 30,
+                      child: ColoredBox(color: const Color(0xFFFF4F4F)),
+                    ),
+                    Expanded(
+                      flex: 15,
+                      child: ColoredBox(color: const Color(0xFFFF9148)),
+                    ),
+                    Expanded(
+                      flex: 15,
+                      child: ColoredBox(color: const Color(0xFFFFD74A)),
+                    ),
+                    Expanded(
+                      flex: 40,
+                      child: ColoredBox(color: const Color(0xFF7EDC8A)),
+                    ),
+                  ],
+          ),
+        ),
       ),
     );
   }
@@ -9023,7 +9499,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           onPressed: () {
                             Navigator.of(context).pop();
                             if (!openedFromAnalysis) {
-                              _goToMenu();
+                              Future.microtask(() {
+                                if (mounted) {
+                                  _goToMenu();
+                                }
+                              });
                             }
                           },
                           child: Text(
