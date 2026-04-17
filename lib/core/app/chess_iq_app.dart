@@ -29,7 +29,6 @@ class ChessIQApp extends StatelessWidget {
           update: (_, economy, academy) {
             final resolvedAcademy = academy ?? PuzzleAcademyProvider();
             resolvedAcademy.attachEconomyProvider(economy);
-            resolvedAcademy.initialize();
             return resolvedAcademy;
           },
         ),

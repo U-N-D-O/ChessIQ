@@ -55,6 +55,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   bool _didPrimeUi = false;
   bool _didShowAcademyProfilePrompt = false;
   bool _pendingEducationInFlight = false;
+  bool _postFrameWorkQueued = false;
   bool _dismissedProfileSetupToMenu = false;
   String? _lastCelebrationKey;
   _LeaderboardScope _leaderboardScope = _LeaderboardScope.international;
@@ -113,7 +114,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       if (!mounted) return;
       if (_dismissedProfileSetupToMenu) return;
       final provider = context.read<PuzzleAcademyProvider>();
-      await provider.initialize();
+      try {
+        await provider.initialize();
+      } catch (e) {
+        if (!mounted) return;
+        return;
+      }
       if (!mounted) return;
       if (_dismissedProfileSetupToMenu) return;
       _didShowAcademyProfilePrompt = true;
@@ -397,6 +403,40 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     Future<void>.delayed(const Duration(milliseconds: 2400), () {
       if (!mounted) return;
       provider.consumeCelebrationNode();
+    });
+  }
+
+  void _queuePostFrameWork(PuzzleAcademyProvider provider) {
+    if (_postFrameWorkQueued) return;
+    _postFrameWorkQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _postFrameWorkQueued = false;
+      if (!mounted) return;
+      if (_dismissedProfileSetupToMenu) return;
+
+      if (provider.initialized && provider.shouldAskForProfile) {
+        if (!_didShowAcademyProfilePrompt) {
+          _didShowAcademyProfilePrompt = true;
+          try {
+            await _ensureAcademyProfile(provider);
+          } finally {
+            _didShowAcademyProfilePrompt = false;
+          }
+        }
+        return;
+      }
+
+      _handleCelebration(provider);
+      await _showPendingEducation(provider);
+      if (!mounted) return;
+
+      if (!provider.scoreboardLoaded && !provider.scoreboardSyncing) {
+        unawaited(
+          provider.refreshRemoteScoreboard(
+            national: _leaderboardScope == _LeaderboardScope.national,
+          ),
+        );
+      }
     });
   }
 
@@ -735,7 +775,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       _StoreRow(
                         icon: Icons.person_outline,
                         title: 'New Nickname',
-                        subtitle: 'Clear current nickname only',
+                        subtitle:
+                            'Ready for a new identity? Change your nickname.',
                         price: '500 coins',
                         onBuy: () async {
                           final ok = await liveProvider.buyNicknameReset();
@@ -764,7 +805,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       _StoreRow(
                         icon: Icons.flag_outlined,
                         title: 'Change Country',
-                        subtitle: 'Clear current country only',
+                        subtitle:
+                            'Moved to a new place? Update your country/region.',
                         price: '500 coins',
                         onBuy: () async {
                           final ok = await liveProvider.buyCountryReset();
@@ -855,26 +897,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           return Center(child: _buildAcademyLoadingIndicator(materialTheme));
         }
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          if (_dismissedProfileSetupToMenu) return;
-          if (provider.initialized && provider.shouldAskForProfile) {
-            if (!_didShowAcademyProfilePrompt) {
-              _didShowAcademyProfilePrompt = true;
-              _ensureAcademyProfile(provider).whenComplete(() {
-                _didShowAcademyProfilePrompt = false;
-              });
-            }
-            return;
-          }
-          _handleCelebration(provider);
-          _showPendingEducation(provider);
-          if (!provider.scoreboardLoaded && !provider.scoreboardSyncing) {
-            provider.refreshRemoteScoreboard(
-              national: _leaderboardScope == _LeaderboardScope.national,
-            );
-          }
-        });
+        _queuePostFrameWork(provider);
 
         return OrientationBuilder(
           builder: (context, orientation) {
@@ -1155,27 +1178,31 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     Map<SemesterRange, List<EloNodeProgress>> grouped, {
     required bool monochrome,
   }) {
-    _ensureExpandedSemester(provider);
+    _ensureExpandedSemester(provider, autoExpandFirstUnlocked: false);
     return CustomScrollView(
       slivers: [
         _buildSliverAppBar(provider, monochrome: monochrome),
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Column(
-              children: [
-                _buildHeroStatsBar(provider),
-                const SizedBox(height: 12),
-                _DailyChallengeCard(
-                  total: provider.dailyPuzzles.length,
-                  completed: provider.completedTodayDailyCount,
-                  hasTodayPuzzle: provider.hasTodayDailyPuzzle,
-                  onTap: () => _openTodayDailyPuzzle(provider, monochrome),
-                ),
-                const SizedBox(height: 12),
-                _buildScoreboardSection(provider, monochrome),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: _buildHeroStatsBar(provider),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _DailyChallengeCard(
+              total: provider.dailyPuzzles.length,
+              completed: provider.completedTodayDailyCount,
+              hasTodayPuzzle: provider.hasTodayDailyPuzzle,
+              onTap: () => _openTodayDailyPuzzle(provider, monochrome),
             ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+            child: _buildScoreboardSection(provider, monochrome),
           ),
         ),
         for (final entry in grouped.entries) ...[
@@ -1619,11 +1646,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   void _openTodayDailyPuzzle(PuzzleAcademyProvider provider, bool monochrome) {
     final daily = provider.todayDailyPuzzle;
     if (daily == null) return;
+    final sequence = provider.dailyPuzzles;
+    if (sequence.isEmpty) return;
     final dailyNode =
         provider.progress.nodes[provider.keyForRating(daily.rating)];
     if (dailyNode == null) return;
     final dailyIndex = provider.todayDailyPuzzleIndex;
-    if (dailyIndex < 0) return;
+    if (dailyIndex < 0 || dailyIndex >= sequence.length) return;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PuzzleNodeScreen(
@@ -1631,20 +1660,24 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           heroTag: provider.heroTagForNode(dailyNode),
           initialPuzzle: daily,
           initialPuzzleIndex: dailyIndex,
-          puzzleSequence: provider.dailyPuzzles,
+          puzzleSequence: sequence,
           sequenceTitle: 'Daily Challenge',
           cinematicThemeEnabled: monochrome,
-          onExitToMap: () {
-            Navigator.of(context).pop();
-          },
         ),
       ),
     );
   }
 
-  void _ensureExpandedSemester(PuzzleAcademyProvider provider) {
+  void _ensureExpandedSemester(
+    PuzzleAcademyProvider provider, {
+    bool autoExpandFirstUnlocked = true,
+  }) {
     if (_expandedSemesterInitialized) return;
     _expandedSemesterInitialized = true;
+
+    if (!autoExpandFirstUnlocked) {
+      return;
+    }
 
     final unlockedNodes = provider.orderedNodes.where((node) => node.unlocked);
     if (unlockedNodes.isEmpty) {
@@ -1681,9 +1714,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           examMode: true,
           examDuration: provider.examDuration,
           cinematicThemeEnabled: monochrome,
-          onExitToMap: () {
-            Navigator.of(context).pop();
-          },
         ),
       ),
     );
@@ -1720,10 +1750,20 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
     for (final node in provider.orderedNodes) {
       final semester = provider.semesterForNode(node);
-      grouped[semester]!.add(node);
+      grouped.putIfAbsent(semester, () => <EloNodeProgress>[]).add(node);
     }
 
     grouped.removeWhere((_, nodes) => nodes.isEmpty);
+
+    // Defensive fallback: keep portrait map stable even if semester metadata
+    // and node ranges are temporarily out-of-sync during provider refresh.
+    if (grouped.isEmpty && provider.orderedNodes.isNotEmpty) {
+      final fallback = provider.semesters.isNotEmpty
+          ? provider.semesters.first
+          : provider.semesterForNode(provider.orderedNodes.first);
+      grouped[fallback] = List<EloNodeProgress>.from(provider.orderedNodes);
+    }
+
     return grouped;
   }
 }

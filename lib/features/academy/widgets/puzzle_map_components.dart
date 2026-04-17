@@ -1,5 +1,30 @@
 part of 'package:chessiq/features/academy/screens/puzzle_map_screen.dart';
 
+// Theme-aware accent colours for academy widgets.
+Color _accentCyan(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  if (context.read<AppThemeProvider>().isMonochrome) {
+    return isDark ? const Color(0xFF9E9E9E) : const Color(0xFF616161);
+  }
+  return isDark ? const Color(0xFF6FE7FF) : const Color(0xFF0E7490);
+}
+
+Color _accentGold(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  if (context.read<AppThemeProvider>().isMonochrome) {
+    return isDark ? const Color(0xFFBDBDBD) : const Color(0xFF424242);
+  }
+  return isDark ? const Color(0xFFD8B640) : const Color(0xFF9A7B0A);
+}
+
+Color _accentBlue(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  if (context.read<AppThemeProvider>().isMonochrome) {
+    return isDark ? const Color(0xFF9E9E9E) : const Color(0xFF616161);
+  }
+  return isDark ? const Color(0xFF5AAEE8) : const Color(0xFF1565C0);
+}
+
 class _DashboardPanel extends StatelessWidget {
   const _DashboardPanel({
     required this.title,
@@ -16,39 +41,33 @@ class _DashboardPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              scheme.primary.withValues(
-                alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
-              ),
-              scheme.surface,
-            ).withValues(alpha: 0.70),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Color.alphaBlend(
-                accent.withValues(alpha: 0.26),
-                scheme.outline,
-              ),
-            ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          scheme.primary.withValues(
+            alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(color: accent, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 10),
-              child,
-            ],
+          scheme.surface,
+        ).withValues(alpha: 0.70),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Color.alphaBlend(
+            accent.withValues(alpha: 0.26),
+            scheme.outline,
           ),
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(color: accent, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
       ),
     );
   }
@@ -75,100 +94,90 @@ class _DailyChallengeCard extends StatelessWidget {
         ? 0.0
         : (completed / max(1, total)).clamp(0.0, 1.0);
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color.alphaBlend(
-                  scheme.primary.withValues(
-                    alpha: theme.brightness == Brightness.dark ? 0.16 : 0.06,
-                  ),
-                  scheme.surface,
-                ).withValues(alpha: 0.96),
-                Color.alphaBlend(
-                  scheme.secondary.withValues(
-                    alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
-                  ),
-                  scheme.surface,
-                ).withValues(alpha: 0.92),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
-          ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              scheme.primary.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.16 : 0.06,
+              ),
+              scheme.surface,
+            ).withValues(alpha: 0.96),
+            Color.alphaBlend(
+              scheme.secondary.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
+              ),
+              scheme.surface,
+            ).withValues(alpha: 0.92),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.calendar_month_rounded, color: scheme.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Daily Challenge',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                Icon(Icons.calendar_month_rounded, color: scheme.primary),
+                const SizedBox(width: 8),
                 Text(
-                  !hasTodayPuzzle
-                      ? 'No daily set available for today yet.'
-                      : '$completed / $total solved in today\'s challenge set',
+                  'Daily Challenge',
                   style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.72),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    minHeight: 8,
-                    value: progress,
-                    backgroundColor: scheme.outline.withValues(alpha: 0.22),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFFD8B640),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    onPressed: hasTodayPuzzle ? onTap : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF5AAEE8),
-                      foregroundColor: const Color(0xFF07131F),
-                      disabledBackgroundColor: scheme.outline.withValues(
-                        alpha: 0.20,
-                      ),
-                      disabledForegroundColor: scheme.onSurface.withValues(
-                        alpha: 0.42,
-                      ),
-                    ),
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: Text(
-                      hasTodayPuzzle
-                          ? "Solve Today's Puzzle"
-                          : 'Check Back Later!',
-                    ),
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              !hasTodayPuzzle
+                  ? 'No daily set available for today yet.'
+                  : '$completed / $total solved in today\'s challenge set',
+              style: TextStyle(color: scheme.onSurface.withValues(alpha: 0.72)),
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                value: progress,
+                backgroundColor: scheme.outline.withValues(alpha: 0.22),
+                valueColor: AlwaysStoppedAnimation<Color>(_accentGold(context)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: hasTodayPuzzle ? onTap : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _accentBlue(context),
+                  foregroundColor: theme.brightness == Brightness.dark
+                      ? const Color(0xFF07131F)
+                      : Colors.white,
+                  disabledBackgroundColor: scheme.outline.withValues(
+                    alpha: 0.20,
+                  ),
+                  disabledForegroundColor: scheme.onSurface.withValues(
+                    alpha: 0.42,
+                  ),
+                ),
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: Text(
+                  hasTodayPuzzle ? "Solve Today's Puzzle" : 'Check Back Later!',
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -192,7 +201,7 @@ class _LeaderboardCard extends StatelessWidget {
 
     return _DashboardPanel(
       title: title,
-      accent: const Color(0xFF6FE7FF),
+      accent: _accentCyan(context),
       child: entries.isEmpty
           ? Text(
               emptyLabel,
@@ -210,8 +219,8 @@ class _LeaderboardCard extends StatelessWidget {
                             width: 28,
                             child: Text(
                               '${entry.rank}',
-                              style: const TextStyle(
-                                color: Color(0xFFD8B640),
+                              style: TextStyle(
+                                color: _accentGold(context),
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -280,85 +289,77 @@ class _SemesterHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return ClipRRect(
+    return InkWell(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                scheme.primary.withValues(
-                  alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
-                ),
-                scheme.surface,
-              ).withValues(alpha: 0.70),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            scheme.primary.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            scheme.surface,
+          ).withValues(alpha: 0.70),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${semester.title} • ${semester.minElo}-${semester.maxElo}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: scheme.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                Expanded(
+                  child: Text(
+                    '${semester.title} • ${semester.minElo}-${semester.maxElo}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onSurface,
                     ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      expanded ? Icons.expand_less : Icons.expand_more,
-                      color: scheme.onSurface.withValues(alpha: 0.72),
-                      size: 18,
-                    ),
-                  ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Text(
-                      '$nodeCount Levels',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.72),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      expanded ? 'Hide' : 'Show',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.72),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  size: 18,
                 ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    minHeight: 7,
-                    value: progress,
-                    backgroundColor: scheme.outline.withValues(alpha: 0.22),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF6FE7FF),
-                    ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(
+                  '$nodeCount Levels',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: 12,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  expanded ? 'Hide' : 'Show',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 7,
+                value: progress,
+                backgroundColor: scheme.outline.withValues(alpha: 0.22),
+                valueColor: AlwaysStoppedAnimation<Color>(_accentCyan(context)),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -414,48 +415,42 @@ class _PuzzleNodeCard extends StatelessWidget {
       scheme.surface,
     );
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: locked
-                  ? [
-                      cardBase.withValues(alpha: 0.70),
-                      Color.alphaBlend(
-                        scheme.primary.withValues(alpha: 0.02),
-                        scheme.surface,
-                      ).withValues(alpha: 0.70),
-                    ]
-                  : [
-                      cardBase.withValues(alpha: 0.70),
-                      Color.alphaBlend(
-                        scheme.secondary.withValues(alpha: 0.05),
-                        scheme.surface,
-                      ).withValues(alpha: 0.70),
-                    ],
-            ),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: locked
-                  ? scheme.outline.withValues(alpha: 0.25)
-                  : scheme.outline.withValues(alpha: 0.34),
-            ),
-          ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(22),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-              child: compact
-                  ? _buildCompactContent(context, locked)
-                  : _buildPortraitContent(context, locked),
-            ),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: locked
+              ? [
+                  cardBase.withValues(alpha: 0.70),
+                  Color.alphaBlend(
+                    scheme.primary.withValues(alpha: 0.02),
+                    scheme.surface,
+                  ).withValues(alpha: 0.70),
+                ]
+              : [
+                  cardBase.withValues(alpha: 0.70),
+                  Color.alphaBlend(
+                    scheme.secondary.withValues(alpha: 0.05),
+                    scheme.surface,
+                  ).withValues(alpha: 0.70),
+                ],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: locked
+              ? scheme.outline.withValues(alpha: 0.25)
+              : scheme.outline.withValues(alpha: 0.34),
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+          child: compact
+              ? _buildCompactContent(context, locked)
+              : _buildPortraitContent(context, locked),
         ),
       ),
     );
@@ -495,7 +490,7 @@ class _PuzzleNodeCard extends StatelessWidget {
                     children: [
                       _InfoTag(
                         label: '${node.solvedCount}/${node.masteryTarget}',
-                        accent: const Color(0xFF5AAEE8),
+                        accent: _accentBlue(context),
                       ),
                       const SizedBox(width: 6),
                       if (bestExamScore != null)
@@ -503,14 +498,14 @@ class _PuzzleNodeCard extends StatelessWidget {
                           label: bestExamGrade != null
                               ? '$bestExamGrade $bestExamScore'
                               : '$bestExamScore pts',
-                          accent: const Color(0xFFD8B640),
+                          accent: _accentGold(context),
                         ),
                     ],
                   ),
                 ],
               ),
             ),
-            _statusCluster(),
+            _statusCluster(context),
           ],
         ),
         const SizedBox(height: 10),
@@ -522,13 +517,13 @@ class _PuzzleNodeCard extends StatelessWidget {
                 if (requiresPreviousSolveTarget)
                   _InfoTag(
                     label: '100 solves prev',
-                    accent: const Color(0xFF71B7FF),
+                    accent: _accentBlue(context),
                   ),
                 if (requiresPreviousSolveTarget) const SizedBox(width: 6),
                 if (requiresPreviousSemesterExamGate)
                   _InfoTag(
                     label: 'Prev sem exam',
-                    accent: const Color(0xFFD8B640),
+                    accent: _accentGold(context),
                   ),
               ],
             ),
@@ -540,10 +535,10 @@ class _PuzzleNodeCard extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: onExamTap,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFD8B640),
-                    side: const BorderSide(color: Color(0xFFD8B640)),
-                    backgroundColor: const Color(
-                      0xFFD8B640,
+                    foregroundColor: _accentGold(context),
+                    side: BorderSide(color: _accentGold(context)),
+                    backgroundColor: _accentGold(
+                      context,
                     ).withValues(alpha: 0.08),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
@@ -561,12 +556,14 @@ class _PuzzleNodeCard extends StatelessWidget {
                       ? Theme.of(
                           context,
                         ).colorScheme.outline.withValues(alpha: 0.28)
-                      : const Color(0xFF5AAEE8),
+                      : _accentBlue(context),
                   foregroundColor: locked
                       ? Theme.of(
                           context,
                         ).colorScheme.onSurface.withValues(alpha: 0.70)
-                      : const Color(0xFF07131F),
+                      : Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF07131F)
+                      : Colors.white,
                 ),
                 child: Text(
                   locked
@@ -587,20 +584,20 @@ class _PuzzleNodeCard extends StatelessWidget {
             if (locked && previousSolveRequirementText != null)
               _InfoTag(
                 label: previousSolveRequirementText!,
-                accent: const Color(0xFF71B7FF),
+                accent: _accentBlue(context),
               ),
             if (locked && previousSolveRequirementText != null)
               const SizedBox(width: 6),
             if (locked && lockedRequirementText != null)
               _InfoTag(
                 label: lockedRequirementText!,
-                accent: const Color(0xFFD8B640),
+                accent: _accentGold(context),
               ),
             if (locked && lockedRequirementText != null)
               const SizedBox(width: 6),
             _InfoTag(
               label: locked ? 'Locked' : 'Training',
-              accent: locked ? scheme.outline : const Color(0xFF5AAEE8),
+              accent: locked ? scheme.outline : _accentBlue(context),
             ),
           ],
         ),
@@ -612,9 +609,7 @@ class _PuzzleNodeCard extends StatelessWidget {
             value: node.masteryProgress,
             backgroundColor: scheme.outline.withValues(alpha: 0.22),
             valueColor: AlwaysStoppedAnimation<Color>(
-              node.goldCrown
-                  ? const Color(0xFFD8B640)
-                  : const Color(0xFF6FE7FF),
+              node.goldCrown ? _accentGold(context) : _accentCyan(context),
             ),
           ),
         ),
@@ -653,7 +648,7 @@ class _PuzzleNodeCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _statusCluster(),
+                  _statusCluster(context),
                 ],
               ),
               const SizedBox(height: 6),
@@ -666,13 +661,13 @@ class _PuzzleNodeCard extends StatelessWidget {
                       if (requiresPreviousSolveTarget)
                         _InfoTag(
                           label: '100 solves prev',
-                          accent: const Color(0xFF71B7FF),
+                          accent: _accentBlue(context),
                         ),
                       if (requiresPreviousSolveTarget) const SizedBox(width: 6),
                       if (requiresPreviousSemesterExamGate)
                         _InfoTag(
                           label: 'Prev sem exam',
-                          accent: const Color(0xFFD8B640),
+                          accent: _accentGold(context),
                         ),
                     ],
                   ),
@@ -713,12 +708,14 @@ class _PuzzleNodeCard extends StatelessWidget {
                             ? Theme.of(
                                 context,
                               ).colorScheme.outline.withValues(alpha: 0.28)
-                            : const Color(0xFF5AAEE8),
+                            : _accentBlue(context),
                         foregroundColor: locked
                             ? Theme.of(
                                 context,
                               ).colorScheme.onSurface.withValues(alpha: 0.70)
-                            : const Color(0xFF07131F),
+                            : Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF07131F)
+                            : Colors.white,
                       ),
                       child: Text(locked ? 'Locked' : 'Train'),
                     ),
@@ -730,10 +727,10 @@ class _PuzzleNodeCard extends StatelessWidget {
                         onPressed: onExamTap,
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          foregroundColor: const Color(0xFFD8B640),
-                          side: const BorderSide(color: Color(0xFFD8B640)),
-                          backgroundColor: const Color(
-                            0xFFD8B640,
+                          foregroundColor: _accentGold(context),
+                          side: BorderSide(color: _accentGold(context)),
+                          backgroundColor: _accentGold(
+                            context,
                           ).withValues(alpha: 0.08),
                         ),
                         child: const Text('Exam'),
@@ -751,8 +748,8 @@ class _PuzzleNodeCard extends StatelessWidget {
                   backgroundColor: scheme.outline.withValues(alpha: 0.22),
                   valueColor: AlwaysStoppedAnimation<Color>(
                     node.goldCrown
-                        ? const Color(0xFFD8B640)
-                        : const Color(0xFF6FE7FF),
+                        ? _accentGold(context)
+                        : _accentCyan(context),
                   ),
                 ),
               ),
@@ -763,15 +760,15 @@ class _PuzzleNodeCard extends StatelessWidget {
     );
   }
 
-  Widget _statusCluster() {
+  Widget _statusCluster(BuildContext context) {
     return Wrap(
       spacing: 6,
       runSpacing: 6,
       children: [
         if (node.goldCrown)
-          const _Tag(
+          _Tag(
             text: 'Gold Crown',
-            color: Color(0xFFD8B640),
+            color: _accentGold(context),
             icon: Icons.workspace_premium,
           ),
         if (showGhost)
@@ -835,7 +832,7 @@ class _HeroBadge extends StatelessWidget {
             ),
             border: Border.all(
               color: node.goldCrown
-                  ? const Color(0xFFD8B640)
+                  ? _accentGold(context)
                   : scheme.primary.withValues(alpha: 0.50),
             ),
           ),
@@ -1036,8 +1033,8 @@ class _StoreRow extends StatelessWidget {
           ),
           Text(
             price,
-            style: const TextStyle(
-              color: Color(0xFFD8B640),
+            style: TextStyle(
+              color: _accentGold(context),
               fontWeight: FontWeight.w800,
             ),
           ),

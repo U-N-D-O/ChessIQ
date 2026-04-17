@@ -84,6 +84,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   bool _userMovesOnOddPly = true;
   bool _coachingOffScript = false;
   bool _muteSounds = false;
+  bool _hapticsEnabled = true;
   int _pendingRegretHalfMoves = 0;
   final List<PuzzleItem> _examMistakePuzzles = <PuzzleItem>[];
   final Set<String> _examMistakePuzzleIds = <String>{};
@@ -148,11 +149,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             (candidate) => candidate.puzzleId == puzzle.puzzleId,
           )
         : provider.indexOfPuzzleInNode(widget.node, puzzle.puzzleId);
-    _loadPuzzle(
-      puzzle,
-      widget.initialPuzzleIndex ?? fallbackIndex,
-      historicalView: widget.initialReviewMode,
-    );
+    final requestedIndex = widget.initialPuzzleIndex ?? fallbackIndex;
+    final safeIndex = _usesCustomSequence
+        ? (_activeSequence.isEmpty
+              ? 0
+              : requestedIndex.clamp(0, _activeSequence.length - 1).toInt())
+        : max(0, requestedIndex);
+    _loadPuzzle(puzzle, safeIndex, historicalView: widget.initialReviewMode);
     _startExamClockIfNeeded();
   }
 
@@ -176,6 +179,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
     setState(() {
       _muteSounds = prefs.getBool(_muteSoundsKey) ?? false;
+      _hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
     });
   }
 
@@ -200,9 +204,15 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final playerIsBlack = game.turn == chess.Color.BLACK;
     final solvedOnLoad = nextLineIndex >= puzzle.moves.length;
 
+    final normalizedIndex = _usesCustomSequence
+        ? (_activeSequence.isEmpty
+              ? 0
+              : index.clamp(0, _activeSequence.length - 1).toInt())
+        : max(0, index);
+
     setState(() {
       _puzzle = puzzle;
-      _puzzleIndex = max(0, index);
+      _puzzleIndex = normalizedIndex;
       _lineIndex = nextLineIndex;
       _busy = false;
       _solved = solvedOnLoad;
@@ -761,7 +771,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     unawaited(_playBoardMoveSound(isCapture: wasCapture));
 
-    await HapticFeedback.lightImpact();
+    if (_hapticsEnabled) await HapticFeedback.lightImpact();
     if (!_focusModeActive) {
       setState(() => _focusModeActive = true);
     }
@@ -792,7 +802,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     final attemptedWasCapture = _isCaptureUci(attemptedUci);
     if (!_applyUciMove(attemptedUci)) {
-      await HapticFeedback.heavyImpact();
+      if (_hapticsEnabled) await HapticFeedback.heavyImpact();
       if (!mounted) return;
       setState(() {
         _focusModeActive = false;
@@ -809,7 +819,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       await provider.recordPuzzleMiss(rating: puzzle.rating);
     }
 
-    await HapticFeedback.heavyImpact();
+    if (_hapticsEnabled) await HapticFeedback.heavyImpact();
     if (!mounted) return;
 
     _setGreyArrowFromUci(attemptedUci, animate: true);
@@ -876,7 +886,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Future<void> _handleExamWrongMove(String attemptedUci) async {
-    await HapticFeedback.heavyImpact();
+    if (_hapticsEnabled) await HapticFeedback.heavyImpact();
     if (!mounted) return;
 
     _setGreyArrowFromUci(attemptedUci, animate: true);
@@ -1036,7 +1046,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     if (_isExamMode) {
-      await HapticFeedback.mediumImpact();
+      if (_hapticsEnabled) await HapticFeedback.mediumImpact();
       if (!mounted) return;
       setState(() {
         _status = 'Correct. Loading the next exam puzzle...';
@@ -1063,7 +1073,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     setState(() {});
 
-    await HapticFeedback.mediumImpact();
+    if (_hapticsEnabled) await HapticFeedback.mediumImpact();
   }
 
   Future<void> _maybeShowAcademyInterstitialReward(
@@ -1113,7 +1123,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       remaining -= 1;
     }
 
-    await HapticFeedback.selectionClick();
+    if (_hapticsEnabled) await HapticFeedback.selectionClick();
     if (!mounted) return;
 
     setState(() {
@@ -1418,6 +1428,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
 
+    final navigator = Navigator.of(context);
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
     final callback = widget.onExitToMap;
     final isReviewMistakeExit =
         widget.initialReviewMode && widget.sequenceTitle == 'Review Mistakes';
@@ -1425,11 +1437,17 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       if (isReviewMistakeExit) {
         await AdService.instance.showInterstitialAd();
       }
-      callback();
+      if (!mounted) return;
+      try {
+        callback();
+      } catch (_) {
+        if (await navigator.maybePop()) {
+          return;
+        }
+        await rootNavigator.maybePop();
+      }
       return;
     }
-    final navigator = Navigator.of(context);
-    final rootNavigator = Navigator.of(context, rootNavigator: true);
     if (isReviewMistakeExit) {
       await AdService.instance.showInterstitialAd();
     }
@@ -1782,6 +1800,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       },
       onHapticsEnabledChanged: (enabled) async {
         await prefs.setBool(_hapticsEnabledKey, enabled);
+        if (mounted) setState(() => _hapticsEnabled = enabled);
       },
     );
   }

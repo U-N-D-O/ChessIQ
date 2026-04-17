@@ -189,6 +189,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _academyTuitionPassOwned = false;
   bool _introCompleted = true;
   bool _suggestionsEnabled = false;
+  bool _vsBotEvalBarOnly = false;
   bool _suggestionLaunchInProgress = false;
   bool _suggestionBurstActive = false;
   Offset? _launchStart;
@@ -1154,9 +1155,41 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool get _isEngineActive => _suggestionsEnabled;
 
-  bool get _shouldShowVisualSuggestions => _isEngineActive && _multiPvCount > 0;
+  bool get _shouldShowVisualSuggestions =>
+      _isEngineActive &&
+      _multiPvCount > 0 &&
+      !(_playVsBot && _vsBotEvalBarOnly);
 
   bool get _shouldKeepEvalActive => _isEngineActive;
+
+  bool get _shouldShowDepthCounter => _shouldKeepEvalActive;
+
+  void _disableEngineInsights() {
+    setState(() {
+      _suggestionsEnabled = false;
+      _vsBotEvalBarOnly = false;
+      _topLines = [];
+      _currentDepth = 0;
+    });
+    _send('stop');
+  }
+
+  void _toggleVsBotEvalBar() {
+    if (!_playVsBot) return;
+    if (_isEngineActive && _vsBotEvalBarOnly) {
+      _disableEngineInsights();
+      return;
+    }
+
+    setState(() {
+      _suggestionsEnabled = true;
+      _vsBotEvalBarOnly = true;
+      _topLines = [];
+      _currentDepth = 0;
+    });
+    _analyze();
+    _addLog('Stockfish evaluation activated');
+  }
 
   bool _isBoardThemeUnlocked(BoardThemeMode mode) {
     return AppThemeProvider.isBoardThemeIndexUnlocked(
@@ -1526,6 +1559,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _send('stop');
     _send('ucinewgame');
     _clearBotGhostArrows();
+    _clearVsBotOverlayState();
     boardState = _initialBoardState();
     _isWhiteTurn = true;
     _resetSpecialMoveState();
@@ -3817,6 +3851,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _activeSection = AppSection.analysis;
         _playVsBot = true;
         _selectedBot = bot;
+        _vsBotEvalBarOnly = false;
         if (switchedOpponent) {
           _vsBotSessionWins = 0;
           _vsBotSessionLosses = 0;
@@ -3828,7 +3863,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       });
 
       await _ensureEngineStarted();
-      _resetBoard(initialLaunch: false, withIntro: false);
+      _resetBoard(initialLaunch: false, withIntro: true);
 
       if (!mounted) return;
       setState(() {
@@ -5125,6 +5160,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       },
     );
   }
+
+  Widget _buildSceneIntroOverlay(Size scene, double scale) {
+    return _buildPremiumIntroOverlay(scene);
+  }
+
+  Key? get _botAvatarWidgetKey => null;
+
+  Widget _buildBotAvatarOverlay(double scale) {
+    return const SizedBox.shrink();
+  }
+
+  void _clearVsBotOverlayState() {}
 
   Offset? _squareCenterInScene(String square) {
     final boardContext = _boardKey.currentContext;
@@ -6754,22 +6801,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                           ),
                                                                         ),
                                                                       ),
-                                                                    const SizedBox(
-                                                                      width: 6,
-                                                                    ),
-                                                                    Text(
-                                                                      'Depth $_currentDepth',
-                                                                      style: TextStyle(
-                                                                        color: scheme
-                                                                            .onSurface
-                                                                            .withValues(
-                                                                              alpha: 0.54,
-                                                                            ),
-                                                                        fontSize:
-                                                                            11 *
-                                                                            scale,
+                                                                    if (_shouldShowDepthCounter)
+                                                                      const SizedBox(
+                                                                        width: 6,
                                                                       ),
-                                                                    ),
+                                                                    if (_shouldShowDepthCounter)
+                                                                      Text(
+                                                                        'Depth $_currentDepth',
+                                                                        style: TextStyle(
+                                                                          color: scheme
+                                                                              .onSurface
+                                                                              .withValues(
+                                                                                alpha: 0.54,
+                                                                              ),
+                                                                          fontSize:
+                                                                              11 *
+                                                                              scale,
+                                                                        ),
+                                                                      ),
                                                                   ],
                                                                 ),
                                                               ),
@@ -6961,7 +7010,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 ),
                         ),
                         if (!_introCompleted)
-                          _buildPremiumIntroOverlay(Size(width, height)),
+                          _buildSceneIntroOverlay(Size(width, height), scale),
                         if (_editModeHintText != null)
                           Positioned.fill(
                             child: IgnorePointer(
@@ -7086,15 +7135,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           ),
                           SizedBox(
                             width: 120 * scale,
-                            child: Text(
-                              'Engine: Stockfish 18',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: scheme.onSurface.withValues(alpha: 0.54),
-                                fontSize: 10 * scale,
-                                letterSpacing: 0.4,
-                              ),
-                            ),
+                            child: !_playVsBot
+                                ? Text(
+                                    'Engine: Stockfish 18',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: scheme.onSurface.withValues(
+                                        alpha: 0.54,
+                                      ),
+                                      fontSize: 10 * scale,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  )
+                                : null,
                           ),
                         ],
                       ),
@@ -7103,49 +7156,62 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   if (_playVsBot && selectedBot != null)
                     Align(
                       alignment: Alignment.centerRight,
-                      child: InkWell(
-                        onTap: _onBotAvatarTapped,
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          width: 34 * scale,
-                          height: 34 * scale,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(
-                                0xFF9ED8FF,
-                              ).withValues(alpha: 0.38),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.centerRight,
+                        children: [
+                          Positioned(
+                            right: 42 * scale,
+                            child: IgnorePointer(
+                              child: _buildBotAvatarOverlay(scale),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(
-                                  alpha: isDark ? 0.24 : 0.10,
+                          ),
+                          InkWell(
+                            onTap: _onBotAvatarTapped,
+                            borderRadius: BorderRadius.circular(999),
+                            child: Container(
+                              key: _botAvatarWidgetKey,
+                              width: 34 * scale,
+                              height: 34 * scale,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF9ED8FF,
+                                  ).withValues(alpha: 0.38),
                                 ),
-                                blurRadius: 10 * scale,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child: selectedBot.avatarAsset != null
-                                ? Image.asset(
-                                    selectedBot.avatarAsset!,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(
-                                    color: Color.alphaBlend(
-                                      scheme.primary.withValues(alpha: 0.08),
-                                      scheme.surface,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(
+                                      alpha: isDark ? 0.24 : 0.10,
                                     ),
-                                    alignment: Alignment.center,
-                                    child: Icon(
-                                      Icons.smart_toy_outlined,
-                                      color: const Color(0xFF9ED8FF),
-                                      size: 18 * scale,
-                                    ),
+                                    blurRadius: 10 * scale,
+                                    offset: const Offset(0, 3),
                                   ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: selectedBot.avatarAsset != null
+                                    ? Image.asset(
+                                        selectedBot.avatarAsset!,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Container(
+                                        color: Color.alphaBlend(
+                                          scheme.primary.withValues(alpha: 0.08),
+                                          scheme.surface,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Icon(
+                                          Icons.smart_toy_outlined,
+                                          color: const Color(0xFF9ED8FF),
+                                          size: 18 * scale,
+                                        ),
+                                      ),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                 ],
@@ -7207,60 +7273,88 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               child: SizedBox(
                 width: 120 * scale,
                 height: 20 * scale,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Positioned(
-                      right: 0,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Depth $_currentDepth',
-                            style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.54),
-                              fontSize: 11 * scale,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     if (!_playVsBot)
-                      Positioned(
-                        right: 84 * scale,
-                        child: SizedBox(
-                          width: 20 * scale,
-                          height: 20 * scale,
-                          child: IconButton(
-                            onPressed: () {
-                              setState(() {
-                                _analysisEditMode = !_analysisEditMode;
-                                _holdSelectedFrom = null;
-                                _gambitSelectedFrom = null;
-                                _legalTargets.clear();
-                                _gambitAvailableTargets.clear();
-                                _editModeHintText = _analysisEditMode
-                                    ? 'Edit mode on'
-                                    : 'Edit mode off';
-                              });
-                              _scheduleEditModeHintHide();
-                            },
-                            icon: Text(
-                              _analysisEditMode ? '🛠️' : '🔒',
-                              style: TextStyle(fontSize: 14 * scale),
-                            ),
-                            tooltip: _analysisEditMode
-                                ? 'Edit mode on (any move allowed)'
-                                : 'Edit mode off (legal moves only)',
-                            splashRadius: 14 * scale,
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: BoxConstraints.tightFor(
-                              width: 20 * scale,
-                              height: 20 * scale,
-                            ),
+                      SizedBox(
+                        width: 20 * scale,
+                        height: 20 * scale,
+                        child: IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _analysisEditMode = !_analysisEditMode;
+                              _holdSelectedFrom = null;
+                              _gambitSelectedFrom = null;
+                              _legalTargets.clear();
+                              _gambitAvailableTargets.clear();
+                              _editModeHintText = _analysisEditMode
+                                  ? 'Edit mode on'
+                                  : 'Edit mode off';
+                            });
+                            _scheduleEditModeHintHide();
+                          },
+                          icon: Text(
+                            _analysisEditMode ? '🛠️' : '🔒',
+                            style: TextStyle(fontSize: 14 * scale),
                           ),
+                          tooltip: _analysisEditMode
+                              ? 'Edit mode on (any move allowed)'
+                              : 'Edit mode off (legal moves only)',
+                          splashRadius: 14 * scale,
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: BoxConstraints.tightFor(
+                            width: 20 * scale,
+                            height: 20 * scale,
+                          ),
+                        ),
+                      ),
+                    if (_playVsBot)
+                      IconButton(
+                        onPressed: _toggleVsBotEvalBar,
+                        tooltip: _isEngineActive && _vsBotEvalBarOnly
+                            ? 'Turn off eval bar'
+                            : 'Turn on eval bar',
+                        icon: Icon(
+                          Icons.analytics_outlined,
+                          size: 16 * scale,
+                          color: _isEngineActive && _vsBotEvalBarOnly
+                              ? const Color(0xFF9ED8FF)
+                              : scheme.onSurface.withValues(alpha: 0.62),
+                        ),
+                        style: IconButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          fixedSize: Size(20 * scale, 20 * scale),
+                          backgroundColor: _isEngineActive && _vsBotEvalBarOnly
+                              ? Color.alphaBlend(
+                                  const Color(
+                                    0xFF9ED8FF,
+                                  ).withValues(alpha: isDark ? 0.16 : 0.10),
+                                  scheme.surface,
+                                )
+                              : Colors.transparent,
+                          side: BorderSide(
+                            color: _isEngineActive && _vsBotEvalBarOnly
+                                ? const Color(
+                                    0xFF9ED8FF,
+                                  ).withValues(alpha: 0.42)
+                                : scheme.outline.withValues(alpha: 0.26),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8 * scale),
+                          ),
+                        ),
+                      ),
+                    if (_shouldShowDepthCounter)
+                      SizedBox(width: _playVsBot ? 8 * scale : 6),
+                    if (_shouldShowDepthCounter)
+                      Text(
+                        'Depth $_currentDepth',
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.54),
+                          fontSize: 11 * scale,
                         ),
                       ),
                   ],
@@ -8227,14 +8321,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_isEngineActive) {
       return GestureDetector(
         key: _suggestionButtonKey,
-        onTap: () {
-          setState(() {
-            _suggestionsEnabled = false;
-            _topLines = [];
-            _currentDepth = 0;
-          });
-          _send('stop');
-        },
+        onTap: _disableEngineInsights,
         onLongPress: _playVsBot
             ? null
             : () {
@@ -8277,6 +8364,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : () async {
               if (_playVsBot) {
                 setState(() {
+                  _vsBotEvalBarOnly = false;
                   _suggestionsEnabled = true;
                 });
                 _analyze();

@@ -528,10 +528,14 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _basePuzzleCountsByNode = await _loadBasePuzzleCounts();
-      _dailyPuzzleAssetPaths = await _loadDailyAssetPaths();
-      await _initServerDate();
-      await _refreshTodayDailyPuzzle(notify: false);
+      _basePuzzleCountsByNode = await _loadBasePuzzleCounts().catchError(
+        (_) => <String, int>{},
+      );
+      _dailyPuzzleAssetPaths = await _loadDailyAssetPaths().catchError(
+        (_) => <String>[],
+      );
+      await _initServerDate().catchError((_) {});
+      await _refreshTodayDailyPuzzle(notify: false).catchError((_) {});
 
       final fallbackNodes = _buildInitialNodes(_basePuzzleCountsByNode);
       final prefs = await SharedPreferences.getInstance();
@@ -566,7 +570,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
             .where((node) => node.unlocked)
             .map((node) => node.key)
             .toSet(),
-      );
+      ).catchError((_) {});
       if (_economyProvider?.loaded == true) {
         _progress = progress.copyWith(coins: _economyProvider!.coins);
       } else {
