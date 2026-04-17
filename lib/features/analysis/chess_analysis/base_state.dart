@@ -21,20 +21,741 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _engineOwner;
   late AnimationController _pulseController;
   late AnimationController _introController;
-                    alpha: isLight ? 0.78 : 0.54,
-                  );
+  late AnimationController _menuRevealController;
+  late AnimationController _launchController;
+  late AnimationController _menuMusicFadeController;
+  late AnimationController _sectionTransitionController;
+  late AnimationController _menuExitAnimationController;
+  late AnimationController _buttonRippleController;
+  late AnimationController _openingButtonFlashController;
+  late AnimationController _storeCoinGainController;
+  bool _openingButtonFlashRed = false;
+  Offset? _buttonRippleCenter;
+  Offset? _storeCoinGainCenter;
+  int _storeCoinGainAmount = 10;
+  bool _buttonUnlocked = false;
+  final AudioPlayer _introAudioPlayer = AudioPlayer();
+  final AudioPlayer _menuAudioPlayer = AudioPlayer();
+  final AudioPlayer _sfxAudioPlayer = AudioPlayer();
+  final List<_MenuSparkParticle> _menuSparkParticles = <_MenuSparkParticle>[];
+  final List<_CreditsBackdropDot> _creditsBackdropDots =
+      <_CreditsBackdropDot>[];
+  final Random _creditsBackdropRandom = Random();
+  bool _creditsDialogOpen = false;
+  bool _menuDotsPreviouslyColliding = false;
+  Offset _blueMenuDotPosition = Offset.zero;
+  Offset _yellowMenuDotPosition = Offset.zero;
+  Offset _blueMenuDotVelocity = Offset.zero;
+  Offset _yellowMenuDotVelocity = Offset.zero;
+  Size? _botSetupLastLayoutSize;
+  double _botSetupLastScrollPosition = 0.0;
+  double _botSetupScrollForce = 0.0;
+  double _blueDotScrollVelocity = 0.0;
+  double _blueDotScrollOffset = 0.0;
+  Timer? _idleInterstitialTimer;
+  bool _screenActive = true;
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+  DateTime? _menuSparkLastUpdate;
+  DateTime? _creditsBackdropLastUpdate;
+  double _menuDotTime = 0.0;
+  double _blueYellowContactTime = 0.0;
+  late final double _blueDotPhase;
+  late final double _yellowDotPhase;
+  late final double _blueDotSpeed;
+  late final double _yellowDotSpeed;
+  late final double _blueDotRadius;
+  late final double _yellowDotRadius;
+  late final double _blueDotTrajectoryNoise;
+  late final double _yellowDotTrajectoryNoise;
+  late final double _blueDotShapeSeed;
+  late final double _yellowDotShapeSeed;
+  static const double _menuCenterBaseSpinSpeed = 0.24;
+  static const double _menuCenterMaxSpinSpeed = 6.0;
+  static const double _menuCenterSpinDecayRate = 0.9;
+  static const double _menuCenterCollisionStreakWindow = 1.2;
+
+  double _menuCenterRotationA = 0.0;
+  double _menuCenterRotationB = 0.0;
+  int _menuCenterShapeSidesA = 4;
+  int _menuCenterShapeSidesB = 5;
+  double _menuCenterShapeChangeTimerA = 1.6;
+  double _menuCenterShapeChangeTimerB = 1.2;
+  double _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
+  DateTime? _menuCenterLastUpdate;
+  DateTime? _menuCenterLastCollision;
+  int _menuCenterCollisionStreakCount = 0;
+  static const int _boardSfxPlayerPoolSize = 4;
+  final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
+    _boardSfxPlayerPoolSize,
+    (_) => AudioPlayer(),
+  );
+  int _nextBoardSfxPlayerIndex = 0;
+  bool _menuMusicPlaying = false;
+  bool _isHotkeyResetting = false;
+  Future<void>? _engineStartFuture;
+  final GlobalKey _sceneKey = GlobalKey();
+  final GlobalKey _boardKey = GlobalKey();
+  final GlobalKey _suggestionButtonKey = GlobalKey();
+  final GlobalKey _storeButtonKey = GlobalKey();
+  final GlobalKey _evalBarHorizontalKey = GlobalKey();
+  final GlobalKey _evalBarVerticalKey = GlobalKey();
+
+  int _currentDepth = 0;
+  double _currentEval = 0.0;
+  bool _evalWhiteTurn =
+      true; // whose turn it was when _currentEval was last set
+  int _multiPvCount = _defaultMultiPvCount;
+  int _engineDepth = _defaultEngineDepth;
+  bool _isWhiteTurn = true;
+  bool _whiteKingMoved = false;
+  bool _blackKingMoved = false;
+  bool _whiteKingsideRookMoved = false;
+  bool _whiteQueensideRookMoved = false;
+  bool _blackKingsideRookMoved = false;
+  bool _blackQueensideRookMoved = false;
+  String? _enPassantTarget;
+  BoardPerspective _perspective = _defaultPerspective;
+  BoardThemeMode _boardThemeMode = _defaultBoardTheme;
+  PieceThemeMode _pieceThemeMode = _defaultPieceTheme;
+
+  List<EngineLine> _topLines = [];
+  final List<MoveRecord> _moveHistory = [];
+  int _historyIndex = -1;
+  late ScrollController _historyScrollController;
+  final Map<String, String> _ecoOpenings = {};
+  final List<EcoLine> _ecoLines = [];
+  int _quizEligibleCount = 0;
+  final Map<String, List<EcoLine>> _quizEligiblePoolCache =
+      <String, List<EcoLine>>{};
+  final Map<String, Set<String>> _quizEligibleNameCache =
+      <String, Set<String>>{};
+  bool _quizPoolsPrecomputed = false;
+  String _currentOpening = '';
+  final List<String> _logs = [];
+  OpeningMode _openingMode = OpeningMode.off;
+  String? _gambitSelectedFrom;
+  String? _holdSelectedFrom;
+  final Set<String> _legalTargets = <String>{};
+  final Set<String> _gambitAvailableTargets = <String>{};
+  EcoLine? _selectedGambit;
+  List<EngineLine> _gambitPreviewLines = [];
+  final Random _rng = Random();
+  bool _playVsBot = false;
+  bool _humanPlaysWhite = true;
+  bool _botThinking = false;
+  final List<_GhostArrow> _botGhostArrows = <_GhostArrow>[];
+  final Map<int, Timer> _botGhostArrowTimers = <int, Timer>{};
+  int _ghostArrowIdSeed = 0;
+  BotCharacter? _selectedBot;
+  int _vsBotSessionWins = 0;
+  int _vsBotSessionLosses = 0;
+  int _vsBotSessionDraws = 0;
+  Completer<List<EngineLine>>? _botSearchCompleter;
+  final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
+  int _botSearchMultiPv = 1;
+  final PageController _botSetupPageController = PageController(
+    viewportFraction: 0.60,
+  );
+  int _botSetupSelectedIndex = 0;
+  Future<void> _loadLastBotIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final idx = prefs.getInt(_lastBotIndexKey);
+    if (idx != null && idx >= 0 && idx < _botCharacters.length) {
+      setState(() {
+        _botSetupSelectedIndex = idx;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_botSetupPageController.hasClients) {
+          _botSetupPageController.jumpToPage(idx);
+        }
+      });
+    }
+  }
+
+  Future<void> _saveLastBotIndex(int idx) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastBotIndexKey, idx);
+  }
+
+  BotSideChoice _botSideChoice = BotSideChoice.random;
+
+  int _depthTier = 1; // 1=pro,2=expert,3=grandmaster,4=oracle
+  int _extraSuggestionPurchases = 0; // each +1 up to max 10 suggestions
+  bool _themePackOwned = false;
+  bool _sakuraBoardOwned = false;
+  bool _tropicalBoardOwned = false;
+  bool _tuttiFruttiOwned = false;
+  bool _spectralOwned = false;
+  bool _piecePackOwned = false;
+  bool _adFreeOwned = false;
+  bool _academyTuitionPassOwned = false;
+  bool _introCompleted = true;
+  bool _suggestionsEnabled = false;
+  bool _vsBotEvalBarOnly = false;
+  bool _suggestionLaunchInProgress = false;
+  bool _suggestionBurstActive = false;
+  Offset? _launchStart;
+  List<Offset> _launchTargets = <Offset>[];
+  bool _launchTargetsEvalBar = false;
+  GameOutcome? _gameOutcome;
+  bool _gameResultDialogVisible = false;
+
+  AppSection _activeSection = AppSection.menu;
+  GambitQuizMode _quizMode = GambitQuizMode.guessName;
+  bool _menuReady = false;
+  bool _muteSounds = false;
+  bool _hapticsEnabled = true;
+  bool _isCinematicThemeEnabled = false;
+  final ValueNotifier<bool> _cinematicThemeNotifier = ValueNotifier<bool>(
+    false,
+  );
+  bool _analysisEditMode = false;
+  Timer? _editModeHintTimer;
+  String? _editModeHintText;
+  final Set<String> _viewedGambits = <String>{};
+  String _quizPrompt = '';
+  String _quizPromptFocus = '';
+  List<String> _quizOptions = <String>[];
+  int _quizCorrectIndex = 0;
+  String _quizFeedback = '';
+  Map<String, String> _quizBoardState = <String, String>{};
+  List<EngineLine> _quizContinuation = <EngineLine>[];
+  bool _quizWhiteToMove = true;
+  int _quizShownPly = 0;
+  // Quiz piece-by-piece playback state
+  Map<String, String> _quizPlayBoard = <String, String>{};
+  int _quizPlayArrowCount = 0;
+  bool _quizPlayActive = false;
+  String? _quizFlyFrom;
+  String? _quizFlyTo;
+  String? _quizFlyPiece;
+  double _quizFlyProgress = 0.0;
+  bool _quizAnswered = false;
+  int _quizSelectedIndex = -1;
+  List<EngineLine> _quizPreviewContinuation = <EngineLine>[];
+  final List<_QuizRoundReview> _quizReviewHistory = <_QuizRoundReview>[];
+  int? _quizReviewIndex;
+  QuizDifficulty _quizDifficulty = QuizDifficulty.medium;
+  int _quizStreak = 0;
+  int _quizBestStreak = 0;
+  int _quizTotalAnswered = 0;
+  int _quizCorrectAnswers = 0;
+  int _quizScore = 0;
+  Map<String, int> _quizDailyScore = <String, int>{};
+  Map<String, int> _quizDailyAttempts = <String, int>{};
+  Map<String, int> _quizDailyCorrectByDay = <String, int>{};
+  Map<String, int> _quizNameDailyAttempts = <String, int>{};
+  Map<String, int> _quizNameDailyCorrect = <String, int>{};
+  Map<String, int> _quizLineDailyAttempts = <String, int>{};
+  Map<String, int> _quizLineDailyCorrect = <String, int>{};
+  Map<String, int> _quizDailyQuestionsAsked = <String, int>{};
+  // Per-difficulty daily stat maps
+  Map<String, int> _quizEasyDailyAttempts = <String, int>{};
+  Map<String, int> _quizEasyDailyCorrect = <String, int>{};
+  Map<String, int> _quizMediumDailyAttempts = <String, int>{};
+  Map<String, int> _quizMediumDailyCorrect = <String, int>{};
+  Map<String, int> _quizHardDailyAttempts = <String, int>{};
+  Map<String, int> _quizHardDailyCorrect = <String, int>{};
+  Map<String, int> _quizVeryHardDailyAttempts = <String, int>{};
+  Map<String, int> _quizVeryHardDailyCorrect = <String, int>{};
+  int _quizQuestionsTarget = 10;
+  int _quizSessionAnswered = 0;
+  int _quizSessionCorrect = 0;
+  bool _quizSessionStarted = false;
+
+  Future<void> _showThemedErrorDialog({
+    required String message,
+    String title = 'Something went wrong',
+    bool includeInternetHint = false,
+  });
+
+  void _loadQuizPrefs(SharedPreferences prefs);
+
+  void _precomputeQuizEligiblePools();
+
+  List<EcoLine> _quizEligiblePool({
+    required GambitQuizMode mode,
+    required QuizDifficulty difficulty,
+  });
+
+  void _markGambitViewed(String name);
+
+  void _resetQuizToSetupState();
+
+  void _openGambitQuizFromMenu();
+
+  Widget _buildMoveSequenceText(
+    String notation, {
+    double fontSize = 12,
+    Color color = Colors.white70,
+    FontWeight fontWeight = FontWeight.w600,
+    int? maxLines,
+    TextOverflow overflow = TextOverflow.clip,
+  });
+
+  Widget _buildGambitQuizScreen();
+
+  void _addLog(String message) {
+    setState(() {
+      _logs.add('${DateTime.now().toIso8601String()} - $message');
+      if (_logs.length > 200) {
+        _logs.removeAt(0);
+      }
+    });
+  }
+
+  void _scheduleEditModeHintHide() {
+    _editModeHintTimer?.cancel();
+    _editModeHintTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      setState(() {
+        _editModeHintText = null;
+      });
+    });
+  }
+
+  void _startIdleInterstitialTimer() {
+    _cancelIdleInterstitialTimer();
+    if (!_screenActive || _lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _idleInterstitialTimer = Timer(const Duration(minutes: 3), () async {
+      if (!mounted ||
+          !_screenActive ||
+          _lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      final shown = await AdService.instance.showInterstitialAd();
+      if (shown && mounted) {
+        await _handleAnalysisInterstitialShown();
+        _resetIdleTimer();
+      }
+    });
+  }
+
+  void _cancelIdleInterstitialTimer() {
+    _idleInterstitialTimer?.cancel();
+    _idleInterstitialTimer = null;
+  }
+
+  void _resetIdleTimer() {
+    _startIdleInterstitialTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycleState = state;
+    if (state == AppLifecycleState.resumed) {
+      _screenActive = true;
+      _resetIdleTimer();
+    } else {
+      _screenActive = false;
+      _cancelIdleInterstitialTimer();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadLastBotIndex();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+    _pulseController.addListener(_updateMenuSparks);
+    _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
+    _startIdleInterstitialTimer();
+    _menuSparkLastUpdate = DateTime.now();
+    _creditsBackdropLastUpdate = DateTime.now();
+    final random = Random();
+    _blueDotPhase = random.nextDouble() * 2 * pi;
+    _yellowDotPhase = random.nextDouble() * 2 * pi;
+    _blueDotSpeed = (0.28 + random.nextDouble() * 0.12) * 1.40;
+    _yellowDotSpeed = (0.25 + random.nextDouble() * 0.12) * 1.40;
+    _blueDotRadius = 0.58 + random.nextDouble() * 0.12;
+    _yellowDotRadius = 0.52 + random.nextDouble() * 0.12;
+    _blueDotTrajectoryNoise = random.nextDouble();
+    _yellowDotTrajectoryNoise = random.nextDouble();
+    _blueDotShapeSeed = random.nextDouble() * 3.2;
+    _yellowDotShapeSeed = random.nextDouble() * 3.2;
+    _menuCenterRotationA = 0.0;
+    _menuCenterRotationB = 0.0;
+    _menuCenterShapeSidesA = 4;
+    _menuCenterShapeSidesB = 5;
+    _menuCenterShapeChangeTimerA = 2.4 + random.nextDouble() * 2.0;
+    _menuCenterShapeChangeTimerB = 2.8 + random.nextDouble() * 1.8;
+    _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
+    _menuCenterLastUpdate = DateTime.now();
+    _menuCenterLastCollision = null;
+    _menuCenterCollisionStreakCount = 0;
+    _menuDotTime = 0.0;
+    _blueMenuDotPosition = Offset(
+      cos(_blueDotPhase) * 0.58,
+      sin(_blueDotPhase) * 0.56,
+    );
+    _yellowMenuDotPosition = Offset(
+      cos(_yellowDotPhase) * 0.54,
+      sin(_yellowDotPhase) * 0.52,
+    );
+    _blueMenuDotVelocity = Offset(
+      0.18 - random.nextDouble() * 0.32,
+      0.18 - random.nextDouble() * 0.32,
+    );
+    _yellowMenuDotVelocity = Offset(
+      0.18 - random.nextDouble() * 0.32,
+      0.18 - random.nextDouble() * 0.32,
+    );
+    _introController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 3315),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed && mounted) {
+            setState(() {
+              _introCompleted = true;
+            });
+            if (_playVsBot &&
+                !_isHumanTurnInBotGame &&
+                !_botThinking &&
+                _gameOutcome == null) {
+              unawaited(_maybeTriggerBotMove());
+            }
+          }
+        });
+    _menuRevealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _launchController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _buttonRippleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _storeCoinGainController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _menuMusicFadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _sectionTransitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _menuExitAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _openingButtonFlashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _historyScrollController = ScrollController();
+    _resetBoard(withIntro: false);
+    _loadEcoOpenings();
+    _restoreSnapshotAndStart();
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      setState(() => _menuReady = true);
+      _menuRevealController.forward(from: 0);
+      _sectionTransitionController.forward(from: 0);
+    });
+  }
+
+  void _updateMenuSparks() {
+    final now = DateTime.now();
+    final last = _menuSparkLastUpdate ?? now;
+    final dt = now.difference(last).inMilliseconds / 1000.0;
+    _menuSparkLastUpdate = now;
+
+    _menuDotTime += dt;
+    if (_menuDotTime > 1e6) {
+      _menuDotTime %= 2 * pi;
+    }
+
+    final centerTime = _menuCenterLastUpdate == null
+        ? 0.0
+        : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
+    _menuCenterLastUpdate = now;
+    _menuCenterSpinSpeed = max(
+      _menuCenterBaseSpinSpeed,
+      _menuCenterSpinSpeed - _menuCenterSpinDecayRate * centerTime,
+    );
+    _menuCenterRotationA += centerTime * _menuCenterSpinSpeed;
+    _menuCenterRotationB += centerTime * _menuCenterSpinSpeed;
+
+    _menuCenterShapeChangeTimerA -= centerTime;
+    _menuCenterShapeChangeTimerB -= centerTime;
+
+    if (_menuCenterShapeChangeTimerA <= 0.0) {
+      final rollA = _creditsBackdropRandom.nextDouble();
+      _menuCenterShapeSidesA = rollA < (1.0 / 31.0)
+          ? 5
+          : rollA < (16.0 / 31.0)
+          ? 0
+          : 4;
+      _menuCenterShapeChangeTimerA =
+          2.4 + _creditsBackdropRandom.nextDouble() * 2.0;
+    }
+    if (_menuCenterShapeChangeTimerB <= 0.0) {
+      final rollB = _creditsBackdropRandom.nextDouble();
+      _menuCenterShapeSidesB = rollB < (1.0 / 31.0)
+          ? 5
+          : rollB < (16.0 / 31.0)
+          ? 0
+          : 4;
+      _menuCenterShapeChangeTimerB =
+          2.8 + _creditsBackdropRandom.nextDouble() * 1.8;
+    }
+
+    final pulse = _menuDotTime;
+    final blueTargetAlignment = _menuDotAlignment(
+      _blueDotPhase,
+      _blueDotSpeed,
+      _blueDotRadius,
+      pulse,
+      _blueDotTrajectoryNoise,
+      _blueDotShapeSeed,
+      false,
+    );
+    final yellowTargetAlignment = _menuDotAlignment(
+      _yellowDotPhase,
+      _yellowDotSpeed,
+      _yellowDotRadius,
+      pulse,
+      _yellowDotTrajectoryNoise,
+      _yellowDotShapeSeed,
+      true,
+    );
+    final blueTarget = Offset(blueTargetAlignment.x, blueTargetAlignment.y);
+    final yellowTarget = Offset(
+      yellowTargetAlignment.x * -1.0,
+      yellowTargetAlignment.y,
+    );
+
+    final separation = _blueMenuDotPosition - _yellowMenuDotPosition;
+    final collisionDistance = separation.distance;
+    final currentlyColliding = collisionDistance < 0.045;
+
+    if (currentlyColliding && !_menuDotsPreviouslyColliding) {
+      final collisionAge = _menuCenterLastCollision == null
+          ? double.infinity
+          : now.difference(_menuCenterLastCollision!).inMilliseconds / 1000.0;
+      if (collisionAge <= _menuCenterCollisionStreakWindow) {
+        _menuCenterCollisionStreakCount += 1;
+      } else {
+        _menuCenterCollisionStreakCount = 1;
+      }
+      _menuCenterLastCollision = now;
+
+      final collisionBonus = 1.4 + _menuCenterCollisionStreakCount * 0.55;
+      _menuCenterSpinSpeed = min(
+        _menuCenterSpinSpeed + collisionBonus,
+        _menuCenterMaxSpinSpeed,
+      );
+
+      final origin = Offset(
+        (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
+        (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
+      );
+      final particleCount = Random().nextInt(2) + 1;
+      for (var i = 0; i < particleCount; i++) {
+        final angle = Random().nextDouble() * 2 * pi;
+        final velocity = Offset(
+          cos(angle) * (0.8 + Random().nextDouble() * 0.6),
+          sin(angle) * (0.8 + Random().nextDouble() * 0.6),
+        );
+        _menuSparkParticles.add(
+          _MenuSparkParticle(
+            position: origin,
+            velocity: velocity,
+            color: Colors.green.withValues(alpha: 0.90),
+          ),
+        );
+      }
+
+      unawaited(_lightHaptic());
+
+      final direction = separation / collisionDistance;
+      const repulsionStrength = 14.7;
+      final impulse =
+          direction * repulsionStrength +
+          Offset(-direction.dy, direction.dx) * 2.7;
+      _blueMenuDotVelocity += impulse;
+      _yellowMenuDotVelocity -= impulse;
+    }
+
+    _menuDotsPreviouslyColliding = currentlyColliding;
+
+    final blueCenter = _blueMenuDotPosition;
+    final yellowCenter = _yellowMenuDotPosition;
+    final blueSpring = (blueTarget - blueCenter) * 4.4;
+    final yellowSpring = (yellowTarget - yellowCenter) * 4.2;
+    final blueOrbit = Offset(-blueCenter.dy, blueCenter.dx) * 3.8;
+    final yellowOrbit = Offset(yellowCenter.dy, -yellowCenter.dx) * 3.7;
+    final blueTwist =
+        Offset(-_blueMenuDotVelocity.dy, _blueMenuDotVelocity.dx) * 2.4;
+    final yellowTwist =
+        Offset(_yellowMenuDotVelocity.dy, -_yellowMenuDotVelocity.dx) * 2.3;
+    final blueNoise = Offset(
+      sin(pulse * 3.1 + 1.7) * 0.28,
+      cos(pulse * 3.5 - 0.5) * 0.28,
+    );
+    final yellowNoise = Offset(
+      cos(pulse * 2.9 + 1.1) * 0.27,
+      sin(pulse * 3.2 - 1.0) * 0.27,
+    );
+    final blueChaos = Offset(
+      sin(pulse * 5.0 + _blueDotShapeSeed) * 0.14,
+      cos(pulse * 4.2 - _blueDotShapeSeed) * 0.13,
+    );
+    final yellowChaos = Offset(
+      cos(pulse * 4.7 + _yellowDotShapeSeed) * 0.15,
+      sin(pulse * 4.4 - _yellowDotShapeSeed) * 0.14,
+    );
+    final blueRadial = blueCenter * -0.18;
+    final yellowRadial = yellowCenter * -0.16;
+
+    final blueAcceleration =
+        blueSpring + blueOrbit + blueTwist + blueNoise + blueChaos + blueRadial;
+    final yellowAcceleration =
+        yellowSpring +
+        yellowOrbit +
+        yellowTwist +
+        yellowNoise +
+        yellowChaos +
+        yellowRadial;
+
+    _blueMenuDotVelocity =
+        (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) * 0.78;
+    _yellowMenuDotVelocity =
+        (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) * 0.78;
+
+    _blueMenuDotPosition += _blueMenuDotVelocity * dt;
+    _yellowMenuDotPosition += _yellowMenuDotVelocity * dt;
+
+    if (_blueMenuDotPosition.distance > 0.96) {
+      _blueMenuDotPosition =
+          _blueMenuDotPosition / _blueMenuDotPosition.distance * 0.92;
+      _blueMenuDotVelocity *= 0.72;
+    }
+    if (_yellowMenuDotPosition.distance > 0.96) {
+      _yellowMenuDotPosition =
+          _yellowMenuDotPosition / _yellowMenuDotPosition.distance * 0.92;
+      _yellowMenuDotVelocity *= 0.72;
+    }
+
+    _menuSparkParticles.removeWhere((particle) {
+      particle.position += particle.velocity * dt;
+      return particle.position.dx.abs() > 1.2 ||
+          particle.position.dy.abs() > 1.2;
+    });
+
+    if (_creditsDialogOpen) {
+      final creditsLast = _creditsBackdropLastUpdate ?? now;
+      final creditsDt = now.difference(creditsLast).inMilliseconds / 1000.0;
+      _creditsBackdropLastUpdate = now;
+      if (_creditsBackdropDots.isNotEmpty) {
+        const gravityStrength = 0.019;
+        const centralStiffness = 0.20;
+        const damping = 0.995;
+        const repulsionThreshold = 0.10;
+        const blueYellowContactThreshold = 0.13;
+        const blueYellowRestDuration = 3.0;
+        const greenPushStrength = 0.28 * 1.3;
+        const blueYellowPushStrength = 0.64 * 1.2 * 1.3;
+
+        var blueYellowTouching = false;
+        Offset blueYellowMidpoint = Offset.zero;
+
+        _blueYellowContactTime = _blueYellowContactTime.clamp(
+          0.0,
+          blueYellowRestDuration,
+        );
+
+        for (final dot in _creditsBackdropDots) {
+          var acceleration = Offset.zero;
+          for (final other in _creditsBackdropDots) {
+            if (identical(dot, other)) continue;
+            final separation = other.position - dot.position;
+            final distance = separation.distance.clamp(0.06, 1.2);
+            acceleration +=
+                separation /
+                (distance * distance) *
+                (gravityStrength * (other.radius * 0.18));
+
+            if (dot.role == _CreditsBackdropDotRole.green &&
+                other.role == _CreditsBackdropDotRole.green &&
+                distance < repulsionThreshold) {
+              final push = separation / distance * greenPushStrength;
+              dot.velocity -=
+                  push * (1.0 + _creditsBackdropRandom.nextDouble() * 0.7);
+            }
+
+            final isBlueYellowPair =
+                (dot.role == _CreditsBackdropDotRole.blue &&
+                    other.role == _CreditsBackdropDotRole.yellow) ||
+                (dot.role == _CreditsBackdropDotRole.yellow &&
+                    other.role == _CreditsBackdropDotRole.blue);
+            if (isBlueYellowPair && distance < blueYellowContactThreshold) {
+              blueYellowTouching = true;
+              blueYellowMidpoint = (dot.position + other.position) / 2;
+            }
+          }
+          acceleration -= dot.position * centralStiffness;
+          dot.velocity = (dot.velocity + acceleration * creditsDt) * damping;
+        }
+
+        var spawnGreenBall = false;
+        if (blueYellowTouching) {
+          _blueYellowContactTime += creditsDt;
+          if (_blueYellowContactTime >= blueYellowRestDuration) {
+            for (final dot in _creditsBackdropDots) {
+              if (dot.role == _CreditsBackdropDotRole.blue ||
+                  dot.role == _CreditsBackdropDotRole.yellow) {
+                final other = _creditsBackdropDots.firstWhere(
+                  (candidate) =>
+                      candidate.role != dot.role &&
+                      (candidate.role == _CreditsBackdropDotRole.blue ||
+                          candidate.role == _CreditsBackdropDotRole.yellow),
+                );
+                final separation = dot.position - other.position;
+                final distance = separation.distance.clamp(0.06, 1.2);
+                final push = separation / distance * blueYellowPushStrength;
+                dot.velocity +=
+                    push * (1.0 + _creditsBackdropRandom.nextDouble() * 0.4);
+              }
+            }
+            spawnGreenBall = _creditsBackdropDots.length < 10;
+            _blueYellowContactTime = 0.0;
+          }
+        } else {
+          _blueYellowContactTime = 0.0;
+        }
+
+        if (spawnGreenBall) {
+          final angle = _creditsBackdropRandom.nextDouble() * 2 * pi;
+          final direction = Offset(cos(angle), sin(angle));
+          _creditsBackdropDots.add(
+            _CreditsBackdropDot(
+              position: blueYellowMidpoint,
               velocity:
                   direction *
                   (0.02 + _creditsBackdropRandom.nextDouble() * 0.03),
-              color: const void Color(0xFF7EDC8A).void withValues(alpha = 0.84),
+              color: const Color(0xFF7EDC8A).withValues(alpha: 0.84),
               radius: 4.0 + _creditsBackdropRandom.nextDouble() * 1.0,
               role: _CreditsBackdropDotRole.green,
             ),
           );
-          final _menuCenterSpinSpeed = min(_menuCenterSpinSpeed + 0.24, 4.2);
+          _menuCenterSpinSpeed = min(_menuCenterSpinSpeed + 0.24, 4.2);
         }
 
-        void for (final dot in _creditsBackdropDots) {
+        for (final dot in _creditsBackdropDots) {
           dot.position += dot.velocity * creditsDt;
           final distance = dot.position.distance;
           if (distance > 0.95) {
@@ -43,22 +764,253 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           }
         }
       }
-    } void else {
+    } else {
       _creditsBackdropLastUpdate = now;
     }
   }
 
-                    alpha: isLight ? 0.78 : 0.54,
-                  );
-    if (muteSounds) return;
-    void try {
+  Widget _buildMenuCenterShape({
+    required double size,
+    required Color strokeColor,
+    required double strokeWidth,
+    required double rotation,
+    required int sides,
+  }) {
+    return Transform.rotate(
+      angle: rotation,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(
+          painter: _RegularPolygonPainter(
+            sides: sides,
+            strokeColor: strokeColor,
+            strokeWidth: strokeWidth,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _initializeCreditsBackdrop() {
+    _creditsBackdropDots.clear();
+
+    final specs = <Map<String, Object>>[
+      {
+        'role': _CreditsBackdropDotRole.green,
+        'color': const Color(0xFF7EDC8A),
+        'radius': 4.5,
+      },
+      {
+        'role': _CreditsBackdropDotRole.blue,
+        'color': const Color(0xFF2A6CF0),
+        'radius': 10.0,
+      },
+      {
+        'role': _CreditsBackdropDotRole.yellow,
+        'color': const Color(0xFFD8B640),
+        'radius': 11.0,
+      },
+      {
+        'role': _CreditsBackdropDotRole.green,
+        'color': const Color(0xFF4ADE80),
+        'radius': 4.25,
+      },
+      {
+        'role': _CreditsBackdropDotRole.green,
+        'color': const Color(0xFF7EDC8A),
+        'radius': 5.25,
+      },
+    ];
+
+    for (final spec in specs) {
+      final angle = _creditsBackdropRandom.nextDouble() * 2 * pi;
+      final distance = 0.18 + _creditsBackdropRandom.nextDouble() * 0.26;
+      final position = Offset(cos(angle) * distance, sin(angle) * distance);
+      final speed = 0.025 + _creditsBackdropRandom.nextDouble() * 0.05;
+      final velocity = Offset.fromDirection(
+        angle + pi / 2 + (_creditsBackdropRandom.nextDouble() - 0.5) * 0.8,
+        speed,
+      );
+
+      _creditsBackdropDots.add(
+        _CreditsBackdropDot(
+          position: position,
+          velocity: velocity,
+          color: (spec['color'] as Color).withValues(alpha: 0.84),
+          radius: spec['radius'] as double,
+          role: spec['role'] as _CreditsBackdropDotRole,
+        ),
+      );
+    }
+
+    _creditsBackdropLastUpdate = DateTime.now();
+  }
+
+  Alignment _menuDotAlignment(
+    double phase,
+    double speed,
+    double radius,
+    double pulse,
+    double trajectoryNoise,
+    double shapeSeed,
+    bool inverted,
+  ) {
+    final time =
+        pulse * 2.6 * speed + phase + shapeSeed * (inverted ? 1.22 : 1.0);
+    final x = inverted
+        ? cos(time * (1.45 + shapeSeed * 0.16) + 0.7) * radius * 0.82 +
+              cos(time * (2.9 + shapeSeed * 0.20) - 1.1) * 0.10 +
+              sin(time * (4.6 + shapeSeed * 0.27) + 0.9) * 0.05
+        : sin(time * (1.25 + shapeSeed * 0.14)) * radius +
+              sin(time * (2.7 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) *
+                  0.12 +
+              sin(time * (4.1 + shapeSeed * 0.35) + 2.1) * 0.06;
+    final y = inverted
+        ? sin(time * (1.65 + shapeSeed * 0.19) - 0.5) * radius * 0.90 +
+              sin(time * (2.55 + shapeSeed * 0.13) + 0.2) * 0.12 +
+              cos(time * (3.9 + shapeSeed * 0.33) - 0.4) * 0.06
+        : cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
+              cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.11 +
+              sin(time * (3.9 + shapeSeed * 0.28) + 0.6) * 0.05;
+    final driftX = inverted
+        ? cos(time * (0.70 + shapeSeed * 0.05) - 0.4) * 0.05
+        : sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.04;
+    final driftY = inverted
+        ? sin(time * (0.88 + shapeSeed * 0.06) + 0.1) * 0.05
+        : cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.04;
+    final jitterX =
+        sin(
+          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
+              trajectoryNoise * 3.7 +
+              (inverted ? 1.4 : 0.0),
+        ) *
+        (trajectoryNoise * 0.08 + shapeSeed * 0.04);
+    final jitterY =
+        cos(
+          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
+              trajectoryNoise * 2.9 +
+              (inverted ? 1.7 : 0.0),
+        ) *
+        (trajectoryNoise * 0.08 + shapeSeed * 0.04);
+    final raw = Offset(x + driftX + jitterX, y + driftY + jitterY);
+    final distance = raw.distance;
+    const limit = 1.20;
+    final returnFactor = distance > limit ? limit / distance : 1.0;
+    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
+  }
+
+  Alignment _botSelectorBlueDotAlignment(
+    double phase,
+    double speed,
+    double radius,
+    double pulse,
+    double trajectoryNoise,
+    double shapeSeed,
+    double scrollOffset,
+  ) {
+    final time = pulse * 1.26 * speed + phase + shapeSeed;
+    final x =
+        sin(time * (1.25 + shapeSeed * 0.14)) * radius +
+        sin(time * (2.6 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.35) + 2.1) * 0.035;
+    final y =
+        cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
+        cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.09 +
+        sin(time * (3.5 + shapeSeed * 0.28) + 0.6) * 0.035;
+    final driftX = sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.015;
+    final driftY = cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.015;
+    final jitterX =
+        sin(
+          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
+              trajectoryNoise * 3.7,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final jitterY =
+        cos(
+          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
+              trajectoryNoise * 2.9,
+        ) *
+        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
+    final raw = Offset(
+      x + driftX + jitterX + (scrollOffset * 0.03),
+      y + driftY + jitterY + (scrollOffset * 0.90),
+    );
+    final distance = raw.distance;
+    const limit = 1.35;
+    final returnFactor = distance > limit ? limit / distance : 1.0;
+    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
+  }
+
+  void _updateBotSetupBlueDotScrollOffset() {
+    _blueDotScrollVelocity *= 0.93;
+    _blueDotScrollOffset += _blueDotScrollVelocity * 0.016;
+    _blueDotScrollOffset = _blueDotScrollOffset.clamp(-1.15, 1.15);
+  }
+
+  Future<void> _playIntroSound() async {
+    if (_muteSounds) return;
+    try {
+      await _introAudioPlayer.stop();
+      await _introAudioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _introAudioPlayer.play(
+        AssetSource(_introSoundAssetPath),
+        mode: PlayerMode.mediaPlayer,
+        volume: 1.0,
+      );
+    } catch (e) {
+      debugPrint('Intro sound failed: $e');
+      _addLog('Intro sound failed: $e');
+    }
+  }
+
+  Future<void> _playMenuMusic() async {
+    if (_muteSounds || _menuMusicPlaying) return;
+    try {
+      await _menuAudioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _menuAudioPlayer.play(
+        AssetSource('sounds/main.mp3'),
+        mode: PlayerMode.mediaPlayer,
+        volume: 0.0,
+      );
+      _menuMusicPlaying = true;
+      _menuMusicFadeController.reset();
+      _menuMusicFadeController.forward().then((_) async {
+        if (_menuMusicPlaying) {
+          await _menuAudioPlayer.setVolume(0.45);
+        }
+      });
+    } catch (e) {
+      debugPrint('Menu music failed: $e');
+      _addLog('Menu music failed: $e');
+    }
+  }
+
+  Future<void> _stopMenuMusic({bool fadeOut = true}) async {
+    if (!_menuMusicPlaying) return;
+    try {
+      if (fadeOut) {
+        await _menuMusicFadeController.reverse();
+      }
+      await _menuAudioPlayer.stop();
+    } catch (e) {
+      debugPrint('Stopping menu music failed: $e');
+      _addLog('Stopping menu music failed: $e');
+    } finally {
+      _menuMusicPlaying = false;
+    }
+  }
+
+  Future<void> _playCoinRewardSound() async {
+    if (_muteSounds) return;
+    try {
       await _sfxAudioPlayer.stop();
       await _sfxAudioPlayer.setReleaseMode(ReleaseMode.stop);
       await _sfxAudioPlayer.setSource(AssetSource('sounds/coin.mp3'));
       await _sfxAudioPlayer.seek(const Duration(milliseconds: 300));
       await _sfxAudioPlayer.setVolume(1.0);
       await _sfxAudioPlayer.resume();
-    } void catch (e) {
+    } catch (e) {
       debugPrint('Coin reward sound failed: $e');
       _addLog('Coin reward sound failed: $e');
     }
@@ -6456,13 +7408,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
-    final isLightMono = useMonochrome && !isDark;
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final displayedEval = _displayEvalForPov();
-    final displayedEvalColor = isLightMono
-        ? Colors.black
-        : useMonochrome
+    final displayedEvalColor = useMonochrome
         ? const Color(0xFFEEEEEE)
         : _evalColorForUi(displayedEval);
     final selectedBot = _selectedBot;
@@ -6617,8 +7566,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       vertical: 6 * scale,
                     ),
                     decoration: BoxDecoration(
-                      color: isLightMono
-                          ? Colors.white
+                      color: useMonochrome
+                          ? const Color(0xFF161B21)
                           : Color.alphaBlend(
                               scheme.primary.withValues(
                                 alpha: isDark ? 0.14 : 0.05,
@@ -6627,8 +7576,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ).withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isLightMono
-                            ? Colors.black
+                        color: useMonochrome
+                            ? const Color(0xFF89929D).withValues(alpha: 0.34)
                             : scheme.outline.withValues(alpha: 0.34),
                       ),
                       boxShadow: [
@@ -6734,11 +7683,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Widget _buildEvalBarHorizontal(double scale) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
-    final isLightMono = useMonochrome && !isDark;
     final showEvalBar = _shouldKeepEvalActive;
     final displayedEval = _displayEvalForPov();
 
@@ -6787,13 +7734,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
-    final Color whiteSegmentColor = isLightMono
-        ? Colors.white
-        : const Color(0xFFF7F7F7);
-    final Color blackSegmentColor = isLightMono
-        ? Colors.black
-        : const Color(0xFF13161C);
-    final Color trackBorderColor = Colors.black;
+    final Color whiteSegmentColor = const Color(0xFFF3F5F7);
+    final Color blackSegmentColor = const Color(0xFF151A20);
+    final Color trackBorderColor = const Color(
+      0xFF78818C,
+    ).withValues(alpha: 0.46);
     final bool leftSideIsWhite = !_isBlackPovActive;
     final Color leftColor = leftSideIsWhite
         ? whiteSegmentColor
@@ -6827,7 +7772,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         decoration: BoxDecoration(
           color: baseColor,
           borderRadius: BorderRadius.circular(2 * scale),
-          border: isLightMono ? Border.all(color: trackBorderColor) : null,
+          border: Border.all(color: trackBorderColor, width: 0.8 * scale),
         ),
         child: FractionallySizedBox(
           alignment: overlayAlignment,
@@ -6846,11 +7791,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Widget _buildEvalBarVertical(double scale) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
-    final isLightMono = useMonochrome && !isDark;
     final showEvalBar = _shouldKeepEvalActive;
     final displayedEval = _displayEvalForPov();
     final fill = _evalFillForUi(displayedEval);
@@ -6908,8 +7851,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     // Monochrome mode: classic black/white segments
-    final Color lightSeg = isLightMono ? Colors.white : const Color(0xFFF7F7F7);
-    final Color darkSeg = isLightMono ? Colors.black : const Color(0xFF13161C);
+    final Color lightSeg = const Color(0xFFF3F5F7);
+    final Color darkSeg = const Color(0xFF151A20);
     final bool bottomIsWhite = !_isBlackPovActive;
     final Color bottomColor = bottomIsWhite ? lightSeg : darkSeg;
     final Color topColor = bottomIsWhite ? darkSeg : lightSeg;
@@ -6924,9 +7867,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(5 * scale),
           border: Border.all(
-            color: isLightMono
-                ? Colors.black
-                : scheme.outline.withValues(alpha: 0.48),
+            color: const Color(0xFF78818C).withValues(alpha: 0.46),
+            width: 0.9 * scale,
           ),
         ),
         child: ClipRRect(
@@ -7683,104 +8625,46 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   _SuggestionButtonPalette _suggestionButtonPalette() {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
 
     if (useMonochrome) {
-      if (isDark) {
-        return _SuggestionButtonPalette(
-          useMonochrome: true,
-          isDark: true,
-          powerBackground: const Color(0xFF14181D),
-          powerBorder: Colors.white.withValues(alpha: 0.40),
-          powerIcon: const Color(0xFFF4F7FB),
-          powerShadow: Colors.white.withValues(alpha: 0.08),
-          surfaceCore: const Color(0xFF2A313A),
-          surfaceBase: const Color(0xFF0F1318),
-          energyPrimary: const Color(0xFFF4F7FB),
-          energySecondary: const Color(0xFF7E8794),
-          activationGlow: const Color(0xFFD4DBE3),
-          boltColor: const Color(0xFFF4F7FB),
-          borderAccent: const Color(0xFFE5EBF2),
-          glyphShell: const Color(0xFF0C1014),
-          glyphBorder: Colors.white.withValues(alpha: 0.22),
-        );
-      }
-
       return _SuggestionButtonPalette(
         useMonochrome: true,
-        isDark: false,
-        powerBackground: Colors.white.withValues(alpha: 0.97),
-        powerBorder: const Color(0xFF151A21).withValues(alpha: 0.32),
-        powerIcon: const Color(0xFF111418),
-        powerShadow: const Color(0xFF111418).withValues(alpha: 0.10),
-        surfaceCore: Color.alphaBlend(
-          Colors.black.withValues(alpha: 0.06),
-          scheme.surface,
-        ),
-        surfaceBase: Colors.white.withValues(alpha: 0.97),
-        energyPrimary: const Color(0xFF111418),
-        energySecondary: const Color(0xFF7F8892),
-        activationGlow: const Color(0xFF535C66),
-        boltColor: const Color(0xFF111418),
-        borderAccent: const Color(0xFF151A21),
-        glyphShell: Colors.white.withValues(alpha: 0.96),
-        glyphBorder: const Color(0xFF151A21).withValues(alpha: 0.18),
-      );
-    }
-
-    if (isDark) {
-      return _SuggestionButtonPalette(
-        useMonochrome: false,
         isDark: true,
-        powerBackground: const Color(0xFF2A0F13),
-        powerBorder: const Color(0xFFE06A79).withValues(alpha: 0.75),
-        powerIcon: const Color(0xFFFFA3AF),
-        powerShadow: const Color(0xFFE06A79).withValues(alpha: 0.24),
-        surfaceCore: const Color(0xFF1A2131),
-        surfaceBase: const Color(0xFF101621),
-        energyPrimary: const Color(0xFF3F6ED8),
-        energySecondary: const Color(0xFFD8B640),
-        activationGlow: const Color(0xFF7EDC8A),
-        boltColor: Colors.white,
-        borderAccent: const Color(0xFFB9A46A),
-        glyphShell: const Color(0xFF0D121A),
-        glyphBorder: const Color(0xFFFFFFFF).withValues(alpha: 0.12),
+        powerBackground: const Color(0xFF14181D),
+        powerBorder: const Color(0xFF8D97A3).withValues(alpha: 0.38),
+        powerIcon: const Color(0xFFE7EBF0),
+        powerShadow: const Color(0xFF6D7681).withValues(alpha: 0.08),
+        surfaceCore: const Color(0xFF232A32),
+        surfaceBase: const Color(0xFF0F1318),
+        energyPrimary: const Color(0xFF98A1AC),
+        energySecondary: const Color(0xFF626B76),
+        activationGlow: const Color(0xFF9AA3AD),
+        boltColor: const Color(0xFFE7EBF0),
+        borderAccent: const Color(0xFF939DA8),
+        glyphShell: const Color(0xFF0C1014),
+        glyphBorder: const Color(0xFF89929D).withValues(alpha: 0.28),
       );
     }
 
     return _SuggestionButtonPalette(
       useMonochrome: false,
-      isDark: false,
-      powerBackground: Color.alphaBlend(
-        const Color(0xFFE06A79).withValues(alpha: 0.10),
-        scheme.surface,
-      ).withValues(alpha: 0.98),
-      powerBorder: const Color(0xFFC84E64).withValues(alpha: 0.60),
-      powerIcon: const Color(0xFFC1495E),
-      powerShadow: const Color(0xFFE06A79).withValues(alpha: 0.18),
-      surfaceCore: Color.alphaBlend(
-        const Color(0xFF2A6CF0).withValues(alpha: 0.12),
-        scheme.surface,
-      ),
-      surfaceBase: Color.alphaBlend(
-        Colors.white.withValues(alpha: 0.88),
-        scheme.surface,
-      ),
-      energyPrimary: const Color(0xFF2D66D4),
-      energySecondary: const Color(0xFFD39A1D),
-      activationGlow: const Color(0xFF3FA868),
-      boltColor: const Color(0xFF173156),
-      borderAccent: const Color(0xFFA48737),
-      glyphShell: Color.alphaBlend(
-        Colors.white.withValues(alpha: 0.90),
-        scheme.surface,
-      ),
-      glyphBorder: const Color(0xFF162131).withValues(alpha: 0.14),
+      isDark: true,
+      powerBackground: const Color(0xFF2A0F13),
+      powerBorder: const Color(0xFFE06A79).withValues(alpha: 0.75),
+      powerIcon: const Color(0xFFFFA3AF),
+      powerShadow: const Color(0xFFE06A79).withValues(alpha: 0.24),
+      surfaceCore: const Color(0xFF1A2131),
+      surfaceBase: const Color(0xFF101621),
+      energyPrimary: const Color(0xFF3F6ED8),
+      energySecondary: const Color(0xFFD8B640),
+      activationGlow: const Color(0xFF7EDC8A),
+      boltColor: Colors.white,
+      borderAccent: const Color(0xFFB9A46A),
+      glyphShell: const Color(0xFF0D121A),
+      glyphBorder: const Color(0xFFFFFFFF).withValues(alpha: 0.12),
     );
   }
 
@@ -7809,10 +8693,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: palette.powerBackground,
-            border: Border.all(
-              color: palette.powerBorder,
-              width: 2,
-            ),
+            border: Border.all(color: palette.powerBorder, width: 2),
             boxShadow: [
               BoxShadow(
                 color: palette.powerShadow,
@@ -8160,10 +9041,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: palette.powerBackground,
-                border: Border.all(
-                  color: palette.powerBorder,
-                  width: 2,
-                ),
+                border: Border.all(color: palette.powerBorder, width: 2),
                 boxShadow: [
                   BoxShadow(
                     color: palette.powerShadow,
@@ -8280,7 +9158,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 : (palette.isDark ? 10 : 8),
           ),
           BoxShadow(
-            color: palette.energySecondary.withValues(alpha: secondaryShadowAlpha),
+            color: palette.energySecondary.withValues(
+              alpha: secondaryShadowAlpha,
+            ),
             blurRadius: isActivating
                 ? (palette.isDark ? 14 : 11)
                 : (palette.isDark ? 8 : 6),
@@ -8453,27 +9333,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Widget _buildVsBotEvalBarGlyph() {
     final palette = _suggestionButtonPalette();
+    final glyphWidth = palette.useMonochrome ? 36.0 : 34.0;
+    final glyphHeight = palette.useMonochrome ? 8.0 : 6.0;
     return Center(
       child: Container(
-        width: 34,
-        height: 6,
+        width: glyphWidth,
+        height: glyphHeight,
         decoration: BoxDecoration(
           color: palette.glyphShell,
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: BorderRadius.circular(glyphHeight / 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: palette.isDark ? 0.20 : 0.08),
-              blurRadius: palette.isDark ? 6 : 4,
+              color: Colors.black.withValues(
+                alpha: palette.useMonochrome
+                    ? 0.16
+                    : (palette.isDark ? 0.20 : 0.08),
+              ),
+              blurRadius: palette.useMonochrome ? 4 : (palette.isDark ? 6 : 4),
               offset: const Offset(0, 1),
             ),
           ],
           border: Border.all(
             color: palette.glyphBorder,
-            width: 0.7,
+            width: palette.useMonochrome ? 0.9 : 0.7,
           ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: BorderRadius.circular(glyphHeight / 2),
           child: CustomPaint(
             painter: _VsBotEvalBarPainter(
               isMono: palette.useMonochrome,
@@ -11703,65 +12589,114 @@ class _VsBotEvalBarPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
     final radius = Radius.circular(size.height / 2);
-    final paint = Paint()..style = PaintingStyle.fill;
 
     if (isMono) {
-      paint.shader = (isDark
-              ? const LinearGradient(
-                  colors: [
-                    Color(0xFFF6F6F6),
-                    Color(0xFFF6F6F6),
-                    Color(0xFF9CA3AF),
-                    Color(0xFF1F2937),
-                  ],
-                  stops: [0.0, 0.55, 0.55, 1.0],
-                )
-              : const LinearGradient(
-                  colors: [
-                    Color(0xFF111827),
-                    Color(0xFF111827),
-                    Color(0xFF6B7280),
-                    Color(0xFFD1D5DB),
-                  ],
-                  stops: [0.0, 0.55, 0.55, 1.0],
-                ))
-          .createShader(rect);
-    } else {
-      paint.shader = (isDark
-              ? const LinearGradient(
-                  colors: [
-                    Color(0xFFFF4747),
-                    Color(0xFFD93434),
-                    Color(0xFFF4D249),
-                    Color(0xFF95E572),
-                    Color(0xFF4FC15E),
-                    Color(0xFF2F8E46),
-                    Color(0xFF166534),
-                  ],
-                  stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
-                )
-              : const LinearGradient(
-                  colors: [
-                    Color(0xFFE44A4A),
-                    Color(0xFFC93A3A),
-                    Color(0xFFE1C344),
-                    Color(0xFF84D669),
-                    Color(0xFF4DBA5E),
-                    Color(0xFF2E8C45),
-                    Color(0xFF166534),
-                  ],
-                  stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
-                ))
-          .createShader(rect);
+      final innerRect = Rect.fromLTWH(
+        0.9,
+        0.9,
+        size.width - 1.8,
+        size.height - 1.8,
+      );
+      final innerRadius = Radius.circular(innerRect.height / 2);
+      final splitX = innerRect.left + (innerRect.width * 0.5);
+      final dividerWidth = 1.2;
+
+      final leftRect = Rect.fromLTRB(
+        innerRect.left,
+        innerRect.top,
+        splitX - (dividerWidth / 2),
+        innerRect.bottom,
+      );
+      final rightRect = Rect.fromLTRB(
+        splitX + (dividerWidth / 2),
+        innerRect.top,
+        innerRect.right,
+        innerRect.bottom,
+      );
+
+      final leftPaint = Paint()
+        ..color = const Color(0xFFF2F4F6)
+        ..style = PaintingStyle.fill;
+      final rightPaint = Paint()
+        ..color = const Color(0xFF1B222C)
+        ..style = PaintingStyle.fill;
+      final dividerPaint = Paint()
+        ..color = const Color(0xFF7A838E)
+        ..style = PaintingStyle.fill;
+      final outlinePaint = Paint()
+        ..color = const Color(0xFF9EA7B2).withValues(alpha: 0.34)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8;
+
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          leftRect,
+          topLeft: innerRadius,
+          bottomLeft: innerRadius,
+        ),
+        leftPaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          rightRect,
+          topRight: innerRadius,
+          bottomRight: innerRadius,
+        ),
+        rightPaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            splitX - (dividerWidth / 2),
+            innerRect.top + 0.3,
+            dividerWidth,
+            innerRect.height - 0.6,
+          ),
+          const Radius.circular(1.2),
+        ),
+        dividerPaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(innerRect, innerRadius),
+        outlinePaint,
+      );
+      return;
     }
+
+    final paint = Paint()..style = PaintingStyle.fill;
+    paint.shader =
+        (isDark
+                ? const LinearGradient(
+                    colors: [
+                      Color(0xFFFF4747),
+                      Color(0xFFD93434),
+                      Color(0xFFF4D249),
+                      Color(0xFF95E572),
+                      Color(0xFF4FC15E),
+                      Color(0xFF2F8E46),
+                      Color(0xFF166534),
+                    ],
+                    stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
+                  )
+                : const LinearGradient(
+                    colors: [
+                      Color(0xFFE44A4A),
+                      Color(0xFFC93A3A),
+                      Color(0xFFE1C344),
+                      Color(0xFF84D669),
+                      Color(0xFF4DBA5E),
+                      Color(0xFF2E8C45),
+                      Color(0xFF166534),
+                    ],
+                    stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
+                  ))
+            .createShader(rect);
 
     canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), paint);
 
     final highlightPaint = Paint()
       ..color = Colors.white.withValues(
-        alpha: isDark
-            ? (isMono ? 0.10 : 0.08)
-            : (isMono ? 0.05 : 0.04),
+        alpha: isMono ? 0.0 : (isDark ? 0.08 : 0.04),
       )
       ..style = PaintingStyle.fill;
     canvas.drawRRect(
@@ -11774,9 +12709,7 @@ class _VsBotEvalBarPainter extends CustomPainter {
 
     final shadowPaint = Paint()
       ..color = Colors.black.withValues(
-        alpha: isDark
-            ? (isMono ? 0.14 : 0.18)
-            : (isMono ? 0.08 : 0.10),
+        alpha: isDark ? (isMono ? 0.14 : 0.18) : (isMono ? 0.08 : 0.10),
       )
       ..style = PaintingStyle.fill;
     canvas.drawRRect(
