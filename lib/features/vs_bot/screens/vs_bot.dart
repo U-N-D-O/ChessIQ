@@ -109,6 +109,8 @@ mixin _VsBotState on _ChessAnalysisPageStateCore {
   }
 
   Widget _buildVsBotIntroAvatar(BotCharacter bot, double size) {
+    final avatarAsset = bot.avatarAssetFor(_selectedBotDifficulty);
+
     return Container(
       width: size,
       height: size,
@@ -132,8 +134,8 @@ mixin _VsBotState on _ChessAnalysisPageStateCore {
         ],
       ),
       child: ClipOval(
-        child: bot.avatarAsset != null
-            ? Image.asset(bot.avatarAsset!, fit: BoxFit.cover)
+        child: avatarAsset != null
+            ? Image.asset(avatarAsset, fit: BoxFit.cover)
             : Container(
                 color: const Color(0xFF230B0B),
                 alignment: Alignment.center,
