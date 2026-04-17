@@ -21,738 +21,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _engineOwner;
   late AnimationController _pulseController;
   late AnimationController _introController;
-  late AnimationController _menuRevealController;
-  late AnimationController _launchController;
-  late AnimationController _menuMusicFadeController;
-  late AnimationController _sectionTransitionController;
-  late AnimationController _menuExitAnimationController;
-  late AnimationController _buttonRippleController;
-  late AnimationController _openingButtonFlashController;
-  late AnimationController _storeCoinGainController;
-  bool _openingButtonFlashRed = false;
-  Offset? _buttonRippleCenter;
-  Offset? _storeCoinGainCenter;
-  int _storeCoinGainAmount = 10;
-  bool _buttonUnlocked = false;
-  final AudioPlayer _introAudioPlayer = AudioPlayer();
-  final AudioPlayer _menuAudioPlayer = AudioPlayer();
-  final AudioPlayer _sfxAudioPlayer = AudioPlayer();
-  final List<_MenuSparkParticle> _menuSparkParticles = <_MenuSparkParticle>[];
-  final List<_CreditsBackdropDot> _creditsBackdropDots =
-      <_CreditsBackdropDot>[];
-  final Random _creditsBackdropRandom = Random();
-  bool _creditsDialogOpen = false;
-  bool _menuDotsPreviouslyColliding = false;
-  Offset _blueMenuDotPosition = Offset.zero;
-  Offset _yellowMenuDotPosition = Offset.zero;
-  Offset _blueMenuDotVelocity = Offset.zero;
-  Offset _yellowMenuDotVelocity = Offset.zero;
-  Size? _botSetupLastLayoutSize;
-  double _botSetupLastScrollPosition = 0.0;
-  double _botSetupScrollForce = 0.0;
-  double _blueDotScrollVelocity = 0.0;
-  double _blueDotScrollOffset = 0.0;
-  Timer? _idleInterstitialTimer;
-  bool _screenActive = true;
-  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
-  DateTime? _menuSparkLastUpdate;
-  DateTime? _creditsBackdropLastUpdate;
-  double _menuDotTime = 0.0;
-  double _blueYellowContactTime = 0.0;
-  late final double _blueDotPhase;
-  late final double _yellowDotPhase;
-  late final double _blueDotSpeed;
-  late final double _yellowDotSpeed;
-  late final double _blueDotRadius;
-  late final double _yellowDotRadius;
-  late final double _blueDotTrajectoryNoise;
-  late final double _yellowDotTrajectoryNoise;
-  late final double _blueDotShapeSeed;
-  late final double _yellowDotShapeSeed;
-  static const double _menuCenterBaseSpinSpeed = 0.24;
-  static const double _menuCenterMaxSpinSpeed = 6.0;
-  static const double _menuCenterSpinDecayRate = 0.9;
-  static const double _menuCenterCollisionStreakWindow = 1.2;
-
-  double _menuCenterRotationA = 0.0;
-  double _menuCenterRotationB = 0.0;
-  int _menuCenterShapeSidesA = 4;
-  int _menuCenterShapeSidesB = 5;
-  double _menuCenterShapeChangeTimerA = 1.6;
-  double _menuCenterShapeChangeTimerB = 1.2;
-  double _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
-  DateTime? _menuCenterLastUpdate;
-  DateTime? _menuCenterLastCollision;
-  int _menuCenterCollisionStreakCount = 0;
-  static const int _boardSfxPlayerPoolSize = 4;
-  final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
-    _boardSfxPlayerPoolSize,
-    (_) => AudioPlayer(),
-  );
-  int _nextBoardSfxPlayerIndex = 0;
-  bool _menuMusicPlaying = false;
-  bool _isHotkeyResetting = false;
-  Future<void>? _engineStartFuture;
-  final GlobalKey _sceneKey = GlobalKey();
-  final GlobalKey _boardKey = GlobalKey();
-  final GlobalKey _suggestionButtonKey = GlobalKey();
-  final GlobalKey _storeButtonKey = GlobalKey();
-
-  int _currentDepth = 0;
-  double _currentEval = 0.0;
-  bool _evalWhiteTurn =
-      true; // whose turn it was when _currentEval was last set
-  int _multiPvCount = _defaultMultiPvCount;
-  int _engineDepth = _defaultEngineDepth;
-  bool _isWhiteTurn = true;
-  bool _whiteKingMoved = false;
-  bool _blackKingMoved = false;
-  bool _whiteKingsideRookMoved = false;
-  bool _whiteQueensideRookMoved = false;
-  bool _blackKingsideRookMoved = false;
-  bool _blackQueensideRookMoved = false;
-  String? _enPassantTarget;
-  BoardPerspective _perspective = _defaultPerspective;
-  BoardThemeMode _boardThemeMode = _defaultBoardTheme;
-  PieceThemeMode _pieceThemeMode = _defaultPieceTheme;
-
-  List<EngineLine> _topLines = [];
-  final List<MoveRecord> _moveHistory = [];
-  int _historyIndex = -1;
-  late ScrollController _historyScrollController;
-  final Map<String, String> _ecoOpenings = {};
-  final List<EcoLine> _ecoLines = [];
-  int _quizEligibleCount = 0;
-  final Map<String, List<EcoLine>> _quizEligiblePoolCache =
-      <String, List<EcoLine>>{};
-  final Map<String, Set<String>> _quizEligibleNameCache =
-      <String, Set<String>>{};
-  bool _quizPoolsPrecomputed = false;
-  String _currentOpening = '';
-  final List<String> _logs = [];
-  OpeningMode _openingMode = OpeningMode.off;
-  String? _gambitSelectedFrom;
-  String? _holdSelectedFrom;
-  final Set<String> _legalTargets = <String>{};
-  final Set<String> _gambitAvailableTargets = <String>{};
-  EcoLine? _selectedGambit;
-  List<EngineLine> _gambitPreviewLines = [];
-  final Random _rng = Random();
-  bool _playVsBot = false;
-  bool _humanPlaysWhite = true;
-  bool _botThinking = false;
-  final List<_GhostArrow> _botGhostArrows = <_GhostArrow>[];
-  final Map<int, Timer> _botGhostArrowTimers = <int, Timer>{};
-  int _ghostArrowIdSeed = 0;
-  BotCharacter? _selectedBot;
-  int _vsBotSessionWins = 0;
-  int _vsBotSessionLosses = 0;
-  int _vsBotSessionDraws = 0;
-  Completer<List<EngineLine>>? _botSearchCompleter;
-  final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
-  int _botSearchMultiPv = 1;
-  final PageController _botSetupPageController = PageController(
-    viewportFraction: 0.60,
-  );
-  int _botSetupSelectedIndex = 0;
-  Future<void> _loadLastBotIndex() async {
-    final prefs = await SharedPreferences.getInstance();
-    final idx = prefs.getInt(_lastBotIndexKey);
-    if (idx != null && idx >= 0 && idx < _botCharacters.length) {
-      setState(() {
-        _botSetupSelectedIndex = idx;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_botSetupPageController.hasClients) {
-          _botSetupPageController.jumpToPage(idx);
-        }
-      });
-    }
-  }
-
-  Future<void> _saveLastBotIndex(int idx) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_lastBotIndexKey, idx);
-  }
-
-  BotSideChoice _botSideChoice = BotSideChoice.random;
-
-  int _depthTier = 1; // 1=pro,2=expert,3=grandmaster,4=oracle
-  int _extraSuggestionPurchases = 0; // each +1 up to max 10 suggestions
-  bool _themePackOwned = false;
-  bool _sakuraBoardOwned = false;
-  bool _tropicalBoardOwned = false;
-  bool _tuttiFruttiOwned = false;
-  bool _spectralOwned = false;
-  bool _piecePackOwned = false;
-  bool _adFreeOwned = false;
-  bool _academyTuitionPassOwned = false;
-  bool _introCompleted = true;
-  bool _suggestionsEnabled = false;
-  bool _vsBotEvalBarOnly = false;
-  bool _suggestionLaunchInProgress = false;
-  bool _suggestionBurstActive = false;
-  Offset? _launchStart;
-  List<Offset> _launchTargets = <Offset>[];
-  GameOutcome? _gameOutcome;
-  bool _gameResultDialogVisible = false;
-
-  AppSection _activeSection = AppSection.menu;
-  GambitQuizMode _quizMode = GambitQuizMode.guessName;
-  bool _menuReady = false;
-  bool _muteSounds = false;
-  bool _hapticsEnabled = true;
-  bool _isCinematicThemeEnabled = false;
-  final ValueNotifier<bool> _cinematicThemeNotifier = ValueNotifier<bool>(
-    false,
-  );
-  bool _analysisEditMode = false;
-  Timer? _editModeHintTimer;
-  String? _editModeHintText;
-  final Set<String> _viewedGambits = <String>{};
-  String _quizPrompt = '';
-  String _quizPromptFocus = '';
-  List<String> _quizOptions = <String>[];
-  int _quizCorrectIndex = 0;
-  String _quizFeedback = '';
-  Map<String, String> _quizBoardState = <String, String>{};
-  List<EngineLine> _quizContinuation = <EngineLine>[];
-  bool _quizWhiteToMove = true;
-  int _quizShownPly = 0;
-  // Quiz piece-by-piece playback state
-  Map<String, String> _quizPlayBoard = <String, String>{};
-  int _quizPlayArrowCount = 0;
-  bool _quizPlayActive = false;
-  String? _quizFlyFrom;
-  String? _quizFlyTo;
-  String? _quizFlyPiece;
-  double _quizFlyProgress = 0.0;
-  bool _quizAnswered = false;
-  int _quizSelectedIndex = -1;
-  List<EngineLine> _quizPreviewContinuation = <EngineLine>[];
-  final List<_QuizRoundReview> _quizReviewHistory = <_QuizRoundReview>[];
-  int? _quizReviewIndex;
-  QuizDifficulty _quizDifficulty = QuizDifficulty.medium;
-  int _quizStreak = 0;
-  int _quizBestStreak = 0;
-  int _quizTotalAnswered = 0;
-  int _quizCorrectAnswers = 0;
-  int _quizScore = 0;
-  Map<String, int> _quizDailyScore = <String, int>{};
-  Map<String, int> _quizDailyAttempts = <String, int>{};
-  Map<String, int> _quizDailyCorrectByDay = <String, int>{};
-  Map<String, int> _quizNameDailyAttempts = <String, int>{};
-  Map<String, int> _quizNameDailyCorrect = <String, int>{};
-  Map<String, int> _quizLineDailyAttempts = <String, int>{};
-  Map<String, int> _quizLineDailyCorrect = <String, int>{};
-  Map<String, int> _quizDailyQuestionsAsked = <String, int>{};
-  // Per-difficulty daily stat maps
-  Map<String, int> _quizEasyDailyAttempts = <String, int>{};
-  Map<String, int> _quizEasyDailyCorrect = <String, int>{};
-  Map<String, int> _quizMediumDailyAttempts = <String, int>{};
-  Map<String, int> _quizMediumDailyCorrect = <String, int>{};
-  Map<String, int> _quizHardDailyAttempts = <String, int>{};
-  Map<String, int> _quizHardDailyCorrect = <String, int>{};
-  Map<String, int> _quizVeryHardDailyAttempts = <String, int>{};
-  Map<String, int> _quizVeryHardDailyCorrect = <String, int>{};
-  int _quizQuestionsTarget = 10;
-  int _quizSessionAnswered = 0;
-  int _quizSessionCorrect = 0;
-  bool _quizSessionStarted = false;
-
-  Future<void> _showThemedErrorDialog({
-    required String message,
-    String title = 'Something went wrong',
-    bool includeInternetHint = false,
-  });
-
-  void _loadQuizPrefs(SharedPreferences prefs);
-
-  void _precomputeQuizEligiblePools();
-
-  List<EcoLine> _quizEligiblePool({
-    required GambitQuizMode mode,
-    required QuizDifficulty difficulty,
-  });
-
-  void _markGambitViewed(String name);
-
-  void _resetQuizToSetupState();
-
-  void _openGambitQuizFromMenu();
-
-  Widget _buildMoveSequenceText(
-    String notation, {
-    double fontSize = 12,
-    Color color = Colors.white70,
-    FontWeight fontWeight = FontWeight.w600,
-    int? maxLines,
-    TextOverflow overflow = TextOverflow.clip,
-  });
-
-  Widget _buildGambitQuizScreen();
-
-  void _addLog(String message) {
-    setState(() {
-      _logs.add('${DateTime.now().toIso8601String()} - $message');
-      if (_logs.length > 200) {
-        _logs.removeAt(0);
-      }
-    });
-  }
-
-  void _scheduleEditModeHintHide() {
-    _editModeHintTimer?.cancel();
-    _editModeHintTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (!mounted) return;
-      setState(() {
-        _editModeHintText = null;
-      });
-    });
-  }
-
-  void _startIdleInterstitialTimer() {
-    _cancelIdleInterstitialTimer();
-    if (!_screenActive || _lifecycleState != AppLifecycleState.resumed) {
-      return;
-    }
-    _idleInterstitialTimer = Timer(const Duration(minutes: 3), () async {
-      if (!mounted ||
-          !_screenActive ||
-          _lifecycleState != AppLifecycleState.resumed) {
-        return;
-      }
-      final shown = await AdService.instance.showInterstitialAd();
-      if (shown && mounted) {
-        await _handleAnalysisInterstitialShown();
-        _resetIdleTimer();
-      }
-    });
-  }
-
-  void _cancelIdleInterstitialTimer() {
-    _idleInterstitialTimer?.cancel();
-    _idleInterstitialTimer = null;
-  }
-
-  void _resetIdleTimer() {
-    _startIdleInterstitialTimer();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    _lifecycleState = state;
-    if (state == AppLifecycleState.resumed) {
-      _screenActive = true;
-      _resetIdleTimer();
-    } else {
-      _screenActive = false;
-      _cancelIdleInterstitialTimer();
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _loadLastBotIndex();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat();
-    _pulseController.addListener(_updateMenuSparks);
-    _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
-    _startIdleInterstitialTimer();
-    _menuSparkLastUpdate = DateTime.now();
-    _creditsBackdropLastUpdate = DateTime.now();
-    final random = Random();
-    _blueDotPhase = random.nextDouble() * 2 * pi;
-    _yellowDotPhase = random.nextDouble() * 2 * pi;
-    _blueDotSpeed = (0.28 + random.nextDouble() * 0.12) * 1.40;
-    _yellowDotSpeed = (0.25 + random.nextDouble() * 0.12) * 1.40;
-    _blueDotRadius = 0.58 + random.nextDouble() * 0.12;
-    _yellowDotRadius = 0.52 + random.nextDouble() * 0.12;
-    _blueDotTrajectoryNoise = random.nextDouble();
-    _yellowDotTrajectoryNoise = random.nextDouble();
-    _blueDotShapeSeed = random.nextDouble() * 3.2;
-    _yellowDotShapeSeed = random.nextDouble() * 3.2;
-    _menuCenterRotationA = 0.0;
-    _menuCenterRotationB = 0.0;
-    _menuCenterShapeSidesA = 4;
-    _menuCenterShapeSidesB = 5;
-    _menuCenterShapeChangeTimerA = 2.4 + random.nextDouble() * 2.0;
-    _menuCenterShapeChangeTimerB = 2.8 + random.nextDouble() * 1.8;
-    _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
-    _menuCenterLastUpdate = DateTime.now();
-    _menuCenterLastCollision = null;
-    _menuCenterCollisionStreakCount = 0;
-    _menuDotTime = 0.0;
-    _blueMenuDotPosition = Offset(
-      cos(_blueDotPhase) * 0.58,
-      sin(_blueDotPhase) * 0.56,
-    );
-    _yellowMenuDotPosition = Offset(
-      cos(_yellowDotPhase) * 0.54,
-      sin(_yellowDotPhase) * 0.52,
-    );
-    _blueMenuDotVelocity = Offset(
-      0.18 - random.nextDouble() * 0.32,
-      0.18 - random.nextDouble() * 0.32,
-    );
-    _yellowMenuDotVelocity = Offset(
-      0.18 - random.nextDouble() * 0.32,
-      0.18 - random.nextDouble() * 0.32,
-    );
-    _introController =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 3315),
-        )..addStatusListener((status) {
-          if (status == AnimationStatus.completed && mounted) {
-            setState(() {
-              _introCompleted = true;
-            });
-            if (_playVsBot &&
-                !_isHumanTurnInBotGame &&
-                !_botThinking &&
-                _gameOutcome == null) {
-              unawaited(_maybeTriggerBotMove());
-            }
-          }
-        });
-    _menuRevealController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _launchController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 650),
-    );
-    _buttonRippleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _storeCoinGainController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _menuMusicFadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _sectionTransitionController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _menuExitAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _openingButtonFlashController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _historyScrollController = ScrollController();
-    _resetBoard(withIntro: false);
-    _loadEcoOpenings();
-    _restoreSnapshotAndStart();
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      setState(() => _menuReady = true);
-      _menuRevealController.forward(from: 0);
-      _sectionTransitionController.forward(from: 0);
-    });
-  }
-
-  void _updateMenuSparks() {
-    final now = DateTime.now();
-    final last = _menuSparkLastUpdate ?? now;
-    final dt = now.difference(last).inMilliseconds / 1000.0;
-    _menuSparkLastUpdate = now;
-
-    _menuDotTime += dt;
-    if (_menuDotTime > 1e6) {
-      _menuDotTime %= 2 * pi;
-    }
-
-    final centerTime = _menuCenterLastUpdate == null
-        ? 0.0
-        : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
-    _menuCenterLastUpdate = now;
-    _menuCenterSpinSpeed = max(
-      _menuCenterBaseSpinSpeed,
-      _menuCenterSpinSpeed - _menuCenterSpinDecayRate * centerTime,
-    );
-    _menuCenterRotationA += centerTime * _menuCenterSpinSpeed;
-    _menuCenterRotationB += centerTime * _menuCenterSpinSpeed;
-
-    _menuCenterShapeChangeTimerA -= centerTime;
-    _menuCenterShapeChangeTimerB -= centerTime;
-
-    if (_menuCenterShapeChangeTimerA <= 0.0) {
-      final rollA = _creditsBackdropRandom.nextDouble();
-      _menuCenterShapeSidesA = rollA < (1.0 / 31.0)
-          ? 5
-          : rollA < (16.0 / 31.0)
-          ? 0
-          : 4;
-      _menuCenterShapeChangeTimerA =
-          2.4 + _creditsBackdropRandom.nextDouble() * 2.0;
-    }
-    if (_menuCenterShapeChangeTimerB <= 0.0) {
-      final rollB = _creditsBackdropRandom.nextDouble();
-      _menuCenterShapeSidesB = rollB < (1.0 / 31.0)
-          ? 5
-          : rollB < (16.0 / 31.0)
-          ? 0
-          : 4;
-      _menuCenterShapeChangeTimerB =
-          2.8 + _creditsBackdropRandom.nextDouble() * 1.8;
-    }
-
-    final pulse = _menuDotTime;
-    final blueTargetAlignment = _menuDotAlignment(
-      _blueDotPhase,
-      _blueDotSpeed,
-      _blueDotRadius,
-      pulse,
-      _blueDotTrajectoryNoise,
-      _blueDotShapeSeed,
-      false,
-    );
-    final yellowTargetAlignment = _menuDotAlignment(
-      _yellowDotPhase,
-      _yellowDotSpeed,
-      _yellowDotRadius,
-      pulse,
-      _yellowDotTrajectoryNoise,
-      _yellowDotShapeSeed,
-      true,
-    );
-    final blueTarget = Offset(blueTargetAlignment.x, blueTargetAlignment.y);
-    final yellowTarget = Offset(
-      yellowTargetAlignment.x * -1.0,
-      yellowTargetAlignment.y,
-    );
-
-    final separation = _blueMenuDotPosition - _yellowMenuDotPosition;
-    final collisionDistance = separation.distance;
-    final currentlyColliding = collisionDistance < 0.045;
-
-    if (currentlyColliding && !_menuDotsPreviouslyColliding) {
-      final collisionAge = _menuCenterLastCollision == null
-          ? double.infinity
-          : now.difference(_menuCenterLastCollision!).inMilliseconds / 1000.0;
-      if (collisionAge <= _menuCenterCollisionStreakWindow) {
-        _menuCenterCollisionStreakCount += 1;
-      } else {
-        _menuCenterCollisionStreakCount = 1;
-      }
-      _menuCenterLastCollision = now;
-
-      final collisionBonus = 1.4 + _menuCenterCollisionStreakCount * 0.55;
-      _menuCenterSpinSpeed = min(
-        _menuCenterSpinSpeed + collisionBonus,
-        _menuCenterMaxSpinSpeed,
-      );
-
-      final origin = Offset(
-        (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
-        (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
-      );
-      final particleCount = Random().nextInt(2) + 1;
-      for (var i = 0; i < particleCount; i++) {
-        final angle = Random().nextDouble() * 2 * pi;
-        final velocity = Offset(
-          cos(angle) * (0.8 + Random().nextDouble() * 0.6),
-          sin(angle) * (0.8 + Random().nextDouble() * 0.6),
-        );
-        _menuSparkParticles.add(
-          _MenuSparkParticle(
-            position: origin,
-            velocity: velocity,
-            color: Colors.green.withValues(alpha: 0.90),
-          ),
-        );
-      }
-
-      unawaited(_lightHaptic());
-
-      final direction = separation / collisionDistance;
-      const repulsionStrength = 14.7;
-      final impulse =
-          direction * repulsionStrength +
-          Offset(-direction.dy, direction.dx) * 2.7;
-      _blueMenuDotVelocity += impulse;
-      _yellowMenuDotVelocity -= impulse;
-    }
-
-    _menuDotsPreviouslyColliding = currentlyColliding;
-
-    final blueCenter = _blueMenuDotPosition;
-    final yellowCenter = _yellowMenuDotPosition;
-    final blueSpring = (blueTarget - blueCenter) * 4.4;
-    final yellowSpring = (yellowTarget - yellowCenter) * 4.2;
-    final blueOrbit = Offset(-blueCenter.dy, blueCenter.dx) * 3.8;
-    final yellowOrbit = Offset(yellowCenter.dy, -yellowCenter.dx) * 3.7;
-    final blueTwist =
-        Offset(-_blueMenuDotVelocity.dy, _blueMenuDotVelocity.dx) * 2.4;
-    final yellowTwist =
-        Offset(_yellowMenuDotVelocity.dy, -_yellowMenuDotVelocity.dx) * 2.3;
-    final blueNoise = Offset(
-      sin(pulse * 3.1 + 1.7) * 0.28,
-      cos(pulse * 3.5 - 0.5) * 0.28,
-    );
-    final yellowNoise = Offset(
-      cos(pulse * 2.9 + 1.1) * 0.27,
-      sin(pulse * 3.2 - 1.0) * 0.27,
-    );
-    final blueChaos = Offset(
-      sin(pulse * 5.0 + _blueDotShapeSeed) * 0.14,
-      cos(pulse * 4.2 - _blueDotShapeSeed) * 0.13,
-    );
-    final yellowChaos = Offset(
-      cos(pulse * 4.7 + _yellowDotShapeSeed) * 0.15,
-      sin(pulse * 4.4 - _yellowDotShapeSeed) * 0.14,
-    );
-    final blueRadial = blueCenter * -0.18;
-    final yellowRadial = yellowCenter * -0.16;
-
-    final blueAcceleration =
-        blueSpring + blueOrbit + blueTwist + blueNoise + blueChaos + blueRadial;
-    final yellowAcceleration =
-        yellowSpring +
-        yellowOrbit +
-        yellowTwist +
-        yellowNoise +
-        yellowChaos +
-        yellowRadial;
-
-    _blueMenuDotVelocity =
-        (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) * 0.78;
-    _yellowMenuDotVelocity =
-        (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) * 0.78;
-
-    _blueMenuDotPosition += _blueMenuDotVelocity * dt;
-    _yellowMenuDotPosition += _yellowMenuDotVelocity * dt;
-
-    if (_blueMenuDotPosition.distance > 0.96) {
-      _blueMenuDotPosition =
-          _blueMenuDotPosition / _blueMenuDotPosition.distance * 0.92;
-      _blueMenuDotVelocity *= 0.72;
-    }
-    if (_yellowMenuDotPosition.distance > 0.96) {
-      _yellowMenuDotPosition =
-          _yellowMenuDotPosition / _yellowMenuDotPosition.distance * 0.92;
-      _yellowMenuDotVelocity *= 0.72;
-    }
-
-    _menuSparkParticles.removeWhere((particle) {
-      particle.position += particle.velocity * dt;
-      return particle.position.dx.abs() > 1.2 ||
-          particle.position.dy.abs() > 1.2;
-    });
-
-    if (_creditsDialogOpen) {
-      final creditsLast = _creditsBackdropLastUpdate ?? now;
-      final creditsDt = now.difference(creditsLast).inMilliseconds / 1000.0;
-      _creditsBackdropLastUpdate = now;
-      if (_creditsBackdropDots.isNotEmpty) {
-        const gravityStrength = 0.019;
-        const centralStiffness = 0.20;
-        const damping = 0.995;
-        const repulsionThreshold = 0.10;
-        const blueYellowContactThreshold = 0.13;
-        const blueYellowRestDuration = 3.0;
-        const greenPushStrength = 0.28 * 1.3;
-        const blueYellowPushStrength = 0.64 * 1.2 * 1.3;
-
-        var blueYellowTouching = false;
-        Offset blueYellowMidpoint = Offset.zero;
-
-        _blueYellowContactTime = _blueYellowContactTime.clamp(
-          0.0,
-          blueYellowRestDuration,
-        );
-
-        for (final dot in _creditsBackdropDots) {
-          var acceleration = Offset.zero;
-          for (final other in _creditsBackdropDots) {
-            if (identical(dot, other)) continue;
-            final separation = other.position - dot.position;
-            final distance = separation.distance.clamp(0.06, 1.2);
-            acceleration +=
-                separation /
-                (distance * distance) *
-                (gravityStrength * (other.radius * 0.18));
-
-            if (dot.role == _CreditsBackdropDotRole.green &&
-                other.role == _CreditsBackdropDotRole.green &&
-                distance < repulsionThreshold) {
-              final push = separation / distance * greenPushStrength;
-              dot.velocity -=
-                  push * (1.0 + _creditsBackdropRandom.nextDouble() * 0.7);
-            }
-
-            final isBlueYellowPair =
-                (dot.role == _CreditsBackdropDotRole.blue &&
-                    other.role == _CreditsBackdropDotRole.yellow) ||
-                (dot.role == _CreditsBackdropDotRole.yellow &&
-                    other.role == _CreditsBackdropDotRole.blue);
-            if (isBlueYellowPair && distance < blueYellowContactThreshold) {
-              blueYellowTouching = true;
-              blueYellowMidpoint = (dot.position + other.position) / 2;
-            }
-          }
-          acceleration -= dot.position * centralStiffness;
-          dot.velocity = (dot.velocity + acceleration * creditsDt) * damping;
-        }
-
-        var spawnGreenBall = false;
-        if (blueYellowTouching) {
-          _blueYellowContactTime += creditsDt;
-          if (_blueYellowContactTime >= blueYellowRestDuration) {
-            for (final dot in _creditsBackdropDots) {
-              if (dot.role == _CreditsBackdropDotRole.blue ||
-                  dot.role == _CreditsBackdropDotRole.yellow) {
-                final other = _creditsBackdropDots.firstWhere(
-                  (candidate) =>
-                      candidate.role != dot.role &&
-                      (candidate.role == _CreditsBackdropDotRole.blue ||
-                          candidate.role == _CreditsBackdropDotRole.yellow),
-                );
-                final separation = dot.position - other.position;
-                final distance = separation.distance.clamp(0.06, 1.2);
-                final push = separation / distance * blueYellowPushStrength;
-                dot.velocity +=
-                    push * (1.0 + _creditsBackdropRandom.nextDouble() * 0.4);
-              }
-            }
-            spawnGreenBall = _creditsBackdropDots.length < 10;
-            _blueYellowContactTime = 0.0;
-          }
-        } else {
-          _blueYellowContactTime = 0.0;
-        }
-
-        if (spawnGreenBall) {
-          final angle = _creditsBackdropRandom.nextDouble() * 2 * pi;
-          final direction = Offset(cos(angle), sin(angle));
-          _creditsBackdropDots.add(
-            _CreditsBackdropDot(
-              position: blueYellowMidpoint,
+                    alpha: isLight ? 0.78 : 0.54,
+                  );
               velocity:
                   direction *
                   (0.02 + _creditsBackdropRandom.nextDouble() * 0.03),
-              color: const Color(0xFF7EDC8A).withValues(alpha: 0.84),
+              color: const void Color(0xFF7EDC8A).void withValues(alpha = 0.84),
               radius: 4.0 + _creditsBackdropRandom.nextDouble() * 1.0,
               role: _CreditsBackdropDotRole.green,
             ),
           );
-          _menuCenterSpinSpeed = min(_menuCenterSpinSpeed + 0.24, 4.2);
+          final _menuCenterSpinSpeed = min(_menuCenterSpinSpeed + 0.24, 4.2);
         }
 
-        for (final dot in _creditsBackdropDots) {
+        void for (final dot in _creditsBackdropDots) {
           dot.position += dot.velocity * creditsDt;
           final distance = dot.position.distance;
           if (distance > 0.95) {
@@ -761,253 +43,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           }
         }
       }
-    } else {
+    } void else {
       _creditsBackdropLastUpdate = now;
     }
   }
 
-  Widget _buildMenuCenterShape({
-    required double size,
-    required Color strokeColor,
-    required double strokeWidth,
-    required double rotation,
-    required int sides,
-  }) {
-    return Transform.rotate(
-      angle: rotation,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: CustomPaint(
-          painter: _RegularPolygonPainter(
-            sides: sides,
-            strokeColor: strokeColor,
-            strokeWidth: strokeWidth,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _initializeCreditsBackdrop() {
-    _creditsBackdropDots.clear();
-
-    final specs = <Map<String, Object>>[
-      {
-        'role': _CreditsBackdropDotRole.green,
-        'color': const Color(0xFF7EDC8A),
-        'radius': 4.5,
-      },
-      {
-        'role': _CreditsBackdropDotRole.blue,
-        'color': const Color(0xFF2A6CF0),
-        'radius': 10.0,
-      },
-      {
-        'role': _CreditsBackdropDotRole.yellow,
-        'color': const Color(0xFFD8B640),
-        'radius': 11.0,
-      },
-      {
-        'role': _CreditsBackdropDotRole.green,
-        'color': const Color(0xFF4ADE80),
-        'radius': 4.25,
-      },
-      {
-        'role': _CreditsBackdropDotRole.green,
-        'color': const Color(0xFF7EDC8A),
-        'radius': 5.25,
-      },
-    ];
-
-    for (final spec in specs) {
-      final angle = _creditsBackdropRandom.nextDouble() * 2 * pi;
-      final distance = 0.18 + _creditsBackdropRandom.nextDouble() * 0.26;
-      final position = Offset(cos(angle) * distance, sin(angle) * distance);
-      final speed = 0.025 + _creditsBackdropRandom.nextDouble() * 0.05;
-      final velocity = Offset.fromDirection(
-        angle + pi / 2 + (_creditsBackdropRandom.nextDouble() - 0.5) * 0.8,
-        speed,
-      );
-
-      _creditsBackdropDots.add(
-        _CreditsBackdropDot(
-          position: position,
-          velocity: velocity,
-          color: (spec['color'] as Color).withValues(alpha: 0.84),
-          radius: spec['radius'] as double,
-          role: spec['role'] as _CreditsBackdropDotRole,
-        ),
-      );
-    }
-
-    _creditsBackdropLastUpdate = DateTime.now();
-  }
-
-  Alignment _menuDotAlignment(
-    double phase,
-    double speed,
-    double radius,
-    double pulse,
-    double trajectoryNoise,
-    double shapeSeed,
-    bool inverted,
-  ) {
-    final time =
-        pulse * 2.6 * speed + phase + shapeSeed * (inverted ? 1.22 : 1.0);
-    final x = inverted
-        ? cos(time * (1.45 + shapeSeed * 0.16) + 0.7) * radius * 0.82 +
-              cos(time * (2.9 + shapeSeed * 0.20) - 1.1) * 0.10 +
-              sin(time * (4.6 + shapeSeed * 0.27) + 0.9) * 0.05
-        : sin(time * (1.25 + shapeSeed * 0.14)) * radius +
-              sin(time * (2.7 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) *
-                  0.12 +
-              sin(time * (4.1 + shapeSeed * 0.35) + 2.1) * 0.06;
-    final y = inverted
-        ? sin(time * (1.65 + shapeSeed * 0.19) - 0.5) * radius * 0.90 +
-              sin(time * (2.55 + shapeSeed * 0.13) + 0.2) * 0.12 +
-              cos(time * (3.9 + shapeSeed * 0.33) - 0.4) * 0.06
-        : cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
-              cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.11 +
-              sin(time * (3.9 + shapeSeed * 0.28) + 0.6) * 0.05;
-    final driftX = inverted
-        ? cos(time * (0.70 + shapeSeed * 0.05) - 0.4) * 0.05
-        : sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.04;
-    final driftY = inverted
-        ? sin(time * (0.88 + shapeSeed * 0.06) + 0.1) * 0.05
-        : cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.04;
-    final jitterX =
-        sin(
-          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
-              trajectoryNoise * 3.7 +
-              (inverted ? 1.4 : 0.0),
-        ) *
-        (trajectoryNoise * 0.08 + shapeSeed * 0.04);
-    final jitterY =
-        cos(
-          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
-              trajectoryNoise * 2.9 +
-              (inverted ? 1.7 : 0.0),
-        ) *
-        (trajectoryNoise * 0.08 + shapeSeed * 0.04);
-    final raw = Offset(x + driftX + jitterX, y + driftY + jitterY);
-    final distance = raw.distance;
-    const limit = 1.20;
-    final returnFactor = distance > limit ? limit / distance : 1.0;
-    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
-  }
-
-  Alignment _botSelectorBlueDotAlignment(
-    double phase,
-    double speed,
-    double radius,
-    double pulse,
-    double trajectoryNoise,
-    double shapeSeed,
-    double scrollOffset,
-  ) {
-    final time = pulse * 1.26 * speed + phase + shapeSeed;
-    final x =
-        sin(time * (1.25 + shapeSeed * 0.14)) * radius +
-        sin(time * (2.6 + shapeSeed * 0.22) + 1.3 + shapeSeed * 0.9) * 0.09 +
-        sin(time * (3.5 + shapeSeed * 0.35) + 2.1) * 0.035;
-    final y =
-        cos(time * (1.77 + shapeSeed * 0.18) + 0.4) * radius * 0.88 +
-        cos(time * (2.35 + shapeSeed * 0.15) - 0.8) * 0.09 +
-        sin(time * (3.5 + shapeSeed * 0.28) + 0.6) * 0.035;
-    final driftX = sin(time * (0.64 + shapeSeed * 0.04) + 1.2) * 0.015;
-    final driftY = cos(time * (0.71 + shapeSeed * 0.03) - 0.7) * 0.015;
-    final jitterX =
-        sin(
-          time * (0.92 + trajectoryNoise * 0.18 + shapeSeed * 0.06) +
-              trajectoryNoise * 3.7,
-        ) *
-        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
-    final jitterY =
-        cos(
-          time * (1.08 + trajectoryNoise * 0.22 - shapeSeed * 0.07) -
-              trajectoryNoise * 2.9,
-        ) *
-        (trajectoryNoise * 0.025 + shapeSeed * 0.015);
-    final raw = Offset(
-      x + driftX + jitterX + (scrollOffset * 0.03),
-      y + driftY + jitterY + (scrollOffset * 0.90),
-    );
-    final distance = raw.distance;
-    const limit = 1.35;
-    final returnFactor = distance > limit ? limit / distance : 1.0;
-    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
-  }
-
-  void _updateBotSetupBlueDotScrollOffset() {
-    _blueDotScrollVelocity *= 0.93;
-    _blueDotScrollOffset += _blueDotScrollVelocity * 0.016;
-    _blueDotScrollOffset = _blueDotScrollOffset.clamp(-1.15, 1.15);
-  }
-
-  Future<void> _playIntroSound() async {
-    if (_muteSounds) return;
-    try {
-      await _introAudioPlayer.stop();
-      await _introAudioPlayer.setReleaseMode(ReleaseMode.stop);
-      await _introAudioPlayer.play(
-        AssetSource(_introSoundAssetPath),
-        mode: PlayerMode.mediaPlayer,
-        volume: 1.0,
-      );
-    } catch (e) {
-      debugPrint('Intro sound failed: $e');
-      _addLog('Intro sound failed: $e');
-    }
-  }
-
-  Future<void> _playMenuMusic() async {
-    if (_muteSounds || _menuMusicPlaying) return;
-    try {
-      await _menuAudioPlayer.setReleaseMode(ReleaseMode.stop);
-      await _menuAudioPlayer.play(
-        AssetSource('sounds/main.mp3'),
-        mode: PlayerMode.mediaPlayer,
-        volume: 0.0,
-      );
-      _menuMusicPlaying = true;
-      _menuMusicFadeController.reset();
-      _menuMusicFadeController.forward().then((_) async {
-        if (_menuMusicPlaying) {
-          await _menuAudioPlayer.setVolume(0.45);
-        }
-      });
-    } catch (e) {
-      debugPrint('Menu music failed: $e');
-      _addLog('Menu music failed: $e');
-    }
-  }
-
-  Future<void> _stopMenuMusic({bool fadeOut = true}) async {
-    if (!_menuMusicPlaying) return;
-    try {
-      if (fadeOut) {
-        await _menuMusicFadeController.reverse();
-      }
-      await _menuAudioPlayer.stop();
-    } catch (e) {
-      debugPrint('Stopping menu music failed: $e');
-      _addLog('Stopping menu music failed: $e');
-    } finally {
-      _menuMusicPlaying = false;
-    }
-  }
-
-  Future<void> _playCoinRewardSound() async {
-    if (_muteSounds) return;
-    try {
+                    alpha: isLight ? 0.78 : 0.54,
+                  );
+    if (muteSounds) return;
+    void try {
       await _sfxAudioPlayer.stop();
       await _sfxAudioPlayer.setReleaseMode(ReleaseMode.stop);
       await _sfxAudioPlayer.setSource(AssetSource('sounds/coin.mp3'));
       await _sfxAudioPlayer.seek(const Duration(milliseconds: 300));
       await _sfxAudioPlayer.setVolume(1.0);
       await _sfxAudioPlayer.resume();
-    } catch (e) {
+    } void catch (e) {
       debugPrint('Coin reward sound failed: $e');
       _addLog('Coin reward sound failed: $e');
     }
@@ -1573,6 +624,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _gameResultDialogVisible = false;
     _launchStart = null;
     _launchTargets = <Offset>[];
+    _launchTargetsEvalBar = false;
     _topLines = [];
     _currentDepth = 0;
     _currentEval = 0.0;
@@ -5133,6 +4185,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Offset? _evalBarCenterInScene() {
+    final evalContext =
+        _evalBarVerticalKey.currentContext ??
+        _evalBarHorizontalKey.currentContext;
+    final sceneContext = _sceneKey.currentContext;
+    if (evalContext == null || sceneContext == null) return null;
+
+    final evalBox = _renderBoxFromContext(evalContext);
+    final sceneBox = _renderBoxFromContext(sceneContext);
+    if (evalBox == null || sceneBox == null) return null;
+
+    return sceneBox.globalToLocal(
+      evalBox.localToGlobal(evalBox.size.center(Offset.zero)),
+    );
+  }
+
   Future<void> _handleAnalysisInterstitialShown() async {
     if (!mounted || _activeSection != AppSection.analysis) return;
     final economy = context.read<EconomyProvider>();
@@ -5219,6 +4287,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           alignedMenuDot.dx * scene.width * 0.42,
           alignedMenuDot.dy * scene.height * 0.40,
         );
+  }
+
+  Offset _launchWavePoint(Offset start, Offset end, double t) {
+    final eased = Curves.easeInOutCubic.transform(t.clamp(0.0, 1.0));
+    final base = Offset.lerp(start, end, eased)!;
+    final delta = end - start;
+    final distance = max(delta.distance, 1.0);
+    final normal = Offset(-delta.dy / distance, delta.dx / distance);
+    final amplitude = min(18.0, distance * 0.09);
+    final wave = sin(eased * pi * 1.6) * amplitude * (1.0 - eased);
+    return base + (normal * wave);
   }
 
   RenderBox? _renderBoxFromContext(BuildContext? context) {
@@ -5499,6 +4578,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       setState(() {
         _launchStart = buttonCenter;
         _launchTargets = targets;
+        _launchTargetsEvalBar = false;
       });
 
       _launchController.forward(from: 0).whenComplete(() {
@@ -5506,6 +4586,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         setState(() {
           _launchStart = null;
           _launchTargets = <Offset>[];
+          _launchTargetsEvalBar = false;
+        });
+        if (!completer.isCompleted) completer.complete();
+      });
+    });
+    await completer.future;
+  }
+
+  Future<void> _fireEvalBarRevealLaunch() async {
+    final completer = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final buttonCenter = _suggestionButtonCenterInScene();
+      final target = _evalBarCenterInScene();
+      if (buttonCenter == null || target == null) {
+        if (!completer.isCompleted) completer.complete();
+        return;
+      }
+
+      setState(() {
+        _launchStart = buttonCenter;
+        _launchTargets = <Offset>[target];
+        _launchTargetsEvalBar = true;
+      });
+
+      _launchController.forward(from: 0).whenComplete(() {
+        if (!mounted) return;
+        setState(() {
+          _launchStart = null;
+          _launchTargets = <Offset>[];
+          _launchTargetsEvalBar = false;
         });
         if (!completer.isCompleted) completer.complete();
       });
@@ -5523,6 +4633,90 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       builder: (context, child) {
         final t = Curves.easeInOutCubic.transform(_launchController.value);
         final start = _launchStart!;
+
+        if (_launchTargetsEvalBar) {
+          final end = _launchTargets.first;
+          final pulseT = ((t - 0.66) / 0.34).clamp(0.0, 1.0);
+          final pulseRadius = 10 + (20 * pulseT);
+          final pulseAlpha = (1.0 - pulseT) * 0.70;
+
+          return IgnorePointer(
+            child: Stack(
+              children: [
+                if (pulseT > 0)
+                  Positioned(
+                    left: end.dx - pulseRadius,
+                    top: end.dy - pulseRadius,
+                    child: Container(
+                      width: pulseRadius * 2,
+                      height: pulseRadius * 2,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const ui.Color.fromARGB(
+                            255,
+                            66,
+                            65,
+                            65,
+                          ).withValues(alpha: pulseAlpha),
+                          width: 1.8,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const ui.Color.fromARGB(
+                              255,
+                              252,
+                              252,
+                              252,
+                            ).withValues(alpha: pulseAlpha * 0.55),
+                            blurRadius: 12,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                for (int i = 5; i >= 0; i--)
+                  Builder(
+                    builder: (context) {
+                      final delayedT = (t - (i * 0.07)).clamp(0.0, 1.0);
+                      if (delayedT <= 0) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final position = _launchWavePoint(start, end, delayedT);
+                      final size = ui.lerpDouble(6.0, 15.0, 1 - (i / 5))!;
+                      final color = i.isEven
+                          ? const ui.Color.fromARGB(255, 51, 51, 51)
+                          : const ui.Color.fromARGB(255, 255, 255, 255);
+                      final alpha = (0.24 + ((5 - i) * 0.12)).clamp(0.0, 0.85);
+
+                      return Positioned(
+                        left: position.dx - (size / 2),
+                        top: position.dy - (size / 2),
+                        child: Container(
+                          width: size,
+                          height: size,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: color.withValues(alpha: alpha),
+                            boxShadow: [
+                              BoxShadow(
+                                color: color.withValues(alpha: alpha),
+                                blurRadius: 8 + ((5 - i) * 1.5),
+                                spreadRadius: i == 0 ? 1.2 : 0.0,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          );
+        }
+
         final rippleT = ((t - 0.82) / 0.18).clamp(0.0, 1.0);
         final rippleRadius = 8 + (24 * rippleT);
         final rippleAlpha = (1.0 - rippleT) * 0.75;
@@ -6916,6 +6110,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                 .center,
                                                         children: [
                                                           SizedBox(
+                                                            key:
+                                                                _evalBarVerticalKey,
                                                             width: evalBarW,
                                                             height: boardSize,
                                                             child: Center(
@@ -6991,90 +6187,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                   bottom: 10,
                                                                 ),
                                                             child: Align(
-                                                              alignment: Alignment
-                                                                  .centerRight,
-                                                              child: SizedBox(
-                                                                height:
-                                                                    20 * scale,
-                                                                child: Row(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    if (!_playVsBot)
-                                                                      SizedBox(
-                                                                        width:
-                                                                            20 *
-                                                                            scale,
-                                                                        height:
-                                                                            20 *
-                                                                            scale,
-                                                                        child: IconButton(
-                                                                          onPressed: () {
-                                                                            setState(() {
-                                                                              _analysisEditMode = !_analysisEditMode;
-                                                                              _holdSelectedFrom = null;
-                                                                              _gambitSelectedFrom = null;
-                                                                              _legalTargets.clear();
-                                                                              _gambitAvailableTargets.clear();
-                                                                              _editModeHintText = _analysisEditMode
-                                                                                  ? 'Edit mode on'
-                                                                                  : 'Edit mode off';
-                                                                            });
-                                                                            _scheduleEditModeHintHide();
-                                                                          },
-                                                                          icon: Text(
-                                                                            _analysisEditMode
-                                                                                ? '🛠️'
-                                                                                : '🔒',
-                                                                            style: TextStyle(
-                                                                              fontSize:
-                                                                                  14 *
-                                                                                  scale,
-                                                                            ),
-                                                                          ),
-                                                                          tooltip:
-                                                                              _analysisEditMode
-                                                                              ? 'Edit mode on (any move allowed)'
-                                                                              : 'Edit mode off (legal moves only)',
-                                                                          splashRadius:
-                                                                              14 *
-                                                                              scale,
-                                                                          visualDensity:
-                                                                              VisualDensity.compact,
-                                                                          padding:
-                                                                              EdgeInsets.zero,
-                                                                          constraints: BoxConstraints.tightFor(
-                                                                            width:
-                                                                                20 *
-                                                                                scale,
-                                                                            height:
-                                                                                20 *
-                                                                                scale,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                    if (_shouldShowDepthCounter)
-                                                                      const SizedBox(
-                                                                        width:
-                                                                            6,
-                                                                      ),
-                                                                    if (_shouldShowDepthCounter)
-                                                                      Text(
-                                                                        'Depth $_currentDepth',
-                                                                        style: TextStyle(
-                                                                          color: scheme.onSurface.withValues(
-                                                                            alpha:
-                                                                                0.54,
-                                                                          ),
-                                                                          fontSize:
-                                                                              11 *
-                                                                              scale,
-                                                                        ),
-                                                                      ),
-                                                                  ],
-                                                                ),
-                                                              ),
+                                                              alignment:
+                                                                  Alignment
+                                                                      .center,
+                                                              child:
+                                                                  _buildEditModeDepthCluster(
+                                                                    scale,
+                                                                    scheme,
+                                                                  ),
                                                             ),
                                                           ),
                                                           if (!_playVsBot &&
@@ -7196,7 +6316,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               : Column(
                                   children: [
                                     _buildHeader(scale),
-                                    _buildEvalBarHorizontal(scale),
+                                    KeyedSubtree(
+                                      key: _evalBarHorizontalKey,
+                                      child: _buildEvalBarHorizontal(scale),
+                                    ),
                                     Expanded(
                                       child: Padding(
                                         padding: EdgeInsets.fromLTRB(
@@ -7532,62 +6655,77 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
           Expanded(
             child: Align(
+              alignment: Alignment.center,
+              child: _buildEditModeDepthCluster(scale, scheme),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditModeDepthCluster(double scale, ColorScheme scheme) {
+    final showEditModeButton = !_playVsBot;
+    final showDepthCounter = _shouldShowDepthCounter;
+    if (!showEditModeButton && !showDepthCounter) {
+      return const SizedBox.shrink();
+    }
+
+    final clusterWidth = showEditModeButton ? 168 * scale : 72 * scale;
+    return SizedBox(
+      width: clusterWidth,
+      height: 20 * scale,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (showDepthCounter)
+            Align(
               alignment: Alignment.centerRight,
-              child: SizedBox(
-                width: 120 * scale,
-                height: 20 * scale,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (!_playVsBot)
-                      SizedBox(
-                        width: 20 * scale,
-                        height: 20 * scale,
-                        child: IconButton(
-                          onPressed: () {
-                            setState(() {
-                              _analysisEditMode = !_analysisEditMode;
-                              _holdSelectedFrom = null;
-                              _gambitSelectedFrom = null;
-                              _legalTargets.clear();
-                              _gambitAvailableTargets.clear();
-                              _editModeHintText = _analysisEditMode
-                                  ? 'Edit mode on'
-                                  : 'Edit mode off';
-                            });
-                            _scheduleEditModeHintHide();
-                          },
-                          icon: Text(
-                            _analysisEditMode ? '🛠️' : '🔒',
-                            style: TextStyle(fontSize: 14 * scale),
-                          ),
-                          tooltip: _analysisEditMode
-                              ? 'Edit mode on (any move allowed)'
-                              : 'Edit mode off (legal moves only)',
-                          splashRadius: 14 * scale,
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: BoxConstraints.tightFor(
-                            width: 20 * scale,
-                            height: 20 * scale,
-                          ),
-                        ),
-                      ),
-                    if (_shouldShowDepthCounter)
-                      SizedBox(width: _playVsBot ? 8 * scale : 6),
-                    if (_shouldShowDepthCounter)
-                      Text(
-                        'Depth $_currentDepth',
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.54),
-                          fontSize: 11 * scale,
-                        ),
-                      ),
-                  ],
+              child: Text(
+                'Depth $_currentDepth',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.54),
+                  fontSize: 11 * scale,
                 ),
               ),
             ),
-          ),
+          if (showEditModeButton)
+            Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: 20 * scale,
+                height: 20 * scale,
+                child: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _analysisEditMode = !_analysisEditMode;
+                      _holdSelectedFrom = null;
+                      _gambitSelectedFrom = null;
+                      _legalTargets.clear();
+                      _gambitAvailableTargets.clear();
+                      _editModeHintText = _analysisEditMode
+                          ? 'Edit mode on'
+                          : 'Edit mode off';
+                    });
+                    _scheduleEditModeHintHide();
+                  },
+                  icon: Text(
+                    _analysisEditMode ? '🛠️' : '🔒',
+                    style: TextStyle(fontSize: 14 * scale),
+                  ),
+                  tooltip: _analysisEditMode
+                      ? 'Edit mode on (any move allowed)'
+                      : 'Edit mode off (legal moves only)',
+                  splashRadius: 14 * scale,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints.tightFor(
+                    width: 20 * scale,
+                    height: 20 * scale,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -8481,6 +7619,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   final idleIconColor = scheme.onSurface.withValues(
                     alpha: isLight ? 0.78 : 0.54,
                   );
+
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -8543,7 +7682,111 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  _SuggestionButtonPalette _suggestionButtonPalette() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+
+    if (useMonochrome) {
+      if (isDark) {
+        return _SuggestionButtonPalette(
+          useMonochrome: true,
+          isDark: true,
+          powerBackground: const Color(0xFF14181D),
+          powerBorder: Colors.white.withValues(alpha: 0.40),
+          powerIcon: const Color(0xFFF4F7FB),
+          powerShadow: Colors.white.withValues(alpha: 0.08),
+          surfaceCore: const Color(0xFF2A313A),
+          surfaceBase: const Color(0xFF0F1318),
+          energyPrimary: const Color(0xFFF4F7FB),
+          energySecondary: const Color(0xFF7E8794),
+          activationGlow: const Color(0xFFD4DBE3),
+          boltColor: const Color(0xFFF4F7FB),
+          borderAccent: const Color(0xFFE5EBF2),
+          glyphShell: const Color(0xFF0C1014),
+          glyphBorder: Colors.white.withValues(alpha: 0.22),
+        );
+      }
+
+      return _SuggestionButtonPalette(
+        useMonochrome: true,
+        isDark: false,
+        powerBackground: Colors.white.withValues(alpha: 0.97),
+        powerBorder: const Color(0xFF151A21).withValues(alpha: 0.32),
+        powerIcon: const Color(0xFF111418),
+        powerShadow: const Color(0xFF111418).withValues(alpha: 0.10),
+        surfaceCore: Color.alphaBlend(
+          Colors.black.withValues(alpha: 0.06),
+          scheme.surface,
+        ),
+        surfaceBase: Colors.white.withValues(alpha: 0.97),
+        energyPrimary: const Color(0xFF111418),
+        energySecondary: const Color(0xFF7F8892),
+        activationGlow: const Color(0xFF535C66),
+        boltColor: const Color(0xFF111418),
+        borderAccent: const Color(0xFF151A21),
+        glyphShell: Colors.white.withValues(alpha: 0.96),
+        glyphBorder: const Color(0xFF151A21).withValues(alpha: 0.18),
+      );
+    }
+
+    if (isDark) {
+      return _SuggestionButtonPalette(
+        useMonochrome: false,
+        isDark: true,
+        powerBackground: const Color(0xFF2A0F13),
+        powerBorder: const Color(0xFFE06A79).withValues(alpha: 0.75),
+        powerIcon: const Color(0xFFFFA3AF),
+        powerShadow: const Color(0xFFE06A79).withValues(alpha: 0.24),
+        surfaceCore: const Color(0xFF1A2131),
+        surfaceBase: const Color(0xFF101621),
+        energyPrimary: const Color(0xFF3F6ED8),
+        energySecondary: const Color(0xFFD8B640),
+        activationGlow: const Color(0xFF7EDC8A),
+        boltColor: Colors.white,
+        borderAccent: const Color(0xFFB9A46A),
+        glyphShell: const Color(0xFF0D121A),
+        glyphBorder: const Color(0xFFFFFFFF).withValues(alpha: 0.12),
+      );
+    }
+
+    return _SuggestionButtonPalette(
+      useMonochrome: false,
+      isDark: false,
+      powerBackground: Color.alphaBlend(
+        const Color(0xFFE06A79).withValues(alpha: 0.10),
+        scheme.surface,
+      ).withValues(alpha: 0.98),
+      powerBorder: const Color(0xFFC84E64).withValues(alpha: 0.60),
+      powerIcon: const Color(0xFFC1495E),
+      powerShadow: const Color(0xFFE06A79).withValues(alpha: 0.18),
+      surfaceCore: Color.alphaBlend(
+        const Color(0xFF2A6CF0).withValues(alpha: 0.12),
+        scheme.surface,
+      ),
+      surfaceBase: Color.alphaBlend(
+        Colors.white.withValues(alpha: 0.88),
+        scheme.surface,
+      ),
+      energyPrimary: const Color(0xFF2D66D4),
+      energySecondary: const Color(0xFFD39A1D),
+      activationGlow: const Color(0xFF3FA868),
+      boltColor: const Color(0xFF173156),
+      borderAccent: const Color(0xFFA48737),
+      glyphShell: Color.alphaBlend(
+        Colors.white.withValues(alpha: 0.90),
+        scheme.surface,
+      ),
+      glyphBorder: const Color(0xFF162131).withValues(alpha: 0.14),
+    );
+  }
+
   Widget _buildSuggestionTriggerButton() {
+    final palette = _suggestionButtonPalette();
+
     if (_playVsBot) {
       return _buildVsBotSuggestionTriggerButton();
     }
@@ -8565,22 +7808,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           height: 56,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF2A0F13),
+            color: palette.powerBackground,
             border: Border.all(
-              color: const Color(0xFFE06A79).withValues(alpha: 0.75),
+              color: palette.powerBorder,
               width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFE06A79).withValues(alpha: 0.24),
+                color: palette.powerShadow,
                 blurRadius: 14,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.power_settings_new_rounded,
-            color: Color(0xFFFFA3AF),
+            color: palette.powerIcon,
             size: 22,
           ),
         ),
@@ -8677,30 +7920,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     gradient: RadialGradient(
                       colors: [
                         Color.lerp(
-                          const Color(0xFF141A25),
-                          const Color(0xFF2A6CF0),
+                          palette.surfaceCore,
+                          palette.energyPrimary,
                           ignition,
                         )!.withValues(alpha: 0.28 + (0.22 * ignition)),
-                        const Color(0xFF0E131D),
+                        palette.surfaceBase,
                       ],
                     ),
                     border: Border.all(
-                      color: const Color(
-                        0xFFB9A46A,
-                      ).withValues(alpha: 0.28 + 0.18 * ignition),
+                      color: palette.borderAccent.withValues(
+                        alpha: 0.28 + 0.18 * ignition,
+                      ),
                       width: 1.6,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(
-                          0xFF3F6ED8,
-                        ).withValues(alpha: 0.12 + (0.22 * ignition)),
+                        color: palette.energyPrimary.withValues(
+                          alpha: 0.12 + (0.22 * ignition),
+                        ),
                         blurRadius: 14 + (10 * ignition),
                       ),
                       BoxShadow(
-                        color: const Color(
-                          0xFFD8B640,
-                        ).withValues(alpha: 0.08 + (0.18 * ignition)),
+                        color: palette.energySecondary.withValues(
+                          alpha: 0.08 + (0.18 * ignition),
+                        ),
                         blurRadius: 18 + (10 * ignition),
                       ),
                     ],
@@ -8708,7 +7951,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   child: Icon(
                     Icons.bolt_rounded,
                     size: 22,
-                    color: Colors.white.withValues(
+                    color: palette.boltColor.withValues(
                       alpha: 0.4 + (0.35 * ignition),
                     ),
                   ),
@@ -8780,33 +8023,35 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               gradient: RadialGradient(
                 colors: [
                   Color.lerp(
-                    const Color(0xFF1A2131),
-                    const Color(0xFF2A6CF0),
+                    palette.surfaceCore,
+                    palette.energyPrimary,
                     ignition,
                   )!.withValues(alpha: 0.6 * coreIntensity),
-                  const Color(0xFF101621),
+                  palette.surfaceBase,
                 ],
               ),
               border: Border.all(
-                color: const Color(0xFFB9A46A).withValues(alpha: 0.45),
+                color: palette.borderAccent.withValues(alpha: 0.45),
                 width: 1.6,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(
-                    0xFF3F6ED8,
-                  ).withValues(alpha: 0.25 + 0.25 * coreIntensity),
+                  color: palette.energyPrimary.withValues(
+                    alpha: 0.25 + 0.25 * coreIntensity,
+                  ),
                   blurRadius: 14 + (8 * coreIntensity),
                 ),
                 BoxShadow(
-                  color: const Color(
-                    0xFFD8B640,
-                  ).withValues(alpha: 0.18 + 0.22 * coreIntensity),
+                  color: palette.energySecondary.withValues(
+                    alpha: 0.18 + 0.22 * coreIntensity,
+                  ),
                   blurRadius: 18 + (10 * coreIntensity),
                 ),
                 if (_suggestionLaunchInProgress)
                   BoxShadow(
-                    color: const Color(0xFF7EDC8A).withValues(alpha: 0.4),
+                    color: palette.activationGlow.withValues(
+                      alpha: palette.useMonochrome ? 0.22 : 0.40,
+                    ),
                     blurRadius: 18,
                     spreadRadius: 2,
                   ),
@@ -8823,13 +8068,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD8B640),
+                        color: palette.energySecondary,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFFD8B640,
-                            ).withValues(alpha: 0.7 * orbOpacity),
+                            color: palette.energySecondary.withValues(
+                              alpha: 0.7 * orbOpacity,
+                            ),
                             blurRadius: 10,
                           ),
                         ],
@@ -8845,13 +8090,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF3F6ED8),
+                        color: palette.energyPrimary,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFF3F6ED8,
-                            ).withValues(alpha: 0.7 * orbOpacity),
+                            color: palette.energyPrimary.withValues(
+                              alpha: 0.7 * orbOpacity,
+                            ),
                             blurRadius: 10,
                           ),
                         ],
@@ -8862,7 +8107,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 Icon(
                   Icons.bolt_rounded,
                   size: 22,
-                  color: Colors.white.withValues(alpha: 0.55 + 0.35 * ignition),
+                  color: palette.boltColor.withValues(
+                    alpha: 0.55 + 0.35 * ignition,
+                  ),
                 ),
               ],
             ),
@@ -8873,6 +8120,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildVsBotSuggestionTriggerButton() {
+    final palette = _suggestionButtonPalette();
     final isEvalOnlyStage = _isEngineActive && _vsBotEvalBarOnly;
     final isFullSuggestionStage = _isEngineActive && !_vsBotEvalBarOnly;
 
@@ -8887,30 +8135,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               }
 
               if (isEvalOnlyStage) {
-                setState(() {
-                  _vsBotEvalBarOnly = false;
-                  _suggestionsEnabled = true;
-                });
-                await _triggerButtonRipple();
-                if (!mounted) return;
-                _analyze();
-                _addLog(
-                  _multiPvCount > 0
-                      ? 'Stockfish suggestions activated'
-                      : 'Stockfish evaluation activated',
-                );
+                await _activateVsBotSuggestionsFromEvalBar();
                 return;
               }
 
-              setState(() {
-                _suggestionsEnabled = true;
-                _vsBotEvalBarOnly = true;
-                _topLines = [];
-                _currentDepth = 0;
-              });
-              if (!mounted) return;
-              _analyze();
-              _addLog('Stockfish eval bar activated');
+              await _activateVsBotEvalBarStage();
             },
       child: AnimatedBuilder(
         animation: Listenable.merge([_pulseController, _introController]),
@@ -8923,153 +8152,282 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           );
           final pulseT = _pulseController.value;
 
-          final base = Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isFullSuggestionStage
-                  ? const Color(0xFF2A0F13)
-                  : const Color(0xFF101621),
-              gradient: isFullSuggestionStage
-                  ? null
-                  : RadialGradient(
-                      colors: [
-                        Color.lerp(
-                          const Color(0xFF1A2131),
-                          const Color(0xFF2A6CF0),
-                          ignition,
-                        )!.withValues(alpha: isEvalOnlyStage ? 0.62 : 0.34),
-                        const Color(0xFF101621),
-                      ],
-                    ),
-              border: Border.all(
-                color: isFullSuggestionStage
-                    ? const Color(0xFFE06A79).withValues(alpha: 0.75)
-                    : const Color(
-                        0xFFB9A46A,
-                      ).withValues(alpha: isEvalOnlyStage ? 0.45 : 0.38),
-                width: 2,
+          final Widget base;
+          if (isFullSuggestionStage) {
+            base = Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: palette.powerBackground,
+                border: Border.all(
+                  color: palette.powerBorder,
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: palette.powerShadow,
+                    blurRadius: palette.isDark ? 14 : 10,
+                    offset: Offset(0, palette.isDark ? 4 : 3),
+                  ),
+                ],
               ),
-              boxShadow: isFullSuggestionStage
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFFE06A79).withValues(alpha: 0.24),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : [
-                      BoxShadow(
-                        color: const Color(
-                          0xFF3F6ED8,
-                        ).withValues(alpha: isEvalOnlyStage ? 0.34 : 0.18),
-                        blurRadius: isEvalOnlyStage ? 16 : 10,
-                      ),
-                      BoxShadow(
-                        color: const Color(
-                          0xFFD8B640,
-                        ).withValues(alpha: isEvalOnlyStage ? 0.28 : 0.14),
-                        blurRadius: isEvalOnlyStage ? 16 : 10,
-                      ),
-                    ],
-            ),
-            child: isFullSuggestionStage
-                ? const Icon(
-                    Icons.power_settings_new_rounded,
-                    color: Color(0xFFFFA3AF),
-                    size: 22,
-                  )
-                : isEvalOnlyStage
-                ? Builder(
-                    builder: (context) {
-                      final Offset yellowOffset;
-                      final Offset blueOffset;
-                      if (introT < 0.32) {
-                        final p = Curves.easeOutCubic.transform(introT / 0.32);
-                        yellowOffset = Offset(-6 + (6 * p), -82 + (82 * p));
-                        blueOffset = Offset(6 - (6 * p), -62 + (62 * p));
-                      } else if (introT < 0.74) {
-                        final q = (introT - 0.32) / 0.42;
-                        final radius = (14 - (11 * Curves.easeIn.transform(q)))
-                            .clamp(3.0, 14.0);
-                        final fastAngle = q * pi * 2 * 5.5;
-                        yellowOffset = Offset(
-                          cos(fastAngle) * radius,
-                          sin(fastAngle) * radius,
-                        );
-                        blueOffset = Offset(
-                          cos(fastAngle + pi) * radius,
-                          sin(fastAngle + pi) * radius,
-                        );
-                      } else {
-                        final orbit = 12.0;
-                        final speed = 1.8;
-                        final angle = pulseT * pi * 2 * speed;
-                        yellowOffset = Offset(
-                          cos(angle) * orbit,
-                          sin(angle) * orbit,
-                        );
-                        blueOffset = Offset(
-                          cos(angle + pi) * orbit,
-                          sin(angle + pi) * orbit,
-                        );
-                      }
-
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Transform.translate(
-                            offset: yellowOffset,
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD8B640),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFFD8B640,
-                                    ).withValues(alpha: 0.72),
-                                    blurRadius: 9,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Transform.translate(
-                            offset: blueOffset,
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3F6ED8),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF3F6ED8,
-                                    ).withValues(alpha: 0.72),
-                                    blurRadius: 9,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          _buildVsBotEvalBarGlyph(),
-                        ],
-                      );
-                    },
-                  )
-                : _buildVsBotEvalBarGlyph(),
-          );
+              child: Icon(
+                Icons.power_settings_new_rounded,
+                color: palette.powerIcon,
+                size: 22,
+              ),
+            );
+          } else if (isEvalOnlyStage) {
+            base = _buildVsBotEvalOnlySuggestionStageButton(
+              introT: introT,
+              pulseT: pulseT,
+            );
+          } else {
+            base = _buildVsBotEvalBarSeedButton(
+              ignition: ignition,
+              isActivating: _suggestionLaunchInProgress,
+            );
+          }
 
           return Opacity(
             opacity: buttonOpacity,
             child: Transform.scale(scale: buttonScale, child: base),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _activateVsBotEvalBarStage() async {
+    setState(() {
+      _suggestionLaunchInProgress = true;
+    });
+    await _fireEvalBarRevealLaunch();
+    if (!mounted) return;
+    setState(() {
+      _suggestionsEnabled = true;
+      _vsBotEvalBarOnly = true;
+      _topLines = [];
+      _currentDepth = 0;
+      _suggestionLaunchInProgress = false;
+    });
+    _analyze();
+    _addLog('Stockfish eval bar activated');
+  }
+
+  Future<void> _activateVsBotSuggestionsFromEvalBar() async {
+    setState(() {
+      _suggestionLaunchInProgress = true;
+    });
+    await _triggerButtonRipple();
+    if (!mounted) return;
+    setState(() {
+      _vsBotEvalBarOnly = false;
+      _suggestionsEnabled = true;
+      _suggestionLaunchInProgress = false;
+    });
+    _analyze();
+    _addLog(
+      _multiPvCount > 0
+          ? 'Stockfish suggestions activated'
+          : 'Stockfish evaluation activated',
+    );
+  }
+
+  Widget _buildVsBotEvalBarSeedButton({
+    required double ignition,
+    required bool isActivating,
+  }) {
+    final palette = _suggestionButtonPalette();
+    final centerAlpha = palette.isDark
+        ? (isActivating ? 0.46 : 0.30)
+        : (isActivating ? 0.90 : 0.82);
+    final borderAlpha = palette.isDark
+        ? (isActivating ? 0.46 : 0.34)
+        : (isActivating ? 0.26 : 0.20);
+    final primaryShadowAlpha = palette.isDark
+        ? (isActivating ? 0.24 : 0.14)
+        : (isActivating ? 0.14 : 0.08);
+    final secondaryShadowAlpha = palette.isDark
+        ? (isActivating ? 0.18 : 0.10)
+        : (isActivating ? 0.12 : 0.06);
+
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            Color.lerp(
+              palette.surfaceCore,
+              palette.energyPrimary,
+              ignition,
+            )!.withValues(alpha: centerAlpha),
+            palette.surfaceBase,
+          ],
+        ),
+        border: Border.all(
+          color: palette.borderAccent.withValues(alpha: borderAlpha),
+          width: palette.isDark ? 1.6 : 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: palette.energyPrimary.withValues(alpha: primaryShadowAlpha),
+            blurRadius: isActivating
+                ? (palette.isDark ? 16 : 12)
+                : (palette.isDark ? 10 : 8),
+          ),
+          BoxShadow(
+            color: palette.energySecondary.withValues(alpha: secondaryShadowAlpha),
+            blurRadius: isActivating
+                ? (palette.isDark ? 14 : 11)
+                : (palette.isDark ? 8 : 6),
+          ),
+        ],
+      ),
+      child: Center(
+        child: isActivating
+            ? Icon(
+                Icons.bolt_rounded,
+                size: 22,
+                color: palette.boltColor.withValues(
+                  alpha: palette.isDark ? 0.82 : 0.92,
+                ),
+              )
+            : _buildVsBotEvalBarGlyph(),
+      ),
+    );
+  }
+
+  Widget _buildVsBotEvalOnlySuggestionStageButton({
+    required double introT,
+    required double pulseT,
+  }) {
+    final palette = _suggestionButtonPalette();
+    final ignition = Curves.easeOut.transform(
+      ((introT - 0.58) / 0.42).clamp(0.0, 1.0),
+    );
+
+    Offset yellowOffset;
+    Offset blueOffset;
+    double coreIntensity;
+
+    if (introT < 0.32) {
+      final p = Curves.easeOutCubic.transform(introT / 0.32);
+      yellowOffset = Offset(-6 + (6 * p), -82 + (82 * p));
+      blueOffset = Offset(6 - (6 * p), -62 + (62 * p));
+      coreIntensity = 0.25 + (0.35 * p);
+    } else if (introT < 0.74) {
+      final q = (introT - 0.32) / 0.42;
+      final radius = (14 - (11 * Curves.easeIn.transform(q))).clamp(3.0, 14.0);
+      final fastAngle = q * pi * 2 * 5.5;
+      yellowOffset = Offset(cos(fastAngle) * radius, sin(fastAngle) * radius);
+      blueOffset = Offset(
+        cos(fastAngle + pi) * radius,
+        sin(fastAngle + pi) * radius,
+      );
+      coreIntensity = 0.55 + (0.35 * q);
+    } else {
+      final angle = pulseT * pi * 2;
+      yellowOffset = Offset(cos(angle) * 11, sin(angle) * 11);
+      blueOffset = Offset(cos(angle + pi) * 11, sin(angle + pi) * 11);
+      coreIntensity = 0.9;
+    }
+
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            Color.lerp(
+              palette.surfaceCore,
+              palette.energyPrimary,
+              ignition,
+            )!.withValues(
+              alpha: palette.isDark
+                  ? 0.6 * coreIntensity
+                  : 0.72 + (0.16 * coreIntensity),
+            ),
+            palette.surfaceBase,
+          ],
+        ),
+        border: Border.all(
+          color: palette.borderAccent.withValues(
+            alpha: palette.isDark ? 0.45 : 0.26,
+          ),
+          width: palette.isDark ? 1.6 : 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: palette.energyPrimary.withValues(
+              alpha: palette.isDark
+                  ? 0.25 + 0.25 * coreIntensity
+                  : 0.10 + 0.12 * coreIntensity,
+            ),
+            blurRadius: (palette.isDark ? 14 : 10) + (8 * coreIntensity),
+          ),
+          BoxShadow(
+            color: palette.energySecondary.withValues(
+              alpha: palette.isDark
+                  ? 0.18 + 0.22 * coreIntensity
+                  : 0.08 + 0.12 * coreIntensity,
+            ),
+            blurRadius: (palette.isDark ? 18 : 12) + (10 * coreIntensity),
+          ),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Transform.translate(
+            offset: yellowOffset,
+            child: _buildThemedSuggestionOrb(
+              palette,
+              color: palette.energySecondary,
+            ),
+          ),
+          Transform.translate(
+            offset: blueOffset,
+            child: _buildThemedSuggestionOrb(
+              palette,
+              color: palette.energyPrimary,
+            ),
+          ),
+          Icon(
+            Icons.bolt_rounded,
+            size: 22,
+            color: palette.boltColor.withValues(
+              alpha: palette.isDark ? 0.55 + 0.35 * ignition : 0.90,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemedSuggestionOrb(
+    _SuggestionButtonPalette palette, {
+    required Color color,
+  }) {
+    final glowAlpha = palette.isDark
+        ? (palette.useMonochrome ? 0.42 : 0.70)
+        : (palette.useMonochrome ? 0.18 : 0.36);
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: glowAlpha),
+            blurRadius: palette.isDark ? 10 : 7,
+          ),
+        ],
       ),
     );
   }
@@ -9094,42 +8452,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildVsBotEvalBarGlyph() {
-    final appTheme = context.watch<AppThemeProvider>();
-    final isMono = appTheme.isMonochrome || _isCinematicThemeEnabled;
+    final palette = _suggestionButtonPalette();
     return Center(
       child: Container(
         width: 34,
-        height: 16,
+        height: 6,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          gradient: LinearGradient(
-            colors: isMono
-                ? const [Color(0xFFFFFFFF), Color(0xFFFFFFFF)]
-                : const [
-                    Color(0xFFFF4F4F),
-                    Color(0xFFFF9148),
-                    Color(0xFFFFD74A),
-                    Color(0xFF7EDC8A),
-                  ],
-            stops: isMono ? null : [0.0, 0.33, 0.66, 1.0],
-          ),
+          color: palette.glyphShell,
+          borderRadius: BorderRadius.circular(3),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: palette.isDark ? 0.20 : 0.08),
+              blurRadius: palette.isDark ? 6 : 4,
+              offset: const Offset(0, 1),
             ),
           ],
           border: Border.all(
-            color: const Color(
-              0xFFFFFFFF,
-            ).withValues(alpha: isMono ? 0.9 : 0.16),
-            width: 1.2,
+            color: palette.glyphBorder,
+            width: 0.7,
           ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: CustomPaint(painter: _VsBotEvalBarPainter(isMono: isMono)),
+          borderRadius: BorderRadius.circular(3),
+          child: CustomPaint(
+            painter: _VsBotEvalBarPainter(
+              isMono: palette.useMonochrome,
+              isDark: palette.isDark,
+            ),
+          ),
         ),
       ),
     );
@@ -12344,59 +11694,138 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 }
 
 class _VsBotEvalBarPainter extends CustomPainter {
-  const _VsBotEvalBarPainter({required this.isMono});
+  const _VsBotEvalBarPainter({required this.isMono, required this.isDark});
 
   final bool isMono;
+  final bool isDark;
 
   @override
   void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final radius = Radius.circular(size.height / 2);
     final paint = Paint()..style = PaintingStyle.fill;
+
     if (isMono) {
-      paint.color = const Color(0xFFFFFFFF);
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.width / 2, size.height), paint);
-      paint.color = const Color(0xFF000000);
-      canvas.drawRect(
-        Rect.fromLTWH(size.width / 2, 0, size.width / 2, size.height),
-        paint,
-      );
+      paint.shader = (isDark
+              ? const LinearGradient(
+                  colors: [
+                    Color(0xFFF6F6F6),
+                    Color(0xFFF6F6F6),
+                    Color(0xFF9CA3AF),
+                    Color(0xFF1F2937),
+                  ],
+                  stops: [0.0, 0.55, 0.55, 1.0],
+                )
+              : const LinearGradient(
+                  colors: [
+                    Color(0xFF111827),
+                    Color(0xFF111827),
+                    Color(0xFF6B7280),
+                    Color(0xFFD1D5DB),
+                  ],
+                  stops: [0.0, 0.55, 0.55, 1.0],
+                ))
+          .createShader(rect);
     } else {
-      final segmentColors = <Color>[
-        const Color(0xFFFF4F4F),
-        const Color(0xFFFF9148),
-        const Color(0xFFFFD74A),
-        const Color(0xFF7EDC8A),
-      ];
-      final segmentWidth = size.width / segmentColors.length;
-      for (var i = 0; i < segmentColors.length; i++) {
-        paint.color = segmentColors[i];
-        canvas.drawRect(
-          Rect.fromLTWH(i * segmentWidth, 0, segmentWidth, size.height),
-          paint,
-        );
-      }
+      paint.shader = (isDark
+              ? const LinearGradient(
+                  colors: [
+                    Color(0xFFFF4747),
+                    Color(0xFFD93434),
+                    Color(0xFFF4D249),
+                    Color(0xFF95E572),
+                    Color(0xFF4FC15E),
+                    Color(0xFF2F8E46),
+                    Color(0xFF166534),
+                  ],
+                  stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
+                )
+              : const LinearGradient(
+                  colors: [
+                    Color(0xFFE44A4A),
+                    Color(0xFFC93A3A),
+                    Color(0xFFE1C344),
+                    Color(0xFF84D669),
+                    Color(0xFF4DBA5E),
+                    Color(0xFF2E8C45),
+                    Color(0xFF166534),
+                  ],
+                  stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
+                ))
+          .createShader(rect);
     }
 
-    paint.color = Colors.white.withValues(alpha: 0.18);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), paint);
+
+    final highlightPaint = Paint()
+      ..color = Colors.white.withValues(
+        alpha: isDark
+            ? (isMono ? 0.10 : 0.08)
+            : (isMono ? 0.05 : 0.04),
+      )
+      ..style = PaintingStyle.fill;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(1.5, 2.0, size.width - 3.0, size.height - 4.0),
-        const Radius.circular(5),
+        Rect.fromLTWH(0.6, 0.6, size.width - 1.2, size.height * 0.34),
+        const Radius.circular(2),
       ),
-      paint,
+      highlightPaint,
     );
 
-    paint.color = Colors.black.withValues(alpha: 0.08);
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(
+        alpha: isDark
+            ? (isMono ? 0.14 : 0.18)
+            : (isMono ? 0.08 : 0.10),
+      )
+      ..style = PaintingStyle.fill;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(1.5, 1.5, size.width - 3.0, size.height - 3.0),
-        const Radius.circular(5),
+        Rect.fromLTWH(0.8, size.height - 1.4, size.width - 1.6, 0.8),
+        const Radius.circular(1),
       ),
-      paint,
+      shadowPaint,
     );
   }
 
   @override
   bool shouldRepaint(covariant _VsBotEvalBarPainter oldDelegate) {
-    return oldDelegate.isMono != isMono;
+    return oldDelegate.isMono != isMono || oldDelegate.isDark != isDark;
   }
+}
+
+class _SuggestionButtonPalette {
+  const _SuggestionButtonPalette({
+    required this.useMonochrome,
+    required this.isDark,
+    required this.powerBackground,
+    required this.powerBorder,
+    required this.powerIcon,
+    required this.powerShadow,
+    required this.surfaceCore,
+    required this.surfaceBase,
+    required this.energyPrimary,
+    required this.energySecondary,
+    required this.activationGlow,
+    required this.boltColor,
+    required this.borderAccent,
+    required this.glyphShell,
+    required this.glyphBorder,
+  });
+
+  final bool useMonochrome;
+  final bool isDark;
+  final Color powerBackground;
+  final Color powerBorder;
+  final Color powerIcon;
+  final Color powerShadow;
+  final Color surfaceCore;
+  final Color surfaceBase;
+  final Color energyPrimary;
+  final Color energySecondary;
+  final Color activationGlow;
+  final Color boltColor;
+  final Color borderAccent;
+  final Color glyphShell;
+  final Color glyphBorder;
 }
