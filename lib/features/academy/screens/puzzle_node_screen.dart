@@ -13,6 +13,7 @@ import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/services/puzzle_engine_service.dart';
 import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -63,11 +64,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   final PuzzleEngineService _engine = PuzzleEngineService();
   final Stopwatch _stopwatch = Stopwatch();
   final Random _rng = Random();
-  final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
+  final List<AudioPlayer?> _boardSfxPlayers = List<AudioPlayer?>.filled(
     _boardSfxPlayerPoolSize,
-    (_) => AudioPlayer(),
+    null,
   );
-  final AudioPlayer _rewardAdAudioPlayer = AudioPlayer();
+  AudioPlayer? _rewardAdAudioPlayer;
   int _nextBoardSfxPlayerIndex = 0;
 
   late final AnimationController _arrowFadeController;
@@ -114,6 +115,25 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       !_solved &&
       !_coachingOffScript &&
       (_lineIndex.isOdd == _userMovesOnOddPly);
+
+  bool get _isWindowsDesktop =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+  PlayerMode get _boardSfxPlayerMode =>
+      _isWindowsDesktop ? PlayerMode.mediaPlayer : PlayerMode.lowLatency;
+
+  AudioPlayer _takeBoardSfxPlayer() {
+    final index = _isWindowsDesktop ? 0 : _nextBoardSfxPlayerIndex;
+    if (!_isWindowsDesktop) {
+      _nextBoardSfxPlayerIndex =
+          (_nextBoardSfxPlayerIndex + 1) % _boardSfxPlayers.length;
+    }
+    return _boardSfxPlayers[index] ??= AudioPlayer();
+  }
+
+  AudioPlayer _ensureRewardAdAudioPlayer() {
+    return _rewardAdAudioPlayer ??= AudioPlayer();
+  }
 
   @override
   void initState() {
@@ -165,9 +185,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     _stopwatch.stop();
     _arrowFadeController.dispose();
     for (final player in _boardSfxPlayers) {
-      player.dispose();
+      player?.dispose();
     }
-    _rewardAdAudioPlayer.dispose();
+    _rewardAdAudioPlayer?.dispose();
     _engine.dispose();
     super.dispose();
   }
@@ -973,16 +993,14 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final assetPath = isCapture
         ? 'sounds/take1.wav'
         : 'sounds/move${_rng.nextInt(8) + 1}.wav';
-    final player = _boardSfxPlayers[_nextBoardSfxPlayerIndex];
-    _nextBoardSfxPlayerIndex =
-        (_nextBoardSfxPlayerIndex + 1) % _boardSfxPlayers.length;
+    final player = _takeBoardSfxPlayer();
 
     try {
       await player.stop();
       await player.setReleaseMode(ReleaseMode.stop);
       await player.play(
         AssetSource(assetPath),
-        mode: PlayerMode.lowLatency,
+        mode: _boardSfxPlayerMode,
         volume: 1.0,
       );
     } catch (_) {
@@ -995,16 +1013,14 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
 
-    final player = _boardSfxPlayers[_nextBoardSfxPlayerIndex];
-    _nextBoardSfxPlayerIndex =
-        (_nextBoardSfxPlayerIndex + 1) % _boardSfxPlayers.length;
+    final player = _takeBoardSfxPlayer();
 
     try {
       await player.stop();
       await player.setReleaseMode(ReleaseMode.stop);
       await player.play(
         AssetSource('sounds/wrongmove.wav'),
-        mode: PlayerMode.lowLatency,
+        mode: _boardSfxPlayerMode,
         volume: 1.0,
       );
     } catch (_) {
@@ -1325,14 +1341,15 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
           actions: [
             FilledButton(
               onPressed: () async {
+                final rewardPlayer = _ensureRewardAdAudioPlayer();
                 try {
-                  await _rewardAdAudioPlayer.stop();
-                  await _rewardAdAudioPlayer.setReleaseMode(ReleaseMode.stop);
-                  await _rewardAdAudioPlayer.setSource(
+                  await rewardPlayer.stop();
+                  await rewardPlayer.setReleaseMode(ReleaseMode.stop);
+                  await rewardPlayer.setSource(
                     AssetSource('sounds/coinbag.mp3'),
                   );
-                  await _rewardAdAudioPlayer.setVolume(1.0);
-                  await _rewardAdAudioPlayer.resume();
+                  await rewardPlayer.setVolume(1.0);
+                  await rewardPlayer.resume();
                 } catch (_) {
                   // Ignore sound playback failures.
                 }

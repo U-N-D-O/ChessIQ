@@ -91,7 +91,7 @@ class _RegularPolygonPainter extends CustomPainter {
   }
 }
 
-mixin _AnalysisPageShared on _ChessAnalysisPageStateBase {
+abstract class _AnalysisPageShared extends _VsBotState {
   @override
   Future<void> _showThemedErrorDialog({
     required String message,

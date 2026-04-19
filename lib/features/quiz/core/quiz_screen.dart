@@ -1,6 +1,6 @@
 ﻿part of '../../analysis/screens/chess_analysis_page.dart';
 
-mixin _QuizScreen on _ChessAnalysisPageStateBase {
+abstract class _QuizScreen extends _AnalysisPageShared {
   @override
   void _loadQuizPrefs(SharedPreferences prefs) {
     final viewed = prefs.getStringList(_viewedGambitsKey) ?? const <String>[];

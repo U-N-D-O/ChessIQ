@@ -168,15 +168,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Future<void> _loadVsBotSetupPrefs();
   String? _selectedBotAvatarAsset(BotCharacter bot);
-  Alignment _botSelectorBlueDotAlignment(
-    double phase,
-    double speed,
-    double radius,
-    double pulse,
-    double trajectoryNoise,
-    double shapeSeed,
-    double scrollOffset,
-  );
 
   BotSideChoice _botSideChoice = BotSideChoice.random;
 

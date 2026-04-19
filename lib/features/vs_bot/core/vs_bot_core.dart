@@ -2,7 +2,7 @@
 
 part of '../../analysis/screens/chess_analysis_page.dart';
 
-mixin _VsBotCore on _ChessAnalysisPageStateBase {
+abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   @override
   Future<void> _loadVsBotSetupPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -839,6 +839,268 @@ mixin _VsBotCore on _ChessAnalysisPageStateBase {
         final progressTitle = _vsBotProgressTitle;
         final progressMessage = _vsBotProgressMessage;
         final challengeAccent = _botDifficultyColor(selectedDifficulty);
+        final summaryText = isDraw
+            ? 'Evenly matched. This one stays on the board.'
+            : isWin
+            ? 'Excellent conversion. You closed it with style.'
+            : 'Tough one. Reset and strike back.';
+        final dialogMaxWidth = isLandscape
+            ? min(880.0, media.size.width - 28)
+            : 460.0;
+
+        Widget? challengeChip;
+        if (selectedBot != null) {
+          challengeChip = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: challengeAccent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: challengeAccent.withValues(alpha: 0.34),
+              ),
+            ),
+            child: Text(
+              '${selectedBot.name} - ${selectedDifficulty.label}',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: challengeAccent,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
+            ),
+          );
+        }
+
+        Widget? progressCard;
+        if (progressTitle != null && progressMessage != null) {
+          progressCard = Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: challengeAccent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: challengeAccent.withValues(alpha: 0.28),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  progressTitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: challengeAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  progressMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.76),
+                    fontSize: 11.8,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget buildActionButton({
+          required String resultValue,
+          required String label,
+          required IconData icon,
+          Color? backgroundColor,
+          Color foregroundColor = Colors.white,
+          BorderSide? side,
+          bool textButton = false,
+        }) {
+          final height = isLandscape ? 42.0 : 46.0;
+          final shape = RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          );
+
+          if (textButton) {
+            return SizedBox(
+              width: double.infinity,
+              height: height,
+              child: TextButton.icon(
+                onPressed: () => Navigator.of(dialogContext).pop(resultValue),
+                style: TextButton.styleFrom(
+                  foregroundColor: foregroundColor,
+                  shape: shape,
+                ),
+                icon: Icon(icon, size: 18),
+                label: Text(label),
+              ),
+            );
+          }
+
+          if (backgroundColor != null) {
+            return SizedBox(
+              width: double.infinity,
+              height: height,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.of(dialogContext).pop(resultValue),
+                style: FilledButton.styleFrom(
+                  backgroundColor: backgroundColor,
+                  foregroundColor: foregroundColor,
+                  shape: shape,
+                ),
+                icon: Icon(icon, size: 18),
+                label: Text(label, textAlign: TextAlign.center),
+              ),
+            );
+          }
+
+          return SizedBox(
+            width: double.infinity,
+            height: height,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(resultValue),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: foregroundColor,
+                side: side,
+                shape: shape,
+              ),
+              icon: Icon(icon, size: 18),
+              label: Text(label),
+            ),
+          );
+        }
+
+        Widget buildActionColumn() {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (progressActionLabel != null) ...[
+                buildActionButton(
+                  resultValue: 'next',
+                  label: progressActionLabel,
+                  icon: Icons.skip_next_rounded,
+                  backgroundColor: challengeAccent,
+                  foregroundColor: const Color(0xFF0A0E14),
+                ),
+                SizedBox(height: isLandscape ? 8 : 10),
+              ],
+              buildActionButton(
+                resultValue: 'restart',
+                label: 'Play Again',
+                icon: Icons.replay_rounded,
+                backgroundColor: accent,
+                foregroundColor: const Color(0xFF0A0E14),
+              ),
+              SizedBox(height: isLandscape ? 8 : 10),
+              buildActionButton(
+                resultValue: 'opponent',
+                label: 'Choose Opponent',
+                icon: Icons.groups_rounded,
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+              ),
+              SizedBox(height: isLandscape ? 8 : 10),
+              buildActionButton(
+                resultValue: 'menu',
+                label: 'Main Menu',
+                icon: Icons.home_rounded,
+                foregroundColor: Colors.white70,
+                textButton: true,
+              ),
+            ],
+          );
+        }
+
+        Widget buildHeroColumn() {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildVsBotResultAnimation(
+                outcome: outcome,
+                isWin: isWin,
+                accent: accent,
+                icon: icon,
+              ),
+              SizedBox(height: isLandscape ? 10 : 18),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isLandscape ? 28 : 32,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.35,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                summaryText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: 12.5,
+                  letterSpacing: 0.24,
+                ),
+              ),
+              if (challengeChip != null) ...[
+                const SizedBox(height: 12),
+                challengeChip,
+              ],
+            ],
+          );
+        }
+
+        Widget buildPortraitBody() {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildHeroColumn(),
+              const SizedBox(height: 16),
+              _buildVsBotSessionScoreboard(accent),
+              if (progressCard != null) ...[
+                const SizedBox(height: 16),
+                progressCard,
+              ],
+              SizedBox(height: isLandscape ? 12 : 18),
+              buildActionColumn(),
+            ],
+          );
+        }
+
+        Widget buildLandscapeBody() {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 9,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: buildHeroColumn(),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                flex: 11,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildVsBotSessionScoreboard(accent),
+                    if (progressCard != null) ...[
+                      const SizedBox(height: 12),
+                      progressCard,
+                    ],
+                    const SizedBox(height: 14),
+                    buildActionColumn(),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
 
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -849,7 +1111,7 @@ mixin _VsBotCore on _ChessAnalysisPageStateBase {
           ),
           child: Container(
             constraints: BoxConstraints(
-              maxWidth: isLandscape ? 520 : 460,
+              maxWidth: dialogMaxWidth,
               maxHeight: media.size.height - (isLandscape ? 24 : 48),
             ),
             decoration: BoxDecoration(
@@ -875,189 +1137,12 @@ mixin _VsBotCore on _ChessAnalysisPageStateBase {
             ),
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
-                26,
+                isLandscape ? 18 : 26,
                 isLandscape ? 18 : 24,
-                26,
-                isLandscape ? 16 : 20,
+                isLandscape ? 18 : 26,
+                isLandscape ? 14 : 20,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildVsBotResultAnimation(
-                    outcome: outcome,
-                    isWin: isWin,
-                    accent: accent,
-                    icon: icon,
-                  ),
-                  SizedBox(height: isLandscape ? 12 : 18),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: isLandscape ? 28 : 32,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.35,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    isDraw
-                        ? 'Evenly matched. This one stays on the board.'
-                        : isWin
-                        ? 'Excellent conversion. You closed it with style.'
-                        : 'Tough one. Reset and strike back.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.72),
-                      fontSize: 12.5,
-                      letterSpacing: 0.24,
-                    ),
-                  ),
-                  if (selectedBot != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: challengeAccent.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: challengeAccent.withValues(alpha: 0.34),
-                        ),
-                      ),
-                      child: Text(
-                        '${selectedBot.name} - ${selectedDifficulty.label}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: challengeAccent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  _buildVsBotSessionScoreboard(accent),
-                  if (progressTitle != null && progressMessage != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                      decoration: BoxDecoration(
-                        color: challengeAccent.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: challengeAccent.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            progressTitle,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: challengeAccent,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            progressMessage,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.76),
-                              fontSize: 11.8,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  SizedBox(height: isLandscape ? 12 : 18),
-                  if (progressActionLabel != null) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: isLandscape ? 44 : 48,
-                      child: FilledButton.icon(
-                        onPressed: () =>
-                            Navigator.of(dialogContext).pop('next'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: challengeAccent,
-                          foregroundColor: const Color(0xFF0A0E14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        icon: const Icon(Icons.skip_next_rounded, size: 18),
-                        label: Text(
-                          progressActionLabel,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: isLandscape ? 8 : 10),
-                  ],
-                  SizedBox(
-                    width: double.infinity,
-                    height: isLandscape ? 44 : 48,
-                    child: FilledButton.icon(
-                      onPressed: () =>
-                          Navigator.of(dialogContext).pop('restart'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: accent,
-                        foregroundColor: const Color(0xFF0A0E14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      icon: const Icon(Icons.replay_rounded, size: 18),
-                      label: const Text('Play Again'),
-                    ),
-                  ),
-                  SizedBox(height: isLandscape ? 8 : 10),
-                  SizedBox(
-                    width: double.infinity,
-                    height: isLandscape ? 42 : 44,
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          Navigator.of(dialogContext).pop('opponent'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.16),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      icon: const Icon(Icons.groups_rounded, size: 18),
-                      label: const Text('Choose Opponent'),
-                    ),
-                  ),
-                  SizedBox(height: isLandscape ? 8 : 10),
-                  SizedBox(
-                    width: double.infinity,
-                    height: isLandscape ? 42 : 44,
-                    child: TextButton.icon(
-                      onPressed: () => Navigator.of(dialogContext).pop('menu'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white70,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      icon: const Icon(Icons.home_rounded, size: 18),
-                      label: const Text('Main Menu'),
-                    ),
-                  ),
-                ],
-              ),
+              child: isLandscape ? buildLandscapeBody() : buildPortraitBody(),
             ),
           ),
         );

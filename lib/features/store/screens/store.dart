@@ -2,7 +2,7 @@
 
 part of '../../analysis/screens/chess_analysis_page.dart';
 
-mixin _StoreState on _ChessAnalysisPageStateCore {
+abstract class _StoreState extends _VsBotCore {
   String _depthTierLabel() => super._depthTierLabel();
 
   Future<void> _purchaseDepthTier(int targetTier) =>
@@ -75,21 +75,13 @@ mixin _StoreState on _ChessAnalysisPageStateCore {
     BoardThemeMode mode,
     Function setL, {
     Future<void> Function()? onLockedTap,
-  }) => super._buildStoreBoardThemeCard(
-    mode,
-    setL,
-    onLockedTap: onLockedTap,
-  );
+  }) => super._buildStoreBoardThemeCard(mode, setL, onLockedTap: onLockedTap);
 
   Widget _buildStorePieceThemeCard(
     PieceThemeMode mode,
     Function setL, {
     Future<void> Function()? onLockedTap,
-  }) => super._buildStorePieceThemeCard(
-    mode,
-    setL,
-    onLockedTap: onLockedTap,
-  );
+  }) => super._buildStorePieceThemeCard(mode, setL, onLockedTap: onLockedTap);
 
   Widget _buildStoreUiThemeCard(AppThemeStyle style, Function setL) =>
       super._buildStoreUiThemeCard(style, setL);

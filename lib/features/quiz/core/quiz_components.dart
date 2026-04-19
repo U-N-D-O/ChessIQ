@@ -1,6 +1,6 @@
 ﻿part of '../../analysis/screens/chess_analysis_page.dart';
 
-mixin _QuizComponents on _QuizScreen {
+abstract class _QuizComponents extends _QuizScreen {
   @override
   Widget _buildQuizStatsCard({
     required QuizTrendFilter filter,

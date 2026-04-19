@@ -1784,6 +1784,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     if (dailyNode == null) return;
     final dailyIndex = provider.todayDailyPuzzleIndex;
     if (dailyIndex < 0 || dailyIndex >= sequence.length) return;
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PuzzleNodeScreen(

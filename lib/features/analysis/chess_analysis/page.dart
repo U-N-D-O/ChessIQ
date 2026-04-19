@@ -7,13 +7,7 @@ class ChessAnalysisPage extends StatefulWidget {
   State<ChessAnalysisPage> createState() => _ChessAnalysisPageState();
 }
 
-abstract class _ChessAnalysisPageStateCore extends _ChessAnalysisPageStateBase
-    with _VsBotCore {}
+abstract class _ChessAnalysisPageStateCore
+    extends _ChessAnalysisPageStateBase {}
 
-class _ChessAnalysisPageState extends _ChessAnalysisPageStateCore
-    with
-        _StoreState,
-        _VsBotState,
-        _AnalysisPageShared,
-        _QuizScreen,
-        _QuizComponents {}
+class _ChessAnalysisPageState extends _QuizComponents {}

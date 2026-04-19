@@ -2,7 +2,7 @@
 
 part of '../../analysis/screens/chess_analysis_page.dart';
 
-mixin _VsBotState on _ChessAnalysisPageStateCore {
+abstract class _VsBotState extends _StoreState {
   final GlobalKey _botAvatarKey = GlobalKey();
   Timer? _botSpeechTypeTimer;
   Timer? _botSpeechHideTimer;

@@ -28,11 +28,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-part '../../quiz/mixins/quiz_components_mixin.dart';
-part '../../quiz/mixins/quiz_screen_mixin.dart';
+part '../../quiz/core/quiz_components.dart';
+part '../../quiz/core/quiz_screen.dart';
 part '../../quiz/models/quiz_round_review.dart';
 part '../../store/screens/store.dart';
-part '../../vs_bot/mixins/vs_bot_core_mixin.dart';
+part '../../vs_bot/core/vs_bot_core.dart';
 part '../../vs_bot/models/ghost_arrow.dart';
 part '../../vs_bot/screens/vs_bot.dart';
 part '../chess_analysis/base_state.dart';
