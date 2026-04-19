@@ -1542,6 +1542,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     if (_quizDifficulty == difficulty) return;
     setState(() {
       _quizDifficulty = difficulty;
+      _quizCurriculumExpanded = false;
       _quizEligibleCount = _quizEligiblePool(
         mode: _quizMode,
         difficulty: _quizDifficulty,
@@ -1566,6 +1567,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizEligibleCount = nextEligibleCount;
       _quizStudyDetailOpen = false;
       _quizStudyShownPly = 0;
+      _quizStudyShelfExpanded = false;
     });
   }
 
@@ -1623,6 +1625,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
 
     setState(() {
       _quizStudyCategory = category;
+      _quizStudyShelfExpanded = false;
       _quizStudySearchQuery = '';
       _quizStudyDetailOpen = false;
       _quizStudyShownPly = 0;
@@ -1656,6 +1659,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyExpandedFamily = _quizStudyExpandedFamily == familyName
           ? null
           : familyName;
+    });
+  }
+
+  void _toggleQuizStudyShelfExpanded() {
+    setState(() {
+      _quizStudyShelfExpanded = !_quizStudyShelfExpanded;
     });
   }
 
@@ -3162,22 +3171,23 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Choose a training route',
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Keep the setup focused: identify names, finish lines, or move into a structured study library with searchable opening families.',
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.74),
-              fontSize: 14,
-              height: 1.45,
-            ),
+          Row(
+            children: [
+              Text(
+                'Choose Your Academy Track',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 4),
+              _buildQuizInfoButton(
+                title: 'Choose Your Academy Track',
+                message:
+                    'Keep the setup focused: identify names, finish lines, or move into a structured study library with searchable opening families.',
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           LayoutBuilder(
@@ -3281,18 +3291,21 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required VoidCallback onTap,
   }) {
     final scheme = Theme.of(context).colorScheme;
+    final cardColor = selected
+        ? Color.alphaBlend(accent.withValues(alpha: 0.12), scheme.surface)
+        : scheme.surface;
 
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Ink(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
-            color: selected
-                ? accent.withValues(alpha: 0.12)
-                : scheme.surface.withValues(alpha: 0.72),
+            color: cardColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: selected
@@ -3306,15 +3319,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(icon, color: accent),
-                  ),
+                  _buildQuizInfoButton(title: title, message: description),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -3338,22 +3343,29 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 ],
               ),
               const SizedBox(height: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                description,
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                  fontSize: 12.5,
-                  height: 1.45,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: accent),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -3436,22 +3448,23 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _quizAcademyMissionTitle(),
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _quizAcademyMissionBody(),
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.76),
-              fontSize: 14,
-              height: 1.45,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _quizAcademyMissionTitle(),
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _buildQuizInfoButton(
+                title: _quizAcademyMissionTitle(),
+                message: _quizAcademyMissionBody(),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -3484,13 +3497,23 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'Selected bracket progress',
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Selected bracket progress',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    _buildQuizInfoButton(
+                      title: 'Selected bracket progress',
+                      message:
+                          '$perfectCount of $requiredCount perfect ${_quizDifficultyLabel(_quizDifficulty).toLowerCase()} sessions banked. ${_quizAcademyBracketObjective(_quizDifficulty)}',
+                    ),
+                  ],
                 ),
               ),
               Text(
@@ -3510,15 +3533,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               value: _quizPerfectSessionRatio(_quizDifficulty),
               backgroundColor: scheme.outline.withValues(alpha: 0.18),
               valueColor: AlwaysStoppedAnimation<Color>(currentTierColor),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '$perfectCount of $requiredCount perfect ${_quizDifficultyLabel(_quizDifficulty).toLowerCase()} sessions banked. ${_quizAcademyBracketObjective(_quizDifficulty)}',
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.72),
-              fontSize: 12.5,
-              height: 1.4,
             ),
           ),
         ],
@@ -3553,9 +3567,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final collapsedSubtitle = _quizStudyMode
-        ? 'Quiz routes still use the academy ladder. Expand it when you want to inspect the brackets.'
-        : 'Folded by default. Expand it when you want to inspect every bracket in the ladder.';
+    final curriculumInfo = _quizStudyMode
+        ? 'Quiz routes still use the academy ladder. Each bracket needs ${_quizAcademyProgress.requiredPerfectSessions} perfect sessions before the next one opens.'
+        : 'Folded by default. Expand it when you want to inspect every bracket in the ladder. Each bracket needs ${_quizAcademyProgress.requiredPerfectSessions} perfect sessions before the next one opens.';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -3570,80 +3584,47 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _quizCurriculumExpanded = !_quizCurriculumExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Curriculum Ladder',
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _quizCurriculumExpanded
-                              ? 'Each bracket needs ${_quizAcademyProgress.requiredPerfectSessions} perfect sessions before the next one opens. Work straight through easy, medium, hard, then very hard.'
-                              : collapsedSubtitle,
-                          style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.74),
-                            fontSize: 14,
-                            height: 1.45,
-                          ),
-                        ),
-                      ],
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(
+                      'Curriculum Ladder',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: scheme.primary.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 4),
+                    _buildQuizInfoButton(
+                      title: 'Curriculum Ladder',
+                      message: curriculumInfo,
                     ),
-                    child: Icon(
-                      _quizCurriculumExpanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              _buildQuizTierToggleButton(
+                expanded: _quizCurriculumExpanded,
+                onPressed: () {
+                  setState(() {
+                    _quizCurriculumExpanded = !_quizCurriculumExpanded;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           if (!_quizCurriculumExpanded)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!_quizStudyMode) ...[
-                  Text(
-                    'Opening Filter',
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildQuizAcademyDifficultyFilterWrap(),
-                  const SizedBox(height: 12),
-                ],
+                _buildQuizAcademyTierCard(
+                  difficulty: _quizDifficulty,
+                  useMonochrome: useMonochrome,
+                ),
+                const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -3722,56 +3703,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
-  Widget _buildQuizAcademyDifficultyFilterWrap() {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: QuizDifficulty.values
-          .map((difficulty) {
-            final selected = _quizDifficulty == difficulty;
-            final unlocked = _quizDifficultyUnlocked(difficulty);
-            final accent = _quizDifficultyColor(difficulty);
-
-            return ChoiceChip(
-              label: Text(_quizDifficultyLabel(difficulty)),
-              avatar: unlocked
-                  ? null
-                  : Icon(
-                      Icons.lock_outline_rounded,
-                      size: 15,
-                      color: scheme.onSurface.withValues(alpha: 0.54),
-                    ),
-              selected: selected,
-              selectedColor: accent.withValues(alpha: 0.18),
-              side: BorderSide(
-                color: selected
-                    ? accent.withValues(alpha: 0.85)
-                    : scheme.outline.withValues(alpha: 0.34),
-              ),
-              labelStyle: TextStyle(
-                color: selected
-                    ? accent
-                    : scheme.onSurface.withValues(
-                        alpha: unlocked ? 0.84 : 0.54,
-                      ),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-              onSelected: (_) {
-                if (unlocked) {
-                  _setQuizDifficulty(difficulty);
-                } else {
-                  unawaited(_showQuizDifficultyLockedDialog(difficulty));
-                }
-              },
-            );
-          })
-          .toList(growable: false),
-    );
-  }
-
   Widget _buildQuizAcademyTierCard({
     required QuizDifficulty difficulty,
     required bool useMonochrome,
@@ -3816,7 +3747,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             : () => unawaited(_showQuizDifficultyLockedDialog(difficulty)),
         borderRadius: BorderRadius.circular(22),
         child: Ink(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -3847,8 +3778,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 34,
+                    height: 34,
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(12),
@@ -3875,19 +3806,19 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       statusLabel,
                       style: TextStyle(
                         color: statusColor,
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               Text(
                 _quizAcademyBracketShortName(difficulty),
                 style: TextStyle(
                   color: scheme.onSurface,
-                  fontSize: 21,
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -3896,26 +3827,26 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 _quizAcademyBracketDescription(difficulty),
                 style: TextStyle(
                   color: scheme.onSurface.withValues(alpha: 0.72),
-                  fontSize: 13,
-                  height: 1.45,
+                  fontSize: 12,
+                  height: 1.35,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               ClipRRect(
                 borderRadius: BorderRadius.circular(999),
                 child: LinearProgressIndicator(
-                  minHeight: 7,
+                  minHeight: 6,
                   value: unlocked ? _quizPerfectSessionRatio(difficulty) : 0.0,
                   backgroundColor: scheme.outline.withValues(alpha: 0.18),
                   valueColor: AlwaysStoppedAnimation<Color>(accent),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 footerText,
                 style: TextStyle(
                   color: scheme.onSurface.withValues(alpha: 0.74),
-                  fontSize: 12.5,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -3946,8 +3877,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final routeDescription = _quizMode == GambitQuizMode.guessName
         ? 'Each run is a fixed 10-question set. You see a position, then identify the opening name.'
         : 'Each run is a fixed 10-question set. You see the opening shell, then complete the correct continuation.';
-    const routeSupportText =
-        'Promotion stays simple: every playable route uses 10 questions, and academy credit only counts at 100% accuracy.';
     final primaryButtonLabel = _quizMode == GambitQuizMode.guessName
         ? 'Start 10-question name drill'
         : 'Start 10-question line drill';
@@ -3972,22 +3901,24 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Session Configuration',
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'The selected route now defines the session. There is no extra setup noise here anymore.',
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.74),
-              fontSize: 14,
-              height: 1.45,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Session Configuration',
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _buildQuizInfoButton(
+                title: 'Session Configuration',
+                message:
+                    'The selected route now defines the session. There is no extra setup noise here anymore. Promotion stays simple: every playable route uses 10 questions, and academy credit only counts at 100% accuracy.',
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           Container(
@@ -4014,25 +3945,27 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        routeTitle,
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              routeTitle,
+                              style: TextStyle(
+                                color: scheme.onSurface,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          _buildQuizInfoButton(
+                            title: routeTitle,
+                            message: routeDescription,
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  routeDescription,
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.74),
-                    fontSize: 13.5,
-                    height: 1.45,
-                  ),
                 ),
               ],
             ),
@@ -4068,15 +4001,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 accent: const Color(0xFFD8B640),
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            routeSupportText,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.68),
-              fontSize: 12.5,
-              height: 1.4,
-            ),
           ),
           if (!canStart) ...[
             const SizedBox(height: 10),
@@ -4163,6 +4087,68 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showQuizInfoDialog({
+    required String title,
+    required String message,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizInfoButton({
+    required String title,
+    required String message,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: message,
+      child: InkResponse(
+        onTap: () =>
+            unawaited(_showQuizInfoDialog(title: title, message: message)),
+        radius: 16,
+        child: Icon(
+          Icons.info_outline,
+          size: 17,
+          color: scheme.onSurface.withValues(alpha: 0.60),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizTierToggleButton({
+    required bool expanded,
+    required VoidCallback onPressed,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(
+        expanded
+            ? Icons.keyboard_arrow_up_rounded
+            : Icons.keyboard_arrow_down_rounded,
+      ),
+      label: Text(expanded ? 'Hide tiers' : 'Show tiers'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: scheme.onSurface,
+        side: BorderSide(color: scheme.outline.withValues(alpha: 0.24)),
+        visualDensity: VisualDensity.compact,
       ),
     );
   }

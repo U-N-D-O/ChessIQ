@@ -193,46 +193,60 @@ Widget _buildQuizStudyMissionPanel(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Opening Study Library',
-          style: TextStyle(
-            color: scheme.onSurface,
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Basic mirrors the easy quiz shelf, Advanced mirrors medium, Master mirrors hard, Grandmaster mirrors very hard, and Library stays open for the full replayable opening catalog.',
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.76),
-            fontSize: 14,
-            height: 1.45,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    'Opening Study Library',
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  state._buildQuizInfoButton(
+                    title: 'Opening Study Library',
+                    message:
+                        'Basic mirrors the easy quiz shelf, Advanced mirrors medium, Master mirrors hard, Grandmaster mirrors very hard, and Library stays open for the full replayable opening catalog.',
+                  ),
+                ],
+              ),
+            ),
+            state._buildQuizTierToggleButton(
+              expanded: state._quizStudyShelfExpanded,
+              onPressed: state._toggleQuizStudyShelfExpanded,
+            ),
+          ],
         ),
         const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final cardWidth = constraints.maxWidth < 560
-                ? constraints.maxWidth
-                : constraints.maxWidth >= 1120
-                ? (constraints.maxWidth - 40) / 5
-                : (constraints.maxWidth - 10) / 2;
+        if (!state._quizStudyShelfExpanded)
+          _buildQuizStudyCategoryCard(state, state._quizStudyCategory)
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth < 560
+                  ? constraints.maxWidth
+                  : constraints.maxWidth >= 1120
+                  ? (constraints.maxWidth - 40) / 5
+                  : (constraints.maxWidth - 10) / 2;
 
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: QuizStudyCategory.values
-                  .map(
-                    (category) => SizedBox(
-                      width: cardWidth,
-                      child: _buildQuizStudyCategoryCard(state, category),
-                    ),
-                  )
-                  .toList(growable: false),
-            );
-          },
-        ),
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: QuizStudyCategory.values
+                    .map(
+                      (category) => SizedBox(
+                        width: cardWidth,
+                        child: _buildQuizStudyCategoryCard(state, category),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
         const SizedBox(height: 14),
         Wrap(
           spacing: 8,
@@ -320,7 +334,7 @@ Widget _buildQuizStudyCategoryCard(
       onTap: () => state._setQuizStudyCategory(category),
       borderRadius: BorderRadius.circular(20),
       child: Ink(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected
               ? accent.withValues(alpha: 0.12)
@@ -339,8 +353,8 @@ Widget _buildQuizStudyCategoryCard(
             Row(
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(12),
@@ -365,19 +379,19 @@ Widget _buildQuizStudyCategoryCard(
                     '${(completion * 100).toStringAsFixed(0)}%',
                     style: TextStyle(
                       color: accent,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               state._quizStudyCategoryLabel(category),
               style: TextStyle(
                 color: scheme.onSurface,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -386,26 +400,26 @@ Widget _buildQuizStudyCategoryCard(
               state._quizStudyCategorySubtitle(category),
               style: TextStyle(
                 color: scheme.onSurface.withValues(alpha: 0.70),
-                fontSize: 12.5,
+                fontSize: 11.5,
                 height: 1.35,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
-                minHeight: 6,
+                minHeight: 5,
                 value: completion,
                 backgroundColor: scheme.outline.withValues(alpha: 0.18),
                 valueColor: AlwaysStoppedAnimation<Color>(accent),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               '$studied/$total openings studied',
               style: TextStyle(
                 color: scheme.onSurface.withValues(alpha: 0.72),
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -454,22 +468,23 @@ Widget _buildQuizStudyLibraryPanel(_QuizScreen state) {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Study Library',
-          style: TextStyle(
-            color: scheme.onSurface,
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Choose a family, then open a variation on its own study screen. Search stays here so the detail view can stay focused and easy to navigate.',
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.74),
-            fontSize: 14,
-            height: 1.45,
-          ),
+        Row(
+          children: [
+            Text(
+              'Study Library',
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 4),
+            state._buildQuizInfoButton(
+              title: 'Study Library',
+              message:
+                  'Choose a family, then open a variation on its own study screen. Search stays here so the detail view can stay focused and easy to navigate.',
+            ),
+          ],
         ),
         const SizedBox(height: 14),
         TextFormField(
@@ -575,24 +590,24 @@ Widget _buildQuizStudyFamilyListPane(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Opening Families',
-          style: TextStyle(
-            color: scheme.onSurface,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          searchActive
-              ? 'Search keeps matching families open so you can jump straight into a variation detail page.'
-              : 'Tap a family name to reveal the included lines and open any variation on its own study page.',
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.68),
-            fontSize: 12.5,
-            height: 1.4,
-          ),
+        Row(
+          children: [
+            Text(
+              'Opening Families',
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 4),
+            state._buildQuizInfoButton(
+              title: 'Opening Families',
+              message: searchActive
+                  ? 'Search keeps matching families open so you can jump straight into a variation detail page.'
+                  : 'Tap a family name to reveal the included lines and open any variation on its own study page.',
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Expanded(

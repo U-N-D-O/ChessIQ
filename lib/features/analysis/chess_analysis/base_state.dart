@@ -237,6 +237,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   QuizAcademyProgress _quizAcademyProgress = QuizAcademyProgress.initial();
   bool _quizStudyMode = false;
   QuizStudyCategory _quizStudyCategory = QuizStudyCategory.basic;
+  bool _quizStudyShelfExpanded = false;
   String _quizStudySearchQuery = '';
   bool _quizStudyDetailOpen = false;
   String? _quizStudySelectedOpeningName;
