@@ -10,12 +10,16 @@ class _QuizStudyFamilyGroup {
 class _QuizStudyPreview {
   final Map<String, String> boardState;
   final bool whiteToMove;
+  final int shownPly;
   final int totalPly;
+  final List<EngineLine> continuation;
 
   const _QuizStudyPreview({
     required this.boardState,
     required this.whiteToMove,
+    required this.shownPly,
     required this.totalPly,
+    required this.continuation,
   });
 }
 
@@ -338,19 +342,25 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
   }
 
-  String _quizStudyFamilyName(String name) {
+  String _quizStudyFamilyCandidate(String name) {
     final cleaned = name.trim();
     if (cleaned.isEmpty) {
       return 'Unnamed Opening';
     }
 
-    var family = cleaned;
-    for (final delimiter in const [':', ',', ';', '(']) {
-      final delimiterIndex = family.indexOf(delimiter);
-      if (delimiterIndex > 0) {
-        family = family.substring(0, delimiterIndex).trim();
+    final normalizedName = cleaned.replaceAll(RegExp(r'[–—]+'), '-');
+    var splitIndex = -1;
+    for (final delimiter in const [':', ',', ';', '(', ' - ']) {
+      final delimiterIndex = normalizedName.indexOf(delimiter);
+      if (delimiterIndex > 0 &&
+          (splitIndex < 0 || delimiterIndex < splitIndex)) {
+        splitIndex = delimiterIndex;
       }
     }
+
+    final family = splitIndex > 0
+        ? normalizedName.substring(0, splitIndex).trim()
+        : normalizedName;
 
     final tokens = family
         .split(RegExp(r'\s+'))
@@ -365,6 +375,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       'defense',
       'defence',
       'opening',
+      'openings',
       'game',
       'attack',
       'system',
@@ -390,26 +401,173 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     return family;
   }
 
-  String _quizStudyVariationLabel(EcoLine line, String familyName) {
-    if (line.name == familyName) {
-      return 'Main line';
+  String _quizStudyCanonicalizeFamily(String family) {
+    var display = family.trim();
+    if (display.isEmpty) {
+      return 'Unnamed Opening';
     }
 
-    for (final prefix in <String>[
-      '$familyName: ',
-      '$familyName, ',
-      '$familyName - ',
-      '$familyName ',
-    ]) {
-      if (line.name.startsWith(prefix)) {
-        final remainder = line.name.substring(prefix.length).trim();
+    display = display
+        .replaceAll(RegExp(r'[’`´]'), "'")
+        .replaceAll(RegExp(r'[–—]+'), '-')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    display = display
+        .replaceAll(RegExp(r'\bDefence\b'), 'Defense')
+        .replaceAll(RegExp(r'\bdefence\b'), 'defense')
+        .replaceAll(RegExp(r'\bOpenings\b'), 'Opening')
+        .replaceAll(RegExp(r'\bopenings\b'), 'opening')
+        .replaceAll(RegExp(r"\bPetroff's\b"), "Petrov's")
+        .replaceAll(RegExp(r'\bPetroff\b'), 'Petrov')
+        .replaceAll(RegExp(r"\bpetroff's\b"), "petrov's")
+        .replaceAll(RegExp(r'\bpetroff\b'), 'petrov');
+
+    final normalized = display
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final aliasKey = normalized
+        .replaceAll("'", '')
+        .replaceAll('-', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    if (aliasKey == 'sicilian defense') {
+      return 'Sicilian Defense';
+    }
+    if (aliasKey == 'sicilian' ||
+        aliasKey.startsWith('sicilian ') ||
+        aliasKey.endsWith(' sicilian')) {
+      return 'Sicilian';
+    }
+    if ({'english', 'english opening'}.contains(aliasKey)) {
+      return 'English Opening';
+    }
+    if ({
+      'queen pawn',
+      'queens pawn',
+      'queen pawn game',
+      'queens pawn game',
+      'queen pawn opening',
+      'queens pawn opening',
+    }.contains(aliasKey)) {
+      return "Queen's Pawn Game";
+    }
+    if ({
+      'king pawn',
+      'kings pawn',
+      'king pawn game',
+      'kings pawn game',
+      'king pawn opening',
+      'kings pawn opening',
+    }.contains(aliasKey)) {
+      return "King's Pawn Game";
+    }
+    if ({
+      'petrov',
+      'petrov defense',
+      'petrovs defense',
+      'russian defense',
+      'russian game',
+    }.contains(aliasKey)) {
+      return 'Petrov Defense';
+    }
+    if ({
+      'caro kann',
+      'caro kann defense',
+      'caro kann defensive system',
+    }.contains(aliasKey)) {
+      return 'Caro-Kann Defense';
+    }
+    if ({'nimzo indian', 'nimzo indian defense'}.contains(aliasKey)) {
+      return 'Nimzo-Indian Defense';
+    }
+    if ({'bogo indian', 'bogo indian defense'}.contains(aliasKey)) {
+      return 'Bogo-Indian Defense';
+    }
+    if ({'queens indian', 'queens indian defense'}.contains(aliasKey)) {
+      return "Queen's Indian Defense";
+    }
+    if ({'kings indian', 'kings indian defense'}.contains(aliasKey)) {
+      return "King's Indian Defense";
+    }
+
+    return display;
+  }
+
+  String _quizStudyCanonicalFamilyKey(String family) {
+    return _quizStudyCanonicalizeFamily(family).toLowerCase();
+  }
+
+  String _quizStudyFamilyName(String name) {
+    return _quizStudyCanonicalizeFamily(_quizStudyFamilyCandidate(name));
+  }
+
+  String? _quizStudyDerivedVariationLabel(String name, String familyName) {
+    final cleaned = name.trim();
+    final lower = cleaned.toLowerCase();
+
+    if (familyName == 'Sicilian') {
+      if (lower.startsWith('sicilian ') &&
+          !lower.startsWith('sicilian defense')) {
+        final remainder = cleaned.substring('Sicilian '.length).trim();
+        if (remainder.isNotEmpty) {
+          return remainder;
+        }
+      }
+      if (lower.endsWith(' sicilian') && lower != 'sicilian') {
+        final remainder = cleaned
+            .substring(0, cleaned.length - ' Sicilian'.length)
+            .trim();
         if (remainder.isNotEmpty) {
           return remainder;
         }
       }
     }
 
-    return line.name;
+    return null;
+  }
+
+  String _quizStudyVariationLabel(EcoLine line, String familyName) {
+    final cleanedName = line.name.trim();
+    final rawFamily = _quizStudyFamilyCandidate(cleanedName);
+    final canonicalFamily = _quizStudyCanonicalizeFamily(rawFamily);
+    final derivedVariation = _quizStudyDerivedVariationLabel(
+      cleanedName,
+      familyName,
+    );
+    if (derivedVariation != null) {
+      return derivedVariation;
+    }
+
+    if (cleanedName == familyName ||
+        (_quizStudyCanonicalFamilyKey(rawFamily) ==
+                _quizStudyCanonicalFamilyKey(familyName) &&
+            cleanedName == rawFamily)) {
+      return 'Main line';
+    }
+
+    final familyPrefixes = <String>{familyName, rawFamily, canonicalFamily}
+        .where((prefix) => prefix.trim().isNotEmpty)
+        .expand(
+          (prefix) => <String>[
+            '$prefix: ',
+            '$prefix, ',
+            '$prefix - ',
+            '$prefix ',
+          ],
+        );
+
+    for (final prefix in familyPrefixes) {
+      if (cleanedName.startsWith(prefix)) {
+        final remainder = cleanedName.substring(prefix.length).trim();
+        if (remainder.isNotEmpty) {
+          return remainder;
+        }
+      }
+    }
+
+    return cleanedName;
   }
 
   List<EcoLine> _dedupeQuizStudyLinesByName(Iterable<EcoLine> lines) {
@@ -432,14 +590,37 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   List<EcoLine> _quizStudyPool(QuizStudyCategory category) {
-    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+    if (!_ensureQuizPoolsAvailable()) {
       return const <EcoLine>[];
     }
-    if (!_quizPoolsPrecomputed) {
-      _precomputeQuizEligiblePools();
-    }
+
     return _quizStudyPoolCache[_quizStudyPoolKey(category)] ??
         const <EcoLine>[];
+  }
+
+  bool _ensureQuizPoolsAvailable() {
+    if (_quizPoolsPrecomputed) {
+      return true;
+    }
+
+    if (_hydratePrecomputedQuizPools()) {
+      return true;
+    }
+
+    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+      return false;
+    }
+
+    _precomputeQuizEligiblePools();
+    return _quizPoolsPrecomputed;
+  }
+
+  bool _quizStudyDataReady() {
+    if (_quizStudyPoolCache.isNotEmpty) {
+      return true;
+    }
+
+    return _ensureQuizPoolsAvailable();
   }
 
   String _quizPoolKey(GambitQuizMode mode, QuizDifficulty difficulty) {
@@ -575,15 +756,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
 
   @override
   void _precomputeQuizEligiblePools() {
+    if (_hydratePrecomputedQuizPools()) {
+      return;
+    }
+
     if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
       _quizEligiblePoolCache.clear();
       _quizEligibleNameCache.clear();
       _quizStudyPoolCache.clear();
       _quizPoolsPrecomputed = false;
-      return;
-    }
-
-    if (_hydratePrecomputedQuizPools()) {
       return;
     }
 
@@ -682,23 +863,19 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required GambitQuizMode mode,
     required QuizDifficulty difficulty,
   }) {
-    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+    if (!_ensureQuizPoolsAvailable()) {
       return const <EcoLine>[];
     }
-    if (!_quizPoolsPrecomputed) {
-      _precomputeQuizEligiblePools();
-    }
+
     return _quizEligiblePoolCache[_quizPoolKey(mode, difficulty)] ??
         const <EcoLine>[];
   }
 
   int _currentViewedEligibleCount() {
-    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+    if (!_ensureQuizPoolsAvailable()) {
       return 0;
     }
-    if (!_quizPoolsPrecomputed) {
-      _precomputeQuizEligiblePools();
-    }
+
     final names =
         _quizEligibleNameCache[_quizPoolKey(_quizMode, _quizDifficulty)] ??
         const <String>{};
@@ -752,6 +929,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudySelectedOpeningName = null;
       _quizStudyExpandedFamily = null;
       _quizStudyOpeningCounts.clear();
+      _quizStudyShownPly = 0;
       _quizStreak = 0;
       _quizBestStreak = 0;
       _quizTotalAnswered = 0;
@@ -1387,6 +1565,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizMode = nextMode;
       _quizEligibleCount = nextEligibleCount;
       _quizStudyDetailOpen = false;
+      _quizStudyShownPly = 0;
     });
   }
 
@@ -1446,6 +1625,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyCategory = category;
       _quizStudySearchQuery = '';
       _quizStudyDetailOpen = false;
+      _quizStudyShownPly = 0;
 
       if (_quizStudySelectedOpeningName != null &&
           !nextLineNames.contains(_quizStudySelectedOpeningName)) {
@@ -1485,6 +1665,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
     setState(() {
       _quizStudyDetailOpen = false;
+      _quizStudyShownPly = 0;
     });
   }
 
@@ -1495,6 +1676,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     setState(() {
       _quizStudyMode = false;
       _quizStudyDetailOpen = false;
+      _quizStudyShownPly = 0;
     });
   }
 
@@ -1504,9 +1686,41 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudySelectedOpeningName = line.name;
       _quizStudyExpandedFamily = familyName;
       _quizStudyDetailOpen = true;
+      _quizStudyShownPly = 0;
       _quizStudyOpeningCounts[line.name] = _quizStudyCountFor(line.name) + 1;
     });
     unawaited(_saveQuizStats());
+  }
+
+  int _quizStudyShownPlyFor(EcoLine line) {
+    if (_quizStudySelectedOpeningName != line.name) {
+      return 0;
+    }
+
+    return _quizStudyShownPly.clamp(0, line.moveTokens.length).toInt();
+  }
+
+  void _setQuizStudyShownPly(EcoLine line, int shownPly) {
+    final clampedPly = shownPly.clamp(0, line.moveTokens.length).toInt();
+    if (_quizStudyShownPly == clampedPly) {
+      return;
+    }
+
+    setState(() {
+      _quizStudyShownPly = clampedPly;
+    });
+  }
+
+  void _resetQuizStudyPosition(EcoLine line) {
+    _setQuizStudyShownPly(line, 0);
+  }
+
+  void _stepQuizStudyBackward(EcoLine line) {
+    _setQuizStudyShownPly(line, _quizStudyShownPlyFor(line) - 1);
+  }
+
+  void _stepQuizStudyForward(EcoLine line) {
+    _setQuizStudyShownPly(line, _quizStudyShownPlyFor(line) + 1);
   }
 
   List<_QuizStudyFamilyGroup> _quizStudyFamilyGroups(
@@ -1596,10 +1810,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   _QuizStudyPreview? _buildQuizStudyPreview(EcoLine line) {
+    final shownPly = _quizStudyShownPlyFor(line);
     var boardState = _initialBoardState();
     var whiteToMove = true;
 
-    for (final token in line.moveTokens) {
+    for (var index = 0; index < shownPly; index++) {
+      final token = line.moveTokens[index];
       final uciMove = _resolveSanToUci(boardState, token, whiteToMove);
       if (uciMove == null) {
         return null;
@@ -1608,10 +1824,33 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       whiteToMove = !whiteToMove;
     }
 
+    final previewBoardState = Map<String, String>.from(boardState);
+    final previewWhiteToMove = whiteToMove;
+    final continuation = <EngineLine>[];
+    for (var index = shownPly; index < line.moveTokens.length; index++) {
+      final token = line.moveTokens[index];
+      final uciMove = _resolveSanToUci(boardState, token, whiteToMove);
+      if (uciMove == null) {
+        return null;
+      }
+      continuation.add(
+        EngineLine(
+          uciMove,
+          0,
+          max(1, line.moveTokens.length - index),
+          continuation.length + 1,
+        ),
+      );
+      boardState = _applyUciMove(boardState, uciMove);
+      whiteToMove = !whiteToMove;
+    }
+
     return _QuizStudyPreview(
-      boardState: boardState,
-      whiteToMove: whiteToMove,
+      boardState: previewBoardState,
+      whiteToMove: previewWhiteToMove,
+      shownPly: shownPly,
       totalPly: line.moveTokens.length,
+      continuation: List<EngineLine>.unmodifiable(continuation),
     );
   }
 

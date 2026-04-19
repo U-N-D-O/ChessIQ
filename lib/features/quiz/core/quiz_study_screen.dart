@@ -420,9 +420,7 @@ Widget _buildQuizStudyLibraryPanel(_QuizScreen state) {
   final theme = Theme.of(state.context);
   final scheme = theme.colorScheme;
   final isDark = theme.brightness == Brightness.dark;
-  final isLoading =
-      state._ecoOpeningsLoading ||
-      (!state._ecoOpeningsLoaded && state._ecoLines.isEmpty);
+  final isLoading = !state._quizStudyDataReady() && state._ecoOpeningsLoading;
   final groups = isLoading
       ? const <_QuizStudyFamilyGroup>[]
       : state._quizStudyFamilyGroups(state._quizStudyCategory);
@@ -610,7 +608,7 @@ Widget _buildQuizStudyFamilyListPane(
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Loading replayable openings...',
+                        'Loading bundled study library...',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: scheme.onSurface.withValues(alpha: 0.68),
@@ -626,7 +624,7 @@ Widget _buildQuizStudyFamilyListPane(
                   child: Text(
                     searchActive
                         ? 'No openings matched that search.'
-                        : 'This shelf does not have replayable openings loaded yet.',
+                        : 'No openings are available in this shelf.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: scheme.onSurface.withValues(alpha: 0.62),
@@ -905,7 +903,8 @@ Widget _buildQuizStudyDetailScreen(
     selectedLine,
     familyName,
   );
-  final positionPly = preview?.totalPly ?? selectedLine.moveTokens.length;
+  final currentPly = preview?.shownPly ?? 0;
+  final totalPly = preview?.totalPly ?? selectedLine.moveTokens.length;
 
   return Container(
     padding: const EdgeInsets.all(16),
@@ -990,7 +989,7 @@ Widget _buildQuizStudyDetailScreen(
             ),
             state._buildQuizAcademyMetricChip(
               label: 'Position',
-              value: '$positionPly ply',
+              value: '$currentPly/$totalPly ply',
               accent: const Color(0xFF7EDC8A),
             ),
           ],
@@ -1090,24 +1089,167 @@ Widget _buildQuizStudyDetailScreen(
         ),
         const SizedBox(height: 14),
         if (preview != null)
-          Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: boardMaxWidth),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: scheme.outline.withValues(alpha: 0.30),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.66),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: scheme.outline.withValues(alpha: 0.22)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Board Walkthrough',
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
-                  child: state._buildQuizBoard(
-                    boardState: preview.boardState,
-                    whiteToMove: preview.whiteToMove,
+                    Text(
+                      'Ply $currentPly/$totalPly',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  currentPly == 0
+                      ? 'Start position. Press forward to replay the line one move at a time with the quiz-style arrow map still visible.'
+                      : preview.continuation.isEmpty
+                      ? 'Final position reached. Step back or jump to the start to review the full line again.'
+                      : '${preview.continuation.length} move${preview.continuation.length == 1 ? '' : 's'} remain from this position.',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.68),
+                    fontSize: 12.5,
+                    height: 1.4,
                   ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: boardMaxWidth),
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: scheme.outline.withValues(alpha: 0.30),
+                          ),
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final reverse =
+                                state._perspective == BoardPerspective.black ||
+                                (state._perspective == BoardPerspective.auto &&
+                                    !preview.whiteToMove);
+
+                            return Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                state._buildQuizBoard(
+                                  boardState: preview.boardState,
+                                  whiteToMove: preview.whiteToMove,
+                                ),
+                                if (preview.continuation.isNotEmpty)
+                                  AnimatedBuilder(
+                                    animation: state._pulseController,
+                                    builder: (context, child) => IgnorePointer(
+                                      child: CustomPaint(
+                                        size: Size.infinite,
+                                        painter: EnergyArrowPainter(
+                                          lines: preview.continuation,
+                                          bestEval: 0,
+                                          progress:
+                                              state._pulseController.value,
+                                          reverse: reverse,
+                                          showSequenceNumbers: true,
+                                          overrideColor: const Color(
+                                            0xFFB8BFC8,
+                                          ),
+                                          staticArrowStyle: true,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _buildQuizStudyReplayButton(
+                        state,
+                        icon: Icons.skip_previous_rounded,
+                        tooltip: 'Jump to the start position',
+                        onPressed: currentPly > 0
+                            ? () => state._resetQuizStudyPosition(selectedLine)
+                            : null,
+                        accent: accent,
+                      ),
+                      _buildQuizStudyReplayButton(
+                        state,
+                        icon: Icons.chevron_left_rounded,
+                        tooltip: 'Step back one move',
+                        onPressed: currentPly > 0
+                            ? () => state._stepQuizStudyBackward(selectedLine)
+                            : null,
+                        accent: accent,
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: accent.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Text(
+                          'Ply $currentPly of $totalPly',
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      _buildQuizStudyReplayButton(
+                        state,
+                        icon: Icons.chevron_right_rounded,
+                        tooltip: 'Step forward one move',
+                        onPressed: currentPly < totalPly
+                            ? () => state._stepQuizStudyForward(selectedLine)
+                            : null,
+                        accent: accent,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           )
         else
@@ -1154,6 +1296,31 @@ Widget _buildQuizStudyDetailScreen(
           ),
         ),
       ],
+    ),
+  );
+}
+
+Widget _buildQuizStudyReplayButton(
+  _QuizScreen state, {
+  required IconData icon,
+  required String tooltip,
+  required VoidCallback? onPressed,
+  required Color accent,
+}) {
+  final scheme = Theme.of(state.context).colorScheme;
+
+  return Tooltip(
+    message: tooltip,
+    child: IconButton.filledTonal(
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        foregroundColor: accent,
+        backgroundColor: accent.withValues(alpha: 0.14),
+        disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.26),
+        disabledBackgroundColor: scheme.surface.withValues(alpha: 0.42),
+        fixedSize: const Size(46, 46),
+      ),
+      icon: Icon(icon),
     ),
   );
 }

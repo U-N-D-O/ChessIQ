@@ -136,7 +136,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _quizPoolsPrecomputed = false;
   Map<String, dynamic>? _precomputedQuizPoolData;
   bool _ecoOpeningsLoading = false;
-  bool _ecoOpeningsLoaded = false;
   String _currentOpening = '';
   final List<String> _logs = [];
   OpeningMode _openingMode = OpeningMode.off;
@@ -243,6 +242,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _quizStudySelectedOpeningName;
   String? _quizStudyExpandedFamily;
   Map<String, int> _quizStudyOpeningCounts = <String, int>{};
+  int _quizStudyShownPly = 0;
   bool _quizCurriculumExpanded = false;
   int _quizStreak = 0;
   int _quizBestStreak = 0;
@@ -1798,7 +1798,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     ];
 
     _ecoOpeningsLoading = true;
-    _ecoOpeningsLoaded = false;
     _ecoLines.clear();
     _ecoOpenings.clear();
     _quizEligiblePoolCache.clear();
@@ -1806,6 +1805,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _quizStudyPoolCache.clear();
     _quizPoolsPrecomputed = false;
     _precomputedQuizPoolData = null;
+
+    try {
+      final poolContent = await rootBundle.loadString(
+        'openings/quiz_pools.json',
+      );
+      final decodedPools = jsonDecode(poolContent);
+      if (decodedPools is Map<String, dynamic>) {
+        _precomputedQuizPoolData = decodedPools;
+        _precomputeQuizEligiblePools();
+        final eligible = _quizEligiblePool(
+          mode: _quizMode,
+          difficulty: _quizDifficulty,
+        );
+        if (mounted) {
+          setState(() => _quizEligibleCount = eligible.length);
+        }
+      } else {
+        _addLog('Precomputed quiz pools asset had invalid format');
+      }
+    } catch (e) {
+      debugPrint('Error loading precomputed quiz pools: $e');
+    }
 
     for (final path in fileNames) {
       try {
@@ -1857,25 +1878,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     }
 
-    try {
-      final poolContent = await rootBundle.loadString(
-        'openings/quiz_pools.json',
-      );
-      final decodedPools = jsonDecode(poolContent);
-      if (decodedPools is Map<String, dynamic>) {
-        _precomputedQuizPoolData = decodedPools;
-      } else {
-        _addLog('Precomputed quiz pools asset had invalid format');
-      }
-    } catch (e) {
-      debugPrint('Error loading precomputed quiz pools: $e');
-    }
-
     _ecoOpeningsLoading = false;
     _addLog('Loaded ECO openings: ${_ecoOpenings.length} entries');
 
     _precomputeQuizEligiblePools();
-    _ecoOpeningsLoaded = true;
 
     final eligible = _quizEligiblePool(
       mode: _quizMode,

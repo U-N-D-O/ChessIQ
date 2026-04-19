@@ -174,16 +174,19 @@ def has_opening_name_annotation(name: str) -> bool:
     return key is not None and key != ''
 
 
-def quiz_study_family_name(name: str) -> str:
+def quiz_study_family_candidate(name: str) -> str:
     cleaned = name.strip()
     if cleaned == '':
         return 'Unnamed Opening'
 
-    family = cleaned
-    for delimiter in (':', ',', ';', '('):
-        index = family.find(delimiter)
-        if index > 0:
-            family = family[:index].strip()
+    normalized_name = re.sub(r'[–—]+', '-', cleaned)
+    split_index = -1
+    for delimiter in (':', ',', ';', '(', ' - '):
+        index = normalized_name.find(delimiter)
+        if index > 0 and (split_index < 0 or index < split_index):
+            split_index = index
+
+    family = normalized_name[:split_index].strip() if split_index > 0 else normalized_name
 
     tokens = [token for token in family.split() if token]
     if not tokens:
@@ -194,6 +197,7 @@ def quiz_study_family_name(name: str) -> str:
         'defense',
         'defence',
         'opening',
+        'openings',
         'game',
         'attack',
         'system',
@@ -211,6 +215,83 @@ def quiz_study_family_name(name: str) -> str:
         return ' '.join(tokens[: family_end_index + 1])
 
     return family
+
+
+def canonicalize_quiz_study_family(family: str) -> str:
+    display = family.strip()
+    if display == '':
+        return 'Unnamed Opening'
+
+    display = re.sub(r"[’`´]", "'", display)
+    display = re.sub(r'[–—]+', '-', display)
+    display = WHITESPACE_RE.sub(' ', display).strip()
+    display = re.sub(r'\bDefence\b', 'Defense', display)
+    display = re.sub(r'\bdefence\b', 'defense', display)
+    display = re.sub(r'\bOpenings\b', 'Opening', display)
+    display = re.sub(r'\bopenings\b', 'opening', display)
+    display = re.sub(r"\bPetroff's\b", "Petrov's", display)
+    display = re.sub(r'\bPetroff\b', 'Petrov', display)
+    display = re.sub(r"\bpetroff's\b", "petrov's", display)
+    display = re.sub(r'\bpetroff\b', 'petrov', display)
+
+    normalized = WHITESPACE_RE.sub(' ', display.lower()).strip()
+    alias_key = WHITESPACE_RE.sub(
+        ' ',
+        normalized.replace("'", '').replace('-', ' '),
+    ).strip()
+
+    if alias_key == 'sicilian defense':
+        return 'Sicilian Defense'
+    if alias_key == 'sicilian' or alias_key.startswith('sicilian ') or alias_key.endswith(' sicilian'):
+        return 'Sicilian'
+    if alias_key in {'english', 'english opening'}:
+        return 'English Opening'
+    if alias_key in {
+        'queen pawn',
+        'queens pawn',
+        'queen pawn game',
+        'queens pawn game',
+        'queen pawn opening',
+        'queens pawn opening',
+    }:
+        return "Queen's Pawn Game"
+    if alias_key in {
+        'king pawn',
+        'kings pawn',
+        'king pawn game',
+        'kings pawn game',
+        'king pawn opening',
+        'kings pawn opening',
+    }:
+        return "King's Pawn Game"
+    if alias_key in {
+        'petrov',
+        'petrov defense',
+        'petrovs defense',
+        'russian defense',
+        'russian game',
+    }:
+        return 'Petrov Defense'
+    if alias_key in {
+        'caro kann',
+        'caro kann defense',
+        'caro kann defensive system',
+    }:
+        return 'Caro-Kann Defense'
+    if alias_key in {'nimzo indian', 'nimzo indian defense'}:
+        return 'Nimzo-Indian Defense'
+    if alias_key in {'bogo indian', 'bogo indian defense'}:
+        return 'Bogo-Indian Defense'
+    if alias_key in {'queens indian', 'queens indian defense'}:
+        return "Queen's Indian Defense"
+    if alias_key in {'kings indian', 'kings indian defense'}:
+        return "King's Indian Defense"
+
+    return display
+
+
+def quiz_study_family_name(name: str) -> str:
+    return canonicalize_quiz_study_family(quiz_study_family_candidate(name))
 
 
 def dedupe_quiz_study_lines_by_name(lines: list[dict[str, object]]) -> list[dict[str, object]]:
