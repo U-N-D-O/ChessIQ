@@ -164,6 +164,36 @@ abstract class _QuizComponents extends _QuizScreen {
             ],
           ),
           const SizedBox(height: 10),
+          Text(
+            'Academy Progress',
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _quizMetricChip(
+                'Unlocked',
+                _quizAcademyBracketShortName(
+                  _quizAcademyProgress.highestUnlockedDifficulty(),
+                ),
+                const Color(0xFF5AAEE8),
+              ),
+              ...QuizDifficulty.values.map(
+                (difficulty) => _quizMetricChip(
+                  _quizAcademyBracketShortName(difficulty),
+                  '${_quizPerfectSessionsFor(difficulty)}/${_quizAcademyProgress.requiredPerfectSessions}',
+                  _quizDifficultyColor(difficulty),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -274,7 +304,7 @@ abstract class _QuizComponents extends _QuizScreen {
           if (recentKeys.isNotEmpty) const SizedBox(height: 10),
           if (series.isEmpty)
             Text(
-              'Play puzzles in this mode to build your accuracy trend.',
+              'Play sessions in this mode to build your accuracy trend.',
               style: TextStyle(
                 color: scheme.onSurface.withValues(alpha: 0.62),
                 fontSize: 11.5,

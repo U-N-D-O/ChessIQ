@@ -27,16 +27,20 @@ part 'package:chessiq/features/academy/widgets/puzzle_map_components.dart';
 
 enum _LeaderboardScope { international, national }
 
+enum _AcademyEntryView { hub, exams }
+
 class PuzzleMapScreen extends StatefulWidget {
   const PuzzleMapScreen({
     super.key,
     required this.onBack,
+    required this.onOpenOpeningQuiz,
     this.cinematicThemeEnabled = false,
     this.onShowCredits,
     this.onOpenMainStore,
   });
 
   final VoidCallback onBack;
+  final VoidCallback onOpenOpeningQuiz;
   final VoidCallback? onShowCredits;
   final VoidCallback? onOpenMainStore;
   final bool cinematicThemeEnabled;
@@ -71,6 +75,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   final Set<String> _expandedSemesterTitles = <String>{};
   bool _expandedSemesterInitialized = false;
+  _AcademyEntryView _activeView = _AcademyEntryView.hub;
 
   @override
   void initState() {
@@ -925,6 +930,25 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     }
   }
 
+  void _openAcademyExams() {
+    if (_activeView == _AcademyEntryView.exams) {
+      return;
+    }
+    setState(() {
+      _activeView = _AcademyEntryView.exams;
+    });
+  }
+
+  void _handleAcademyBack() {
+    if (_activeView == _AcademyEntryView.exams) {
+      setState(() {
+        _activeView = _AcademyEntryView.hub;
+      });
+      return;
+    }
+    widget.onBack();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -947,11 +971,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             builder: (context, orientation) {
               return LayoutBuilder(
                 builder: (context, constraints) {
-                  final wide = constraints.maxWidth >= 980;
-                  final aspectRatio =
-                      constraints.maxWidth / max(1.0, constraints.maxHeight);
-                  final useDualPaneLayout = wide || aspectRatio >= 1.0;
-                  final grouped = _groupBySemester(provider);
                   final leadTone = monochrome
                       ? const Color(0xFF808080)
                       : scheme.primary;
@@ -961,40 +980,16 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   final rootContent = Stack(
                     children: [
                       Positioned.fill(child: _buildAtmosphere(monochrome)),
-                      if (useDualPaneLayout)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Flexible(
-                              flex: 3,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: min(
-                                    360,
-                                    constraints.maxWidth * 0.34,
-                                  ),
-                                ),
-                                child: _buildMasteryDashboard(
-                                  provider,
-                                  monochrome: monochrome,
-                                ),
-                              ),
-                            ),
-                            Flexible(
-                              flex: 7,
-                              child: _buildLandscapeMap(
-                                provider,
-                                grouped,
-                                themeProvider: themeProvider,
-                                monochrome: monochrome,
-                              ),
-                            ),
-                          ],
+                      if (_activeView == _AcademyEntryView.hub)
+                        _buildAcademyHub(
+                          constraints: constraints,
+                          themeProvider: themeProvider,
+                          monochrome: monochrome,
                         )
                       else
-                        _buildPortraitMap(
+                        _buildAcademyExamsView(
                           provider,
-                          grouped,
+                          constraints: constraints,
                           themeProvider: themeProvider,
                           monochrome: monochrome,
                         ),
@@ -1048,6 +1043,406 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           );
         },
       ),
+    );
+  }
+
+  Widget _buildAcademyHub({
+    required BoxConstraints constraints,
+    required AppThemeProvider themeProvider,
+    required bool monochrome,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final media = MediaQuery.of(context);
+    final sideBySide = constraints.maxWidth >= 920;
+    final maxContentWidth = sideBySide ? 1180.0 : 760.0;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        max(24, 20 + media.padding.bottom),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: maxContentWidth,
+            minHeight: max(0.0, constraints.maxHeight - 36),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _handleAcademyBack,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    tooltip: 'Back to menu',
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: 'Settings',
+                    onPressed: () => _openQuickThemeSettings(themeProvider),
+                    icon: const Icon(Icons.settings_outlined),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: _openStore,
+                    icon: const Icon(Icons.storefront_outlined),
+                    tooltip: 'Academy store',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: widget.onShowCredits,
+                child: Image.asset(
+                  'assets/ChessIQ.png',
+                  width: 150,
+                  height: 42,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(height: 18),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Choose your academy track',
+                      style: TextStyle(
+                        fontSize: sideBySide ? 34 : 30,
+                        fontWeight: FontWeight.w800,
+                        height: 1.05,
+                        letterSpacing: monochrome ? 0.22 : 0,
+                        color: scheme.onSurface,
+                        shadows: _academyMonoTextGlow(
+                          monochrome
+                              ? const Color(0xFFE5E8ED)
+                              : const Color(0xFF6FE7FF),
+                          monochrome: monochrome,
+                          strength: 1.0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Stay on the semester ladder with Puzzle Academy Exams, or switch to Opening Quiz for fast opening recognition and line recall drills.',
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.45,
+                        color: scheme.onSurface.withValues(alpha: 0.74),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              if (sideBySide)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildAcademyHubCard(
+                        title: 'Puzzle Academy Exams',
+                        description:
+                            'Resume the semester map, daily challenge, leaderboard climb, and bracket exams.',
+                        ctaLabel: 'Enter Exams',
+                        imageAsset: 'assets/academy/exam.png',
+                        accent: monochrome
+                            ? const Color(0xFFE2E6EC)
+                            : const Color(0xFF6FE7FF),
+                        shadowColor: monochrome
+                            ? const Color(0xFF9FA7B3)
+                            : const Color(0xFF137A9A),
+                        icon: Icons.auto_stories_outlined,
+                        monochrome: monochrome,
+                        isDark: isDark,
+                        onTap: _openAcademyExams,
+                      ),
+                    ),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: _buildAcademyHubCard(
+                        title: 'Opening Quiz',
+                        description:
+                            'Train opening names and line recognition with the existing quiz flow, now routed through academy.',
+                        ctaLabel: 'Start Quiz',
+                        imageAsset: 'assets/academy/quiz.png',
+                        accent: monochrome
+                            ? const Color(0xFFF0E9DC)
+                            : const Color(0xFFD8B640),
+                        shadowColor: monochrome
+                            ? const Color(0xFFB4AB9B)
+                            : const Color(0xFF8A6714),
+                        icon: Icons.extension_outlined,
+                        monochrome: monochrome,
+                        isDark: isDark,
+                        onTap: widget.onOpenOpeningQuiz,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  children: [
+                    _buildAcademyHubCard(
+                      title: 'Puzzle Academy Exams',
+                      description:
+                          'Resume the semester map, daily challenge, leaderboard climb, and bracket exams.',
+                      ctaLabel: 'Enter Exams',
+                      imageAsset: 'assets/academy/exam.png',
+                      accent: monochrome
+                          ? const Color(0xFFE2E6EC)
+                          : const Color(0xFF6FE7FF),
+                      shadowColor: monochrome
+                          ? const Color(0xFF9FA7B3)
+                          : const Color(0xFF137A9A),
+                      icon: Icons.auto_stories_outlined,
+                      monochrome: monochrome,
+                      isDark: isDark,
+                      onTap: _openAcademyExams,
+                    ),
+                    const SizedBox(height: 18),
+                    _buildAcademyHubCard(
+                      title: 'Opening Quiz',
+                      description:
+                          'Train opening names and line recognition with the existing quiz flow, now routed through academy.',
+                      ctaLabel: 'Start Quiz',
+                      imageAsset: 'assets/academy/quiz.png',
+                      accent: monochrome
+                          ? const Color(0xFFF0E9DC)
+                          : const Color(0xFFD8B640),
+                      shadowColor: monochrome
+                          ? const Color(0xFFB4AB9B)
+                          : const Color(0xFF8A6714),
+                      icon: Icons.extension_outlined,
+                      monochrome: monochrome,
+                      isDark: isDark,
+                      onTap: widget.onOpenOpeningQuiz,
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAcademyHubCard({
+    required String title,
+    required String description,
+    required String ctaLabel,
+    required String imageAsset,
+    required Color accent,
+    required Color shadowColor,
+    required IconData icon,
+    required bool monochrome,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    final buttonForeground = monochrome
+        ? const Color(0xFF14171A)
+        : (accent.computeLuminance() > 0.55
+              ? const Color(0xFF071114)
+              : Colors.white);
+
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: accent.withValues(alpha: 0.55)),
+              boxShadow: [
+                BoxShadow(
+                  color: shadowColor.withValues(alpha: isDark ? 0.24 : 0.20),
+                  blurRadius: 34,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 18),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(imageAsset, fit: BoxFit.cover),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.black.withValues(
+                            alpha: monochrome ? 0.18 : 0.08,
+                          ),
+                          Colors.black.withValues(
+                            alpha: monochrome ? 0.34 : 0.18,
+                          ),
+                          Colors.black.withValues(
+                            alpha: monochrome ? 0.76 : 0.68,
+                          ),
+                        ],
+                        stops: const [0.0, 0.44, 1.0],
+                      ),
+                    ),
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(-0.7, -0.8),
+                        radius: 1.15,
+                        colors: [
+                          accent.withValues(alpha: monochrome ? 0.16 : 0.24),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.34),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: accent.withValues(alpha: 0.46),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 15, color: accent),
+                              const SizedBox(width: 7),
+                              Text(
+                                'Academy Route',
+                                style: TextStyle(
+                                  color: accent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            height: 1.0,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: Text(
+                            description,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.86),
+                              fontSize: 14,
+                              height: 1.45,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: onTap,
+                          icon: Icon(icon),
+                          label: Text(ctaLabel),
+                          style: _academyFilledButtonStyle(
+                            backgroundColor: accent,
+                            foregroundColor: buttonForeground,
+                            monochrome: monochrome,
+                            side: BorderSide(
+                              color: accent.withValues(alpha: 0.68),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 14,
+                            ),
+                            radius: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAcademyExamsView(
+    PuzzleAcademyProvider provider, {
+    required BoxConstraints constraints,
+    required AppThemeProvider themeProvider,
+    required bool monochrome,
+  }) {
+    final wide = constraints.maxWidth >= 980;
+    final aspectRatio = constraints.maxWidth / max(1.0, constraints.maxHeight);
+    final useDualPaneLayout = wide || aspectRatio >= 1.0;
+    final grouped = _groupBySemester(provider);
+
+    if (useDualPaneLayout) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Flexible(
+            flex: 3,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: min(360, constraints.maxWidth * 0.34),
+              ),
+              child: _buildMasteryDashboard(provider, monochrome: monochrome),
+            ),
+          ),
+          Flexible(
+            flex: 7,
+            child: _buildLandscapeMap(
+              provider,
+              grouped,
+              themeProvider: themeProvider,
+              monochrome: monochrome,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return _buildPortraitMap(
+      provider,
+      grouped,
+      themeProvider: themeProvider,
+      monochrome: monochrome,
     );
   }
 
@@ -1436,7 +1831,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         scheme.surface,
       ).withValues(alpha: 0.90),
       leading: IconButton(
-        onPressed: widget.onBack,
+        onPressed: _handleAcademyBack,
         icon: const Icon(Icons.arrow_back_rounded),
       ),
       actions: [
@@ -1525,7 +1920,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           Row(
             children: [
               IconButton(
-                onPressed: widget.onBack,
+                onPressed: _handleAcademyBack,
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const SizedBox(width: 6),

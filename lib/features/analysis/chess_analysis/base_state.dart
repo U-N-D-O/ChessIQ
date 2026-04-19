@@ -123,6 +123,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   final List<MoveRecord> _moveHistory = [];
   int _historyIndex = -1;
   late ScrollController _historyScrollController;
+  late ScrollController _quizStudyLibraryScrollController;
   final Map<String, String> _ecoOpenings = {};
   final List<EcoLine> _ecoLines = [];
   int _quizEligibleCount = 0;
@@ -130,7 +131,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       <String, List<EcoLine>>{};
   final Map<String, Set<String>> _quizEligibleNameCache =
       <String, Set<String>>{};
+  final Map<String, List<EcoLine>> _quizStudyPoolCache =
+      <String, List<EcoLine>>{};
   bool _quizPoolsPrecomputed = false;
+  Map<String, dynamic>? _precomputedQuizPoolData;
+  bool _ecoOpeningsLoading = false;
+  bool _ecoOpeningsLoaded = false;
   String _currentOpening = '';
   final List<String> _logs = [];
   OpeningMode _openingMode = OpeningMode.off;
@@ -191,6 +197,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _launchTargetsEvalBar = false;
   GameOutcome? _gameOutcome;
   bool _gameResultDialogVisible = false;
+  bool _quizLaunchedFromAcademy = false;
 
   AppSection _activeSection = AppSection.menu;
   GambitQuizMode _quizMode = GambitQuizMode.guessName;
@@ -227,7 +234,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   List<EngineLine> _quizPreviewContinuation = <EngineLine>[];
   final List<_QuizRoundReview> _quizReviewHistory = <_QuizRoundReview>[];
   int? _quizReviewIndex;
-  QuizDifficulty _quizDifficulty = QuizDifficulty.medium;
+  QuizDifficulty _quizDifficulty = QuizDifficulty.easy;
+  QuizAcademyProgress _quizAcademyProgress = QuizAcademyProgress.initial();
+  bool _quizStudyMode = false;
+  QuizStudyCategory _quizStudyCategory = QuizStudyCategory.basic;
+  String _quizStudySearchQuery = '';
+  bool _quizStudyDetailOpen = false;
+  String? _quizStudySelectedOpeningName;
+  String? _quizStudyExpandedFamily;
+  Map<String, int> _quizStudyOpeningCounts = <String, int>{};
+  bool _quizCurriculumExpanded = false;
   int _quizStreak = 0;
   int _quizBestStreak = 0;
   int _quizTotalAnswered = 0;
@@ -274,7 +290,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _resetQuizToSetupState();
 
-  void _openGambitQuizFromMenu();
+  void _openGambitQuizFromAcademy();
 
   Widget _buildMoveSequenceText(
     String notation, {
@@ -448,6 +464,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       duration: const Duration(milliseconds: 500),
     );
     _historyScrollController = ScrollController();
+    _quizStudyLibraryScrollController = ScrollController();
     _resetBoard(withIntro: false);
     _loadEcoOpenings();
     _restoreSnapshotAndStart();
@@ -1780,11 +1797,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'openings/ecoE.json',
     ];
 
+    _ecoOpeningsLoading = true;
+    _ecoOpeningsLoaded = false;
     _ecoLines.clear();
     _ecoOpenings.clear();
     _quizEligiblePoolCache.clear();
     _quizEligibleNameCache.clear();
+    _quizStudyPoolCache.clear();
     _quizPoolsPrecomputed = false;
+    _precomputedQuizPoolData = null;
 
     for (final path in fileNames) {
       try {
@@ -1835,9 +1856,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         debugPrint('Error loading ECO file $path: $e');
       }
     }
+
+    try {
+      final poolContent = await rootBundle.loadString(
+        'openings/quiz_pools.json',
+      );
+      final decodedPools = jsonDecode(poolContent);
+      if (decodedPools is Map<String, dynamic>) {
+        _precomputedQuizPoolData = decodedPools;
+      } else {
+        _addLog('Precomputed quiz pools asset had invalid format');
+      }
+    } catch (e) {
+      debugPrint('Error loading precomputed quiz pools: $e');
+    }
+
+    _ecoOpeningsLoading = false;
     _addLog('Loaded ECO openings: ${_ecoOpenings.length} entries');
 
     _precomputeQuizEligiblePools();
+    _ecoOpeningsLoaded = true;
 
     final eligible = _quizEligiblePool(
       mode: _quizMode,
@@ -2899,6 +2937,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _vsBotSessionLosses = 0;
       _vsBotSessionDraws = 0;
       _gameOutcome = null;
+      _quizLaunchedFromAcademy = false;
       _activeSection = AppSection.puzzleAcademy;
     });
   }
@@ -2939,6 +2978,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _goToMenu() {
     if (!mounted) return;
     if (_activeSection == AppSection.gambitQuiz) {
+      final returnToAcademy = _quizLaunchedFromAcademy;
       setState(() {
         _playVsBot = false;
         _selectedBot = null;
@@ -2948,9 +2988,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionDraws = 0;
         _gameOutcome = null;
         _resetQuizToSetupState();
-        _activeSection = AppSection.menu;
+        _quizLaunchedFromAcademy = false;
+        _activeSection = returnToAcademy
+            ? AppSection.puzzleAcademy
+            : AppSection.menu;
       });
-      unawaited(_playMenuMusic());
+      if (!returnToAcademy) {
+        unawaited(_playMenuMusic());
+      }
       return;
     }
 
@@ -2964,6 +3009,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionDraws = 0;
         _gameOutcome = null;
         _clearBotGhostArrows();
+        _quizLaunchedFromAcademy = false;
         _activeSection = AppSection.menu;
       });
       return;
@@ -2978,6 +3024,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionLosses = 0;
         _vsBotSessionDraws = 0;
         _gameOutcome = null;
+        _quizLaunchedFromAcademy = false;
         _activeSection = AppSection.menu;
       });
       return;
@@ -3010,6 +3057,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionLosses = 0;
         _vsBotSessionDraws = 0;
         _gameOutcome = null;
+        _quizLaunchedFromAcademy = false;
         _activeSection = AppSection.menu;
       });
       unawaited(_playMenuMusic());
@@ -3038,6 +3086,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _introCompleted = true;
         _buttonUnlocked = true;
         _menuMusicPlaying = false;
+        _quizLaunchedFromAcademy = false;
       });
 
       _menuExitAnimationController.reset();
@@ -3083,6 +3132,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     : _activeSection == AppSection.puzzleAcademy
                     ? PuzzleMapScreen(
                         onBack: _goToMenu,
+                        onOpenOpeningQuiz: _openGambitQuizFromAcademy,
                         cinematicThemeEnabled: _isCinematicThemeEnabled,
                         onShowCredits: _showCreditsDialog,
                         onOpenMainStore: () =>
@@ -4703,7 +4753,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildStartMenu() {
-    const coreBlue = Color(0xFF2A6CF0);
     const coreGold = Color(0xFFD8B640);
     const fusionGreen = Color(0xFF7EDC8A);
     final media = MediaQuery.of(context);
@@ -4932,16 +4981,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             : coreGold,
                                         onTap: () =>
                                             unawaited(_enterAnalysisBoard()),
-                                      ),
-                                      _menuGlyphButton(
-                                        label: 'OPENING LAB',
-                                        icon: Icons.extension_outlined,
-                                        accent: isMono
-                                            ? scheme.onSurface.withValues(
-                                                alpha: 0.78,
-                                              )
-                                            : coreBlue,
-                                        onTap: _openGambitQuizFromMenu,
                                       ),
                                       _menuGlyphButton(
                                         label: 'PUZZLE ACADEMY',
@@ -10685,6 +10724,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _openingButtonFlashController.dispose();
     _storeCoinGainController.dispose();
     _botSetupPageController.dispose();
+    _historyScrollController.dispose();
+    _quizStudyLibraryScrollController.dispose();
     _introAudioPlayer.dispose();
     _menuAudioPlayer.dispose();
     _sfxAudioPlayer.dispose();

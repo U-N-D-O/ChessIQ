@@ -1,5 +1,24 @@
 ﻿part of '../../analysis/screens/chess_analysis_page.dart';
 
+class _QuizStudyFamilyGroup {
+  final String familyName;
+  final List<EcoLine> lines;
+
+  const _QuizStudyFamilyGroup({required this.familyName, required this.lines});
+}
+
+class _QuizStudyPreview {
+  final Map<String, String> boardState;
+  final bool whiteToMove;
+  final int totalPly;
+
+  const _QuizStudyPreview({
+    required this.boardState,
+    required this.whiteToMove,
+    required this.totalPly,
+  });
+}
+
 abstract class _QuizScreen extends _AnalysisPageShared {
   @override
   void _loadQuizPrefs(SharedPreferences prefs) {
@@ -23,6 +42,20 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         difficultyIndex >= 0 &&
         difficultyIndex < QuizDifficulty.values.length) {
       _quizDifficulty = QuizDifficulty.values[difficultyIndex];
+    }
+
+    final studyCategoryIndex = decoded['studyCategory'];
+    if (studyCategoryIndex is int &&
+        studyCategoryIndex >= 0 &&
+        studyCategoryIndex < QuizStudyCategory.values.length) {
+      _quizStudyCategory = QuizStudyCategory.values[studyCategoryIndex];
+    }
+
+    final studyCounts = decoded['studyCounts'];
+    if (studyCounts is Map) {
+      _quizStudyOpeningCounts = studyCounts.map(
+        (k, v) => MapEntry(k.toString(), v is num ? max(0, v.toInt()) : 0),
+      )..removeWhere((_, value) => value <= 0);
     }
 
     final streak = decoded['streak'];
@@ -110,13 +143,19 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     loadDiffMap('hardDailyCorrect', (m) => _quizHardDailyCorrect = m);
     loadDiffMap('veryHardDailyAttempts', (m) => _quizVeryHardDailyAttempts = m);
     loadDiffMap('veryHardDailyCorrect', (m) => _quizVeryHardDailyCorrect = m);
+
+    final academyProgress = decoded['academyProgress'];
+    if (academyProgress is Map) {
+      _quizAcademyProgress = QuizAcademyProgress.fromMap(academyProgress);
+    } else {
+      _quizAcademyProgress = QuizAcademyProgress.initial();
+    }
+
+    _syncQuizDifficultyToAcademyProgress();
   }
 
-  /// Returns an approximate popularity score [0.0 – 1.0] for an opening by
-  /// name, based on known over-the-board frequency (Lichess / Chess.com data).
   double _openingPopularityScore(String name) {
     final lower = name.toLowerCase();
-    // Tier 1 – Top ~15%: universally played, household names
     if (_anyKeyword(lower, const [
       'sicilian',
       'ruy lopez',
@@ -142,7 +181,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     ])) {
       return 0.92;
     }
-    // Tier 2 – ~15-35%: popular but not universal
     if (_anyKeyword(lower, const [
       'slav',
       'dutch',
@@ -173,7 +211,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     ])) {
       return 0.70;
     }
-    // Tier 3 – ~35-50%: moderate / club-level
     if (_anyKeyword(lower, const [
       'alekhine',
       'benoni',
@@ -199,7 +236,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     ])) {
       return 0.50;
     }
-    // Tier 4 – bottom ~50%: rare / exotic lines
     return 0.25;
   }
 
@@ -217,12 +253,193 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       case QuizDifficulty.easy:
         return score >= 0.86;
       case QuizDifficulty.medium:
-        return score >= 0.65;
+        return score >= 0.65 && score < 0.86;
       case QuizDifficulty.hard:
-        return score >= 0.45 && score < 0.86;
+        return score >= 0.45 && score < 0.65;
       case QuizDifficulty.veryHard:
         return score < 0.45;
     }
+  }
+
+  QuizStudyCategory _quizStudyCategoryForDifficulty(QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return QuizStudyCategory.basic;
+      case QuizDifficulty.medium:
+        return QuizStudyCategory.advanced;
+      case QuizDifficulty.hard:
+        return QuizStudyCategory.master;
+      case QuizDifficulty.veryHard:
+        return QuizStudyCategory.grandmaster;
+    }
+  }
+
+  String _quizStudyPoolKey(QuizStudyCategory category) {
+    return 'study:${category.name}';
+  }
+
+  String _quizStudyCategoryLabel(QuizStudyCategory category) {
+    switch (category) {
+      case QuizStudyCategory.basic:
+        return 'Basic';
+      case QuizStudyCategory.advanced:
+        return 'Advanced';
+      case QuizStudyCategory.master:
+        return 'Master';
+      case QuizStudyCategory.grandmaster:
+        return 'Grandmaster';
+      case QuizStudyCategory.library:
+        return 'Library';
+    }
+  }
+
+  String _quizStudyCategorySubtitle(QuizStudyCategory category) {
+    switch (category) {
+      case QuizStudyCategory.basic:
+        return 'Easy quiz shelf';
+      case QuizStudyCategory.advanced:
+        return 'Medium quiz shelf';
+      case QuizStudyCategory.master:
+        return 'Hard quiz shelf';
+      case QuizStudyCategory.grandmaster:
+        return 'Very hard quiz shelf';
+      case QuizStudyCategory.library:
+        return 'Full replayable catalog';
+    }
+  }
+
+  Color _quizStudyCategoryColor(QuizStudyCategory category) {
+    switch (category) {
+      case QuizStudyCategory.basic:
+        return _quizDifficultyColor(QuizDifficulty.easy);
+      case QuizStudyCategory.advanced:
+        return _quizDifficultyColor(QuizDifficulty.medium);
+      case QuizStudyCategory.master:
+        return _quizDifficultyColor(QuizDifficulty.hard);
+      case QuizStudyCategory.grandmaster:
+        return _quizDifficultyColor(QuizDifficulty.veryHard);
+      case QuizStudyCategory.library:
+        return const Color(0xFF5AAEE8);
+    }
+  }
+
+  IconData _quizStudyCategoryIcon(QuizStudyCategory category) {
+    switch (category) {
+      case QuizStudyCategory.basic:
+        return Icons.school_outlined;
+      case QuizStudyCategory.advanced:
+        return Icons.auto_stories_outlined;
+      case QuizStudyCategory.master:
+        return Icons.workspace_premium_outlined;
+      case QuizStudyCategory.grandmaster:
+        return Icons.psychology_alt_outlined;
+      case QuizStudyCategory.library:
+        return Icons.library_books_outlined;
+    }
+  }
+
+  String _quizStudyFamilyName(String name) {
+    final cleaned = name.trim();
+    if (cleaned.isEmpty) {
+      return 'Unnamed Opening';
+    }
+
+    var family = cleaned;
+    for (final delimiter in const [':', ',', ';', '(']) {
+      final delimiterIndex = family.indexOf(delimiter);
+      if (delimiterIndex > 0) {
+        family = family.substring(0, delimiterIndex).trim();
+      }
+    }
+
+    final tokens = family
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+    if (tokens.isEmpty) {
+      return cleaned;
+    }
+
+    const familyTerms = <String>{
+      'gambit',
+      'defense',
+      'defence',
+      'opening',
+      'game',
+      'attack',
+      'system',
+      'countergambit',
+      'counter-gambit',
+    };
+
+    var familyEndIndex = -1;
+    for (var index = 0; index < tokens.length; index++) {
+      final normalizedToken = tokens[index].toLowerCase().replaceAll(
+        RegExp(r'[^a-z\-]'),
+        '',
+      );
+      if (familyTerms.contains(normalizedToken)) {
+        familyEndIndex = index;
+      }
+    }
+
+    if (familyEndIndex >= 0) {
+      return tokens.take(familyEndIndex + 1).join(' ');
+    }
+
+    return family;
+  }
+
+  String _quizStudyVariationLabel(EcoLine line, String familyName) {
+    if (line.name == familyName) {
+      return 'Main line';
+    }
+
+    for (final prefix in <String>[
+      '$familyName: ',
+      '$familyName, ',
+      '$familyName - ',
+      '$familyName ',
+    ]) {
+      if (line.name.startsWith(prefix)) {
+        final remainder = line.name.substring(prefix.length).trim();
+        if (remainder.isNotEmpty) {
+          return remainder;
+        }
+      }
+    }
+
+    return line.name;
+  }
+
+  List<EcoLine> _dedupeQuizStudyLinesByName(Iterable<EcoLine> lines) {
+    final uniqueByName = <String, EcoLine>{};
+    for (final line in lines) {
+      uniqueByName.putIfAbsent(line.name, () => line);
+    }
+
+    final sorted = uniqueByName.values.toList()
+      ..sort((a, b) {
+        final familyCompare = _quizStudyFamilyName(
+          a.name,
+        ).toLowerCase().compareTo(_quizStudyFamilyName(b.name).toLowerCase());
+        if (familyCompare != 0) {
+          return familyCompare;
+        }
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+    return List<EcoLine>.unmodifiable(sorted);
+  }
+
+  List<EcoLine> _quizStudyPool(QuizStudyCategory category) {
+    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+      return const <EcoLine>[];
+    }
+    if (!_quizPoolsPrecomputed) {
+      _precomputeQuizEligiblePools();
+    }
+    return _quizStudyPoolCache[_quizStudyPoolKey(category)] ??
+        const <EcoLine>[];
   }
 
   String _quizPoolKey(GambitQuizMode mode, QuizDifficulty difficulty) {
@@ -275,8 +492,101 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     return key != null && key.isNotEmpty;
   }
 
+  bool _hydratePrecomputedQuizPools() {
+    final data = _precomputedQuizPoolData;
+    if (data == null) {
+      return false;
+    }
+
+    final rawLines = data['lines'];
+    final rawPools = data['pools'];
+    if (rawLines is! List || rawPools is! Map) {
+      return false;
+    }
+
+    final indexedLines = <EcoLine>[];
+    for (final rawLine in rawLines) {
+      if (rawLine is! Map) {
+        return false;
+      }
+      final name = rawLine['n']?.toString() ?? '';
+      final normalizedMoves = rawLine['m']?.toString() ?? '';
+      final isGambit = rawLine['g'] == true;
+      if (name.isEmpty || normalizedMoves.isEmpty) {
+        return false;
+      }
+
+      final moveTokens = normalizedMoves
+          .split(' ')
+          .where((token) => token.isNotEmpty)
+          .toList(growable: false);
+      if (moveTokens.isEmpty) {
+        return false;
+      }
+
+      indexedLines.add(
+        EcoLine(
+          name: name,
+          normalizedMoves: normalizedMoves,
+          moveTokens: moveTokens,
+          isGambit: isGambit,
+        ),
+      );
+    }
+
+    _quizEligiblePoolCache.clear();
+    _quizEligibleNameCache.clear();
+    _quizStudyPoolCache.clear();
+
+    for (final entry in rawPools.entries) {
+      final poolKey = entry.key.toString();
+      final rawIndexes = entry.value;
+      if (rawIndexes is! List) {
+        return false;
+      }
+
+      final pool = <EcoLine>[];
+      for (final rawIndex in rawIndexes) {
+        final lineIndex = rawIndex is int
+            ? rawIndex
+            : rawIndex is num
+            ? rawIndex.toInt()
+            : -1;
+        if (lineIndex < 0 || lineIndex >= indexedLines.length) {
+          return false;
+        }
+        pool.add(indexedLines[lineIndex]);
+      }
+
+      final immutablePool = List<EcoLine>.unmodifiable(pool);
+      if (poolKey.startsWith('study:')) {
+        _quizStudyPoolCache[poolKey] = immutablePool;
+      } else {
+        _quizEligiblePoolCache[poolKey] = immutablePool;
+        _quizEligibleNameCache[poolKey] = immutablePool
+            .map((line) => line.name)
+            .toSet();
+      }
+    }
+
+    _quizPoolsPrecomputed = true;
+    return true;
+  }
+
   @override
   void _precomputeQuizEligiblePools() {
+    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+      _quizEligiblePoolCache.clear();
+      _quizEligibleNameCache.clear();
+      _quizStudyPoolCache.clear();
+      _quizPoolsPrecomputed = false;
+      return;
+    }
+
+    if (_hydratePrecomputedQuizPools()) {
+      return;
+    }
+
     final allUniqueByName = <String, EcoLine>{};
     for (final line in _ecoLines) {
       allUniqueByName.putIfAbsent(line.name, () => line);
@@ -305,6 +615,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
 
     _quizEligiblePoolCache.clear();
     _quizEligibleNameCache.clear();
+    _quizStudyPoolCache.clear();
 
     for (final difficulty in QuizDifficulty.values) {
       final ranged = noAnnotationReplayable
@@ -354,7 +665,14 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizEligibleNameCache[guessLineKey] = guessLinePool
           .map((line) => line.name)
           .toSet();
+
+      final studyCategory = _quizStudyCategoryForDifficulty(difficulty);
+      _quizStudyPoolCache[_quizStudyPoolKey(studyCategory)] =
+          _dedupeQuizStudyLinesByName([...guessNamePool, ...guessLinePool]);
     }
+
+    _quizStudyPoolCache[_quizStudyPoolKey(QuizStudyCategory.library)] =
+        _dedupeQuizStudyLinesByName(noAnnotationReplayable);
 
     _quizPoolsPrecomputed = true;
   }
@@ -364,6 +682,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required GambitQuizMode mode,
     required QuizDifficulty difficulty,
   }) {
+    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+      return const <EcoLine>[];
+    }
     if (!_quizPoolsPrecomputed) {
       _precomputeQuizEligiblePools();
     }
@@ -372,6 +693,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   int _currentViewedEligibleCount() {
+    if (_ecoOpeningsLoading || _ecoLines.isEmpty) {
+      return 0;
+    }
     if (!_quizPoolsPrecomputed) {
       _precomputeQuizEligiblePools();
     }
@@ -393,11 +717,13 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final prefs = await SharedPreferences.getInstance();
     final payload = {
       'difficulty': _quizDifficulty.index,
+      'studyCategory': _quizStudyCategory.index,
       'streak': _quizStreak,
       'bestStreak': _quizBestStreak,
       'totalAnswered': _quizTotalAnswered,
       'correctAnswers': _quizCorrectAnswers,
       'score': _quizScore,
+      'studyCounts': _quizStudyOpeningCounts,
       'dailyScore': _quizDailyScore,
       'dailyAttempts': _quizDailyAttempts,
       'dailyCorrect': _quizDailyCorrectByDay,
@@ -414,12 +740,18 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       'hardDailyCorrect': _quizHardDailyCorrect,
       'veryHardDailyAttempts': _quizVeryHardDailyAttempts,
       'veryHardDailyCorrect': _quizVeryHardDailyCorrect,
+      'academyProgress': _quizAcademyProgress.toMap(),
     };
     await prefs.setString(_quizStatsKey, jsonEncode(payload));
   }
 
   Future<void> _resetQuizStats() async {
     setState(() {
+      _quizStudyCategory = QuizStudyCategory.basic;
+      _quizStudySearchQuery = '';
+      _quizStudySelectedOpeningName = null;
+      _quizStudyExpandedFamily = null;
+      _quizStudyOpeningCounts.clear();
       _quizStreak = 0;
       _quizBestStreak = 0;
       _quizTotalAnswered = 0;
@@ -490,6 +822,133 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       case QuizDifficulty.veryHard:
         return const Color(0xFFD07EFF);
     }
+  }
+
+  String _quizAcademyBracketShortName(QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return 'Foundation';
+      case QuizDifficulty.medium:
+        return 'Seminar';
+      case QuizDifficulty.hard:
+        return 'Tournament';
+      case QuizDifficulty.veryHard:
+        return 'Oracle';
+    }
+  }
+
+  String _quizAcademyBracketTitle(QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return 'Foundation Semester';
+      case QuizDifficulty.medium:
+        return 'Theory Seminar';
+      case QuizDifficulty.hard:
+        return 'Tournament Lab';
+      case QuizDifficulty.veryHard:
+        return 'Oracle Chamber';
+    }
+  }
+
+  String _quizAcademyBracketDescription(QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return 'Recognize household openings, clean starter shells, and the most common practical setups.';
+      case QuizDifficulty.medium:
+        return 'Handle richer mainstream branches, transpositions, and broader theoretical families.';
+      case QuizDifficulty.hard:
+        return 'Survive sharper tournament lines where move-order accuracy and structure memory matter.';
+      case QuizDifficulty.veryHard:
+        return 'Work through obscure theory, rare sidelines, and long-memory recall under pressure.';
+    }
+  }
+
+  String _quizAcademyBracketObjective(QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return 'Build reliable recognition of the opening names players meet most often.';
+      case QuizDifficulty.medium:
+        return 'Extend that recall into deeper mainstream theory and broader move-order awareness.';
+      case QuizDifficulty.hard:
+        return 'Convert recognition into disciplined line recall inside sharper competitive branches.';
+      case QuizDifficulty.veryHard:
+        return 'Finish the academy track with uncommon structures and obscure continuation memory.';
+    }
+  }
+
+  IconData _quizAcademyBracketIcon(QuizDifficulty difficulty) {
+    switch (difficulty) {
+      case QuizDifficulty.easy:
+        return Icons.school_outlined;
+      case QuizDifficulty.medium:
+        return Icons.menu_book_outlined;
+      case QuizDifficulty.hard:
+        return Icons.workspace_premium_outlined;
+      case QuizDifficulty.veryHard:
+        return Icons.auto_awesome_outlined;
+    }
+  }
+
+  bool _quizDifficultyUnlocked(QuizDifficulty difficulty) {
+    return _quizAcademyProgress.isDifficultyUnlocked(difficulty);
+  }
+
+  int _quizPerfectSessionsFor(QuizDifficulty difficulty) {
+    return _quizAcademyProgress.perfectSessionsFor(difficulty);
+  }
+
+  double _quizPerfectSessionRatio(QuizDifficulty difficulty) {
+    final required = _quizAcademyProgress.requiredPerfectSessions;
+    if (required <= 0) {
+      return 1.0;
+    }
+    return min(1.0, _quizPerfectSessionsFor(difficulty) / required);
+  }
+
+  void _syncQuizDifficultyToAcademyProgress() {
+    if (_quizDifficultyUnlocked(_quizDifficulty)) {
+      return;
+    }
+    _quizDifficulty = _quizAcademyProgress.highestUnlockedDifficulty();
+  }
+
+  String _quizAcademyMissionTitle() {
+    if (_quizAcademyProgress.isTrackComplete) {
+      return 'Oracle route complete';
+    }
+
+    final nextDifficulty = _quizAcademyProgress.nextDifficulty(_quizDifficulty);
+    if (_quizAcademyProgress.isDifficultyCompleted(_quizDifficulty) &&
+        nextDifficulty != null) {
+      return '${_quizAcademyBracketShortName(nextDifficulty)} unlocked';
+    }
+
+    return 'Promotion requires perfection';
+  }
+
+  String _quizAcademyMissionBody() {
+    if (_quizAcademyProgress.isTrackComplete) {
+      return 'Every bracket is certified. Keep training any tier to sharpen recognition speed and long-line recall.';
+    }
+
+    final selectedDifficulty = _quizDifficulty;
+    final nextDifficulty = _quizAcademyProgress.nextDifficulty(
+      selectedDifficulty,
+    );
+    final remaining = _quizAcademyProgress.remainingPerfectSessionsFor(
+      selectedDifficulty,
+    );
+
+    if (_quizAcademyProgress.isDifficultyCompleted(selectedDifficulty) &&
+        nextDifficulty != null) {
+      return '${_quizAcademyBracketTitle(selectedDifficulty)} is certified. Step into ${_quizAcademyBracketTitle(nextDifficulty)} when you want the next layer of theory.';
+    }
+
+    if (nextDifficulty == null) {
+      return 'Bank $remaining more perfect ${_quizDifficultyLabel(selectedDifficulty).toLowerCase()} session${remaining == 1 ? '' : 's'} to finish the academy track. Every answer in the session must be correct.';
+    }
+
+    return 'Bank $remaining more perfect ${_quizDifficultyLabel(selectedDifficulty).toLowerCase()} session${remaining == 1 ? '' : 's'} to unlock ${_quizAcademyBracketTitle(nextDifficulty)}. Promotion credit only counts when the full session ends at 100% accuracy.';
   }
 
   String _todayKey() {
@@ -898,6 +1357,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   void _setQuizDifficulty(QuizDifficulty difficulty) {
+    if (!_quizDifficultyUnlocked(difficulty)) {
+      unawaited(_showQuizDifficultyLockedDialog(difficulty));
+      return;
+    }
     if (_quizDifficulty == difficulty) return;
     setState(() {
       _quizDifficulty = difficulty;
@@ -909,22 +1372,247 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     unawaited(_saveQuizStats());
   }
 
-  void _setQuizMode(GambitQuizMode mode) {
-    if (_quizMode == mode) return;
+  void _selectQuizAcademyTrack({
+    GambitQuizMode? mode,
+    required bool studyMode,
+  }) {
+    final nextMode = mode ?? _quizMode;
+    final nextEligibleCount = studyMode
+        ? _quizEligibleCount
+        : _quizEligiblePool(mode: nextMode, difficulty: _quizDifficulty).length;
+
     setState(() {
-      _quizMode = mode;
-      _quizEligibleCount = _quizEligiblePool(
-        mode: _quizMode,
-        difficulty: _quizDifficulty,
-      ).length;
+      _quizStudyMode = studyMode;
+      _quizQuestionsTarget = 10;
+      _quizMode = nextMode;
+      _quizEligibleCount = nextEligibleCount;
+      _quizStudyDetailOpen = false;
     });
   }
 
-  void _setQuizQuestionTarget(int target) {
-    if (_quizQuestionsTarget == target) return;
+  int _quizStudyCountFor(String openingName) {
+    return _quizStudyOpeningCounts[openingName] ?? 0;
+  }
+
+  int _quizStudyCategoryTotalCount(QuizStudyCategory category) {
+    return _quizStudyPool(category).length;
+  }
+
+  int _quizStudyCategoryStudiedCount(QuizStudyCategory category) {
+    var studied = 0;
+    for (final line in _quizStudyPool(category)) {
+      if (_quizStudyCountFor(line.name) > 0) {
+        studied += 1;
+      }
+    }
+    return studied;
+  }
+
+  double _quizStudyCategoryCompletion(QuizStudyCategory category) {
+    final total = _quizStudyCategoryTotalCount(category);
+    if (total <= 0) {
+      return 0.0;
+    }
+    return _quizStudyCategoryStudiedCount(category) / total;
+  }
+
+  int _quizStudyCategoryTotalReps(QuizStudyCategory category) {
+    var total = 0;
+    for (final line in _quizStudyPool(category)) {
+      total += _quizStudyCountFor(line.name);
+    }
+    return total;
+  }
+
+  int _quizStudyTotalReps() {
+    return _quizStudyOpeningCounts.values.fold<int>(
+      0,
+      (sum, count) => sum + count,
+    );
+  }
+
+  void _setQuizStudyCategory(QuizStudyCategory category) {
+    if (_quizStudyCategory == category) {
+      return;
+    }
+
+    final nextLines = _quizStudyPool(category);
+    final nextLineNames = nextLines.map((line) => line.name).toSet();
+    final nextFamilies = nextLines
+        .map((line) => _quizStudyFamilyName(line.name))
+        .toSet();
+
     setState(() {
-      _quizQuestionsTarget = target;
+      _quizStudyCategory = category;
+      _quizStudySearchQuery = '';
+      _quizStudyDetailOpen = false;
+
+      if (_quizStudySelectedOpeningName != null &&
+          !nextLineNames.contains(_quizStudySelectedOpeningName)) {
+        _quizStudySelectedOpeningName = null;
+      }
+      if (_quizStudyExpandedFamily != null &&
+          !nextFamilies.contains(_quizStudyExpandedFamily)) {
+        _quizStudyExpandedFamily = null;
+      }
     });
+    unawaited(_saveQuizStats());
+  }
+
+  void _setQuizStudySearchQuery(String value) {
+    if (_quizStudySearchQuery == value) {
+      return;
+    }
+    setState(() {
+      _quizStudySearchQuery = value;
+      if (value.trim().isNotEmpty) {
+        _quizStudyExpandedFamily = null;
+      }
+    });
+  }
+
+  void _toggleQuizStudyFamily(String familyName) {
+    setState(() {
+      _quizStudyExpandedFamily = _quizStudyExpandedFamily == familyName
+          ? null
+          : familyName;
+    });
+  }
+
+  void _closeQuizStudyDetail() {
+    if (!_quizStudyDetailOpen) {
+      return;
+    }
+    setState(() {
+      _quizStudyDetailOpen = false;
+    });
+  }
+
+  void _exitQuizStudyScreen() {
+    if (!_quizStudyMode) {
+      return;
+    }
+    setState(() {
+      _quizStudyMode = false;
+      _quizStudyDetailOpen = false;
+    });
+  }
+
+  void _selectQuizStudyOpening(EcoLine line) {
+    final familyName = _quizStudyFamilyName(line.name);
+    setState(() {
+      _quizStudySelectedOpeningName = line.name;
+      _quizStudyExpandedFamily = familyName;
+      _quizStudyDetailOpen = true;
+      _quizStudyOpeningCounts[line.name] = _quizStudyCountFor(line.name) + 1;
+    });
+    unawaited(_saveQuizStats());
+  }
+
+  List<_QuizStudyFamilyGroup> _quizStudyFamilyGroups(
+    QuizStudyCategory category,
+  ) {
+    final query = _quizStudySearchQuery.trim().toLowerCase();
+    final grouped = <String, List<EcoLine>>{};
+
+    for (final line in _quizStudyPool(category)) {
+      final familyName = _quizStudyFamilyName(line.name);
+      if (query.isNotEmpty) {
+        final haystack = '$familyName ${line.name} ${line.normalizedMoves}'
+            .toLowerCase();
+        if (!haystack.contains(query)) {
+          continue;
+        }
+      }
+      grouped.putIfAbsent(familyName, () => <EcoLine>[]).add(line);
+    }
+
+    final groups = grouped.entries.toList()
+      ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+
+    return groups
+        .map((entry) {
+          entry.value.sort((a, b) {
+            final variationCompare = _quizStudyVariationLabel(a, entry.key)
+                .toLowerCase()
+                .compareTo(
+                  _quizStudyVariationLabel(b, entry.key).toLowerCase(),
+                );
+            if (variationCompare != 0) {
+              return variationCompare;
+            }
+            return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          });
+          return _QuizStudyFamilyGroup(
+            familyName: entry.key,
+            lines: List<EcoLine>.unmodifiable(entry.value),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  EcoLine? _selectedQuizStudyLine() {
+    final selectedName = _quizStudySelectedOpeningName;
+    if (selectedName == null || selectedName.isEmpty) {
+      return null;
+    }
+
+    for (final line in _quizStudyPool(_quizStudyCategory)) {
+      if (line.name == selectedName) {
+        return line;
+      }
+    }
+
+    return null;
+  }
+
+  List<EcoLine> _quizStudyFamilyLines(String familyName) {
+    final lines = _quizStudyPool(
+      _quizStudyCategory,
+    ).where((line) => _quizStudyFamilyName(line.name) == familyName).toList();
+
+    lines.sort((a, b) {
+      final variationCompare = _quizStudyVariationLabel(a, familyName)
+          .toLowerCase()
+          .compareTo(_quizStudyVariationLabel(b, familyName).toLowerCase());
+      if (variationCompare != 0) {
+        return variationCompare;
+      }
+
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+    return List<EcoLine>.unmodifiable(lines);
+  }
+
+  int _quizStudyFamilyStudiedCount(_QuizStudyFamilyGroup group) {
+    var studied = 0;
+    for (final line in group.lines) {
+      if (_quizStudyCountFor(line.name) > 0) {
+        studied += 1;
+      }
+    }
+    return studied;
+  }
+
+  _QuizStudyPreview? _buildQuizStudyPreview(EcoLine line) {
+    var boardState = _initialBoardState();
+    var whiteToMove = true;
+
+    for (final token in line.moveTokens) {
+      final uciMove = _resolveSanToUci(boardState, token, whiteToMove);
+      if (uciMove == null) {
+        return null;
+      }
+      boardState = _applyUciMove(boardState, uciMove);
+      whiteToMove = !whiteToMove;
+    }
+
+    return _QuizStudyPreview(
+      boardState: boardState,
+      whiteToMove: whiteToMove,
+      totalPly: line.moveTokens.length,
+    );
   }
 
   void _appendQuizReviewEntry({
@@ -1015,18 +1703,338 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   @override
-  void _openGambitQuizFromMenu() {
+  void _openGambitQuizFromAcademy() {
     setState(() {
       _playVsBot = false;
       _selectedBot = null;
       _botThinking = false;
+      _quizLaunchedFromAcademy = true;
+      _quizStudyMode = false;
+      _quizStudyDetailOpen = false;
+      _quizCurriculumExpanded = false;
+      _quizQuestionsTarget = 10;
+      _syncQuizDifficultyToAcademyProgress();
       _resetQuizToSetupState();
       _activeSection = AppSection.gambitQuiz;
     });
   }
 
+  Future<void> _showQuizDifficultyLockedDialog(
+    QuizDifficulty difficulty,
+  ) async {
+    final previousDifficulty = QuizDifficulty.values[difficulty.index - 1];
+    final remaining = _quizAcademyProgress.remainingPerfectSessionsFor(
+      previousDifficulty,
+    );
+    final previousLabel = _quizDifficultyLabel(previousDifficulty);
+    final difficultyLabel = _quizDifficultyLabel(difficulty);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$difficultyLabel Locked'),
+        content: Text(
+          remaining <= 0
+              ? '$difficultyLabel is ready, but your current academy bracket needs to refresh. Return to the setup screen and try again.'
+              : 'Complete $remaining more perfect $previousLabel session${remaining == 1 ? '' : 's'} to unlock $difficultyLabel. Promotion credit only counts when the whole session finishes at 100% accuracy.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Understood'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  QuizSessionAcademyOutcome _recordQuizSessionOutcome() {
+    final sessionDifficulty = _quizDifficulty;
+    final accuracy = _quizSessionAnswered <= 0
+        ? 0.0
+        : (_quizSessionCorrect / _quizSessionAnswered) * 100.0;
+    final perfectSession =
+        _quizSessionAnswered > 0 && _quizSessionCorrect == _quizSessionAnswered;
+    final requiredPerfectSessions =
+        _quizAcademyProgress.requiredPerfectSessions;
+    var nextDifficulty = _quizAcademyProgress.nextDifficulty(sessionDifficulty);
+    var earnedProgressCredit = false;
+    var unlockedNextDifficulty = false;
+    var completedTrack = _quizAcademyProgress.isTrackComplete;
+    var completedPerfectSessions = _quizAcademyProgress.perfectSessionsFor(
+      sessionDifficulty,
+    );
+
+    if (perfectSession) {
+      final previousProgress = completedPerfectSessions;
+      final updatedProgress = _quizAcademyProgress.recordPerfectSession(
+        sessionDifficulty,
+      );
+      completedPerfectSessions = updatedProgress.perfectSessionsFor(
+        sessionDifficulty,
+      );
+      earnedProgressCredit = completedPerfectSessions > previousProgress;
+      final difficultyCompletedNow =
+          previousProgress < requiredPerfectSessions &&
+          completedPerfectSessions >= requiredPerfectSessions;
+
+      _quizAcademyProgress = updatedProgress;
+      nextDifficulty = updatedProgress.nextDifficulty(sessionDifficulty);
+      unlockedNextDifficulty = difficultyCompletedNow && nextDifficulty != null;
+      completedTrack = updatedProgress.isTrackComplete;
+
+      if (unlockedNextDifficulty) {
+        _quizDifficulty = nextDifficulty;
+      } else {
+        _syncQuizDifficultyToAcademyProgress();
+      }
+
+      _quizEligibleCount = _quizEligiblePool(
+        mode: _quizMode,
+        difficulty: _quizDifficulty,
+      ).length;
+      unawaited(_saveQuizStats());
+    }
+
+    return QuizSessionAcademyOutcome(
+      sessionDifficulty: sessionDifficulty,
+      activeDifficultyAfterSession: _quizDifficulty,
+      nextDifficulty: nextDifficulty,
+      accuracy: accuracy,
+      perfectSession: perfectSession,
+      earnedProgressCredit: earnedProgressCredit,
+      unlockedNextDifficulty: unlockedNextDifficulty,
+      completedTrack: completedTrack,
+      completedPerfectSessions: completedPerfectSessions,
+      requiredPerfectSessions: requiredPerfectSessions,
+    );
+  }
+
+  Future<void> _showQuizSessionSummaryDialog(
+    QuizSessionAcademyOutcome outcome,
+  ) async {
+    final sessionLabel = _quizDifficultyLabel(outcome.sessionDifficulty);
+    final nextLabel = outcome.nextDifficulty == null
+        ? null
+        : _quizDifficultyLabel(outcome.nextDifficulty!);
+
+    var headline = 'Session Complete';
+    var detail =
+        'Finish at 100% accuracy to bank academy promotion credit for $sessionLabel.';
+
+    if (outcome.completedTrack && outcome.perfectSession) {
+      headline = 'Oracle Certification Complete';
+      detail =
+          'You cleared the final academy bracket. Every Opening Quiz difficulty is now fully certified.';
+    } else if (outcome.unlockedNextDifficulty && nextLabel != null) {
+      headline = '$nextLabel Unlocked';
+      detail =
+          'Your perfect $sessionLabel session completed the bracket. $nextLabel is now available from the academy ladder.';
+    } else if (outcome.perfectSession && outcome.earnedProgressCredit) {
+      headline = 'Perfect Session Banked';
+      detail =
+          'Academy progress recorded for $sessionLabel. Keep chaining flawless sessions to reach the next bracket.';
+    } else if (outcome.perfectSession && !outcome.earnedProgressCredit) {
+      if (nextLabel != null &&
+          _quizAcademyProgress.isDifficultyCompleted(
+            outcome.sessionDifficulty,
+          )) {
+        headline = '$sessionLabel Certified';
+        detail =
+            '$sessionLabel is already complete. Move into $nextLabel to keep advancing through the academy track.';
+      } else {
+        headline = 'Session Complete';
+      }
+    } else if (nextLabel != null) {
+      final remaining = _quizAcademyProgress.remainingPerfectSessionsFor(
+        outcome.sessionDifficulty,
+      );
+      detail =
+          'A promotion credit was not awarded. You still need $remaining perfect $sessionLabel session${remaining == 1 ? '' : 's'} to unlock $nextLabel.';
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final scheme = theme.colorScheme;
+        final accent = _quizDifficultyColor(outcome.sessionDifficulty);
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color.alphaBlend(
+                    accent.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.20 : 0.12,
+                    ),
+                    scheme.surface,
+                  ),
+                  Color.alphaBlend(
+                    scheme.primary.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.16 : 0.06,
+                    ),
+                    scheme.surface,
+                  ),
+                  scheme.surface,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: accent.withValues(alpha: 0.55)),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.20),
+                  blurRadius: 28,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: accent.withValues(alpha: 0.38)),
+                  ),
+                  child: Text(
+                    _quizAcademyBracketTitle(outcome.sessionDifficulty),
+                    style: TextStyle(
+                      color: accent,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  headline,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  detail,
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.78),
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _quizSessionSummaryChip(
+                      label: 'Questions',
+                      value: '$_quizSessionAnswered/$_quizQuestionsTarget',
+                      accent: const Color(0xFF5AAEE8),
+                    ),
+                    _quizSessionSummaryChip(
+                      label: 'Correct',
+                      value: _quizSessionCorrect.toString(),
+                      accent: const Color(0xFF7EDC8A),
+                    ),
+                    _quizSessionSummaryChip(
+                      label: 'Accuracy',
+                      value: '${outcome.accuracy.toStringAsFixed(1)}%',
+                      accent: const Color(0xFFD8B640),
+                    ),
+                    _quizSessionSummaryChip(
+                      label: 'Bracket Credit',
+                      value:
+                          '${outcome.completedPerfectSessions}/${outcome.requiredPerfectSessions}',
+                      accent: accent,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: accent.computeLuminance() > 0.55
+                          ? const Color(0xFF081015)
+                          : Colors.white,
+                    ),
+                    child: Text(
+                      outcome.unlockedNextDifficulty && nextLabel != null
+                          ? 'Train $nextLabel'
+                          : 'Return to Academy',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _quizSessionSummaryChip({
+    required String label,
+    required String value,
+    required Color accent,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.30)),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+          children: [
+            TextSpan(text: '$label: '),
+            TextSpan(
+              text: value,
+              style: TextStyle(color: accent),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _startQuizSession() {
+    if (_quizStudyMode) {
+      return;
+    }
+
     setState(() {
+      _syncQuizDifficultyToAcademyProgress();
+      _quizStudyMode = false;
+      _quizQuestionsTarget = 10;
       _quizSessionStarted = true;
       _quizSessionAnswered = 0;
       _quizSessionCorrect = 0;
@@ -1040,29 +2048,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   Future<void> _finishQuizSession() async {
-    final total = max(1, _quizSessionAnswered);
-    final accuracy = (_quizSessionCorrect / total) * 100.0;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Session Complete'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Questions: $_quizSessionAnswered/$_quizQuestionsTarget'),
-            Text('Correct: $_quizSessionCorrect'),
-            Text('Accuracy: ${accuracy.toStringAsFixed(1)}%'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Done'),
-          ),
-        ],
-      ),
-    );
+    late QuizSessionAcademyOutcome outcome;
+    setState(() {
+      outcome = _recordQuizSessionOutcome();
+    });
+
+    await _showQuizSessionSummaryDialog(outcome);
 
     if (!mounted) return;
     setState(() {
@@ -1598,6 +2589,1345 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     _submitQuizAnswer(_quizSelectedIndex);
   }
 
+  Widget _buildQuizAcademySetupScreen() {
+    if (_quizStudyMode) {
+      return _buildQuizStudyScreen(this);
+    }
+
+    final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final isLandscape = media.orientation == Orientation.landscape;
+    final quizPadding = isLandscape
+        ? EdgeInsets.fromLTRB(
+            16 + media.padding.left,
+            12 + media.padding.top,
+            16 + media.padding.right,
+            16 + media.padding.bottom,
+          )
+        : const EdgeInsets.fromLTRB(16, 12, 16, 16);
+    final lightHeaderColor = isDark ? scheme.onSurface : Colors.black;
+    final backDestination = _quizLaunchedFromAcademy ? 'academy' : 'menu';
+    final currentPoolCount = _quizEligiblePool(
+      mode: _quizMode,
+      difficulty: _quizDifficulty,
+    ).length;
+    final viewedCount = _currentViewedEligibleCount();
+    final eligibleCount = currentPoolCount > 0
+        ? currentPoolCount
+        : _ecoOpenings.length;
+    final currentTierColor = _quizDifficultyColor(_quizDifficulty);
+    final perfectCount = _quizPerfectSessionsFor(_quizDifficulty);
+    final requiredCount = _quizAcademyProgress.requiredPerfectSessions;
+    final canStart = currentPoolCount >= 3;
+    final highestUnlocked = _quizAcademyProgress.highestUnlockedDifficulty();
+
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(
+                  const Color(0xFF6FE7FF).withValues(
+                    alpha: useMonochrome
+                        ? (isDark ? 0.06 : 0.08)
+                        : (isDark ? 0.18 : 0.14),
+                  ),
+                  scheme.surface,
+                ),
+                scheme.surface,
+                Color.alphaBlend(
+                  const Color(0xFFD8B640).withValues(
+                    alpha: useMonochrome
+                        ? (isDark ? 0.06 : 0.08)
+                        : (isDark ? 0.14 : 0.10),
+                  ),
+                  scheme.surface,
+                ),
+              ],
+              stops: const [0.0, 0.55, 1.0],
+            ),
+          ),
+        ),
+        Positioned.fill(child: _buildQuizAcademyAtmosphere(useMonochrome)),
+        IgnorePointer(
+          child: AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              final pulse = _menuDotTime;
+              final alignment = _botSelectorBlueDotAlignment(
+                _blueDotPhase,
+                0.55,
+                _blueDotRadius,
+                pulse,
+                _blueDotTrajectoryNoise,
+                _blueDotShapeSeed,
+                0.0,
+              );
+              return Align(alignment: alignment, child: child);
+            },
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFD8B640).withValues(alpha: 0.92),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF9E761D).withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        ListView(
+          padding: quizPadding,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _goToMenu,
+                  color: lightHeaderColor,
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back to $backDestination',
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Opening Quiz',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                    color: lightHeaderColor,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: _openAppearanceSettings,
+                  color: lightHeaderColor,
+                  icon: const Icon(Icons.palette_outlined),
+                  tooltip: 'Board & Pieces',
+                ),
+                IconButton(
+                  onPressed: _openQuizStatsSheet,
+                  color: lightHeaderColor,
+                  icon: const Icon(Icons.insights_outlined),
+                  tooltip: 'Performance Stats',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildQuizAcademyHeroCard(
+              currentTierColor: currentTierColor,
+              highestUnlocked: highestUnlocked,
+              useMonochrome: useMonochrome,
+            ),
+            const SizedBox(height: 14),
+            _buildQuizAcademyMissionPanel(
+              currentTierColor: currentTierColor,
+              perfectCount: perfectCount,
+              requiredCount: requiredCount,
+              viewedCount: viewedCount,
+              eligibleCount: eligibleCount,
+              highestUnlocked: highestUnlocked,
+            ),
+            const SizedBox(height: 14),
+            _buildQuizAcademyCurriculumPanel(useMonochrome: useMonochrome),
+            const SizedBox(height: 14),
+            _buildQuizAcademyConfigurationPanel(
+              currentPoolCount: currentPoolCount,
+              canStart: canStart,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$viewedCount/$eligibleCount openings viewed',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.58),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                InkResponse(
+                  onTap: _showOpeningsViewedInfoDialog,
+                  radius: 14,
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: scheme.onSurface.withValues(alpha: 0.60),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuizAcademyAtmosphere(bool useMonochrome) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          Align(
+            alignment: const Alignment(-0.86, -0.86),
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    (useMonochrome
+                            ? const Color(0xFFC5CBD3)
+                            : const Color(0xFF6FE7FF))
+                        .withValues(
+                          alpha: useMonochrome
+                              ? (isDark ? 0.06 : 0.10)
+                              : (isDark ? 0.10 : 0.20),
+                        ),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        (useMonochrome
+                                ? const Color(0xFFB0B7C2)
+                                : const Color(0xFF0F809D))
+                            .withValues(
+                              alpha: useMonochrome
+                                  ? (isDark ? 0.14 : 0.18)
+                                  : (isDark ? 0.22 : 0.30),
+                            ),
+                    blurRadius: 120,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Align(
+            alignment: const Alignment(0.92, -0.72),
+            child: Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    (useMonochrome
+                            ? const Color(0xFFD6D0C5)
+                            : const Color(0xFFD8B640))
+                        .withValues(
+                          alpha: useMonochrome
+                              ? (isDark ? 0.05 : 0.09)
+                              : (isDark ? 0.08 : 0.16),
+                        ),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        (useMonochrome
+                                ? const Color(0xFFC4BCAD)
+                                : const Color(0xFF9E761D))
+                            .withValues(
+                              alpha: useMonochrome
+                                  ? (isDark ? 0.12 : 0.16)
+                                  : (isDark ? 0.18 : 0.24),
+                            ),
+                    blurRadius: 110,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Align(
+            alignment: const Alignment(-0.15, 1.08),
+            child: Container(
+              width: 360,
+              height: 220,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color:
+                    (useMonochrome
+                            ? const Color(0xFF9FA9B8)
+                            : const Color(0xFF31497A))
+                        .withValues(alpha: isDark ? 0.08 : 0.06),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        (useMonochrome
+                                ? const Color(0xFFB8C0CB)
+                                : const Color(0xFF4B7BD8))
+                            .withValues(alpha: isDark ? 0.10 : 0.08),
+                    blurRadius: 120,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyHeroCard({
+    required Color currentTierColor,
+    required QuizDifficulty highestUnlocked,
+    required bool useMonochrome,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final selectedRouteAccent = _quizStudyMode
+        ? const Color(0xFFD8B640)
+        : _quizMode == GambitQuizMode.guessName
+        ? const Color(0xFF5AAEE8)
+        : const Color(0xFFD8B640);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              selectedRouteAccent.withValues(
+                alpha: useMonochrome
+                    ? (isDark ? 0.08 : 0.10)
+                    : (isDark ? 0.16 : 0.10),
+              ),
+              scheme.surface,
+            ),
+            scheme.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: selectedRouteAccent.withValues(alpha: 0.34)),
+        boxShadow: [
+          BoxShadow(
+            color: selectedRouteAccent.withValues(alpha: isDark ? 0.12 : 0.10),
+            blurRadius: 24,
+            spreadRadius: 1,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Choose a training route',
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Keep the setup focused: identify names, finish lines, or move into a structured study library with searchable opening families.',
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.74),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 780;
+              final cards = [
+                _buildQuizAcademyRouteCard(
+                  title: 'Identify Opening Name',
+                  description:
+                      'Recognize the opening from the position and certify each bracket with clean 10-question runs.',
+                  badge: 'Quiz Route',
+                  icon: Icons.badge_outlined,
+                  accent: const Color(0xFF5AAEE8),
+                  selected:
+                      !_quizStudyMode && _quizMode == GambitQuizMode.guessName,
+                  onTap: () => _selectQuizAcademyTrack(
+                    mode: GambitQuizMode.guessName,
+                    studyMode: false,
+                  ),
+                ),
+                _buildQuizAcademyRouteCard(
+                  title: 'Complete Opening Line',
+                  description:
+                      'Finish the correct continuation when the opening shell is already on the board.',
+                  badge: 'Quiz Route',
+                  icon: Icons.route_outlined,
+                  accent: const Color(0xFFD8B640),
+                  selected:
+                      !_quizStudyMode && _quizMode == GambitQuizMode.guessLine,
+                  onTap: () => _selectQuizAcademyTrack(
+                    mode: GambitQuizMode.guessLine,
+                    studyMode: false,
+                  ),
+                ),
+                _buildQuizAcademyRouteCard(
+                  title: 'Study',
+                  description:
+                      'Browse grouped opening families, search variations, and preview each line on the board while separate study counters track repetition.',
+                  badge: 'Study Route',
+                  icon: Icons.menu_book_outlined,
+                  accent: const Color(0xFFE1BF57),
+                  selected: _quizStudyMode,
+                  onTap: () => _selectQuizAcademyTrack(studyMode: true),
+                ),
+              ];
+
+              if (stacked) {
+                return Column(
+                  children: [
+                    for (var index = 0; index < cards.length; index++) ...[
+                      cards[index],
+                      if (index < cards.length - 1) const SizedBox(height: 10),
+                    ],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: 10),
+                  Expanded(child: cards[1]),
+                  const SizedBox(width: 10),
+                  Expanded(child: cards[2]),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildQuizAcademyHeroChip(
+                icon: Icons.flag_outlined,
+                label: 'Unlocked',
+                value: _quizAcademyBracketShortName(highestUnlocked),
+                accent: currentTierColor,
+              ),
+              _buildQuizAcademyHeroChip(
+                icon: Icons.filter_9_plus_outlined,
+                label: 'Set Size',
+                value: 'Fixed at 10',
+                accent: const Color(0xFFD8B640),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyRouteCard({
+    required String title,
+    required String description,
+    required String badge,
+    required IconData icon,
+    required Color accent,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withValues(alpha: 0.12)
+                : scheme.surface.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? accent.withValues(alpha: 0.70)
+                  : scheme.outline.withValues(alpha: 0.24),
+              width: selected ? 1.4 : 1.0,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: accent),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: accent.withValues(alpha: 0.24)),
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                description,
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  fontSize: 12.5,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyHeroChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color accent,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.34),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.42)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: accent),
+          const SizedBox(width: 8),
+          Text(
+            '$label: $value',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.92),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyMissionPanel({
+    required Color currentTierColor,
+    required int perfectCount,
+    required int requiredCount,
+    required int viewedCount,
+    required int eligibleCount,
+    required QuizDifficulty highestUnlocked,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
+              scheme.surface,
+            ),
+            Color.alphaBlend(
+              scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
+              scheme.surface,
+            ),
+            scheme.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _quizAcademyMissionTitle(),
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _quizAcademyMissionBody(),
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.76),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildQuizAcademyMetricChip(
+                label: 'Unlocked',
+                value: _quizAcademyBracketShortName(highestUnlocked),
+                accent: const Color(0xFF5AAEE8),
+              ),
+              _buildQuizAcademyMetricChip(
+                label: 'Perfect Runs',
+                value: _quizAcademyProgress.totalPerfectSessions.toString(),
+                accent: const Color(0xFFD8B640),
+              ),
+              _buildQuizAcademyMetricChip(
+                label: 'Accuracy',
+                value: '${_quizAccuracy().toStringAsFixed(1)}%',
+                accent: const Color(0xFF7EDC8A),
+              ),
+              _buildQuizAcademyMetricChip(
+                label: 'Visible Library',
+                value: '$viewedCount/$eligibleCount',
+                accent: const Color(0xFF9DB5E8),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Selected bracket progress',
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              Text(
+                '$perfectCount/$requiredCount',
+                style: TextStyle(
+                  color: currentTierColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: _quizPerfectSessionRatio(_quizDifficulty),
+              backgroundColor: scheme.outline.withValues(alpha: 0.18),
+              valueColor: AlwaysStoppedAnimation<Color>(currentTierColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$perfectCount of $requiredCount perfect ${_quizDifficultyLabel(_quizDifficulty).toLowerCase()} sessions banked. ${_quizAcademyBracketObjective(_quizDifficulty)}',
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.72),
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyMetricChip({
+    required String label,
+    required String value,
+    required Color accent,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.30)),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyCurriculumPanel({required bool useMonochrome}) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final collapsedSubtitle = _quizStudyMode
+        ? 'Quiz routes still use the academy ladder. Expand it when you want to inspect the brackets.'
+        : 'Folded by default. Expand it when you want to inspect every bracket in the ladder.';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.10 : 0.03),
+          scheme.surface,
+        ).withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _quizCurriculumExpanded = !_quizCurriculumExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Curriculum Ladder',
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _quizCurriculumExpanded
+                              ? 'Each bracket needs ${_quizAcademyProgress.requiredPerfectSessions} perfect sessions before the next one opens. Work straight through easy, medium, hard, then very hard.'
+                              : collapsedSubtitle,
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.74),
+                            fontSize: 14,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _quizCurriculumExpanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (!_quizCurriculumExpanded)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!_quizStudyMode) ...[
+                  Text(
+                    'Opening Filter',
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildQuizAcademyDifficultyFilterWrap(),
+                  const SizedBox(height: 12),
+                ],
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildQuizAcademyMetricChip(
+                      label: 'Active',
+                      value: _quizAcademyBracketShortName(_quizDifficulty),
+                      accent: _quizDifficultyColor(_quizDifficulty),
+                    ),
+                    _buildQuizAcademyMetricChip(
+                      label: 'Unlocked',
+                      value: _quizAcademyBracketShortName(
+                        _quizAcademyProgress.highestUnlockedDifficulty(),
+                      ),
+                      accent: const Color(0xFF5AAEE8),
+                    ),
+                    _buildQuizAcademyMetricChip(
+                      label: 'Promotion Rule',
+                      value:
+                          '${_quizAcademyProgress.requiredPerfectSessions} perfect runs',
+                      accent: const Color(0xFFD8B640),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final twoColumns = constraints.maxWidth >= 760;
+                final cards = QuizDifficulty.values
+                    .map(
+                      (difficulty) => _buildQuizAcademyTierCard(
+                        difficulty: difficulty,
+                        useMonochrome: useMonochrome,
+                      ),
+                    )
+                    .toList(growable: false);
+
+                if (!twoColumns) {
+                  return Column(
+                    children: [
+                      for (var index = 0; index < cards.length; index++) ...[
+                        cards[index],
+                        if (index < cards.length - 1)
+                          const SizedBox(height: 12),
+                      ],
+                    ],
+                  );
+                }
+
+                return Column(
+                  children: [
+                    for (
+                      var rowStart = 0;
+                      rowStart < cards.length;
+                      rowStart += 2
+                    ) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: cards[rowStart]),
+                          const SizedBox(width: 12),
+                          Expanded(child: cards[rowStart + 1]),
+                        ],
+                      ),
+                      if (rowStart + 2 < cards.length)
+                        const SizedBox(height: 12),
+                    ],
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyDifficultyFilterWrap() {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: QuizDifficulty.values
+          .map((difficulty) {
+            final selected = _quizDifficulty == difficulty;
+            final unlocked = _quizDifficultyUnlocked(difficulty);
+            final accent = _quizDifficultyColor(difficulty);
+
+            return ChoiceChip(
+              label: Text(_quizDifficultyLabel(difficulty)),
+              avatar: unlocked
+                  ? null
+                  : Icon(
+                      Icons.lock_outline_rounded,
+                      size: 15,
+                      color: scheme.onSurface.withValues(alpha: 0.54),
+                    ),
+              selected: selected,
+              selectedColor: accent.withValues(alpha: 0.18),
+              side: BorderSide(
+                color: selected
+                    ? accent.withValues(alpha: 0.85)
+                    : scheme.outline.withValues(alpha: 0.34),
+              ),
+              labelStyle: TextStyle(
+                color: selected
+                    ? accent
+                    : scheme.onSurface.withValues(
+                        alpha: unlocked ? 0.84 : 0.54,
+                      ),
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+              onSelected: (_) {
+                if (unlocked) {
+                  _setQuizDifficulty(difficulty);
+                } else {
+                  unawaited(_showQuizDifficultyLockedDialog(difficulty));
+                }
+              },
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+
+  Widget _buildQuizAcademyTierCard({
+    required QuizDifficulty difficulty,
+    required bool useMonochrome,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final accent = _quizDifficultyColor(difficulty);
+    final unlocked = _quizDifficultyUnlocked(difficulty);
+    final completed = _quizAcademyProgress.isDifficultyCompleted(difficulty);
+    final selected = _quizDifficulty == difficulty;
+    final perfectCount = _quizPerfectSessionsFor(difficulty);
+    final requirement = _quizAcademyProgress.requiredPerfectSessions;
+    final previousDifficulty = difficulty == QuizDifficulty.values.first
+        ? null
+        : QuizDifficulty.values[difficulty.index - 1];
+
+    String statusLabel;
+    Color statusColor;
+    if (completed) {
+      statusLabel = 'Certified';
+      statusColor = const Color(0xFF7EDC8A);
+    } else if (selected) {
+      statusLabel = 'Active';
+      statusColor = accent;
+    } else if (unlocked) {
+      statusLabel = 'Unlocked';
+      statusColor = const Color(0xFF8FD0FF);
+    } else {
+      statusLabel = 'Locked';
+      statusColor = scheme.onSurface.withValues(alpha: 0.62);
+    }
+
+    final footerText = unlocked
+        ? '$perfectCount/$requirement perfect sessions'
+        : '${_quizAcademyProgress.remainingPerfectSessionsFor(previousDifficulty!)} perfect ${_quizDifficultyLabel(previousDifficulty).toLowerCase()} sessions left';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: unlocked
+            ? () => _setQuizDifficulty(difficulty)
+            : () => unawaited(_showQuizDifficultyLockedDialog(difficulty)),
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(
+                  accent.withValues(
+                    alpha: selected
+                        ? (useMonochrome ? 0.12 : 0.18)
+                        : (useMonochrome ? 0.06 : 0.08),
+                  ),
+                  scheme.surface,
+                ),
+                scheme.surface,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: selected
+                  ? accent.withValues(alpha: 0.72)
+                  : scheme.outline.withValues(alpha: 0.24),
+              width: selected ? 1.4 : 1.0,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _quizAcademyBracketIcon(difficulty),
+                      color: accent,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.30),
+                      ),
+                    ),
+                    child: Text(
+                      statusLabel,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                _quizAcademyBracketShortName(difficulty),
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _quizAcademyBracketDescription(difficulty),
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  fontSize: 13,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  minHeight: 7,
+                  value: unlocked ? _quizPerfectSessionRatio(difficulty) : 0.0,
+                  backgroundColor: scheme.outline.withValues(alpha: 0.18),
+                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                footerText,
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.74),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyConfigurationPanel({
+    required int currentPoolCount,
+    required bool canStart,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final routeAccent = _quizMode == GambitQuizMode.guessName
+        ? const Color(0xFF5AAEE8)
+        : const Color(0xFFD8B640);
+    final routeIcon = _quizMode == GambitQuizMode.guessName
+        ? Icons.badge_outlined
+        : Icons.route_outlined;
+    final routeTitle = _quizMode == GambitQuizMode.guessName
+        ? 'Identify Opening Name'
+        : 'Complete Opening Line';
+    final routeDescription = _quizMode == GambitQuizMode.guessName
+        ? 'Each run is a fixed 10-question set. You see a position, then identify the opening name.'
+        : 'Each run is a fixed 10-question set. You see the opening shell, then complete the correct continuation.';
+    const routeSupportText =
+        'Promotion stays simple: every playable route uses 10 questions, and academy credit only counts at 100% accuracy.';
+    final primaryButtonLabel = _quizMode == GambitQuizMode.guessName
+        ? 'Start 10-question name drill'
+        : 'Start 10-question line drill';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              scheme.secondary.withValues(alpha: isDark ? 0.12 : 0.04),
+              scheme.surface,
+            ),
+            scheme.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Session Configuration',
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The selected route now defines the session. There is no extra setup noise here anymore.',
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.74),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: routeAccent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: routeAccent.withValues(alpha: 0.30)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: routeAccent.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(routeIcon, color: routeAccent),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        routeTitle,
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  routeDescription,
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.74),
+                    fontSize: 13.5,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildQuizAcademyMetricChip(
+                label: 'Route',
+                value: routeTitle,
+                accent: routeAccent,
+              ),
+              _buildQuizAcademyMetricChip(
+                label: 'Questions',
+                value: '10 fixed',
+                accent: const Color(0xFF7EDC8A),
+              ),
+              _buildQuizAcademyMetricChip(
+                label: 'Bracket',
+                value: _quizAcademyBracketShortName(_quizDifficulty),
+                accent: _quizDifficultyColor(_quizDifficulty),
+              ),
+              _buildQuizAcademyMetricChip(
+                label: 'Curated Lines',
+                value: currentPoolCount.toString(),
+                accent: const Color(0xFF5AAEE8),
+              ),
+              _buildQuizAcademyMetricChip(
+                label: 'Promotion Rule',
+                value: '100% finish',
+                accent: const Color(0xFFD8B640),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            routeSupportText,
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.68),
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+          if (!canStart) ...[
+            const SizedBox(height: 10),
+            Text(
+              'The selected bracket does not have enough playable lines loaded yet. Try another bracket or let the opening library finish loading.',
+              style: TextStyle(
+                color: const Color(0xFFFFB26A),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 560;
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _openQuizStatsSheet,
+                      icon: const Icon(Icons.insights_outlined),
+                      label: const Text('Academy Stats'),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: const Color(
+                            0xFF5AAEE8,
+                          ).withValues(alpha: 0.45),
+                        ),
+                        foregroundColor: const Color(0xFF8FD0FF),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: canStart ? _startQuizSession : null,
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(primaryButtonLabel),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: routeAccent,
+                        foregroundColor: routeAccent.computeLuminance() > 0.55
+                            ? const Color(0xFF081015)
+                            : Colors.white,
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openQuizStatsSheet,
+                      icon: const Icon(Icons.insights_outlined),
+                      label: const Text('Academy Stats'),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: const Color(
+                            0xFF5AAEE8,
+                          ).withValues(alpha: 0.45),
+                        ),
+                        foregroundColor: const Color(0xFF8FD0FF),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: canStart ? _startQuizSession : null,
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(primaryButtonLabel),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: routeAccent,
+                        foregroundColor: routeAccent.computeLuminance() > 0.55
+                            ? const Color(0xFF081015)
+                            : Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget _buildGambitQuizScreen() {
     final media = MediaQuery.of(context);
@@ -1654,359 +3984,14 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         answersLocked && displayedSelectedIndex == displayedCorrectIndex;
     final sideBySideLayout =
         isLandscape && hasQuizBoard && media.size.width >= 700;
-    final panelSurface = Color.alphaBlend(
-      scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
-      scheme.surface,
-    );
-    final panelSurfaceAlt = Color.alphaBlend(
-      scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
-      scheme.surface,
-    );
     final quizBackground = useMonochrome
         ? (isDark ? const Color(0xFF06080D) : Colors.white)
         : scheme.surface;
     final chipBorderColor = scheme.outline.withValues(alpha: 0.34);
     final lightHeaderColor = isDark ? scheme.onSurface : Colors.black;
-    final chipUnselectedText = isDark
-        ? scheme.onSurface.withValues(alpha: 0.82)
-        : Colors.black;
 
     if (!_quizSessionStarted) {
-      return Stack(
-        children: [
-          Container(color: quizBackground),
-          IgnorePointer(
-            child: AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, child) {
-                final pulse = _menuDotTime;
-                final alignment = _botSelectorBlueDotAlignment(
-                  _blueDotPhase,
-                  0.55,
-                  _blueDotRadius,
-                  pulse,
-                  _blueDotTrajectoryNoise,
-                  _blueDotShapeSeed,
-                  0.0,
-                );
-                return Align(alignment: alignment, child: child);
-              },
-              child: Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const ui.Color.fromARGB(
-                    255,
-                    46,
-                    95,
-                    232,
-                  ).withValues(alpha: 0.92),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF3B78D8).withValues(alpha: 0.45),
-                      blurRadius: 18,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: quizPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _goToMenu,
-                      color: lightHeaderColor,
-                      icon: const Icon(Icons.arrow_back),
-                      tooltip: 'Back to menu',
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Opening Puzzles',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 20,
-                        color: lightHeaderColor,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: _openAppearanceSettings,
-                      color: lightHeaderColor,
-                      icon: const Icon(Icons.palette_outlined),
-                      tooltip: 'Board & Pieces',
-                    ),
-                    IconButton(
-                      onPressed: _openQuizStatsSheet,
-                      color: lightHeaderColor,
-                      icon: const Icon(Icons.insights_outlined),
-                      tooltip: 'Performance Stats',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [panelSurface, panelSurfaceAlt, scheme.surface],
-                      stops: const [0.0, 0.55, 1.0],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Mode',
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.66),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('Identify Opening Name'),
-                            selected: _quizMode == GambitQuizMode.guessName,
-                            selectedColor: const Color(
-                              0xFF5AAEE8,
-                            ).withValues(alpha: isDark ? 0.20 : 0.28),
-                            side: BorderSide(
-                              color: _quizMode == GambitQuizMode.guessName
-                                  ? const Color(0xFF5AAEE8)
-                                  : chipBorderColor,
-                            ),
-                            labelStyle: TextStyle(
-                              color: _quizMode == GambitQuizMode.guessName
-                                  ? (isDark
-                                        ? const Color(0xFF8FD0FF)
-                                        : const Color(0xFF1040A0))
-                                  : chipUnselectedText,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            onSelected: (_) =>
-                                _setQuizMode(GambitQuizMode.guessName),
-                          ),
-                          ChoiceChip(
-                            label: const Text('Complete Opening Line'),
-                            selected: _quizMode == GambitQuizMode.guessLine,
-                            selectedColor: const Color(
-                              0xFF5AAEE8,
-                            ).withValues(alpha: isDark ? 0.20 : 0.28),
-                            side: BorderSide(
-                              color: _quizMode == GambitQuizMode.guessLine
-                                  ? const Color(0xFF5AAEE8)
-                                  : chipBorderColor,
-                            ),
-                            labelStyle: TextStyle(
-                              color: _quizMode == GambitQuizMode.guessLine
-                                  ? (isDark
-                                        ? const Color(0xFF8FD0FF)
-                                        : const Color(0xFF1040A0))
-                                  : chipUnselectedText,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            onSelected: (_) =>
-                                _setQuizMode(GambitQuizMode.guessLine),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Difficulty',
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.66),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ...QuizDifficulty.values.map((difficulty) {
-                            final selected = _quizDifficulty == difficulty;
-                            final color = _quizDifficultyColor(difficulty);
-                            return ChoiceChip(
-                              label: Text(_quizDifficultyLabel(difficulty)),
-                              selected: selected,
-                              selectedColor: color.withValues(alpha: 0.2),
-                              side: BorderSide(
-                                color: selected
-                                    ? color.withValues(alpha: 0.9)
-                                    : chipBorderColor,
-                              ),
-                              labelStyle: TextStyle(
-                                color: selected ? color : chipUnselectedText,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                              onSelected: (_) => _setQuizDifficulty(difficulty),
-                            );
-                          }),
-                          if (isLandscape) ...[
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 2,
-                                vertical: 6,
-                              ),
-                              child: Text(
-                                'Questions',
-                                style: TextStyle(
-                                  color: scheme.onSurface.withValues(
-                                    alpha: 0.66,
-                                  ),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            ...[10, 15, 20].map((target) {
-                              final selected = _quizQuestionsTarget == target;
-                              return ChoiceChip(
-                                label: Text('$target'),
-                                selected: selected,
-                                selectedColor: const Color(
-                                  0xFFD8B640,
-                                ).withValues(alpha: 0.20),
-                                side: BorderSide(
-                                  color: selected
-                                      ? const Color(0xFFD8B640)
-                                      : chipBorderColor,
-                                ),
-                                labelStyle: TextStyle(
-                                  color: selected
-                                      ? const Color(0xFFE4CA79)
-                                      : chipUnselectedText,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                onSelected: (_) =>
-                                    _setQuizQuestionTarget(target),
-                              );
-                            }),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      if (!isLandscape) ...[
-                        Text(
-                          'Questions',
-                          style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.66),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 7),
-                        Wrap(
-                          spacing: 8,
-                          children: [10, 15, 20].map((target) {
-                            final selected = _quizQuestionsTarget == target;
-                            return ChoiceChip(
-                              label: Text('$target'),
-                              selected: selected,
-                              selectedColor: const Color(
-                                0xFFD8B640,
-                              ).withValues(alpha: 0.20),
-                              side: BorderSide(
-                                color: selected
-                                    ? const Color(0xFFD8B640)
-                                    : chipBorderColor,
-                              ),
-                              labelStyle: TextStyle(
-                                color: selected
-                                    ? const Color(0xFFE4CA79)
-                                    : chipUnselectedText,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              onSelected: (_) => _setQuizQuestionTarget(target),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _openQuizStatsSheet,
-                              icon: const Icon(Icons.insights_outlined),
-                              label: const Text('View Stats'),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(
-                                  color: const Color(
-                                    0xFF5AAEE8,
-                                  ).withValues(alpha: 0.45),
-                                ),
-                                foregroundColor: const Color(0xFF8FD0FF),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _startQuizSession,
-                              icon: const Icon(Icons.play_arrow_rounded),
-                              label: const Text('Start Quiz'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF5AAEE8),
-                                foregroundColor: const Color(0xFF07131F),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${_currentViewedEligibleCount()}/${_quizEligibleCount > 0 ? _quizEligibleCount : _ecoOpenings.length} openings viewed',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.52),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    InkResponse(
-                      onTap: _showOpeningsViewedInfoDialog,
-                      radius: 14,
-                      child: Icon(
-                        Icons.info_outline,
-                        size: 16,
-                        color: scheme.onSurface.withValues(alpha: 0.60),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
+      return _buildQuizAcademySetupScreen();
     }
 
     Widget buildQuizBoardCard({double? maxBoardSize}) {
@@ -2406,7 +4391,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       ? 'Guess'
                       : (_quizSessionAnswered >= _quizQuestionsTarget
                             ? 'Finish Session'
-                            : 'Next Puzzle'),
+                            : 'Next Question'),
                 ),
               ),
       );
@@ -2441,7 +4426,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                     ),
                     Expanded(
                       child: Text(
-                        '${displayedQuizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizDifficultyLabel(_quizDifficulty)} · $_quizQuestionsTarget Q',
+                        '${displayedQuizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizAcademyBracketShortName(_quizDifficulty)} · $_quizQuestionsTarget Q',
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 18,

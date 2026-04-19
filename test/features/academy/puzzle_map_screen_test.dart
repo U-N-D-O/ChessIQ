@@ -147,11 +147,19 @@ void main() {
             ),
           ],
           child: const MaterialApp(
-            home: Scaffold(body: PuzzleMapScreen(onBack: _noop)),
+            home: Scaffold(
+              body: PuzzleMapScreen(onBack: _noop, onOpenOpeningQuiz: _noop),
+            ),
           ),
         ),
       );
 
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Puzzle Academy Exams'), findsOneWidget);
+
+      await tester.tap(find.text('Enter Exams'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 

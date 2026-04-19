@@ -30,6 +30,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 part '../../quiz/core/quiz_components.dart';
 part '../../quiz/core/quiz_screen.dart';
+part '../../quiz/core/quiz_study_screen.dart';
 part '../../quiz/models/quiz_round_review.dart';
 part '../../store/screens/store.dart';
 part '../../vs_bot/core/vs_bot_core.dart';
