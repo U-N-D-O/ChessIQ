@@ -29,6 +29,26 @@ enum _LeaderboardScope { international, national }
 
 enum _AcademyEntryView { hub, exams }
 
+class _AcademyHubFlightData {
+  const _AcademyHubFlightData({
+    required this.cardId,
+    required this.title,
+    required this.imageAsset,
+    required this.accent,
+    required this.shadowColor,
+    required this.icon,
+    required this.rect,
+  });
+
+  final String cardId;
+  final String title;
+  final String imageAsset;
+  final Color accent;
+  final Color shadowColor;
+  final IconData icon;
+  final Rect rect;
+}
+
 class PuzzleMapScreen extends StatefulWidget {
   const PuzzleMapScreen({
     super.key,
@@ -71,11 +91,24 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   late final double _academyBlueDotShapeSeed;
   late final double _academyBlueDotTrajectoryNoise;
   late final double _academyBlueDotRadius;
+  late final double _academyYellowDotPhase;
+  late final double _academyYellowDotShapeSeed;
+  late final double _academyYellowDotTrajectoryNoise;
+  late final double _academyYellowDotRadius;
+  late final AnimationController _academyHubFlightController;
   Duration _academyBlueDotLastTick = Duration.zero;
 
+  final GlobalKey _academyRootContentKey = GlobalKey();
+  final GlobalKey _academyHubExamsCardKey = GlobalKey();
+  final GlobalKey _academyHubQuizCardKey = GlobalKey();
   final Set<String> _expandedSemesterTitles = <String>{};
   bool _expandedSemesterInitialized = false;
   _AcademyEntryView _activeView = _AcademyEntryView.hub;
+  String? _academyHubLaunchingCardId;
+  String? _academyHubHoveredCardId;
+  String? _academyHubPressedCardId;
+  bool _academyHubLaunchInFlight = false;
+  _AcademyHubFlightData? _academyHubFlight;
 
   @override
   void initState() {
@@ -89,6 +122,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     _academyBlueDotShapeSeed = random.nextDouble() * 3.2;
     _academyBlueDotTrajectoryNoise = random.nextDouble();
     _academyBlueDotRadius = 0.58 + random.nextDouble() * 0.12;
+    _academyYellowDotPhase = random.nextDouble() * 2 * pi + pi / 3;
+    _academyYellowDotShapeSeed = random.nextDouble() * 3.2 + 0.35;
+    _academyYellowDotTrajectoryNoise = random.nextDouble();
+    _academyYellowDotRadius = 0.56 + random.nextDouble() * 0.14;
+    _academyHubFlightController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 480),
+    );
 
     _academyBlueDotTime = ValueNotifier<double>(0.0);
     _academyBlueDotTicker = createTicker((elapsed) {
@@ -103,6 +144,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   @override
   void dispose() {
     _confettiController.dispose();
+    _academyHubFlightController.dispose();
     _academyBlueDotTicker.dispose();
     _academyBlueDotTime.dispose();
     _academyStoreSfxPlayer?.dispose();
@@ -949,6 +991,112 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     widget.onBack();
   }
 
+  GlobalKey _academyHubCardKeyFor(String cardId) {
+    return cardId == 'quiz' ? _academyHubQuizCardKey : _academyHubExamsCardKey;
+  }
+
+  void _setAcademyHubHoveredCard(String? cardId) {
+    if (_academyHubLaunchInFlight || _academyHubHoveredCardId == cardId) {
+      return;
+    }
+    setState(() {
+      _academyHubHoveredCardId = cardId;
+    });
+  }
+
+  void _setAcademyHubPressedCard(String? cardId) {
+    if (_academyHubLaunchInFlight || _academyHubPressedCardId == cardId) {
+      return;
+    }
+    setState(() {
+      _academyHubPressedCardId = cardId;
+    });
+  }
+
+  _AcademyHubFlightData? _captureAcademyHubFlight({
+    required String cardId,
+    required String title,
+    required String imageAsset,
+    required Color accent,
+    required Color shadowColor,
+    required IconData icon,
+  }) {
+    final stackContext = _academyRootContentKey.currentContext;
+    final cardContext = _academyHubCardKeyFor(cardId).currentContext;
+    if (stackContext == null || cardContext == null) {
+      return null;
+    }
+
+    final stackBox = stackContext.findRenderObject() as RenderBox?;
+    final cardBox = cardContext.findRenderObject() as RenderBox?;
+    if (stackBox == null || cardBox == null) {
+      return null;
+    }
+
+    final topLeft = cardBox.localToGlobal(Offset.zero, ancestor: stackBox);
+    return _AcademyHubFlightData(
+      cardId: cardId,
+      title: title,
+      imageAsset: imageAsset,
+      accent: accent,
+      shadowColor: shadowColor,
+      icon: icon,
+      rect: topLeft & cardBox.size,
+    );
+  }
+
+  Future<void> _runAcademyHubLaunchAnimation({
+    required String cardId,
+    required String title,
+    required String imageAsset,
+    required Color accent,
+    required Color shadowColor,
+    required IconData icon,
+    required VoidCallback onComplete,
+  }) async {
+    if (_academyHubLaunchInFlight) {
+      return;
+    }
+
+    final flight = _captureAcademyHubFlight(
+      cardId: cardId,
+      title: title,
+      imageAsset: imageAsset,
+      accent: accent,
+      shadowColor: shadowColor,
+      icon: icon,
+    );
+    if (flight == null) {
+      onComplete();
+      return;
+    }
+
+    setState(() {
+      _academyHubLaunchInFlight = true;
+      _academyHubLaunchingCardId = cardId;
+      _academyHubHoveredCardId = null;
+      _academyHubPressedCardId = null;
+      _academyHubFlight = flight;
+    });
+
+    try {
+      await _academyHubFlightController.forward(from: 0.0);
+      if (mounted) {
+        onComplete();
+      }
+    } finally {
+      if (mounted) {
+        _academyHubFlightController.value = 0.0;
+        setState(() {
+          _academyHubLaunchInFlight = false;
+          _academyHubLaunchingCardId = null;
+          _academyHubFlight = null;
+          _academyHubPressedCardId = null;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -978,8 +1126,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       ? const Color(0xFFA6A6A6)
                       : scheme.secondary;
                   final rootContent = Stack(
+                    key: _academyRootContentKey,
                     children: [
-                      Positioned.fill(child: _buildAtmosphere(monochrome)),
+                      Positioned.fill(
+                        child: _buildAtmosphere(
+                          monochrome,
+                          includeYellow: _activeView == _AcademyEntryView.hub,
+                        ),
+                      ),
                       if (_activeView == _AcademyEntryView.hub)
                         _buildAcademyHub(
                           constraints: constraints,
@@ -1013,6 +1167,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           ),
                         ),
                       ),
+                      if (_academyHubFlight != null)
+                        Positioned.fill(
+                          child: _buildAcademyHubFlightOverlay(isDark: isDark),
+                        ),
                     ],
                   );
 
@@ -1052,7 +1210,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required bool monochrome,
   }) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final media = MediaQuery.of(context);
     final sideBySide = constraints.maxWidth >= 920;
@@ -1074,158 +1231,60 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: _handleAcademyBack,
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    tooltip: 'Back to menu',
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: 'Settings',
-                    onPressed: () => _openQuickThemeSettings(themeProvider),
-                    icon: const Icon(Icons.settings_outlined),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    onPressed: _openStore,
-                    icon: const Icon(Icons.storefront_outlined),
-                    tooltip: 'Academy store',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: widget.onShowCredits,
-                child: Image.asset(
-                  'assets/ChessIQ.png',
-                  width: 150,
-                  height: 42,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(height: 18),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              SizedBox(
+                height: 50,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text(
-                      'Choose your academy track',
-                      style: TextStyle(
-                        fontSize: sideBySide ? 34 : 30,
-                        fontWeight: FontWeight.w800,
-                        height: 1.05,
-                        letterSpacing: monochrome ? 0.22 : 0,
-                        color: scheme.onSurface,
-                        shadows: _academyMonoTextGlow(
-                          monochrome
-                              ? const Color(0xFFE5E8ED)
-                              : const Color(0xFF6FE7FF),
-                          monochrome: monochrome,
-                          strength: 1.0,
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        onPressed: _handleAcademyBack,
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        tooltip: 'Back to menu',
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.center,
+                      child: GestureDetector(
+                        onTap: widget.onShowCredits,
+                        child: Image.asset(
+                          'assets/ChessIQ.png',
+                          width: 150,
+                          height: 42,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Stay on the semester ladder with Puzzle Academy Exams, or switch to Opening Quiz for fast opening recognition and line recall drills.',
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.45,
-                        color: scheme.onSurface.withValues(alpha: 0.74),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Settings',
+                            onPressed: () =>
+                                _openQuickThemeSettings(themeProvider),
+                            icon: const Icon(Icons.settings_outlined),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: _openStore,
+                            icon: const Icon(Icons.storefront_outlined),
+                            tooltip: 'Academy store',
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              if (sideBySide)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _buildAcademyHubCard(
-                        title: 'Puzzle Academy Exams',
-                        description:
-                            'Resume the semester map, daily challenge, leaderboard climb, and bracket exams.',
-                        ctaLabel: 'Enter Exams',
-                        imageAsset: 'assets/academy/exam.png',
-                        accent: monochrome
-                            ? const Color(0xFFE2E6EC)
-                            : const Color(0xFF6FE7FF),
-                        shadowColor: monochrome
-                            ? const Color(0xFF9FA7B3)
-                            : const Color(0xFF137A9A),
-                        icon: Icons.auto_stories_outlined,
-                        monochrome: monochrome,
-                        isDark: isDark,
-                        onTap: _openAcademyExams,
-                      ),
-                    ),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      child: _buildAcademyHubCard(
-                        title: 'Opening Quiz',
-                        description:
-                            'Train opening names and line recognition with the existing quiz flow, now routed through academy.',
-                        ctaLabel: 'Start Quiz',
-                        imageAsset: 'assets/academy/quiz.png',
-                        accent: monochrome
-                            ? const Color(0xFFF0E9DC)
-                            : const Color(0xFFD8B640),
-                        shadowColor: monochrome
-                            ? const Color(0xFFB4AB9B)
-                            : const Color(0xFF8A6714),
-                        icon: Icons.extension_outlined,
-                        monochrome: monochrome,
-                        isDark: isDark,
-                        onTap: widget.onOpenOpeningQuiz,
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Column(
-                  children: [
-                    _buildAcademyHubCard(
-                      title: 'Puzzle Academy Exams',
-                      description:
-                          'Resume the semester map, daily challenge, leaderboard climb, and bracket exams.',
-                      ctaLabel: 'Enter Exams',
-                      imageAsset: 'assets/academy/exam.png',
-                      accent: monochrome
-                          ? const Color(0xFFE2E6EC)
-                          : const Color(0xFF6FE7FF),
-                      shadowColor: monochrome
-                          ? const Color(0xFF9FA7B3)
-                          : const Color(0xFF137A9A),
-                      icon: Icons.auto_stories_outlined,
-                      monochrome: monochrome,
-                      isDark: isDark,
-                      onTap: _openAcademyExams,
-                    ),
-                    const SizedBox(height: 18),
-                    _buildAcademyHubCard(
-                      title: 'Opening Quiz',
-                      description:
-                          'Train opening names and line recognition with the existing quiz flow, now routed through academy.',
-                      ctaLabel: 'Start Quiz',
-                      imageAsset: 'assets/academy/quiz.png',
-                      accent: monochrome
-                          ? const Color(0xFFF0E9DC)
-                          : const Color(0xFFD8B640),
-                      shadowColor: monochrome
-                          ? const Color(0xFFB4AB9B)
-                          : const Color(0xFF8A6714),
-                      icon: Icons.extension_outlined,
-                      monochrome: monochrome,
-                      isDark: isDark,
-                      onTap: widget.onOpenOpeningQuiz,
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 18),
+              _buildAcademyHubSelector(
+                sideBySide: sideBySide,
+                monochrome: monochrome,
+                isDark: isDark,
+              ),
             ],
           ),
         ),
@@ -1233,10 +1292,317 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
+  Widget _buildAcademyHubSelector({
+    required bool sideBySide,
+    required bool monochrome,
+    required bool isDark,
+  }) {
+    final examsAccent = monochrome
+        ? const Color(0xFFE2E6EC)
+        : const Color(0xFF6FE7FF);
+    final quizAccent = monochrome
+        ? const Color(0xFFF0E9DC)
+        : const Color(0xFFD8B640);
+    final activeAccent = switch (_academyHubLaunchingCardId) {
+      'exams' => examsAccent,
+      'quiz' => quizAccent,
+      _ => Color.lerp(examsAccent, quizAccent, 0.5)!,
+    };
+    final examsCard = _buildAcademyHubCard(
+      cardId: 'exams',
+      title: 'Puzzle Academy Exams',
+      imageAsset: 'assets/academy/exam.png',
+      accent: examsAccent,
+      shadowColor: monochrome
+          ? const Color(0xFF9FA7B3)
+          : const Color(0xFF137A9A),
+      icon: Icons.extension_outlined,
+      monochrome: monochrome,
+      isDark: isDark,
+      onTap: () => unawaited(
+        _runAcademyHubLaunchAnimation(
+          cardId: 'exams',
+          title: 'Puzzle Academy Exams',
+          imageAsset: 'assets/academy/exam.png',
+          accent: examsAccent,
+          shadowColor: monochrome
+              ? const Color(0xFF9FA7B3)
+              : const Color(0xFF137A9A),
+          icon: Icons.extension_outlined,
+          onComplete: _openAcademyExams,
+        ),
+      ),
+    );
+    final quizCard = _buildAcademyHubCard(
+      cardId: 'quiz',
+      title: 'Opening Quiz',
+      imageAsset: 'assets/academy/quiz.png',
+      accent: quizAccent,
+      shadowColor: monochrome
+          ? const Color(0xFFB4AB9B)
+          : const Color(0xFF8A6714),
+      icon: Icons.menu_book_outlined,
+      monochrome: monochrome,
+      isDark: isDark,
+      onTap: () => unawaited(
+        _runAcademyHubLaunchAnimation(
+          cardId: 'quiz',
+          title: 'Opening Quiz',
+          imageAsset: 'assets/academy/quiz.png',
+          accent: quizAccent,
+          shadowColor: monochrome
+              ? const Color(0xFFB4AB9B)
+              : const Color(0xFF8A6714),
+          icon: Icons.menu_book_outlined,
+          onComplete: widget.onOpenOpeningQuiz,
+        ),
+      ),
+    );
+
+    final selectorBody = sideBySide
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Transform.translate(
+                  offset: const Offset(0, -10),
+                  child: examsCard,
+                ),
+              ),
+              const SizedBox(width: 28),
+              Expanded(
+                child: Transform.translate(
+                  offset: const Offset(0, 10),
+                  child: quizCard,
+                ),
+              ),
+            ],
+          )
+        : Column(
+            children: [
+              Transform.rotate(angle: -0.012, child: examsCard),
+              const SizedBox(height: 28),
+              Transform.rotate(angle: 0.012, child: quizCard),
+            ],
+          );
+
+    return AnimatedBuilder(
+      animation: _academyBlueDotTime,
+      builder: (context, child) {
+        final pulse = 0.5 + 0.5 * sin(_academyBlueDotTime.value * 0.8);
+        final radius = BorderRadius.circular(sideBySide ? 38 : 32);
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: sideBySide ? 22 : 10,
+              top: sideBySide ? 6 : 4,
+              child: IgnorePointer(
+                child: Container(
+                  width: sideBySide ? 180 : 124,
+                  height: sideBySide ? 104 : 84,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: RadialGradient(
+                      colors: [
+                        examsAccent.withValues(alpha: monochrome ? 0.10 : 0.18),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: sideBySide ? 18 : 10,
+              bottom: sideBySide ? 10 : 6,
+              child: IgnorePointer(
+                child: Container(
+                  width: sideBySide ? 190 : 132,
+                  height: sideBySide ? 112 : 88,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: RadialGradient(
+                      colors: [
+                        quizAccent.withValues(alpha: monochrome ? 0.10 : 0.20),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            ClipRRect(
+              borderRadius: radius,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                    sideBySide ? 22 : 14,
+                    sideBySide ? 28 : 20,
+                    sideBySide ? 22 : 14,
+                    sideBySide ? 28 : 20,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withValues(
+                          alpha: monochrome
+                              ? (isDark ? 0.14 : 0.24)
+                              : (isDark ? 0.08 : 0.20),
+                        ),
+                        activeAccent.withValues(
+                          alpha: monochrome
+                              ? (isDark ? 0.05 : 0.08)
+                              : (isDark
+                                    ? 0.06 + pulse * 0.03
+                                    : 0.10 + pulse * 0.04),
+                        ),
+                        Colors.white.withValues(
+                          alpha: monochrome
+                              ? (isDark ? 0.10 : 0.18)
+                              : (isDark ? 0.06 : 0.13),
+                        ),
+                      ],
+                    ),
+                    borderRadius: radius,
+                    border: Border.all(
+                      color: Color.alphaBlend(
+                        activeAccent.withValues(alpha: 0.14 + pulse * 0.08),
+                        Colors.white.withValues(alpha: 0.30),
+                      ),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: activeAccent.withValues(
+                          alpha: 0.07 + pulse * 0.04,
+                        ),
+                        blurRadius: 32,
+                        spreadRadius: 0.5,
+                        offset: const Offset(0, 12),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.30 : 0.10,
+                        ),
+                        blurRadius: 30,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white.withValues(
+                                    alpha: monochrome ? 0.05 : 0.14,
+                                  ),
+                                  Colors.white.withValues(alpha: 0.01),
+                                  activeAccent.withValues(
+                                    alpha: monochrome ? 0.02 : 0.05,
+                                  ),
+                                ],
+                                stops: const [0.0, 0.38, 1.0],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: -50,
+                        top: 12 + sin(_academyBlueDotTime.value * 0.55) * 12,
+                        child: IgnorePointer(
+                          child: Transform.rotate(
+                            angle: -0.42,
+                            child: Container(
+                              width: 160,
+                              height: 240,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    examsAccent.withValues(
+                                      alpha: monochrome ? 0.04 : 0.08,
+                                    ),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: -40,
+                        bottom: -8 + cos(_academyBlueDotTime.value * 0.48) * 10,
+                        child: IgnorePointer(
+                          child: Transform.rotate(
+                            angle: 0.38,
+                            child: Container(
+                              width: 180,
+                              height: 250,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    quizAccent.withValues(
+                                      alpha: monochrome ? 0.04 : 0.08,
+                                    ),
+                                    Colors.transparent,
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 26,
+                        right: 26,
+                        top: 0,
+                        child: IgnorePointer(
+                          child: Container(
+                            height: 1.1,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.white.withValues(alpha: 0.60),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      selectorBody,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildAcademyHubCard({
+    required String cardId,
     required String title,
-    required String description,
-    required String ctaLabel,
     required String imageAsset,
     required Color accent,
     required Color shadowColor,
@@ -1245,158 +1611,676 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required bool isDark,
     required VoidCallback onTap,
   }) {
-    final buttonForeground = monochrome
-        ? const Color(0xFF14171A)
-        : (accent.computeLuminance() > 0.55
-              ? const Color(0xFF071114)
-              : Colors.white);
+    final cardKey = _academyHubCardKeyFor(cardId);
+    final isHovered = _academyHubHoveredCardId == cardId;
+    final isPressed = _academyHubPressedCardId == cardId;
+    final isLaunching = _academyHubLaunchingCardId == cardId;
+    final isDimmed =
+        _academyHubLaunchingCardId != null &&
+        _academyHubLaunchingCardId != cardId;
+    final cardScale = isLaunching
+        ? 1.038
+        : isPressed
+        ? 0.992
+        : isHovered
+        ? 1.018
+        : 1.0;
+    final cardOffset = isLaunching
+        ? const Offset(0, -0.028)
+        : isPressed
+        ? const Offset(0, 0.010)
+        : isHovered
+        ? const Offset(0, -0.014)
+        : Offset.zero;
+    final cardTurns = isLaunching
+        ? 0.003
+        : isHovered
+        ? (cardId == 'exams' ? -0.0016 : 0.0016)
+        : 0.0;
+    final imageScale = isLaunching
+        ? 1.16
+        : isPressed
+        ? 1.02
+        : isHovered
+        ? 1.05
+        : 1.0;
+    final imageOffset = isLaunching
+        ? (cardId == 'exams'
+              ? const Offset(-0.02, -0.03)
+              : const Offset(0.02, -0.03))
+        : isHovered
+        ? (cardId == 'exams' ? const Offset(-0.01, 0) : const Offset(0.01, 0))
+        : Offset.zero;
 
     return AspectRatio(
       aspectRatio: 16 / 9,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: accent.withValues(alpha: 0.55)),
-              boxShadow: [
-                BoxShadow(
-                  color: shadowColor.withValues(alpha: isDark ? 0.24 : 0.20),
-                  blurRadius: 34,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 18),
-                ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(imageAsset, fit: BoxFit.cover),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.black.withValues(
-                            alpha: monochrome ? 0.18 : 0.08,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 560),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          final slide = (1 - value) * 16;
+          return Transform.translate(
+            offset: Offset(0, slide),
+            child: Opacity(opacity: value, child: child),
+          );
+        },
+        child: RepaintBoundary(
+          key: cardKey,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => _setAcademyHubHoveredCard(cardId),
+            onExit: (_) => _setAcademyHubHoveredCard(null),
+            child: Semantics(
+              button: true,
+              label: title,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                opacity: isDimmed ? 0.74 : 1.0,
+                child: AnimatedScale(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  scale: cardScale,
+                  child: AnimatedSlide(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    offset: cardOffset,
+                    child: AnimatedRotation(
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutCubic,
+                      turns: cardTurns,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(30),
+                          boxShadow: [
+                            BoxShadow(
+                              color: shadowColor.withValues(
+                                alpha: isLaunching
+                                    ? (isDark ? 0.34 : 0.30)
+                                    : isHovered
+                                    ? (isDark ? 0.30 : 0.27)
+                                    : (isDark ? 0.26 : 0.22),
+                              ),
+                              blurRadius: isLaunching
+                                  ? 42
+                                  : isHovered
+                                  ? 38
+                                  : 34,
+                              spreadRadius: isLaunching
+                                  ? 4
+                                  : isHovered
+                                  ? 3
+                                  : 2,
+                              offset: Offset(
+                                0,
+                                isLaunching
+                                    ? 24
+                                    : isHovered
+                                    ? 22
+                                    : 18,
+                              ),
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: isDark ? 0.28 : 0.12,
+                              ),
+                              blurRadius: isLaunching ? 30 : 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(30),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: _academyHubLaunchInFlight ? null : onTap,
+                            onTapDown: (_) => _setAcademyHubPressedCard(cardId),
+                            onTapCancel: () => _setAcademyHubPressedCard(null),
+                            borderRadius: BorderRadius.circular(30),
+                            splashColor: accent.withValues(alpha: 0.20),
+                            highlightColor: accent.withValues(alpha: 0.08),
+                            child: Ink(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(
+                                  color: accent.withValues(
+                                    alpha: isLaunching
+                                        ? 0.86
+                                        : isHovered
+                                        ? 0.74
+                                        : 0.62,
+                                  ),
+                                ),
+                              ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          accent.withValues(
+                                            alpha: monochrome ? 0.10 : 0.16,
+                                          ),
+                                          Colors.black.withValues(
+                                            alpha: monochrome ? 0.18 : 0.24,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned.fill(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: AnimatedScale(
+                                        duration: const Duration(
+                                          milliseconds: 240,
+                                        ),
+                                        curve: Curves.easeOutCubic,
+                                        scale: imageScale,
+                                        child: AnimatedSlide(
+                                          duration: const Duration(
+                                            milliseconds: 240,
+                                          ),
+                                          curve: Curves.easeOutCubic,
+                                          offset: imageOffset,
+                                          child: Image.asset(
+                                            imageAsset,
+                                            fit: BoxFit.contain,
+                                            alignment: Alignment.center,
+                                            filterQuality: FilterQuality.high,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.black.withValues(
+                                            alpha: monochrome ? 0.08 : 0.04,
+                                          ),
+                                          Colors.black.withValues(
+                                            alpha: monochrome ? 0.22 : 0.10,
+                                          ),
+                                          Colors.black.withValues(
+                                            alpha: monochrome ? 0.54 : 0.48,
+                                          ),
+                                        ],
+                                        stops: const [0.0, 0.42, 1.0],
+                                      ),
+                                    ),
+                                  ),
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: RadialGradient(
+                                        center: const Alignment(-0.72, -0.82),
+                                        radius: 1.12,
+                                        colors: [
+                                          accent.withValues(
+                                            alpha: monochrome ? 0.12 : 0.18,
+                                          ),
+                                          Colors.transparent,
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 220),
+                                    opacity: isLaunching ? 1.0 : 0.0,
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: RadialGradient(
+                                          center: const Alignment(0.72, -0.68),
+                                          radius: 1.0,
+                                          colors: [
+                                            accent.withValues(alpha: 0.28),
+                                            Colors.transparent,
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  AnimatedBuilder(
+                                    animation: _academyBlueDotTime,
+                                    builder: (context, child) {
+                                      final highlightPulse =
+                                          0.84 +
+                                          0.16 *
+                                              sin(
+                                                _academyBlueDotTime.value *
+                                                        0.34 +
+                                                    (cardId == 'exams'
+                                                        ? 0.3
+                                                        : 1.7),
+                                              );
+                                      return IgnorePointer(
+                                        child: Opacity(
+                                          opacity: highlightPulse.clamp(
+                                            0.70,
+                                            1.0,
+                                          ),
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child: Stack(
+                                      children: [
+                                        Positioned(
+                                          left: -26,
+                                          top: -38,
+                                          child: Transform.rotate(
+                                            angle: -0.34,
+                                            child: Container(
+                                              width: 170,
+                                              height: 250,
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [
+                                                    Colors.white.withValues(
+                                                      alpha: 0.00,
+                                                    ),
+                                                    Colors.white.withValues(
+                                                      alpha: monochrome
+                                                          ? 0.08
+                                                          : 0.12,
+                                                    ),
+                                                    Colors.white.withValues(
+                                                      alpha: 0.00,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          right: 12,
+                                          top: 10,
+                                          child: Container(
+                                            width: 110,
+                                            height: 86,
+                                            decoration: BoxDecoration(
+                                              gradient: RadialGradient(
+                                                colors: [
+                                                  Colors.white.withValues(
+                                                    alpha: monochrome
+                                                        ? 0.10
+                                                        : 0.16,
+                                                  ),
+                                                  Colors.transparent,
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      22,
+                                      20,
+                                      22,
+                                      20,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 220,
+                                              ),
+                                              curve: Curves.easeOutCubic,
+                                              width: isLaunching ? 52 : 46,
+                                              height: isLaunching ? 52 : 46,
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.28,
+                                                ),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: accent.withValues(
+                                                    alpha: isLaunching
+                                                        ? 0.78
+                                                        : 0.56,
+                                                  ),
+                                                ),
+                                                boxShadow: isLaunching
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: accent
+                                                              .withValues(
+                                                                alpha: 0.32,
+                                                              ),
+                                                          blurRadius: 16,
+                                                          spreadRadius: 1,
+                                                        ),
+                                                      ]
+                                                    : const <BoxShadow>[],
+                                              ),
+                                              child: Icon(icon, color: accent),
+                                            ),
+                                            const Spacer(),
+                                            AnimatedSlide(
+                                              duration: const Duration(
+                                                milliseconds: 220,
+                                              ),
+                                              curve: Curves.easeOutCubic,
+                                              offset: isLaunching
+                                                  ? const Offset(0.14, 0)
+                                                  : Offset.zero,
+                                              child: AnimatedRotation(
+                                                duration: const Duration(
+                                                  milliseconds: 220,
+                                                ),
+                                                curve: Curves.easeOutCubic,
+                                                turns: isLaunching ? 0.02 : 0.0,
+                                                child: Container(
+                                                  width: 46,
+                                                  height: 46,
+                                                  decoration: BoxDecoration(
+                                                    color: accent.withValues(
+                                                      alpha: monochrome
+                                                          ? 0.18
+                                                          : 0.22,
+                                                    ),
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(
+                                                      color: accent.withValues(
+                                                        alpha: isLaunching
+                                                            ? 0.80
+                                                            : 0.62,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.arrow_forward_rounded,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const Spacer(),
+                                        Align(
+                                          alignment: Alignment.bottomLeft,
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 220,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                            width: isLaunching ? 78 : 52,
+                                            height: isLaunching ? 5 : 4,
+                                            decoration: BoxDecoration(
+                                              color: accent,
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: accent.withValues(
+                                                    alpha: isLaunching
+                                                        ? 0.70
+                                                        : 0.50,
+                                                  ),
+                                                  blurRadius: isLaunching
+                                                      ? 18
+                                                      : 12,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          Colors.black.withValues(
-                            alpha: monochrome ? 0.34 : 0.18,
-                          ),
-                          Colors.black.withValues(
-                            alpha: monochrome ? 0.76 : 0.68,
-                          ),
-                        ],
-                        stops: const [0.0, 0.44, 1.0],
+                        ),
                       ),
                     ),
                   ),
-                  DecoratedBox(
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAcademyHubFlightOverlay({required bool isDark}) {
+    final flight = _academyHubFlight;
+    if (flight == null) {
+      return const SizedBox.shrink();
+    }
+
+    final size = MediaQuery.sizeOf(context);
+    final destinationRect = Rect.fromLTWH(
+      -size.width * 0.06,
+      -size.height * 0.05,
+      size.width * 1.12,
+      size.height * 1.10,
+    );
+
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _academyHubFlightController,
+        builder: (context, child) {
+          final raw = _academyHubFlightController.value;
+          final t = Curves.easeInOutCubic.transform(raw);
+          final currentRect = Rect.lerp(flight.rect, destinationRect, t)!;
+          final fadeStart = 0.58;
+          final fadeProgress = ((raw - fadeStart) / (1 - fadeStart)).clamp(
+            0.0,
+            1.0,
+          );
+          final opacity = 1.0 - Curves.easeOut.transform(fadeProgress);
+          final radius = lerpDouble(30, 6, t) ?? 6;
+          final scale = 1.0 + raw * 0.02;
+
+          return Opacity(
+            opacity: opacity,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
-                        center: const Alignment(-0.7, -0.8),
-                        radius: 1.15,
+                        center: Alignment.center,
+                        radius: 1.0,
                         colors: [
-                          accent.withValues(alpha: monochrome ? 0.16 : 0.24),
+                          flight.accent.withValues(alpha: 0.10 + raw * 0.08),
+                          Colors.black.withValues(alpha: raw * 0.10),
                           Colors.transparent,
                         ],
                       ),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.34),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: accent.withValues(alpha: 0.46),
+                ),
+                Positioned.fromRect(
+                  rect: currentRect,
+                  child: Transform.scale(
+                    scale: scale,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(radius),
+                        boxShadow: [
+                          BoxShadow(
+                            color: flight.shadowColor.withValues(
+                              alpha: isDark ? 0.42 : 0.36,
                             ),
+                            blurRadius: lerpDouble(34, 58, t) ?? 58,
+                            spreadRadius: lerpDouble(2, 10, t) ?? 10,
+                            offset: Offset(0, lerpDouble(18, 28, t) ?? 28),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(icon, size: 15, color: accent),
-                              const SizedBox(width: 7),
-                              Text(
-                                'Academy Route',
-                                style: TextStyle(
-                                  color: accent,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.2,
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(radius),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    flight.accent.withValues(alpha: 0.18),
+                                    Colors.black.withValues(alpha: 0.24),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            height: 1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360),
-                          child: Text(
-                            description,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.86),
-                              fontSize: 14,
-                              height: 1.45,
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: onTap,
-                          icon: Icon(icon),
-                          label: Text(ctaLabel),
-                          style: _academyFilledButtonStyle(
-                            backgroundColor: accent,
-                            foregroundColor: buttonForeground,
-                            monochrome: monochrome,
-                            side: BorderSide(
-                              color: accent.withValues(alpha: 0.68),
+                            Padding(
+                              padding: EdgeInsets.all(
+                                lerpDouble(8, 18, t) ?? 18,
+                              ),
+                              child: Image.asset(
+                                flight.imageAsset,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.center,
+                                filterQuality: FilterQuality.high,
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 14,
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.04),
+                                    Colors.black.withValues(alpha: 0.10),
+                                    Colors.black.withValues(alpha: 0.48),
+                                  ],
+                                  stops: const [0.0, 0.42, 1.0],
+                                ),
+                              ),
                             ),
-                            radius: 18,
-                          ),
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: -36,
+                              child: Transform.rotate(
+                                angle: -0.34,
+                                child: Container(
+                                  height: 260,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.white.withValues(alpha: 0.0),
+                                        Colors.white.withValues(alpha: 0.14),
+                                        Colors.white.withValues(alpha: 0.0),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                lerpDouble(22, 28, t) ?? 28,
+                                lerpDouble(20, 28, t) ?? 28,
+                                lerpDouble(22, 28, t) ?? 28,
+                                lerpDouble(20, 28, t) ?? 28,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: lerpDouble(46, 64, t) ?? 64,
+                                        height: lerpDouble(46, 64, t) ?? 64,
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.28,
+                                          ),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: flight.accent.withValues(
+                                              alpha: 0.80,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          flight.icon,
+                                          color: flight.accent,
+                                          size: lerpDouble(24, 30, t) ?? 30,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Container(
+                                        width: lerpDouble(46, 66, t) ?? 66,
+                                        height: lerpDouble(46, 66, t) ?? 66,
+                                        decoration: BoxDecoration(
+                                          color: flight.accent.withValues(
+                                            alpha: 0.22,
+                                          ),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: flight.accent.withValues(
+                                              alpha: 0.82,
+                                            ),
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.arrow_forward_rounded,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    width: lerpDouble(52, 110, t) ?? 110,
+                                    height: lerpDouble(4, 7, t) ?? 7,
+                                    decoration: BoxDecoration(
+                                      color: flight.accent,
+                                      borderRadius: BorderRadius.circular(999),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: flight.accent.withValues(
+                                            alpha: 0.70,
+                                          ),
+                                          blurRadius: 18,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -1446,44 +2330,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  Widget _buildAtmosphere(bool cinematic) {
+  Widget _buildAtmosphere(bool cinematic, {required bool includeYellow}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return IgnorePointer(
       child: Stack(
         children: [
-          ValueListenableBuilder<double>(
-            valueListenable: _academyBlueDotTime,
-            builder: (context, time, child) {
-              return Align(
-                alignment: _academyDotAlignment(
-                  _academyBlueDotPhase,
-                  0.52,
-                  _academyBlueDotRadius,
-                  time,
-                  _academyBlueDotTrajectoryNoise,
-                  _academyBlueDotShapeSeed,
-                ),
-                child: child,
-              );
-            },
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(
-                      0xFF5AAEE8,
-                    ).withValues(alpha: isDark ? 0.45 : 0.80),
-                    blurRadius: isDark ? 18 : 28,
-                    spreadRadius: isDark ? 3 : 6,
-                  ),
-                ],
-              ),
-            ),
-          ),
           Align(
             alignment: const Alignment(-0.88, -0.82),
             child: Container(
@@ -1517,45 +2368,198 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               ),
             ),
           ),
-          Align(
-            alignment: const Alignment(0.95, -0.75),
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color:
-                    (cinematic
-                            ? const Color(0xFF9DA3AD)
-                            : const Color(0xFFD8B640))
-                        .withValues(
-                          alpha: cinematic
-                              ? (isDark ? 0.06 : 0.09)
-                              : (isDark ? 0.08 : 0.28),
-                        ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (cinematic
-                                ? const Color(0xFF9DA3AD)
-                                : const Color(0xFFBF8C00))
-                            .withValues(
-                              alpha: cinematic
-                                  ? (isDark ? 0.10 : 0.14)
-                                  : (isDark ? 0.16 : 0.42),
-                            ),
-                    blurRadius: cinematic ? 90 : (isDark ? 90 : 120),
-                  ),
-                ],
+          if (includeYellow)
+            Align(
+              alignment: const Alignment(0.95, -0.75),
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color:
+                      (cinematic
+                              ? const Color(0xFF9DA3AD)
+                              : const Color(0xFFD8B640))
+                          .withValues(
+                            alpha: cinematic
+                                ? (isDark ? 0.06 : 0.09)
+                                : (isDark ? 0.08 : 0.28),
+                          ),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          (cinematic
+                                  ? const Color(0xFF9DA3AD)
+                                  : const Color(0xFFBF8C00))
+                              .withValues(
+                                alpha: cinematic
+                                    ? (isDark ? 0.10 : 0.14)
+                                    : (isDark ? 0.16 : 0.42),
+                              ),
+                      blurRadius: cinematic ? 90 : (isDark ? 90 : 120),
+                    ),
+                  ],
+                ),
               ),
             ),
+          ValueListenableBuilder<double>(
+            valueListenable: _academyBlueDotTime,
+            builder: (context, time, child) {
+              if (!includeYellow) {
+                return Align(
+                  alignment: _academyDotAlignment(
+                    _academyBlueDotPhase,
+                    0.52,
+                    _academyBlueDotRadius,
+                    time,
+                    _academyBlueDotTrajectoryNoise,
+                    _academyBlueDotShapeSeed,
+                  ),
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF5AAEE8,
+                          ).withValues(alpha: isDark ? 0.45 : 0.80),
+                          blurRadius: isDark ? 18 : 28,
+                          spreadRadius: isDark ? 3 : 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final alignments = _academyRepellingDotAlignments(time);
+              return Stack(
+                children: [
+                  Align(
+                    alignment: alignments.blue,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(
+                              0xFF5AAEE8,
+                            ).withValues(alpha: isDark ? 0.45 : 0.80),
+                            blurRadius: isDark ? 18 : 28,
+                            spreadRadius: isDark ? 3 : 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: alignments.yellow,
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFD8B640).withValues(alpha: 0.94),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(
+                              0xFFD8B640,
+                            ).withValues(alpha: isDark ? 0.38 : 0.74),
+                            blurRadius: isDark ? 18 : 26,
+                            spreadRadius: isDark ? 3 : 5,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
   }
 
+  ({Alignment blue, Alignment yellow}) _academyRepellingDotAlignments(
+    double pulse,
+  ) {
+    var blue = _academyDotOffset(
+      _academyBlueDotPhase,
+      0.52,
+      _academyBlueDotRadius,
+      pulse,
+      _academyBlueDotTrajectoryNoise,
+      _academyBlueDotShapeSeed,
+    );
+    var yellow = _academyDotOffset(
+      _academyYellowDotPhase,
+      0.48,
+      _academyYellowDotRadius,
+      pulse,
+      _academyYellowDotTrajectoryNoise,
+      _academyYellowDotShapeSeed,
+    );
+
+    final delta = blue - yellow;
+    final distance = delta.distance;
+    const repelThreshold = 0.34;
+    if (distance < repelThreshold) {
+      final proximity = (repelThreshold - distance) / repelThreshold;
+      final fallback = Offset(
+        cos(pulse * 0.86 + _academyBlueDotPhase),
+        sin(pulse * 0.92 + _academyYellowDotPhase),
+      );
+      final fallbackDistance = fallback.distance == 0 ? 1.0 : fallback.distance;
+      final direction = distance < 0.001
+          ? fallback / fallbackDistance
+          : delta / distance;
+      final tangent = Offset(-direction.dy, direction.dx);
+      final swirlSign =
+          sin(pulse * 1.4 + _academyBlueDotPhase - _academyYellowDotPhase) >= 0
+          ? 1.0
+          : -1.0;
+      final push = proximity * 0.06;
+      final swirl = proximity * proximity * 0.11;
+      blue = blue + direction * push + tangent * swirl * swirlSign;
+      yellow = yellow - direction * push - tangent * swirl * swirlSign;
+    }
+
+    blue = _academyClampDotOffset(blue);
+    yellow = _academyClampDotOffset(yellow);
+
+    return (
+      blue: Alignment(blue.dx, blue.dy),
+      yellow: Alignment(yellow.dx, yellow.dy),
+    );
+  }
+
   Alignment _academyDotAlignment(
+    double phase,
+    double speed,
+    double radius,
+    double pulse,
+    double trajectoryNoise,
+    double shapeSeed,
+  ) {
+    final offset = _academyDotOffset(
+      phase,
+      speed,
+      radius,
+      pulse,
+      trajectoryNoise,
+      shapeSeed,
+    );
+    return Alignment(offset.dx, offset.dy);
+  }
+
+  Offset _academyDotOffset(
     double phase,
     double speed,
     double radius,
@@ -1586,11 +2590,16 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               trajectoryNoise * 2.9,
         ) *
         (trajectoryNoise * 0.025 + shapeSeed * 0.015);
-    final raw = Offset(x + driftX + jitterX, y + driftY + jitterY);
+    return _academyClampDotOffset(
+      Offset(x + driftX + jitterX, y + driftY + jitterY),
+    );
+  }
+
+  Offset _academyClampDotOffset(Offset raw) {
     final distance = raw.distance;
     const limit = 1.35;
     final returnFactor = distance > limit ? limit / distance : 1.0;
-    return Alignment(raw.dx * returnFactor, raw.dy * returnFactor);
+    return Offset(raw.dx * returnFactor, raw.dy * returnFactor);
   }
 
   Widget _buildAcademyLoadingIndicator(ThemeData theme) {

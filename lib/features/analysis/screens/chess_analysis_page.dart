@@ -13,6 +13,7 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_map_screen.dart';
 import 'package:chessiq/features/analysis/models/analysis_models.dart';
 import 'package:chessiq/features/analysis/painters/energy_arrow_painter.dart';
+import 'package:chessiq/features/quiz/data/opening_quiz_catalog.dart';
 import 'package:chessiq/features/quiz/models/quiz_models.dart';
 import 'package:chessiq/features/quiz/painters/quiz_accuracy_trend_painter.dart';
 import 'package:chessiq/features/store/models/store_models.dart';

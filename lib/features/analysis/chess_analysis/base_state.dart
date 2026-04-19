@@ -1808,25 +1808,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _precomputedQuizPoolData = null;
 
     try {
-      final poolContent = await rootBundle.loadString(
-        'openings/quiz_pools.json',
+      _precomputedQuizPoolData = loadOpeningQuizCatalog();
+      _precomputeQuizEligiblePools();
+      final eligible = _quizEligiblePool(
+        mode: _quizMode,
+        difficulty: _quizDifficulty,
       );
-      final decodedPools = jsonDecode(poolContent);
-      if (decodedPools is Map<String, dynamic>) {
-        _precomputedQuizPoolData = decodedPools;
-        _precomputeQuizEligiblePools();
-        final eligible = _quizEligiblePool(
-          mode: _quizMode,
-          difficulty: _quizDifficulty,
-        );
-        if (mounted) {
-          setState(() => _quizEligibleCount = eligible.length);
-        }
-      } else {
-        _addLog('Precomputed quiz pools asset had invalid format');
+      if (mounted) {
+        setState(() => _quizEligibleCount = eligible.length);
       }
     } catch (e) {
-      debugPrint('Error loading precomputed quiz pools: $e');
+      debugPrint('Error loading built-in opening quiz catalog: $e');
     }
 
     for (final path in fileNames) {

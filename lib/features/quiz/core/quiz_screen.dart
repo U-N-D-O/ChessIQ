@@ -976,17 +976,16 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
   }
 
-  String _quizDifficultyLabel(QuizDifficulty difficulty) {
-    switch (difficulty) {
-      case QuizDifficulty.easy:
-        return 'Easy';
-      case QuizDifficulty.medium:
-        return 'Medium';
-      case QuizDifficulty.hard:
-        return 'Hard';
-      case QuizDifficulty.veryHard:
-        return 'Very Hard';
-    }
+  String _quizAcademyTierLabel(QuizDifficulty difficulty) {
+    return _quizAcademyBracketShortName(difficulty);
+  }
+
+  String _quizAcademyTierSessionLabel(
+    QuizDifficulty difficulty, {
+    bool lowercase = false,
+  }) {
+    final label = '${_quizAcademyTierLabel(difficulty)} level';
+    return lowercase ? label.toLowerCase() : label;
   }
 
   Color _quizDifficultyColor(QuizDifficulty difficulty) {
@@ -1123,10 +1122,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
 
     if (nextDifficulty == null) {
-      return 'Bank $remaining more perfect ${_quizDifficultyLabel(selectedDifficulty).toLowerCase()} session${remaining == 1 ? '' : 's'} to finish the academy track. Every answer in the session must be correct.';
+      return 'Bank $remaining more perfect ${_quizAcademyTierSessionLabel(selectedDifficulty, lowercase: true)} session${remaining == 1 ? '' : 's'} to finish the academy track. Every answer in the session must be correct.';
     }
 
-    return 'Bank $remaining more perfect ${_quizDifficultyLabel(selectedDifficulty).toLowerCase()} session${remaining == 1 ? '' : 's'} to unlock ${_quizAcademyBracketTitle(nextDifficulty)}. Promotion credit only counts when the full session ends at 100% accuracy.';
+    return 'Bank $remaining more perfect ${_quizAcademyTierSessionLabel(selectedDifficulty, lowercase: true)} session${remaining == 1 ? '' : 's'} to unlock ${_quizAcademyBracketTitle(nextDifficulty)}. Promotion credit only counts when the full session ends at 100% accuracy.';
   }
 
   String _todayKey() {
@@ -1974,8 +1973,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final remaining = _quizAcademyProgress.remainingPerfectSessionsFor(
       previousDifficulty,
     );
-    final previousLabel = _quizDifficultyLabel(previousDifficulty);
-    final difficultyLabel = _quizDifficultyLabel(difficulty);
+    final previousLabel = _quizAcademyTierSessionLabel(
+      previousDifficulty,
+      lowercase: true,
+    );
+    final difficultyLabel = _quizAcademyTierLabel(difficulty);
 
     await showDialog<void>(
       context: context,
@@ -2061,14 +2063,18 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   Future<void> _showQuizSessionSummaryDialog(
     QuizSessionAcademyOutcome outcome,
   ) async {
-    final sessionLabel = _quizDifficultyLabel(outcome.sessionDifficulty);
+    final sessionLabel = _quizAcademyTierLabel(outcome.sessionDifficulty);
+    final sessionLevelLabel = _quizAcademyTierSessionLabel(
+      outcome.sessionDifficulty,
+      lowercase: true,
+    );
     final nextLabel = outcome.nextDifficulty == null
         ? null
-        : _quizDifficultyLabel(outcome.nextDifficulty!);
+        : _quizAcademyTierLabel(outcome.nextDifficulty!);
 
     var headline = 'Session Complete';
     var detail =
-        'Finish at 100% accuracy to bank academy promotion credit for $sessionLabel.';
+        'Finish at 100% accuracy to bank academy promotion credit for the $sessionLevelLabel bracket.';
 
     if (outcome.completedTrack && outcome.perfectSession) {
       headline = 'Oracle Certification Complete';
@@ -2098,7 +2104,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         outcome.sessionDifficulty,
       );
       detail =
-          'A promotion credit was not awarded. You still need $remaining perfect $sessionLabel session${remaining == 1 ? '' : 's'} to unlock $nextLabel.';
+          'A promotion credit was not awarded. You still need $remaining perfect $sessionLevelLabel session${remaining == 1 ? '' : 's'} to unlock $nextLabel.';
     }
 
     await showDialog<void>(
@@ -3511,7 +3517,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                     _buildQuizInfoButton(
                       title: 'Selected bracket progress',
                       message:
-                          '$perfectCount of $requiredCount perfect ${_quizDifficultyLabel(_quizDifficulty).toLowerCase()} sessions banked. ${_quizAcademyBracketObjective(_quizDifficulty)}',
+                          '$perfectCount of $requiredCount perfect ${_quizAcademyTierSessionLabel(_quizDifficulty, lowercase: true)} sessions banked. ${_quizAcademyBracketObjective(_quizDifficulty)}',
                     ),
                   ],
                 ),
@@ -3737,7 +3743,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
 
     final footerText = unlocked
         ? '$perfectCount/$requirement perfect sessions'
-        : '${_quizAcademyProgress.remainingPerfectSessionsFor(previousDifficulty!)} perfect ${_quizDifficultyLabel(previousDifficulty).toLowerCase()} sessions left';
+        : '${_quizAcademyProgress.remainingPerfectSessionsFor(previousDifficulty!)} perfect ${_quizAcademyTierSessionLabel(previousDifficulty, lowercase: true)} sessions left';
 
     return Material(
       color: Colors.transparent,

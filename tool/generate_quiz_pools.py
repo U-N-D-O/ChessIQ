@@ -11,6 +11,7 @@ import chess
 ROOT = Path(__file__).resolve().parents[1]
 OPENINGS_DIR = ROOT / 'openings'
 OUTPUT_PATH = OPENINGS_DIR / 'quiz_pools.json'
+DART_OUTPUT_PATH = ROOT / 'lib' / 'features' / 'quiz' / 'data' / 'opening_quiz_catalog.dart'
 ECO_FILES = [OPENINGS_DIR / f'eco{letter}.json' for letter in 'ABCDE']
 
 MOVE_NUMBER_RE = re.compile(r'\d+\.')
@@ -473,6 +474,24 @@ def serialize_pools(pools: dict[str, list[dict[str, object]]]) -> dict[str, obje
     }
 
 
+def write_dart_catalog(payload: dict[str, object]) -> None:
+    json_payload = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+    dart_source = (
+        "import 'dart:convert';\n\n"
+        'Map<String, dynamic> loadOpeningQuizCatalog() {\n'
+        '  final decoded = jsonDecode(_openingQuizCatalogJson);\n'
+        '  if (decoded is! Map<String, dynamic>) {\n'
+        "    throw const FormatException('Invalid opening quiz catalog payload');\n"
+        '  }\n'
+        '  return decoded;\n'
+        '}\n\n'
+        "const String _openingQuizCatalogJson = r'''\n"
+        f'{json_payload}\n'
+        "''';\n"
+    )
+    DART_OUTPUT_PATH.write_text(dart_source, encoding='utf-8')
+
+
 def main() -> int:
     lines = load_eco_lines()
     pools = build_pools(lines)
@@ -481,9 +500,11 @@ def main() -> int:
         json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n',
         encoding='utf-8',
     )
+    write_dart_catalog(payload)
 
     print(f'Loaded {len(lines)} ECO lines')
     print(f'Wrote {payload["meta"]["lineCount"]} unique pooled lines to {OUTPUT_PATH}')
+    print(f'Wrote built-in opening quiz catalog to {DART_OUTPUT_PATH}')
     for key, size in payload['meta']['poolSizes'].items():
         print(f'  {key}: {size}')
     return 0
