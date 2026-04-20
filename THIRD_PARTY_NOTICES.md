@@ -63,7 +63,23 @@ Direct pub dependencies used by this app include:
 
 Each third-party package remains licensed under its own terms. For complete and current licensing details, refer to each package page on pub.dev and bundled license metadata where applicable.
 
-## 5. Audio Asset Attribution
+## 5. Font Asset Attribution
+
+This project bundles third-party pixel font assets used by the Opening Academy retro interface.
+
+- Asset: `assets/fonts/PixgamerRegular.ttf`
+- Font name: `PixgamerRegular`
+- Source page: https://www.fontspace.com/pixgamer-font-f85447
+- License note supplied with the downloaded font package: Creative Commons Attribution No Derivatives (CC BY-ND)
+- Compliance note: Attribution is provided here, but release use should continue to be reviewed against the upstream license terms for bundled font redistribution and modification constraints.
+
+- Asset: `assets/fonts/PixelatedEleganceRegular.ttf`
+- Font name: `Pixelated Elegance`
+- Source page: https://ggbot.itch.io/pixelated-elegance-font
+- Publisher website: https://www.ggbot.net
+- License note supplied with the downloaded font package: Creative Commons Zero v1.0 Universal (CC0 1.0), Public Domain
+
+## 6. Audio Asset Attribution
 
 This project includes third-party audio assets used chess sound effects, coin sound effects and rewards feedback.
 

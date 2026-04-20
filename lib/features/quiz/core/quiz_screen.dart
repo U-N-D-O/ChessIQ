@@ -1,4 +1,4 @@
-﻿part of '../../analysis/screens/chess_analysis_page.dart';
+part of '../../analysis/screens/chess_analysis_page.dart';
 
 class _QuizStudyFamilyGroup {
   final String familyName;
@@ -23,7 +23,190 @@ class _QuizStudyPreview {
   });
 }
 
+const String _quizAcademyDisplayFontFamily = 'PixgamerRegular';
+const String _quizAcademyHudFontFamily = 'PixelatedElegance';
+
+class _QuizAcademyPalette {
+  const _QuizAcademyPalette({
+    required this.backdrop,
+    required this.shell,
+    required this.panel,
+    required this.panelAlt,
+    required this.line,
+    required this.shadow,
+    required this.text,
+    required this.textMuted,
+    required this.cyan,
+    required this.amber,
+    required this.emerald,
+    required this.signal,
+    required this.boardDark,
+    required this.boardLight,
+  });
+
+  final Color backdrop;
+  final Color shell;
+  final Color panel;
+  final Color panelAlt;
+  final Color line;
+  final Color shadow;
+  final Color text;
+  final Color textMuted;
+  final Color cyan;
+  final Color amber;
+  final Color emerald;
+  final Color signal;
+  final Color boardDark;
+  final Color boardLight;
+}
+
+class _QuizAcademyBackdropPainter extends CustomPainter {
+  const _QuizAcademyBackdropPainter({
+    required this.palette,
+    required this.phase,
+  });
+
+  final _QuizAcademyPalette palette;
+  final double phase;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = palette.line.withValues(alpha: 0.18)
+      ..strokeWidth = 1;
+    const cellSize = 28.0;
+    final yShift = (phase * 10) % cellSize;
+
+    for (double x = 0; x <= size.width; x += cellSize) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = -cellSize + yShift; y <= size.height; y += cellSize) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final scanPaint = Paint()..color = palette.text.withValues(alpha: 0.035);
+    for (double y = 0; y <= size.height; y += 10) {
+      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), scanPaint);
+    }
+
+    final starPaint = Paint()..color = palette.cyan.withValues(alpha: 0.24);
+    final sparklePaint = Paint()..color = palette.amber.withValues(alpha: 0.18);
+    for (var index = 0; index < 22; index++) {
+      final progress = ((index * 0.11) + phase * 0.015) % 1.0;
+      final x = size.width * ((index * 37 % 100) / 100);
+      final y = size.height * (0.08 + progress * 0.48);
+      final starSize = index.isEven ? 3.0 : 2.0;
+      canvas.drawRect(
+        Rect.fromLTWH(x, y, starSize, starSize),
+        index % 3 == 0 ? sparklePaint : starPaint,
+      );
+    }
+
+    final floorRect = Rect.fromLTWH(
+      0,
+      size.height * 0.72,
+      size.width,
+      size.height * 0.28,
+    );
+    canvas.drawRect(
+      floorRect,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          floorRect.topCenter,
+          floorRect.bottomCenter,
+          <Color>[
+            palette.boardDark.withValues(alpha: 0.04),
+            palette.boardDark.withValues(alpha: 0.22),
+          ],
+        ),
+    );
+
+    final beamPaint = Paint()
+      ..color = palette.boardLight.withValues(alpha: 0.14);
+    for (var index = 0; index < 9; index++) {
+      final progress = index / 8;
+      final topY = size.height * 0.72;
+      final bottomY = size.height;
+      final centerX = size.width * progress;
+      final halfSpreadTop = size.width * 0.02;
+      final halfSpreadBottom = size.width * (0.06 + progress * 0.06);
+      final path = Path()
+        ..moveTo(centerX - halfSpreadTop, topY)
+        ..lineTo(centerX + halfSpreadTop, topY)
+        ..lineTo(centerX + halfSpreadBottom, bottomY)
+        ..lineTo(centerX - halfSpreadBottom, bottomY)
+        ..close();
+      canvas.drawPath(path, beamPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _QuizAcademyBackdropPainter oldDelegate) {
+    return oldDelegate.phase != phase || oldDelegate.palette != palette;
+  }
+}
+
 abstract class _QuizScreen extends _AnalysisPageShared {
+  final GlobalKey _quizStudyBoardKey = GlobalKey();
+  final GlobalKey _quizStudyLibraryIndexKey = GlobalKey();
+  final GlobalKey _quizStudyLibrarySelectionKey = GlobalKey();
+
+  void _focusQuizStudyBoard() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final targetContext = _quizStudyBoardKey.currentContext;
+      if (targetContext == null) return;
+
+      unawaited(
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: 0.02,
+        ),
+      );
+    });
+  }
+
+  void _focusQuizStudyLibrarySelection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final targetContext = _quizStudyLibrarySelectionKey.currentContext;
+      if (targetContext == null) return;
+
+      unawaited(
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeInOut,
+          alignment: 0.16,
+        ),
+      );
+    });
+  }
+
+  void _focusQuizStudyLibraryIndex({bool focusSelection = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final indexContext = _quizStudyLibraryIndexKey.currentContext;
+      if (indexContext != null) {
+        await Scrollable.ensureVisible(
+          indexContext,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeInOut,
+          alignment: 0.04,
+        );
+      }
+
+      if (!focusSelection || !mounted) {
+        return;
+      }
+
+      _focusQuizStudyLibrarySelection();
+    });
+  }
+
   @override
   void _loadQuizPrefs(SharedPreferences prefs) {
     final viewed = prefs.getStringList(_viewedGambitsKey) ?? const <String>[];
@@ -203,7 +386,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       'bogo indian',
       'semi-slav',
       'ponziani',
-      'reti opening',
       'réti',
       'colle',
       'stonewall',
@@ -871,17 +1053,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         const <EcoLine>[];
   }
 
-  int _currentViewedEligibleCount() {
-    if (!_ensureQuizPoolsAvailable()) {
-      return 0;
-    }
-
-    final names =
-        _quizEligibleNameCache[_quizPoolKey(_quizMode, _quizDifficulty)] ??
-        const <String>{};
-    return _viewedGambits.where(names.contains).length;
-  }
-
   @override
   void _markGambitViewed(String name) {
     if (name.isEmpty) return;
@@ -1040,19 +1211,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
   }
 
-  String _quizAcademyBracketObjective(QuizDifficulty difficulty) {
-    switch (difficulty) {
-      case QuizDifficulty.easy:
-        return 'Build reliable recognition of the opening names players meet most often.';
-      case QuizDifficulty.medium:
-        return 'Extend that recall into deeper mainstream theory and broader move-order awareness.';
-      case QuizDifficulty.hard:
-        return 'Convert recognition into disciplined line recall inside sharper competitive branches.';
-      case QuizDifficulty.veryHard:
-        return 'Finish the academy track with uncommon structures and obscure continuation memory.';
-    }
-  }
-
   IconData _quizAcademyBracketIcon(QuizDifficulty difficulty) {
     switch (difficulty) {
       case QuizDifficulty.easy:
@@ -1087,45 +1245,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       return;
     }
     _quizDifficulty = _quizAcademyProgress.highestUnlockedDifficulty();
-  }
-
-  String _quizAcademyMissionTitle() {
-    if (_quizAcademyProgress.isTrackComplete) {
-      return 'Oracle route complete';
-    }
-
-    final nextDifficulty = _quizAcademyProgress.nextDifficulty(_quizDifficulty);
-    if (_quizAcademyProgress.isDifficultyCompleted(_quizDifficulty) &&
-        nextDifficulty != null) {
-      return '${_quizAcademyBracketShortName(nextDifficulty)} unlocked';
-    }
-
-    return 'Promotion requires perfection';
-  }
-
-  String _quizAcademyMissionBody() {
-    if (_quizAcademyProgress.isTrackComplete) {
-      return 'Every bracket is certified. Keep training any tier to sharpen recognition speed and long-line recall.';
-    }
-
-    final selectedDifficulty = _quizDifficulty;
-    final nextDifficulty = _quizAcademyProgress.nextDifficulty(
-      selectedDifficulty,
-    );
-    final remaining = _quizAcademyProgress.remainingPerfectSessionsFor(
-      selectedDifficulty,
-    );
-
-    if (_quizAcademyProgress.isDifficultyCompleted(selectedDifficulty) &&
-        nextDifficulty != null) {
-      return '${_quizAcademyBracketTitle(selectedDifficulty)} is certified. Step into ${_quizAcademyBracketTitle(nextDifficulty)} when you want the next layer of theory.';
-    }
-
-    if (nextDifficulty == null) {
-      return 'Bank $remaining more perfect ${_quizAcademyTierSessionLabel(selectedDifficulty, lowercase: true)} session${remaining == 1 ? '' : 's'} to finish the academy track. Every answer in the session must be correct.';
-    }
-
-    return 'Bank $remaining more perfect ${_quizAcademyTierSessionLabel(selectedDifficulty, lowercase: true)} session${remaining == 1 ? '' : 's'} to unlock ${_quizAcademyBracketTitle(nextDifficulty)}. Promotion credit only counts when the full session ends at 100% accuracy.';
   }
 
   String _todayKey() {
@@ -1611,6 +1730,278 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
+  int _quizStudyScopedReps(QuizStudyCategory? category) {
+    return category == null
+        ? _quizStudyTotalReps()
+        : _quizStudyCategoryTotalReps(category);
+  }
+
+  int _quizStudyScopedStudiedCount(QuizStudyCategory? category) {
+    return category == null
+        ? _quizStudyOpeningCounts.length
+        : _quizStudyCategoryStudiedCount(category);
+  }
+
+  void _resetQuizStudyProgress({QuizStudyCategory? category}) {
+    setState(() {
+      if (category == null) {
+        _quizStudyOpeningCounts.clear();
+        return;
+      }
+
+      final scopedLineNames = _quizStudyPool(
+        category,
+      ).map((line) => line.name).toSet();
+      _quizStudyOpeningCounts.removeWhere(
+        (openingName, _) => scopedLineNames.contains(openingName),
+      );
+    });
+  }
+
+  Future<void> _showQuizStudyResetDialog() async {
+    if (_quizStudyTotalReps() <= 0) {
+      return;
+    }
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final palette = _academyPalette(
+      scheme: scheme,
+      useMonochrome: useMonochrome,
+      isDark: isDark,
+    );
+    QuizStudyCategory? selectedScope =
+        _quizStudyCategoryTotalReps(_quizStudyCategory) > 0
+        ? _quizStudyCategory
+        : null;
+
+    final selectedScopeName = await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final targetLabel = selectedScope == null
+                ? 'ALL SHELVES'
+                : _quizStudyCategoryLabel(selectedScope!).toUpperCase();
+            final targetStudied = _quizStudyScopedStudiedCount(selectedScope);
+            final targetReps = _quizStudyScopedReps(selectedScope);
+            final resetCopy = selectedScope == null
+                ? 'This clears every studied opening count across all shelves and families. Progress rings and navigator checkmarks will reset.'
+                : 'This clears the studied opening counts for the ${_quizStudyCategoryLabel(selectedScope!).toLowerCase()} shelf only. Progress rings and checkmarks in that shelf will reset.';
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: _academyPixelPanel(
+                  palette: palette,
+                  accent: palette.signal,
+                  fillColor: palette.panel,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _academyTag(
+                        palette: palette,
+                        label: 'WARNING',
+                        accent: palette.signal,
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'RESET STUDIED OPENINGS',
+                        style: _academyDisplayStyle(
+                          palette: palette,
+                          size: 22,
+                          weight: FontWeight.w700,
+                          letterSpacing: 0.9,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        resetCopy,
+                        style: _academyHudStyle(
+                          palette: palette,
+                          size: 12.8,
+                          color: palette.textMuted,
+                          weight: FontWeight.w600,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'RESET TARGET',
+                        style: _academyHudStyle(
+                          palette: palette,
+                          size: 11.8,
+                          color: palette.text,
+                          weight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.shell,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: palette.cyan.withValues(alpha: 0.42),
+                            width: 2,
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<QuizStudyCategory?>(
+                            value: selectedScope,
+                            isExpanded: true,
+                            dropdownColor: palette.panelAlt,
+                            iconEnabledColor: palette.cyan,
+                            style: _academyHudStyle(
+                              palette: palette,
+                              size: 12.8,
+                              color: palette.text,
+                              weight: FontWeight.w700,
+                              letterSpacing: 0.65,
+                            ),
+                            items: <DropdownMenuItem<QuizStudyCategory?>>[
+                              DropdownMenuItem<QuizStudyCategory?>(
+                                value: null,
+                                child: Text(
+                                  'ALL SHELVES',
+                                  style: _academyHudStyle(
+                                    palette: palette,
+                                    size: 12.8,
+                                    color: palette.text,
+                                    weight: FontWeight.w700,
+                                    letterSpacing: 0.65,
+                                  ),
+                                ),
+                              ),
+                              ...QuizStudyCategory.values.map(
+                                (category) =>
+                                    DropdownMenuItem<QuizStudyCategory?>(
+                                      value: category,
+                                      child: Text(
+                                        _quizStudyCategoryLabel(
+                                          category,
+                                        ).toUpperCase(),
+                                        style: _academyHudStyle(
+                                          palette: palette,
+                                          size: 12.8,
+                                          color: palette.text,
+                                          weight: FontWeight.w700,
+                                          letterSpacing: 0.65,
+                                        ),
+                                      ),
+                                    ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setDialogState(() {
+                                selectedScope = value;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          _buildQuizAcademyMetricChip(
+                            palette: palette,
+                            label: 'TARGET',
+                            value: targetLabel,
+                            accent: palette.cyan,
+                            icon: Icons.layers_rounded,
+                          ),
+                          _buildQuizAcademyMetricChip(
+                            palette: palette,
+                            label: 'STUDIED',
+                            value: targetStudied.toString(),
+                            accent: palette.emerald,
+                            icon: Icons.auto_stories_outlined,
+                          ),
+                          _buildQuizAcademyMetricChip(
+                            palette: palette,
+                            label: 'REPS',
+                            value: targetReps.toString(),
+                            accent: palette.amber,
+                            icon: Icons.bolt_rounded,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Are you sure you want to continue?',
+                        style: _academyHudStyle(
+                          palette: palette,
+                          size: 12.4,
+                          color: palette.text,
+                          weight: FontWeight.w800,
+                          letterSpacing: 0.7,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        alignment: WrapAlignment.end,
+                        children: <Widget>[
+                          _academyHudButton(
+                            palette: palette,
+                            icon: Icons.close_rounded,
+                            label: 'CANCEL',
+                            accent: palette.cyan,
+                            onTap: () => Navigator.of(dialogContext).pop(),
+                          ),
+                          _academyHudButton(
+                            palette: palette,
+                            icon: Icons.restart_alt_rounded,
+                            label: 'RESET',
+                            accent: palette.signal,
+                            filled: true,
+                            onTap: targetReps > 0
+                                ? () => Navigator.of(
+                                    dialogContext,
+                                  ).pop(selectedScope?.name ?? 'all')
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selectedScopeName == null || !mounted) {
+      return;
+    }
+
+    _resetQuizStudyProgress(
+      category: selectedScopeName == 'all'
+          ? null
+          : QuizStudyCategory.values.byName(selectedScopeName),
+    );
+    unawaited(_saveQuizStats());
+  }
+
   void _setQuizStudyCategory(QuizStudyCategory category) {
     if (_quizStudyCategory == category) {
       return;
@@ -1627,6 +2018,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyShelfExpanded = false;
       _quizStudySearchQuery = '';
       _quizStudyDetailOpen = false;
+      _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
 
       if (_quizStudySelectedOpeningName != null &&
@@ -1667,14 +2059,22 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     });
   }
 
+  void _toggleQuizStudyInfoExpanded() {
+    setState(() {
+      _quizStudyInfoExpanded = !_quizStudyInfoExpanded;
+    });
+  }
+
   void _closeQuizStudyDetail() {
     if (!_quizStudyDetailOpen) {
       return;
     }
     setState(() {
       _quizStudyDetailOpen = false;
+      _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
     });
+    _focusQuizStudyLibraryIndex(focusSelection: true);
   }
 
   void _exitQuizStudyScreen() {
@@ -1684,19 +2084,24 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     setState(() {
       _quizStudyMode = false;
       _quizStudyDetailOpen = false;
+      _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
     });
   }
 
-  void _selectQuizStudyOpening(EcoLine line) {
+  void _selectQuizStudyOpening(EcoLine line, {bool focusBoard = false}) {
     final familyName = _quizStudyFamilyName(line.name);
     setState(() {
       _quizStudySelectedOpeningName = line.name;
       _quizStudyExpandedFamily = familyName;
       _quizStudyDetailOpen = true;
+      _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
       _quizStudyOpeningCounts[line.name] = _quizStudyCountFor(line.name) + 1;
     });
+    if (focusBoard) {
+      _focusQuizStudyBoard();
+    }
     unawaited(_saveQuizStats());
   }
 
@@ -1727,8 +2132,54 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     _setQuizStudyShownPly(line, _quizStudyShownPlyFor(line) - 1);
   }
 
+  bool _isCaptureMoveOnBoard(Map<String, String> boardState, String uciMove) {
+    if (uciMove.length < 4) {
+      return false;
+    }
+
+    final from = uciMove.substring(0, 2);
+    final to = uciMove.substring(2, 4);
+    final piece = boardState[from];
+    if (piece == null) {
+      return false;
+    }
+
+    return boardState.containsKey(to) || (piece[0] == 'p' && from[0] != to[0]);
+  }
+
   void _stepQuizStudyForward(EcoLine line) {
-    _setQuizStudyShownPly(line, _quizStudyShownPlyFor(line) + 1);
+    final currentPly = _quizStudyShownPlyFor(line);
+    if (currentPly >= line.moveTokens.length) {
+      return;
+    }
+
+    var boardState = _initialBoardState();
+    var whiteToMove = true;
+    for (var index = 0; index < currentPly; index++) {
+      final token = line.moveTokens[index];
+      final uciMove = _resolveSanToUci(boardState, token, whiteToMove);
+      if (uciMove == null) {
+        return;
+      }
+      boardState = _applyUciMove(boardState, uciMove);
+      whiteToMove = !whiteToMove;
+    }
+
+    final nextUciMove = _resolveSanToUci(
+      boardState,
+      line.moveTokens[currentPly],
+      whiteToMove,
+    );
+    if (nextUciMove == null) {
+      return;
+    }
+
+    _setQuizStudyShownPly(line, currentPly + 1);
+    unawaited(
+      _playBoardMoveSound(
+        isCapture: _isCaptureMoveOnBoard(boardState, nextUciMove),
+      ),
+    );
   }
 
   List<_QuizStudyFamilyGroup> _quizStudyFamilyGroups(
@@ -1966,6 +2417,115 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     });
   }
 
+  Future<void> _showQuizAcademyNoticeDialog({
+    required String title,
+    required String message,
+    String tagLabel = 'INFO',
+    String actionLabel = 'CLOSE',
+    IconData icon = Icons.info_outline_rounded,
+    Color? accent,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final isDark = theme.brightness == Brightness.dark;
+        final useMonochrome =
+            ctx.read<AppThemeProvider>().isMonochrome ||
+            _isCinematicThemeEnabled;
+        final palette = _academyPalette(
+          scheme: theme.colorScheme,
+          useMonochrome: useMonochrome,
+          isDark: isDark,
+        );
+        final effectiveAccent = accent ?? palette.cyan;
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: _academyPixelPanel(
+              palette: palette,
+              accent: effectiveAccent,
+              fillColor: palette.panel,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _academyTag(
+                        palette: palette,
+                        label: tagLabel,
+                        accent: effectiveAccent,
+                      ),
+                      const Spacer(),
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            effectiveAccent.withValues(alpha: 0.12),
+                            palette.panelAlt,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: effectiveAccent.withValues(alpha: 0.50),
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(icon, size: 18, color: effectiveAccent),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    title.toUpperCase(),
+                    style: _academyDisplayStyle(
+                      palette: palette,
+                      size: 22,
+                      weight: FontWeight.w700,
+                      letterSpacing: 0.85,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    message,
+                    style: _academyHudStyle(
+                      palette: palette,
+                      size: 12.8,
+                      color: palette.text,
+                      weight: FontWeight.w600,
+                      letterSpacing: 0.24,
+                      height: 1.48,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _academyHudButton(
+                      palette: palette,
+                      icon: Icons.check_rounded,
+                      label: actionLabel,
+                      accent: effectiveAccent,
+                      onTap: () => Navigator.of(ctx).pop(),
+                      filled: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showQuizDifficultyLockedDialog(
     QuizDifficulty difficulty,
   ) async {
@@ -1979,22 +2539,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
     final difficultyLabel = _quizAcademyTierLabel(difficulty);
 
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('$difficultyLabel Locked'),
-        content: Text(
-          remaining <= 0
-              ? '$difficultyLabel is ready, but your current academy bracket needs to refresh. Return to the setup screen and try again.'
-              : 'Complete $remaining more perfect $previousLabel session${remaining == 1 ? '' : 's'} to unlock $difficultyLabel. Promotion credit only counts when the whole session finishes at 100% accuracy.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Understood'),
-          ),
-        ],
-      ),
+    await _showQuizAcademyNoticeDialog(
+      title: '$difficultyLabel Locked',
+      message: remaining <= 0
+          ? '$difficultyLabel is ready, but your current academy bracket needs to refresh. Return to the setup screen and try again.'
+          : 'Complete $remaining more perfect $previousLabel session${remaining == 1 ? '' : 's'} to unlock $difficultyLabel. Promotion credit only counts when the whole session finishes at 100% accuracy.',
+      tagLabel: 'LOCKED',
+      actionLabel: 'UNDERSTOOD',
+      icon: Icons.lock_outline_rounded,
+      accent: _quizDifficultyColor(difficulty),
     );
   }
 
@@ -2336,6 +2889,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   void _openQuizStatsSheet() {
+    if (_quizStudyMode) {
+      unawaited(_showQuizStudyStatsDialog());
+      return;
+    }
+
     var filter = QuizTrendFilter.both;
     int? days = 7;
     var difficultyFilter = QuizStatsDifficultyFilter.all;
@@ -2390,6 +2948,255 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           );
         },
       ),
+    );
+  }
+
+  Future<void> _showQuizStudyStatsDialog() async {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final palette = _academyPalette(
+      scheme: scheme,
+      useMonochrome: useMonochrome,
+      isDark: isDark,
+    );
+    final currentCategory = _quizStudyCategory;
+    final currentGroups = _quizStudyFamilyGroups(currentCategory);
+    final totalFamilies = currentGroups.length;
+    final completedFamilies = currentGroups
+        .where(
+          (group) =>
+              group.lines.isNotEmpty &&
+              _quizStudyFamilyStudiedCount(group) >= group.lines.length,
+        )
+        .length;
+    final currentTotal = _quizStudyCategoryTotalCount(currentCategory);
+    final currentStudied = _quizStudyCategoryStudiedCount(currentCategory);
+    final currentReps = _quizStudyCategoryTotalReps(currentCategory);
+    final currentCompletion = _quizStudyCategoryCompletion(currentCategory);
+    final overallStudied = _quizStudyOpeningCounts.length;
+    final overallReps = _quizStudyTotalReps();
+    final maxDialogHeight = min(
+      MediaQuery.of(context).size.height * 0.86,
+      760.0,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 24,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 560,
+              maxHeight: maxDialogHeight,
+            ),
+            child: _academyPixelPanel(
+              palette: palette,
+              accent: palette.cyan,
+              fillColor: palette.panel,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              _academyTag(
+                                palette: palette,
+                                label: 'PROGRESS REPORT',
+                                accent: palette.cyan,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'STUDY LIBRARY STATS',
+                                style: _academyDisplayStyle(
+                                  palette: palette,
+                                  size: 24,
+                                  weight: FontWeight.w700,
+                                  letterSpacing: 0.9,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Progress here reflects opening study shelves instead of quiz performance.',
+                                style: _academyHudStyle(
+                                  palette: palette,
+                                  size: 12.6,
+                                  color: palette.textMuted,
+                                  weight: FontWeight.w600,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _academyHudButton(
+                          palette: palette,
+                          icon: Icons.close_rounded,
+                          label: 'CLOSE',
+                          accent: palette.amber,
+                          onTap: () => Navigator.of(dialogContext).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        _buildQuizAcademyMetricChip(
+                          palette: palette,
+                          label: 'SHELF',
+                          value: _quizStudyCategoryLabel(currentCategory),
+                          accent: _quizStudyCategoryColor(currentCategory),
+                          icon: _quizStudyCategoryIcon(currentCategory),
+                        ),
+                        _buildQuizAcademyMetricChip(
+                          palette: palette,
+                          label: 'OPENINGS',
+                          value: '$currentStudied/$currentTotal',
+                          accent: palette.emerald,
+                          icon: Icons.auto_stories_outlined,
+                        ),
+                        _buildQuizAcademyMetricChip(
+                          palette: palette,
+                          label: 'FAMILIES',
+                          value: '$completedFamilies/$totalFamilies',
+                          accent: palette.cyan,
+                          icon: Icons.account_tree_outlined,
+                        ),
+                        _buildQuizAcademyMetricChip(
+                          palette: palette,
+                          label: 'SHELF REPS',
+                          value: currentReps.toString(),
+                          accent: palette.amber,
+                          icon: Icons.bolt_rounded,
+                        ),
+                        _buildQuizAcademyMetricChip(
+                          palette: palette,
+                          label: 'LIBRARY LOGGED',
+                          value: overallStudied.toString(),
+                          accent: palette.signal,
+                          icon: Icons.grid_view_rounded,
+                        ),
+                        _buildQuizAcademyMetricChip(
+                          palette: palette,
+                          label: 'ALL REPS',
+                          value: overallReps.toString(),
+                          accent: palette.cyan,
+                          icon: Icons.insights_outlined,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _academyPixelPanel(
+                      palette: palette,
+                      accent: _quizStudyCategoryColor(currentCategory),
+                      fillColor: palette.panelAlt,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _academyPanelHeader(
+                            palette: palette,
+                            title: 'CURRENT SHELF',
+                            subtitle:
+                                '${_quizStudyCategoryLabel(currentCategory)} completion and repetition totals for the shelf you are currently browsing.',
+                          ),
+                          const SizedBox(height: 12),
+                          _buildQuizStudyMeter(
+                            this,
+                            palette: palette,
+                            label: 'SHELF COMPLETION',
+                            valueLabel:
+                                '${(currentCompletion * 100).toStringAsFixed(0)}%',
+                            value: currentCompletion,
+                            accent: _quizStudyCategoryColor(currentCategory),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _academyPixelPanel(
+                      palette: palette,
+                      accent: palette.emerald,
+                      fillColor: palette.panelAlt,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _academyPanelHeader(
+                            palette: palette,
+                            title: 'SHELF BREAKDOWN',
+                            subtitle:
+                                'Every study shelf uses the same progress rules: a line counts once as studied after its first launch.',
+                          ),
+                          const SizedBox(height: 12),
+                          for (final category
+                              in QuizStudyCategory.values) ...<Widget>[
+                            _buildQuizStudyMeter(
+                              this,
+                              palette: palette,
+                              label: _quizStudyCategoryLabel(
+                                category,
+                              ).toUpperCase(),
+                              valueLabel:
+                                  '${_quizStudyCategoryStudiedCount(category)}/${_quizStudyCategoryTotalCount(category)}',
+                              value: _quizStudyCategoryCompletion(category),
+                              accent: _quizStudyCategoryColor(category),
+                            ),
+                            if (category != QuizStudyCategory.values.last)
+                              const SizedBox(height: 12),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (overallReps <= 0) ...<Widget>[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            palette.amber.withValues(alpha: 0.10),
+                            palette.shell,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: palette.amber.withValues(alpha: 0.32),
+                            width: 2,
+                          ),
+                        ),
+                        child: Text(
+                          'No study reps have been logged yet. Open a variation from the library to start filling these meters.',
+                          style: _academyHudStyle(
+                            palette: palette,
+                            size: 12.4,
+                            color: palette.textMuted,
+                            weight: FontWeight.w700,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2673,17 +3480,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       if (!mounted || !_quizPlayActive) return;
       final uciMove = _quizContinuation[i].move;
       final from = uciMove.substring(0, 2);
-      final to = uciMove.substring(2, 4);
       final piece = board[from];
       if (piece == null) break;
 
       final boardDuringFlight = Map<String, String>.from(board)..remove(from);
-      final isCapture =
-          board.containsKey(to) || (piece[0] == 'p' && from[0] != to[0]);
+      final isCapture = _isCaptureMoveOnBoard(board, uciMove);
       setState(() {
         _quizPlayBoard = boardDuringFlight;
         _quizFlyFrom = from;
-        _quizFlyTo = to;
+        _quizFlyTo = uciMove.substring(2, 4);
         _quizFlyPiece = piece;
         _quizFlyProgress = 0.0;
       });
@@ -2855,28 +3660,36 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
-    final isLandscape = media.orientation == Orientation.landscape;
-    final quizPadding = isLandscape
-        ? EdgeInsets.fromLTRB(
-            16 + media.padding.left,
-            12 + media.padding.top,
-            16 + media.padding.right,
-            16 + media.padding.bottom,
-          )
-        : const EdgeInsets.fromLTRB(16, 12, 16, 16);
-    final lightHeaderColor = isDark ? scheme.onSurface : Colors.black;
+    final palette = _academyPalette(
+      scheme: scheme,
+      useMonochrome: useMonochrome,
+      isDark: isDark,
+    );
+    final sideInset = max(16.0, (media.size.width - 1180.0) / 2);
+    final quizPadding = EdgeInsets.fromLTRB(
+      sideInset + media.padding.left,
+      12 + media.padding.top,
+      sideInset + media.padding.right,
+      18 + media.padding.bottom,
+    );
     final backDestination = _quizLaunchedFromAcademy ? 'academy' : 'menu';
+    final backAction = _quizOpeningsRoutePage
+        ? _returnToQuizSelector
+        : _goToMenu;
+    final backTooltip = _quizOpeningsRoutePage
+        ? 'Back to mode selector'
+        : 'Back to $backDestination';
+    final pageTitle = _quizOpeningsRoutePage
+        ? 'OPENINGS QUIZ'
+        : 'OPENING ACADEMY';
+    final pageSubtitle = _quizOpeningsRoutePage
+        ? 'LEVEL SELECT / MISSION BRIEFING'
+        : 'INSERT COIN / CHOOSE YOUR PATH';
     final currentPoolCount = _quizEligiblePool(
       mode: _quizMode,
       difficulty: _quizDifficulty,
     ).length;
-    final viewedCount = _currentViewedEligibleCount();
-    final eligibleCount = currentPoolCount > 0
-        ? currentPoolCount
-        : _ecoOpenings.length;
     final currentTierColor = _quizDifficultyColor(_quizDifficulty);
-    final perfectCount = _quizPerfectSessionsFor(_quizDifficulty);
-    final requiredCount = _quizAcademyProgress.requiredPerfectSessions;
     final canStart = currentPoolCount >= 3;
     final highestUnlocked = _quizAcademyProgress.highestUnlockedDifficulty();
 
@@ -2887,247 +3700,596 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color.alphaBlend(
-                  const Color(0xFF6FE7FF).withValues(
-                    alpha: useMonochrome
-                        ? (isDark ? 0.06 : 0.08)
-                        : (isDark ? 0.18 : 0.14),
-                  ),
-                  scheme.surface,
-                ),
-                scheme.surface,
-                Color.alphaBlend(
-                  const Color(0xFFD8B640).withValues(
-                    alpha: useMonochrome
-                        ? (isDark ? 0.06 : 0.08)
-                        : (isDark ? 0.14 : 0.10),
-                  ),
-                  scheme.surface,
-                ),
+              colors: <Color>[
+                palette.backdrop,
+                palette.shell,
+                palette.panelAlt,
               ],
               stops: const [0.0, 0.55, 1.0],
             ),
           ),
         ),
         Positioned.fill(child: _buildQuizAcademyAtmosphere(useMonochrome)),
-        IgnorePointer(
-          child: AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              final pulse = _menuDotTime;
-              final alignment = _botSelectorBlueDotAlignment(
-                _blueDotPhase,
-                0.55,
-                _blueDotRadius,
-                pulse,
-                _blueDotTrajectoryNoise,
-                _blueDotShapeSeed,
-                0.0,
-              );
-              return Align(alignment: alignment, child: child);
-            },
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFD8B640).withValues(alpha: 0.92),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF9E761D).withValues(alpha: 0.45),
-                    blurRadius: 18,
-                    spreadRadius: 3,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
         ListView(
           padding: quizPadding,
           children: [
-            Row(
-              children: [
-                IconButton(
-                  onPressed: _goToMenu,
-                  color: lightHeaderColor,
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Back to $backDestination',
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Opening Quiz',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 20,
-                    color: lightHeaderColor,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: _openAppearanceSettings,
-                  color: lightHeaderColor,
-                  icon: const Icon(Icons.palette_outlined),
-                  tooltip: 'Board & Pieces',
-                ),
-                IconButton(
-                  onPressed: _openQuizStatsSheet,
-                  color: lightHeaderColor,
-                  icon: const Icon(Icons.insights_outlined),
-                  tooltip: 'Performance Stats',
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 780;
+                final actions = Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.end,
+                  children: <Widget>[
+                    _academyHudButton(
+                      palette: palette,
+                      icon: Icons.arrow_back,
+                      label: _quizOpeningsRoutePage ? 'BACK' : 'EXIT',
+                      accent: palette.text,
+                      onTap: backAction,
+                    ),
+                    _academyHudButton(
+                      palette: palette,
+                      icon: Icons.palette_outlined,
+                      label: 'STYLE',
+                      accent: palette.amber,
+                      onTap: _openAppearanceSettings,
+                    ),
+                    _academyHudButton(
+                      palette: palette,
+                      icon: Icons.insights_outlined,
+                      label: 'STATS',
+                      accent: palette.cyan,
+                      onTap: _openQuizStatsSheet,
+                    ),
+                  ],
+                );
+                final titleBlock = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      pageTitle,
+                      style: _academyDisplayStyle(
+                        palette: palette,
+                        size: 24,
+                        weight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      pageSubtitle,
+                      style: _academyHudStyle(
+                        palette: palette,
+                        size: 12,
+                        weight: FontWeight.w700,
+                        letterSpacing: 0.85,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      backTooltip,
+                      style: _academyHudStyle(palette: palette, size: 11.3),
+                    ),
+                  ],
+                );
+
+                return _academyPixelPanel(
+                  palette: palette,
+                  accent: _quizOpeningsRoutePage
+                      ? currentTierColor
+                      : palette.cyan,
+                  fillColor: palette.shell,
+                  child: stacked
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            titleBlock,
+                            const SizedBox(height: 14),
+                            actions,
+                          ],
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(child: titleBlock),
+                            const SizedBox(width: 16),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 420),
+                              child: actions,
+                            ),
+                          ],
+                        ),
+                );
+              },
             ),
-            const SizedBox(height: 12),
-            _buildQuizAcademyHeroCard(
-              currentTierColor: currentTierColor,
-              highestUnlocked: highestUnlocked,
-              useMonochrome: useMonochrome,
-            ),
-            const SizedBox(height: 14),
-            _buildQuizAcademyMissionPanel(
-              currentTierColor: currentTierColor,
-              perfectCount: perfectCount,
-              requiredCount: requiredCount,
-              viewedCount: viewedCount,
-              eligibleCount: eligibleCount,
-              highestUnlocked: highestUnlocked,
-            ),
-            const SizedBox(height: 14),
-            _buildQuizAcademyCurriculumPanel(useMonochrome: useMonochrome),
-            const SizedBox(height: 14),
-            _buildQuizAcademyConfigurationPanel(
-              currentPoolCount: currentPoolCount,
-              canStart: canStart,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$viewedCount/$eligibleCount openings viewed',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.58),
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                InkResponse(
-                  onTap: _showOpeningsViewedInfoDialog,
-                  radius: 14,
-                  child: Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: scheme.onSurface.withValues(alpha: 0.60),
-                  ),
-                ),
-              ],
-            ),
+            const SizedBox(height: 16),
+            if (_quizOpeningsRoutePage)
+              _buildQuizAcademyQuizRoutePage(
+                useMonochrome: useMonochrome,
+                currentPoolCount: currentPoolCount,
+                canStart: canStart,
+                currentTierColor: currentTierColor,
+                highestUnlocked: highestUnlocked,
+              )
+            else
+              _buildQuizAcademyLaunchScreen(
+                useMonochrome: useMonochrome,
+                isDark: isDark,
+                scheme: scheme,
+              ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildQuizAcademyAtmosphere(bool useMonochrome) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          Align(
-            alignment: const Alignment(-0.86, -0.86),
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color:
-                    (useMonochrome
-                            ? const Color(0xFFC5CBD3)
-                            : const Color(0xFF6FE7FF))
-                        .withValues(
-                          alpha: useMonochrome
-                              ? (isDark ? 0.06 : 0.10)
-                              : (isDark ? 0.10 : 0.20),
-                        ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (useMonochrome
-                                ? const Color(0xFFB0B7C2)
-                                : const Color(0xFF0F809D))
-                            .withValues(
-                              alpha: useMonochrome
-                                  ? (isDark ? 0.14 : 0.18)
-                                  : (isDark ? 0.22 : 0.30),
-                            ),
-                    blurRadius: 120,
+  void _returnToQuizSelector() {
+    setState(() {
+      _quizOpeningsRoutePage = false;
+      _quizStudyMode = false;
+    });
+  }
+
+  Widget _buildQuizAcademyLaunchScreen({
+    required bool useMonochrome,
+    required bool isDark,
+    required ColorScheme scheme,
+  }) {
+    final palette = _academyPalette(
+      scheme: scheme,
+      useMonochrome: useMonochrome,
+      isDark: isDark,
+    );
+    final eligibleCount = _quizEligiblePool(
+      mode: _quizMode,
+      difficulty: _quizDifficulty,
+    ).length;
+    final highestUnlocked = _quizAcademyProgress.highestUnlockedDifficulty();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 980;
+        final dualColumn = constraints.maxWidth >= 700 && !wide;
+        final marquee = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _academyMarquee(
+              palette: palette,
+              eyebrow: 'INSERT COIN',
+              title: 'OPENING ACADEMY',
+              subtitle:
+                  'Pick a cabinet. Quiz opens the route board; study launches the library immediately. Ladder rules and content loading stay exactly as they are now.',
+              accent: palette.cyan,
+              badges: <Widget>[
+                _buildQuizAcademyMetricChip(
+                  palette: palette,
+                  label: 'READY LINES',
+                  value: max(eligibleCount, _ecoOpenings.length).toString(),
+                  accent: palette.cyan,
+                  icon: Icons.grid_view_rounded,
+                  compact: true,
+                ),
+                _buildQuizAcademyMetricChip(
+                  palette: palette,
+                  label: 'TOP BRACKET',
+                  value: _quizAcademyBracketShortName(highestUnlocked),
+                  accent: _quizDifficultyColor(highestUnlocked),
+                  icon: _quizAcademyBracketIcon(highestUnlocked),
+                  compact: true,
+                ),
+                _buildQuizAcademyMetricChip(
+                  palette: palette,
+                  label: 'PROMOTION',
+                  value:
+                      '${_quizAcademyProgress.requiredPerfectSessions} perfect runs',
+                  accent: palette.emerald,
+                  icon: Icons.workspace_premium_outlined,
+                  compact: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _academyPixelPanel(
+              palette: palette,
+              accent: palette.amber,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _academyPanelHeader(
+                    palette: palette,
+                    title: 'ARCADE DIRECTIVE',
+                    subtitle:
+                        'Choose a cabinet to continue. Quiz sends you to route select. Study jumps straight into the opening library.',
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: <Widget>[
+                      _academyTag(
+                        palette: palette,
+                        label: 'QUIZ -> ROUTE BOARD',
+                        accent: palette.cyan,
+                      ),
+                      _academyTag(
+                        palette: palette,
+                        label: 'STUDY -> LIBRARY',
+                        accent: palette.amber,
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
+          ],
+        );
+        final quizCard = _buildQuizAcademyLauncherCard(
+          palette: palette,
+          assetPath: 'assets/academy/openingsquiz.png',
+          title: 'Openings Quiz',
+          subtitle:
+              'Pick a drill route, inspect the ladder, then clear a 10-question mission.',
+          cartridgeLabel: 'QUIZ CARTRIDGE',
+          ctaLabel: 'PRESS START',
+          accent: palette.cyan,
+          onTap: () {
+            setState(() {
+              _quizOpeningsRoutePage = true;
+              _quizStudyMode = false;
+              _quizQuestionsTarget = 10;
+              _quizStudyDetailOpen = false;
+              _quizStudyShownPly = 0;
+              _quizStudyShelfExpanded = false;
+              _quizEligibleCount = _quizEligiblePool(
+                mode: _quizMode,
+                difficulty: _quizDifficulty,
+              ).length;
+            });
+          },
+        );
+        final studyCard = _buildQuizAcademyLauncherCard(
+          palette: palette,
+          assetPath: 'assets/academy/openingsstudy.png',
+          title: 'Openings Study',
+          subtitle:
+              'Browse grouped lines, inspect continuations, and practice with the study library.',
+          cartridgeLabel: 'STUDY CARTRIDGE',
+          ctaLabel: 'OPEN LIBRARY',
+          accent: palette.amber,
+          onTap: () => _selectQuizAcademyTrack(studyMode: true),
+        );
+        final selectorDeck = wide
+            ? Column(
+                children: <Widget>[
+                  quizCard,
+                  const SizedBox(height: 16),
+                  studyCard,
+                ],
+              )
+            : dualColumn
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(child: quizCard),
+                  const SizedBox(width: 14),
+                  Expanded(child: studyCard),
+                ],
+              )
+            : Column(
+                children: <Widget>[
+                  quizCard,
+                  const SizedBox(height: 14),
+                  studyCard,
+                ],
+              );
+
+        if (!wide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              marquee,
+              const SizedBox(height: 18),
+              selectorDeck,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(flex: 11, child: marquee),
+            const SizedBox(width: 18),
+            Expanded(flex: 9, child: selectorDeck),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildQuizAcademyLauncherCard({
+    required _QuizAcademyPalette palette,
+    required String assetPath,
+    required String title,
+    required String subtitle,
+    required String cartridgeLabel,
+    required String ctaLabel,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    final foreground = accent.computeLuminance() > 0.55
+        ? const Color(0xFF081015)
+        : Colors.white;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Color.alphaBlend(accent.withValues(alpha: 0.14), palette.panel),
+                palette.panel,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: accent.withValues(alpha: 0.78), width: 3),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: palette.shadow,
+                offset: const Offset(6, 6),
+                blurRadius: 0,
+              ),
+            ],
           ),
-          Align(
-            alignment: const Alignment(0.92, -0.72),
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color:
-                    (useMonochrome
-                            ? const Color(0xFFD6D0C5)
-                            : const Color(0xFFD8B640))
-                        .withValues(
-                          alpha: useMonochrome
-                              ? (isDark ? 0.05 : 0.09)
-                              : (isDark ? 0.08 : 0.16),
-                        ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (useMonochrome
-                                ? const Color(0xFFC4BCAD)
-                                : const Color(0xFF9E761D))
-                            .withValues(
-                              alpha: useMonochrome
-                                  ? (isDark ? 0.12 : 0.16)
-                                  : (isDark ? 0.18 : 0.24),
-                            ),
-                    blurRadius: 110,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  _academyTag(
+                    palette: palette,
+                    label: cartridgeLabel,
+                    accent: accent,
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.keyboard_double_arrow_right_rounded,
+                    color: accent,
                   ),
                 ],
               ),
-            ),
-          ),
-          Align(
-            alignment: const Alignment(-0.15, 1.08),
-            child: Container(
-              width: 360,
-              height: 220,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                color:
-                    (useMonochrome
-                            ? const Color(0xFF9FA9B8)
-                            : const Color(0xFF31497A))
-                        .withValues(alpha: isDark ? 0.08 : 0.06),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (useMonochrome
-                                ? const Color(0xFFB8C0CB)
-                                : const Color(0xFF4B7BD8))
-                            .withValues(alpha: isDark ? 0.10 : 0.08),
-                    blurRadius: 120,
+              const SizedBox(height: 14),
+              Container(
+                height: 168,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: accent.withValues(alpha: 0.58),
+                    width: 2,
                   ),
-                ],
+                  color: palette.shell,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: Image.asset(assetPath, fit: BoxFit.cover),
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              Text(
+                title.toUpperCase(),
+                style: _academyDisplayStyle(
+                  palette: palette,
+                  size: 22,
+                  color: accent,
+                  weight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                subtitle,
+                style: _academyHudStyle(
+                  palette: palette,
+                  size: 12.6,
+                  color: palette.textMuted,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: accent.withValues(alpha: 0.90),
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    ctaLabel,
+                    style: _academyHudStyle(
+                      palette: palette,
+                      color: foreground,
+                      size: 12.4,
+                      weight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildQuizAcademyQuizRoutePage({
+    required bool useMonochrome,
+    required int currentPoolCount,
+    required bool canStart,
+    required Color currentTierColor,
+    required QuizDifficulty highestUnlocked,
+  }) {
+    final theme = Theme.of(context);
+    final palette = _academyPalette(
+      scheme: theme.colorScheme,
+      useMonochrome: useMonochrome,
+      isDark: theme.brightness == Brightness.dark,
+    );
+    final routeAccent = _academyRouteAccent(palette, _quizMode);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 980;
+        final routeDeck = _academyPixelPanel(
+          palette: palette,
+          accent: routeAccent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _academyPanelHeader(
+                palette: palette,
+                title: 'ROUTE CARTRIDGES',
+                subtitle:
+                    'Choose the drill cabinet you want to boot before you inspect the ladder and mission details.',
+                infoTitle: 'Openings Quiz Routes',
+                infoMessage:
+                    'Choose your challenge and then refine your bracket with the ladder and mission briefing panels.',
+              ),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, deckConstraints) {
+                  final stacked = deckConstraints.maxWidth < 620;
+                  final cards = <Widget>[
+                    _buildQuizAcademyRouteCard(
+                      palette: palette,
+                      title: _academyRouteTitle(GambitQuizMode.guessName),
+                      description: _academyRouteDescription(
+                        GambitQuizMode.guessName,
+                      ),
+                      badge: _academyRouteBadge(GambitQuizMode.guessName),
+                      icon: _academyRouteIcon(GambitQuizMode.guessName),
+                      accent: palette.cyan,
+                      selected:
+                          !_quizStudyMode &&
+                          _quizMode == GambitQuizMode.guessName,
+                      onTap: () => _selectQuizAcademyTrack(
+                        mode: GambitQuizMode.guessName,
+                        studyMode: false,
+                      ),
+                    ),
+                    _buildQuizAcademyRouteCard(
+                      palette: palette,
+                      title: _academyRouteTitle(GambitQuizMode.guessLine),
+                      description: _academyRouteDescription(
+                        GambitQuizMode.guessLine,
+                      ),
+                      badge: _academyRouteBadge(GambitQuizMode.guessLine),
+                      icon: _academyRouteIcon(GambitQuizMode.guessLine),
+                      accent: palette.amber,
+                      selected:
+                          !_quizStudyMode &&
+                          _quizMode == GambitQuizMode.guessLine,
+                      onTap: () => _selectQuizAcademyTrack(
+                        mode: GambitQuizMode.guessLine,
+                        studyMode: false,
+                      ),
+                    ),
+                  ];
+
+                  if (stacked) {
+                    return Column(
+                      children: <Widget>[
+                        cards[0],
+                        const SizedBox(height: 12),
+                        cards[1],
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(child: cards[0]),
+                      const SizedBox(width: 12),
+                      Expanded(child: cards[1]),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+
+        if (!wide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _buildQuizAcademyHeroCard(
+                currentTierColor: currentTierColor,
+                highestUnlocked: highestUnlocked,
+                useMonochrome: useMonochrome,
+              ),
+              const SizedBox(height: 18),
+              routeDeck,
+              const SizedBox(height: 18),
+              _buildQuizAcademyCurriculumPanel(useMonochrome: useMonochrome),
+              const SizedBox(height: 18),
+              _buildQuizAcademyConfigurationPanel(
+                currentPoolCount: currentPoolCount,
+                canStart: canStart,
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _buildQuizAcademyHeroCard(
+              currentTierColor: currentTierColor,
+              highestUnlocked: highestUnlocked,
+              useMonochrome: useMonochrome,
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(flex: 11, child: routeDeck),
+                const SizedBox(width: 18),
+                Expanded(
+                  flex: 9,
+                  child: Column(
+                    children: <Widget>[
+                      _buildQuizAcademyCurriculumPanel(
+                        useMonochrome: useMonochrome,
+                      ),
+                      const SizedBox(height: 18),
+                      _buildQuizAcademyConfigurationPanel(
+                        currentPoolCount: currentPoolCount,
+                        canStart: canStart,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -3137,157 +4299,63 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required bool useMonochrome,
   }) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final selectedRouteAccent = _quizStudyMode
-        ? const Color(0xFFD8B640)
-        : _quizMode == GambitQuizMode.guessName
-        ? const Color(0xFF5AAEE8)
-        : const Color(0xFFD8B640);
+    final palette = _academyPalette(
+      scheme: theme.colorScheme,
+      useMonochrome: useMonochrome,
+      isDark: theme.brightness == Brightness.dark,
+    );
+    final routeAccent = _academyRouteAccent(palette, _quizMode);
+    final currentPoolCount = _quizEligiblePool(
+      mode: _quizMode,
+      difficulty: _quizDifficulty,
+    ).length;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              selectedRouteAccent.withValues(
-                alpha: useMonochrome
-                    ? (isDark ? 0.08 : 0.10)
-                    : (isDark ? 0.16 : 0.10),
-              ),
-              scheme.surface,
-            ),
-            scheme.surface,
-          ],
+    return _academyMarquee(
+      palette: palette,
+      eyebrow: 'LEVEL SELECT',
+      title: 'OPENINGS QUIZ ROUTES',
+      subtitle:
+          'Select a drill cartridge, inspect the league ladder, then boot a fixed 10-question mission.',
+      accent: routeAccent,
+      badges: <Widget>[
+        _buildQuizAcademyMetricChip(
+          palette: palette,
+          label: 'ROUTE',
+          value: _academyRouteBadge(_quizMode),
+          accent: routeAccent,
+          icon: _academyRouteIcon(_quizMode),
+          compact: true,
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: selectedRouteAccent.withValues(alpha: 0.34)),
-        boxShadow: [
-          BoxShadow(
-            color: selectedRouteAccent.withValues(alpha: isDark ? 0.12 : 0.10),
-            blurRadius: 24,
-            spreadRadius: 1,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Choose Your Academy Track',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 4),
-              _buildQuizInfoButton(
-                title: 'Choose Your Academy Track',
-                message:
-                    'Keep the setup focused: identify names, finish lines, or move into a structured study library with searchable opening families.',
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final stacked = constraints.maxWidth < 780;
-              final cards = [
-                _buildQuizAcademyRouteCard(
-                  title: 'Identify Opening Name',
-                  description:
-                      'Recognize the opening from the position and certify each bracket with clean 10-question runs.',
-                  badge: 'Quiz Route',
-                  icon: Icons.badge_outlined,
-                  accent: const Color(0xFF5AAEE8),
-                  selected:
-                      !_quizStudyMode && _quizMode == GambitQuizMode.guessName,
-                  onTap: () => _selectQuizAcademyTrack(
-                    mode: GambitQuizMode.guessName,
-                    studyMode: false,
-                  ),
-                ),
-                _buildQuizAcademyRouteCard(
-                  title: 'Complete Opening Line',
-                  description:
-                      'Finish the correct continuation when the opening shell is already on the board.',
-                  badge: 'Quiz Route',
-                  icon: Icons.route_outlined,
-                  accent: const Color(0xFFD8B640),
-                  selected:
-                      !_quizStudyMode && _quizMode == GambitQuizMode.guessLine,
-                  onTap: () => _selectQuizAcademyTrack(
-                    mode: GambitQuizMode.guessLine,
-                    studyMode: false,
-                  ),
-                ),
-                _buildQuizAcademyRouteCard(
-                  title: 'Study',
-                  description:
-                      'Browse grouped opening families, search variations, and preview each line on the board while separate study counters track repetition.',
-                  badge: 'Study Route',
-                  icon: Icons.menu_book_outlined,
-                  accent: const Color(0xFFE1BF57),
-                  selected: _quizStudyMode,
-                  onTap: () => _selectQuizAcademyTrack(studyMode: true),
-                ),
-              ];
-
-              if (stacked) {
-                return Column(
-                  children: [
-                    for (var index = 0; index < cards.length; index++) ...[
-                      cards[index],
-                      if (index < cards.length - 1) const SizedBox(height: 10),
-                    ],
-                  ],
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: cards[0]),
-                  const SizedBox(width: 10),
-                  Expanded(child: cards[1]),
-                  const SizedBox(width: 10),
-                  Expanded(child: cards[2]),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildQuizAcademyHeroChip(
-                icon: Icons.flag_outlined,
-                label: 'Unlocked',
-                value: _quizAcademyBracketShortName(highestUnlocked),
-                accent: currentTierColor,
-              ),
-              _buildQuizAcademyHeroChip(
-                icon: Icons.filter_9_plus_outlined,
-                label: 'Set Size',
-                value: 'Fixed at 10',
-                accent: const Color(0xFFD8B640),
-              ),
-            ],
-          ),
-        ],
-      ),
+        _buildQuizAcademyMetricChip(
+          palette: palette,
+          label: 'BRACKET',
+          value: _quizAcademyBracketShortName(_quizDifficulty),
+          accent: currentTierColor,
+          icon: _quizAcademyBracketIcon(_quizDifficulty),
+          compact: true,
+        ),
+        _buildQuizAcademyMetricChip(
+          palette: palette,
+          label: 'UNLOCKED',
+          value: _quizAcademyBracketShortName(highestUnlocked),
+          accent: _quizDifficultyColor(highestUnlocked),
+          icon: Icons.lock_open_rounded,
+          compact: true,
+        ),
+        _buildQuizAcademyMetricChip(
+          palette: palette,
+          label: 'CURATED LINES',
+          value: currentPoolCount.toString(),
+          accent: palette.emerald,
+          icon: Icons.token_rounded,
+          compact: true,
+        ),
+      ],
     );
   }
 
   Widget _buildQuizAcademyRouteCard({
+    required _QuizAcademyPalette palette,
     required String title,
     required String description,
     required String badge,
@@ -3296,80 +4364,116 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    final scheme = Theme.of(context).colorScheme;
     final cardColor = selected
-        ? Color.alphaBlend(accent.withValues(alpha: 0.12), scheme.surface)
-        : scheme.surface;
+        ? Color.alphaBlend(accent.withValues(alpha: 0.18), palette.panelAlt)
+        : palette.panelAlt;
+    final borderColor = selected
+        ? accent.withValues(alpha: 0.90)
+        : palette.line;
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(4),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(4),
         child: Ink(
-          padding: const EdgeInsets.all(13),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? accent.withValues(alpha: 0.70)
-                  : scheme.outline.withValues(alpha: 0.24),
-              width: selected ? 1.4 : 1.0,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Color.alphaBlend(accent.withValues(alpha: 0.08), cardColor),
+                cardColor,
+              ],
             ),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: borderColor, width: 3),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: palette.shadow,
+                offset: const Offset(5, 5),
+                blurRadius: 0,
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: <Widget>[
               Row(
-                children: [
-                  _buildQuizInfoButton(title: title, message: description),
-                  const Spacer(),
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: accent.withValues(alpha: 0.24)),
-                    ),
-                    child: Text(
-                      badge,
-                      style: TextStyle(
-                        color: accent,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
+                      color: accent.withValues(alpha: 0.20),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.60),
+                        width: 2,
                       ),
+                    ),
+                    child: Icon(icon, color: accent, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          title.toUpperCase(),
+                          style: _academyDisplayStyle(
+                            palette: palette,
+                            size: 18,
+                            weight: FontWeight.w700,
+                            letterSpacing: 0.9,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _academyTag(
+                          palette: palette,
+                          label: badge,
+                          accent: accent,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
+              Text(
+                description,
+                style: _academyHudStyle(
+                  palette: palette,
+                  size: 12.2,
+                  color: palette.textMuted,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 14),
               Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(icon, color: accent),
-                  ),
-                  const SizedBox(width: 10),
+                children: <Widget>[
                   Expanded(
                     child: Text(
-                      title,
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                      selected ? 'ACTIVE CARTRIDGE' : 'PRESS TO ARM',
+                      style: _academyHudStyle(
+                        palette: palette,
+                        size: 10.8,
+                        color: selected ? accent : palette.textMuted,
+                        weight: FontWeight.w800,
+                        letterSpacing: 0.9,
+                        height: 1.0,
                       ),
                     ),
+                  ),
+                  Icon(
+                    selected
+                        ? Icons.check_circle_outline
+                        : Icons.play_arrow_rounded,
+                    color: selected ? accent : palette.textMuted,
                   ),
                 ],
               ),
@@ -3380,30 +4484,51 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
-  Widget _buildQuizAcademyHeroChip({
-    required IconData icon,
+  Widget _buildQuizAcademyMetricChip({
+    _QuizAcademyPalette? palette,
     required String label,
     required String value,
     required Color accent,
+    IconData? icon,
+    bool compact = false,
   }) {
+    final theme = Theme.of(context);
+    final effectivePalette =
+        palette ??
+        _academyPalette(
+          scheme: theme.colorScheme,
+          useMonochrome:
+              context.read<AppThemeProvider>().isMonochrome ||
+              _isCinematicThemeEnabled,
+          isDark: theme.brightness == Brightness.dark,
+        );
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: compact ? 7 : 8,
+      ),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.34),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accent.withValues(alpha: 0.42)),
+        color: accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: accent.withValues(alpha: 0.40), width: 2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: accent),
-          const SizedBox(width: 8),
+        children: <Widget>[
+          if (icon != null) ...<Widget>[
+            Icon(icon, size: compact ? 13 : 15, color: accent),
+            const SizedBox(width: 6),
+          ],
           Text(
             '$label: $value',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.92),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+            style: _academyHudStyle(
+              palette: effectivePalette,
+              size: compact ? 10.8 : 11.6,
+              color: effectivePalette.text,
+              weight: FontWeight.w800,
+              letterSpacing: 0.7,
+              height: 1.0,
             ),
           ),
         ],
@@ -3411,256 +4536,91 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
-  Widget _buildQuizAcademyMissionPanel({
-    required Color currentTierColor,
-    required int perfectCount,
-    required int requiredCount,
-    required int viewedCount,
-    required int eligibleCount,
-    required QuizDifficulty highestUnlocked,
-  }) {
+  Widget _buildQuizAcademyAtmosphere(bool useMonochrome) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
-              scheme.surface,
-            ),
-            Color.alphaBlend(
-              scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.04),
-              scheme.surface,
-            ),
-            scheme.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _quizAcademyMissionTitle(),
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              _buildQuizInfoButton(
-                title: _quizAcademyMissionTitle(),
-                message: _quizAcademyMissionBody(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildQuizAcademyMetricChip(
-                label: 'Unlocked',
-                value: _quizAcademyBracketShortName(highestUnlocked),
-                accent: const Color(0xFF5AAEE8),
-              ),
-              _buildQuizAcademyMetricChip(
-                label: 'Perfect Runs',
-                value: _quizAcademyProgress.totalPerfectSessions.toString(),
-                accent: const Color(0xFFD8B640),
-              ),
-              _buildQuizAcademyMetricChip(
-                label: 'Accuracy',
-                value: '${_quizAccuracy().toStringAsFixed(1)}%',
-                accent: const Color(0xFF7EDC8A),
-              ),
-              _buildQuizAcademyMetricChip(
-                label: 'Visible Library',
-                value: '$viewedCount/$eligibleCount',
-                accent: const Color(0xFF9DB5E8),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Text(
-                      'Selected bracket progress',
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    _buildQuizInfoButton(
-                      title: 'Selected bracket progress',
-                      message:
-                          '$perfectCount of $requiredCount perfect ${_quizAcademyTierSessionLabel(_quizDifficulty, lowercase: true)} sessions banked. ${_quizAcademyBracketObjective(_quizDifficulty)}',
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '$perfectCount/$requiredCount',
-                style: TextStyle(
-                  color: currentTierColor,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              minHeight: 8,
-              value: _quizPerfectSessionRatio(_quizDifficulty),
-              backgroundColor: scheme.outline.withValues(alpha: 0.18),
-              valueColor: AlwaysStoppedAnimation<Color>(currentTierColor),
-            ),
-          ),
-        ],
-      ),
+    final palette = _academyPalette(
+      scheme: theme.colorScheme,
+      useMonochrome: useMonochrome,
+      isDark: theme.brightness == Brightness.dark,
     );
-  }
-
-  Widget _buildQuizAcademyMetricChip({
-    required String label,
-    required String value,
-    required Color accent,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accent.withValues(alpha: 0.30)),
-      ),
-      child: Text(
-        '$label: $value',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
+    return _academyBackdropLayer(palette: palette);
   }
 
   Widget _buildQuizAcademyCurriculumPanel({required bool useMonochrome}) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
+    final palette = _academyPalette(
+      scheme: theme.colorScheme,
+      useMonochrome: useMonochrome,
+      isDark: theme.brightness == Brightness.dark,
+    );
     final curriculumInfo = _quizStudyMode
         ? 'Quiz routes still use the academy ladder. Each bracket needs ${_quizAcademyProgress.requiredPerfectSessions} perfect sessions before the next one opens.'
         : 'Folded by default. Expand it when you want to inspect every bracket in the ladder. Each bracket needs ${_quizAcademyProgress.requiredPerfectSessions} perfect sessions before the next one opens.';
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.10 : 0.03),
-          scheme.surface,
-        ).withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
-      ),
+    return _academyPixelPanel(
+      palette: palette,
+      accent: _quizDifficultyColor(_quizDifficulty),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Text(
-                      'Curriculum Ladder',
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    _buildQuizInfoButton(
-                      title: 'Curriculum Ladder',
-                      message: curriculumInfo,
-                    ),
-                  ],
-                ),
-              ),
-              _buildQuizTierToggleButton(
-                expanded: _quizCurriculumExpanded,
-                onPressed: () {
+        children: <Widget>[
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 620;
+              final header = _academyPanelHeader(
+                palette: palette,
+                title: 'LEAGUE LADDER',
+                subtitle:
+                    '${_quizAcademyBracketShortName(_quizDifficulty)} is armed. Promote with ${_quizAcademyProgress.requiredPerfectSessions} perfect clears per bracket.',
+                infoTitle: 'Curriculum Ladder',
+                infoMessage: curriculumInfo,
+              );
+              final toggle = _academyHudButton(
+                palette: palette,
+                icon: _quizCurriculumExpanded
+                    ? Icons.unfold_less_rounded
+                    : Icons.unfold_more_rounded,
+                label: _quizCurriculumExpanded
+                    ? 'FOLD LADDER'
+                    : 'EXPAND LADDER',
+                accent: palette.cyan,
+                onTap: () {
                   setState(() {
                     _quizCurriculumExpanded = !_quizCurriculumExpanded;
                   });
                 },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (!_quizCurriculumExpanded)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildQuizAcademyTierCard(
-                  difficulty: _quizDifficulty,
-                  useMonochrome: useMonochrome,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildQuizAcademyMetricChip(
-                      label: 'Active',
-                      value: _quizAcademyBracketShortName(_quizDifficulty),
-                      accent: _quizDifficultyColor(_quizDifficulty),
-                    ),
-                    _buildQuizAcademyMetricChip(
-                      label: 'Unlocked',
-                      value: _quizAcademyBracketShortName(
-                        _quizAcademyProgress.highestUnlockedDifficulty(),
-                      ),
-                      accent: const Color(0xFF5AAEE8),
-                    ),
-                    _buildQuizAcademyMetricChip(
-                      label: 'Promotion Rule',
-                      value:
-                          '${_quizAcademyProgress.requiredPerfectSessions} perfect runs',
-                      accent: const Color(0xFFD8B640),
-                    ),
+              );
+
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    header,
+                    const SizedBox(height: 14),
+                    toggle,
                   ],
-                ),
-              ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(child: header),
+                  const SizedBox(width: 16),
+                  toggle,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          if (!_quizCurriculumExpanded)
+            _buildQuizAcademyTierCard(
+              difficulty: _quizDifficulty,
+              useMonochrome: useMonochrome,
             )
           else
             LayoutBuilder(
               builder: (context, constraints) {
-                final twoColumns = constraints.maxWidth >= 760;
+                final twoColumns = constraints.maxWidth >= 700;
                 final cards = QuizDifficulty.values
                     .map(
                       (difficulty) => _buildQuizAcademyTierCard(
@@ -3714,7 +4674,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required bool useMonochrome,
   }) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final palette = _academyPalette(
+      scheme: theme.colorScheme,
+      useMonochrome: useMonochrome,
+      isDark: theme.brightness == Brightness.dark,
+    );
     final accent = _quizDifficultyColor(difficulty);
     final unlocked = _quizDifficultyUnlocked(difficulty);
     final completed = _quizAcademyProgress.isDifficultyCompleted(difficulty);
@@ -3729,16 +4693,16 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     Color statusColor;
     if (completed) {
       statusLabel = 'Certified';
-      statusColor = const Color(0xFF7EDC8A);
+      statusColor = palette.emerald;
     } else if (selected) {
       statusLabel = 'Active';
       statusColor = accent;
     } else if (unlocked) {
       statusLabel = 'Unlocked';
-      statusColor = const Color(0xFF8FD0FF);
+      statusColor = palette.cyan;
     } else {
       statusLabel = 'Locked';
-      statusColor = scheme.onSurface.withValues(alpha: 0.62);
+      statusColor = palette.textMuted;
     }
 
     final footerText = unlocked
@@ -3751,109 +4715,153 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         onTap: unlocked
             ? () => _setQuizDifficulty(difficulty)
             : () => unawaited(_showQuizDifficultyLockedDialog(difficulty)),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
         child: Ink(
-          padding: const EdgeInsets.all(13),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
+              colors: <Color>[
                 Color.alphaBlend(
                   accent.withValues(
                     alpha: selected
                         ? (useMonochrome ? 0.12 : 0.18)
                         : (useMonochrome ? 0.06 : 0.08),
                   ),
-                  scheme.surface,
+                  palette.panelAlt,
                 ),
-                scheme.surface,
+                palette.panelAlt,
               ],
             ),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: selected
-                  ? accent.withValues(alpha: 0.72)
-                  : scheme.outline.withValues(alpha: 0.24),
-              width: selected ? 1.4 : 1.0,
+              color: selected ? accent.withValues(alpha: 0.72) : palette.line,
+              width: 3,
             ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: palette.shadow,
+                offset: const Offset(5, 5),
+                blurRadius: 0,
+              ),
+              if (selected)
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.14),
+                  blurRadius: 20,
+                  spreadRadius: 1,
+                ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: <Widget>[
               Row(
-                children: [
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(12),
+                      color: accent.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.55),
+                        width: 2,
+                      ),
                     ),
                     child: Icon(
                       _quizAcademyBracketIcon(difficulty),
                       color: accent,
                     ),
                   ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          _quizAcademyBracketShortName(
+                            difficulty,
+                          ).toUpperCase(),
+                          style: _academyDisplayStyle(
+                            palette: palette,
+                            size: 18,
+                            weight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _academyTag(
+                          palette: palette,
+                          label: statusLabel.toUpperCase(),
+                          accent: statusColor,
+                        ),
+                      ],
                     ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: statusColor.withValues(alpha: 0.30),
-                      ),
-                    ),
-                    child: Text(
-                      statusLabel,
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    unlocked
+                        ? Icons.play_arrow_rounded
+                        : Icons.lock_outline_rounded,
+                    color: statusColor,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _quizAcademyBracketDescription(difficulty),
+                style: _academyHudStyle(
+                  palette: palette,
+                  size: 12.1,
+                  color: palette.textMuted,
+                  weight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  minHeight: 8,
+                  value: unlocked ? _quizPerfectSessionRatio(difficulty) : 0.0,
+                  backgroundColor: palette.line.withValues(alpha: 0.22),
+                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  _buildQuizAcademyMetricChip(
+                    palette: palette,
+                    label: 'PERFECT',
+                    value: '$perfectCount/$requirement',
+                    accent: accent,
+                    icon: Icons.stars_rounded,
+                    compact: true,
+                  ),
+                  _buildQuizAcademyMetricChip(
+                    palette: palette,
+                    label: 'STATE',
+                    value: statusLabel,
+                    accent: statusColor,
+                    icon: unlocked
+                        ? Icons.lock_open_rounded
+                        : Icons.lock_outline_rounded,
+                    compact: true,
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               Text(
-                _quizAcademyBracketShortName(difficulty),
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _quizAcademyBracketDescription(difficulty),
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                  fontSize: 12,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  minHeight: 6,
-                  value: unlocked ? _quizPerfectSessionRatio(difficulty) : 0.0,
-                  backgroundColor: scheme.outline.withValues(alpha: 0.18),
-                  valueColor: AlwaysStoppedAnimation<Color>(accent),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
                 footerText,
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.74),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
+                style: _academyHudStyle(
+                  palette: palette,
+                  size: 11.2,
+                  color: palette.textMuted,
+                  weight: FontWeight.w700,
                 ),
               ),
             ],
@@ -3868,105 +4876,101 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required bool canStart,
   }) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
+    final palette = _academyPalette(
+      scheme: theme.colorScheme,
+      useMonochrome:
+          context.read<AppThemeProvider>().isMonochrome ||
+          _isCinematicThemeEnabled,
+      isDark: theme.brightness == Brightness.dark,
+    );
+    final routeAccent = _academyRouteAccent(palette, _quizMode);
+    final routeIcon = _academyRouteIcon(_quizMode);
+    final routeTitle = _academyRouteTitle(_quizMode);
+    final routeDescription = _academyRouteDescription(_quizMode);
 
-    final routeAccent = _quizMode == GambitQuizMode.guessName
-        ? const Color(0xFF5AAEE8)
-        : const Color(0xFFD8B640);
-    final routeIcon = _quizMode == GambitQuizMode.guessName
-        ? Icons.badge_outlined
-        : Icons.route_outlined;
-    final routeTitle = _quizMode == GambitQuizMode.guessName
-        ? 'Identify Opening Name'
-        : 'Complete Opening Line';
-    final routeDescription = _quizMode == GambitQuizMode.guessName
-        ? 'Each run is a fixed 10-question set. You see a position, then identify the opening name.'
-        : 'Each run is a fixed 10-question set. You see the opening shell, then complete the correct continuation.';
-    final primaryButtonLabel = _quizMode == GambitQuizMode.guessName
-        ? 'Start 10-question name drill'
-        : 'Start 10-question line drill';
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              scheme.secondary.withValues(alpha: isDark ? 0.12 : 0.04),
-              scheme.surface,
-            ),
-            scheme.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
-      ),
+    return _academyPixelPanel(
+      palette: palette,
+      accent: routeAccent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Session Configuration',
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              _buildQuizInfoButton(
-                title: 'Session Configuration',
-                message:
-                    'The selected route now defines the session. There is no extra setup noise here anymore. Promotion stays simple: every playable route uses 10 questions, and academy credit only counts at 100% accuracy.',
-              ),
-            ],
+        children: <Widget>[
+          _academyPanelHeader(
+            palette: palette,
+            title: 'MISSION BRIEFING',
+            subtitle:
+                'Route rules stay fixed: 10 questions per mission, and academy promotion only counts on a perfect clear.',
+            infoTitle: 'Session Configuration',
+            infoMessage:
+                'The selected route defines the session. There is no extra setup noise here anymore. Promotion stays simple: every playable route uses 10 questions, and academy credit only counts at 100% accuracy.',
           ),
           const SizedBox(height: 14),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: routeAccent.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: routeAccent.withValues(alpha: 0.30)),
+              color: Color.alphaBlend(
+                routeAccent.withValues(alpha: 0.14),
+                palette.panelAlt,
+              ),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: routeAccent.withValues(alpha: 0.45),
+                width: 2,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              children: <Widget>[
                 Row(
-                  children: [
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
                     Container(
-                      width: 38,
-                      height: 38,
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
                         color: routeAccent.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: routeAccent.withValues(alpha: 0.45),
+                          width: 2,
+                        ),
                       ),
                       child: Icon(routeIcon, color: routeAccent),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              routeTitle,
-                              style: TextStyle(
-                                color: scheme.onSurface,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  routeTitle.toUpperCase(),
+                                  style: _academyDisplayStyle(
+                                    palette: palette,
+                                    size: 18,
+                                    weight: FontWeight.w700,
+                                    letterSpacing: 0.85,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 6),
+                              _buildQuizInfoButton(
+                                title: routeTitle,
+                                message: routeDescription,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          _buildQuizInfoButton(
-                            title: routeTitle,
-                            message: routeDescription,
+                          const SizedBox(height: 8),
+                          Text(
+                            routeDescription,
+                            style: _academyHudStyle(
+                              palette: palette,
+                              size: 12.2,
+                              color: palette.textMuted,
+                              weight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
@@ -3980,43 +4984,65 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
+            children: <Widget>[
               _buildQuizAcademyMetricChip(
+                palette: palette,
                 label: 'Route',
-                value: routeTitle,
+                value: _academyRouteBadge(_quizMode),
                 accent: routeAccent,
+                icon: routeIcon,
               ),
               _buildQuizAcademyMetricChip(
+                palette: palette,
                 label: 'Questions',
                 value: '10 fixed',
-                accent: const Color(0xFF7EDC8A),
+                accent: palette.emerald,
+                icon: Icons.pin_outlined,
               ),
               _buildQuizAcademyMetricChip(
+                palette: palette,
                 label: 'Bracket',
                 value: _quizAcademyBracketShortName(_quizDifficulty),
                 accent: _quizDifficultyColor(_quizDifficulty),
+                icon: _quizAcademyBracketIcon(_quizDifficulty),
               ),
               _buildQuizAcademyMetricChip(
+                palette: palette,
                 label: 'Curated Lines',
                 value: currentPoolCount.toString(),
-                accent: const Color(0xFF5AAEE8),
+                accent: palette.cyan,
+                icon: Icons.library_books_outlined,
               ),
               _buildQuizAcademyMetricChip(
+                palette: palette,
                 label: 'Promotion Rule',
                 value: '100% finish',
-                accent: const Color(0xFFD8B640),
+                accent: palette.amber,
+                icon: Icons.workspace_premium_outlined,
               ),
             ],
           ),
           if (!canStart) ...[
-            const SizedBox(height: 10),
-            Text(
-              'The selected bracket does not have enough playable lines loaded yet. Try another bracket or let the opening library finish loading.',
-              style: TextStyle(
-                color: const Color(0xFFFFB26A),
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                height: 1.4,
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: palette.signal.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: palette.signal.withValues(alpha: 0.42),
+                  width: 2,
+                ),
+              ),
+              child: Text(
+                'The selected bracket does not have enough playable lines loaded yet. Try another bracket or let the opening library finish loading.',
+                style: _academyHudStyle(
+                  palette: palette,
+                  size: 12.0,
+                  color: palette.signal,
+                  weight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -4024,70 +5050,38 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           LayoutBuilder(
             builder: (context, constraints) {
               final stacked = constraints.maxWidth < 560;
+              final statsButton = _academyHudButton(
+                palette: palette,
+                icon: Icons.insights_outlined,
+                label: 'QUIZ STATS',
+                accent: palette.cyan,
+                onTap: _openQuizStatsSheet,
+              );
+              final startButton = _academyHudButton(
+                palette: palette,
+                icon: Icons.play_arrow_rounded,
+                label: _academyRouteStartLabel(_quizMode),
+                accent: routeAccent,
+                onTap: canStart ? _startQuizSession : null,
+                filled: true,
+              );
+
               if (stacked) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _openQuizStatsSheet,
-                      icon: const Icon(Icons.insights_outlined),
-                      label: const Text('Academy Stats'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: 0.45),
-                        ),
-                        foregroundColor: const Color(0xFF8FD0FF),
-                      ),
-                    ),
+                  children: <Widget>[
+                    statsButton,
                     const SizedBox(height: 10),
-                    FilledButton.icon(
-                      onPressed: canStart ? _startQuizSession : null,
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: Text(primaryButtonLabel),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: routeAccent,
-                        foregroundColor: routeAccent.computeLuminance() > 0.55
-                            ? const Color(0xFF081015)
-                            : Colors.white,
-                      ),
-                    ),
+                    startButton,
                   ],
                 );
               }
 
               return Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _openQuizStatsSheet,
-                      icon: const Icon(Icons.insights_outlined),
-                      label: const Text('Academy Stats'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: 0.45),
-                        ),
-                        foregroundColor: const Color(0xFF8FD0FF),
-                      ),
-                    ),
-                  ),
+                children: <Widget>[
+                  Expanded(child: statsButton),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: canStart ? _startQuizSession : null,
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: Text(primaryButtonLabel),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: routeAccent,
-                        foregroundColor: routeAccent.computeLuminance() > 0.55
-                            ? const Color(0xFF081015)
-                            : Colors.white,
-                      ),
-                    ),
-                  ),
+                  Expanded(child: startButton),
                 ],
               );
             },
@@ -4101,18 +5095,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required String title,
     required String message,
   }) async {
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+    await _showQuizAcademyNoticeDialog(
+      title: title,
+      message: message,
+      tagLabel: 'INFO',
+      actionLabel: 'CLOSE',
+      icon: Icons.info_outline_rounded,
     );
   }
 
@@ -4120,41 +5108,50 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required String title,
     required String message,
   }) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final palette = _academyPalette(
+      scheme: theme.colorScheme,
+      useMonochrome: useMonochrome,
+      isDark: isDark,
+    );
+    final accent = palette.cyan;
 
     return Tooltip(
-      message: message,
-      child: InkResponse(
-        onTap: () =>
-            unawaited(_showQuizInfoDialog(title: title, message: message)),
-        radius: 16,
-        child: Icon(
-          Icons.info_outline,
-          size: 17,
-          color: scheme.onSurface.withValues(alpha: 0.60),
+      message: title,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () =>
+              unawaited(_showQuizInfoDialog(title: title, message: message)),
+          borderRadius: BorderRadius.circular(4),
+          child: Ink(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                accent.withValues(alpha: 0.08),
+                palette.shell,
+              ),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: accent.withValues(alpha: 0.46),
+                width: 2,
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: palette.shadow.withValues(alpha: 0.14),
+                  offset: const Offset(2, 2),
+                  blurRadius: 0,
+                ),
+              ],
+            ),
+            child: Icon(Icons.info_outline_rounded, size: 15, color: accent),
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildQuizTierToggleButton({
-    required bool expanded,
-    required VoidCallback onPressed,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(
-        expanded
-            ? Icons.keyboard_arrow_up_rounded
-            : Icons.keyboard_arrow_down_rounded,
-      ),
-      label: Text(expanded ? 'Hide tiers' : 'Show tiers'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: scheme.onSurface,
-        side: BorderSide(color: scheme.outline.withValues(alpha: 0.24)),
-        visualDensity: VisualDensity.compact,
       ),
     );
   }
@@ -4168,15 +5165,18 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
+    final palette = _academyPalette(
+      scheme: scheme,
+      useMonochrome: useMonochrome,
+      isDark: isDark,
+    );
     final isLandscape = media.orientation == Orientation.landscape;
-    final quizPadding = isLandscape
-        ? EdgeInsets.fromLTRB(
-            16 + media.padding.left,
-            12 + media.padding.top,
-            16 + media.padding.right,
-            16 + media.padding.bottom,
-          )
-        : const EdgeInsets.fromLTRB(16, 12, 16, 16);
+    final quizPadding = EdgeInsets.fromLTRB(
+      16 + media.padding.left,
+      12 + media.padding.top,
+      16 + media.padding.right,
+      16 + media.padding.bottom,
+    );
     final reviewEntry = _quizReviewIndex == null
         ? null
         : _quizReviewHistory[_quizReviewIndex!];
@@ -4214,15 +5214,127 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final isCorrectAnswer =
         answersLocked && displayedSelectedIndex == displayedCorrectIndex;
     final sideBySideLayout =
-        isLandscape && hasQuizBoard && media.size.width >= 700;
-    final quizBackground = useMonochrome
-        ? (isDark ? const Color(0xFF06080D) : Colors.white)
-        : scheme.surface;
-    final chipBorderColor = scheme.outline.withValues(alpha: 0.34);
-    final lightHeaderColor = isDark ? scheme.onSurface : Colors.black;
+        isLandscape && hasQuizBoard && media.size.width >= 920;
+    final routeAccent = _academyRouteAccent(palette, displayedQuizMode);
+    final questionCounter = min(
+      _quizSessionAnswered + (_quizAnswered ? 0 : 1),
+      _quizQuestionsTarget,
+    );
+    final headerTitle = reviewMode
+        ? 'Round Review'
+        : _academyRouteTitle(displayedQuizMode);
+    final headerSubtitle = reviewMode
+        ? 'Step through earlier answers, compare continuations, and jump back to the live round when you are ready.'
+        : displayedQuizMode == GambitQuizMode.guessLine
+        ? 'Tap an option to preview its continuation on the board, then lock in your answer.'
+        : 'Read the board, pick the right opening name, and keep the streak moving.';
+    final sessionBodyStyle = _academyHudStyle(
+      palette: palette,
+      size: 12.7,
+      weight: FontWeight.w700,
+      color: palette.text,
+      letterSpacing: 0.28,
+    );
+    final sessionDetailStyle = _academyHudStyle(
+      palette: palette,
+      size: 11.4,
+      weight: FontWeight.w600,
+      color: palette.textMuted,
+      letterSpacing: 0.22,
+    );
 
     if (!_quizSessionStarted) {
       return _buildQuizAcademySetupScreen();
+    }
+
+    Widget buildQuizTopPanel() {
+      final badges = <Widget>[
+        _academyTag(
+          palette: palette,
+          label: _academyRouteBadge(displayedQuizMode).toUpperCase(),
+          accent: routeAccent,
+        ),
+        _academyTag(
+          palette: palette,
+          label:
+              '${_quizAcademyBracketShortName(_quizDifficulty).toUpperCase()} BRACKET',
+          accent: palette.textMuted,
+        ),
+        _academyTag(
+          palette: palette,
+          label: 'Q $questionCounter/$_quizQuestionsTarget',
+          accent: palette.emerald,
+        ),
+        _academyTag(
+          palette: palette,
+          label: 'SCORE $_quizScore',
+          accent: palette.amber,
+        ),
+        _academyTag(
+          palette: palette,
+          label: 'STREAK $_quizStreak',
+          accent: palette.cyan,
+        ),
+        if (reviewMode &&
+            _quizReviewIndex != null &&
+            _quizReviewHistory.isNotEmpty)
+          _academyTag(
+            palette: palette,
+            label:
+                'REVIEW ${_quizReviewIndex! + 1}/${_quizReviewHistory.length}',
+            accent: palette.signal,
+          ),
+      ];
+
+      final actionButtons = <Widget>[
+        _academyHudButton(
+          palette: palette,
+          icon: Icons.arrow_back_rounded,
+          label: 'BACK TO SETUP',
+          accent: palette.text,
+          onTap: _returnToQuizSetup,
+        ),
+        _academyHudButton(
+          palette: palette,
+          icon: Icons.palette_outlined,
+          label: 'STYLE',
+          accent: palette.cyan,
+          onTap: _openAppearanceSettings,
+        ),
+        _academyHudButton(
+          palette: palette,
+          icon: Icons.insights_outlined,
+          label: 'QUIZ STATS',
+          accent: palette.amber,
+          onTap: _openQuizStatsSheet,
+        ),
+      ];
+
+      return _academyPixelPanel(
+        palette: palette,
+        accent: routeAccent,
+        fillColor: palette.panelAlt,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Wrap(spacing: 10, runSpacing: 10, children: badges),
+            const SizedBox(height: 14),
+            Text(
+              headerTitle,
+              style: _academyDisplayStyle(
+                palette: palette,
+                size: media.size.width < 420 ? 22 : 26,
+                weight: FontWeight.w700,
+                letterSpacing: 0.9,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(headerSubtitle, style: sessionBodyStyle),
+            const SizedBox(height: 14),
+            Wrap(spacing: 10, runSpacing: 10, children: actionButtons),
+          ],
+        ),
+      );
     }
 
     Widget buildQuizBoardCard({double? maxBoardSize}) {
@@ -4250,82 +5362,95 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       final canOpenHistory = reviewMode
           ? (_quizReviewIndex ?? 0) > 0
           : _quizReviewHistory.isNotEmpty;
-
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Color.alphaBlend(
-            scheme.primary.withValues(alpha: isDark ? 0.12 : 0.04),
-            scheme.surface,
-          ).withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+      final boardAccent = showingLivePreview
+          ? palette.amber
+          : reviewMode
+          ? palette.signal
+          : answersLocked
+          ? (isCorrectAnswer ? palette.emerald : palette.signal)
+          : routeAccent;
+      final boardTitle = reviewMode ? 'Review Board' : 'Board Preview';
+      final boardSubtitle = reviewMode
+          ? 'Compare the stored continuation with the answer you selected for this earlier round.'
+          : displayedQuizMode == GambitQuizMode.guessLine
+          ? 'Selecting a line previews its continuation directly on the board.'
+          : 'Read the position first, then choose the matching opening name.';
+      final boardBadges = <Widget>[
+        _academyTag(
+          palette: palette,
+          label: 'POSITION $displayedShownPly PLY',
+          accent: boardAccent,
         ),
+        _academyTag(
+          palette: palette,
+          label: displayedWhiteToMove ? 'WHITE TO MOVE' : 'BLACK TO MOVE',
+          accent: displayedWhiteToMove ? palette.cyan : palette.amber,
+        ),
+        _academyTag(
+          palette: palette,
+          label: visibleArrows.isEmpty
+              ? 'POSITION ONLY'
+              : '${visibleArrows.length} MOVE${visibleArrows.length == 1 ? '' : 'S'} SHOWN',
+          accent: boardAccent,
+        ),
+        if (showingLivePreview)
+          _academyTag(
+            palette: palette,
+            label: 'PREVIEW ACTIVE',
+            accent: palette.amber,
+          ),
+        if (answersLocked && !reviewMode)
+          _academyTag(
+            palette: palette,
+            label: isCorrectAnswer ? 'CORRECT LOCK-IN' : 'ANSWER LOCKED',
+            accent: isCorrectAnswer ? palette.emerald : palette.signal,
+          ),
+      ];
+      final boardActions = <Widget>[
+        if (canOpenHistory)
+          _academyHudButton(
+            palette: palette,
+            icon: Icons.history_edu_outlined,
+            label: reviewMode ? 'OLDER REVIEW' : 'REVIEW LOG',
+            accent: palette.amber,
+            onTap: _openPreviousQuizReview,
+          ),
+        if (reviewMode)
+          _academyHudButton(
+            palette: palette,
+            icon: Icons.play_circle_outline_rounded,
+            label: 'LIVE ROUND',
+            accent: palette.cyan,
+            onTap: _exitQuizReviewMode,
+          ),
+      ];
+
+      return _academyPixelPanel(
+        palette: palette,
+        accent: boardAccent,
+        fillColor: palette.panel,
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 34,
-              child: Stack(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      onPressed: canOpenHistory
-                          ? _openPreviousQuizReview
-                          : null,
-                      tooltip: 'Review previous question',
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 18,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Position after $displayedShownPly ply',
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: reviewMode
-                        ? TextButton(
-                            onPressed: _exitQuizReviewMode,
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF8FD0FF),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                              ),
-                              minimumSize: const Size(0, 32),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text('Current'),
-                          )
-                        : Text(
-                            displayedWhiteToMove
-                                ? 'White to move'
-                                : 'Black to move',
-                            style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.62),
-                              fontSize: 10,
-                            ),
-                          ),
-                  ),
-                ],
+          children: <Widget>[
+            Text(
+              boardTitle.toUpperCase(),
+              style: _academyHudStyle(
+                palette: palette,
+                size: 11.8,
+                weight: FontWeight.w800,
+                color: boardAccent,
+                letterSpacing: 0.95,
+                height: 1.0,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+            Text(boardSubtitle, style: sessionDetailStyle),
+            if (boardActions.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 10),
+              Wrap(spacing: 10, runSpacing: 10, children: boardActions),
+            ],
+            const SizedBox(height: 12),
             Center(
               child: SizedBox(
                 width: maxBoardSize,
@@ -4334,11 +5459,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   aspectRatio: 1,
                   child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: scheme.outline.withValues(alpha: 0.34),
-                        width: 1.2,
-                      ),
+                      color: palette.panelAlt,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: palette.line, width: 2),
                     ),
                     child: LayoutBuilder(
                       builder: (context, bc) {
@@ -4376,7 +5499,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                       progress: _pulseController.value,
                                       reverse: reverse,
                                       showSequenceNumbers: true,
-                                      overrideColor: const Color(0xFFB8BFC8),
+                                      overrideColor: boardAccent.withValues(
+                                        alpha: 0.92,
+                                      ),
                                       staticArrowStyle: true,
                                     ),
                                   ),
@@ -4421,174 +5546,270 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: boardBadges),
           ],
         ),
       );
     }
 
     List<Widget> buildQuizOptionButtons() {
-      return [
+      if (displayedOptions.isEmpty) {
+        return <Widget>[
+          Text('Loading round options...', style: sessionDetailStyle),
+        ];
+      }
+
+      return <Widget>[
         for (int i = 0; i < displayedOptions.length; i++)
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: answersLocked
-                    ? null
-                    : () => _selectQuizAnswerOption(i),
-                icon: answersLocked
-                    ? Icon(
-                        i == displayedCorrectIndex
-                            ? Icons.check_circle
-                            : (i == displayedSelectedIndex
-                                  ? Icons.cancel
-                                  : Icons.radio_button_unchecked),
-                        size: 18,
-                        color: i == displayedCorrectIndex
-                            ? const Color(0xFF7EDC8A)
-                            : (i == displayedSelectedIndex
-                                  ? const Color(0xFFFF8A80)
-                                  : scheme.onSurface.withValues(alpha: 0.36)),
-                      )
-                    : Icon(
-                        i == displayedSelectedIndex
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_unchecked,
-                        size: 17,
-                        color: i == displayedSelectedIndex
-                            ? const Color(0xFF8FD0FF)
-                            : scheme.onSurface.withValues(alpha: 0.48),
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: answersLocked ? null : () => _selectQuizAnswerOption(i),
+                borderRadius: BorderRadius.circular(4),
+                child: Ink(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      (answersLocked
+                              ? (i == displayedCorrectIndex
+                                    ? palette.emerald
+                                    : (i == displayedSelectedIndex
+                                          ? palette.signal
+                                          : palette.line))
+                              : (i == displayedSelectedIndex
+                                    ? routeAccent
+                                    : palette.line))
+                          .withValues(
+                            alpha:
+                                (answersLocked && i == displayedCorrectIndex) ||
+                                    i == displayedSelectedIndex
+                                ? 0.18
+                                : 0.08,
+                          ),
+                      palette.panelAlt,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: answersLocked && i == displayedCorrectIndex
+                          ? palette.emerald.withValues(alpha: 0.94)
+                          : answersLocked && i == displayedSelectedIndex
+                          ? palette.signal.withValues(alpha: 0.86)
+                          : !answersLocked && i == displayedSelectedIndex
+                          ? routeAccent.withValues(alpha: 0.94)
+                          : palette.line,
+                      width: 2,
+                    ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: palette.shadow.withValues(alpha: 0.18),
+                        offset: const Offset(4, 4),
+                        blurRadius: 0,
                       ),
-                style: OutlinedButton.styleFrom(
-                  alignment: Alignment.centerLeft,
-                  side: BorderSide(
-                    color: answersLocked && i == displayedCorrectIndex
-                        ? const Color(0xFF7EDC8A).withValues(alpha: 0.7)
-                        : (!answersLocked && i == displayedSelectedIndex
-                              ? const Color(0xFF5AAEE8).withValues(alpha: 0.75)
-                              : chipBorderColor),
+                    ],
                   ),
-                  backgroundColor: answersLocked && i == displayedCorrectIndex
-                      ? const Color(0xFF7EDC8A).withValues(alpha: 0.12)
-                      : (answersLocked && i == displayedSelectedIndex
-                            ? const Color(0xFFFF8A80).withValues(alpha: 0.08)
-                            : (!answersLocked && i == displayedSelectedIndex
-                                  ? const Color(
-                                      0xFF5AAEE8,
-                                    ).withValues(alpha: 0.10)
-                                  : null)),
-                ),
-                label: displayedQuizMode == GambitQuizMode.guessLine
-                    ? _buildMoveSequenceText(
-                        displayedOptions[i],
-                        fontSize: 14,
-                        color: answersLocked && i == displayedCorrectIndex
-                            ? (isDark
-                                  ? const Color(0xFFE9FFF0)
-                                  : const Color(0xFF143522))
-                            : scheme.onSurface.withValues(alpha: 0.90),
-                        fontWeight: answersLocked && i == displayedCorrectIndex
-                            ? FontWeight.w800
-                            : FontWeight.w600,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : Text(
-                        displayedOptions[i],
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: answersLocked && i == displayedCorrectIndex
-                              ? (isDark
-                                    ? const Color(0xFFE9FFF0)
-                                    : const Color(0xFF143522))
-                              : scheme.onSurface.withValues(alpha: 0.90),
-                          fontWeight:
-                              answersLocked && i == displayedCorrectIndex
-                              ? FontWeight.w800
-                              : FontWeight.w600,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Container(
+                        width: 34,
+                        height: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            (answersLocked && i == displayedCorrectIndex
+                                    ? palette.emerald
+                                    : answersLocked &&
+                                          i == displayedSelectedIndex
+                                    ? palette.signal
+                                    : !answersLocked &&
+                                          i == displayedSelectedIndex
+                                    ? routeAccent
+                                    : palette.shell)
+                                .withValues(alpha: 0.22),
+                            palette.panel,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: answersLocked && i == displayedCorrectIndex
+                                ? palette.emerald.withValues(alpha: 0.86)
+                                : answersLocked && i == displayedSelectedIndex
+                                ? palette.signal.withValues(alpha: 0.76)
+                                : !answersLocked && i == displayedSelectedIndex
+                                ? routeAccent.withValues(alpha: 0.86)
+                                : palette.line,
+                            width: 2,
+                          ),
+                        ),
+                        child: Text(
+                          String.fromCharCode(65 + i),
+                          style: _academyHudStyle(
+                            palette: palette,
+                            color: answersLocked && i == displayedCorrectIndex
+                                ? palette.emerald
+                                : answersLocked && i == displayedSelectedIndex
+                                ? palette.signal
+                                : !answersLocked && i == displayedSelectedIndex
+                                ? routeAccent
+                                : palette.text,
+                            size: 13,
+                            weight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            height: 1.0,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            displayedQuizMode == GambitQuizMode.guessLine
+                                ? DefaultTextStyle.merge(
+                                    style: const TextStyle(
+                                      fontFamily: _quizAcademyHudFontFamily,
+                                      fontFamilyFallback: <String>[
+                                        'Courier New',
+                                      ],
+                                    ),
+                                    child: _buildMoveSequenceText(
+                                      displayedOptions[i],
+                                      fontSize: 13.6,
+                                      color: palette.text,
+                                      fontWeight:
+                                          answersLocked &&
+                                              i == displayedCorrectIndex
+                                          ? FontWeight.w800
+                                          : FontWeight.w700,
+                                      maxLines: 4,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )
+                                : Text(
+                                    displayedOptions[i],
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _academyHudStyle(
+                                      palette: palette,
+                                      color: palette.text,
+                                      size: 13.4,
+                                      weight:
+                                          answersLocked &&
+                                              i == displayedCorrectIndex
+                                          ? FontWeight.w800
+                                          : FontWeight.w700,
+                                      letterSpacing: 0.24,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                            const SizedBox(height: 5),
+                            Text(
+                              answersLocked
+                                  ? i == displayedCorrectIndex
+                                        ? 'Correct answer'
+                                        : i == displayedSelectedIndex
+                                        ? 'Your answer'
+                                        : 'Reviewed option'
+                                  : i == displayedSelectedIndex
+                                  ? displayedQuizMode ==
+                                            GambitQuizMode.guessLine
+                                        ? 'Previewing on board'
+                                        : 'Selected'
+                                  : displayedQuizMode ==
+                                        GambitQuizMode.guessLine
+                                  ? 'Tap to preview'
+                                  : 'Tap to select',
+                              style: _academyHudStyle(
+                                palette: palette,
+                                color:
+                                    answersLocked && i == displayedCorrectIndex
+                                    ? palette.emerald
+                                    : answersLocked &&
+                                          i == displayedSelectedIndex
+                                    ? palette.signal
+                                    : !answersLocked &&
+                                          i == displayedSelectedIndex
+                                    ? routeAccent
+                                    : palette.textMuted,
+                                size: 11,
+                                weight: FontWeight.w700,
+                                letterSpacing: 0.22,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(
+                        answersLocked
+                            ? i == displayedCorrectIndex
+                                  ? Icons.check_circle_rounded
+                                  : i == displayedSelectedIndex
+                                  ? Icons.cancel_rounded
+                                  : Icons.circle_outlined
+                            : i == displayedSelectedIndex
+                            ? (displayedQuizMode == GambitQuizMode.guessLine
+                                  ? Icons.play_circle_fill_rounded
+                                  : Icons.radio_button_checked)
+                            : Icons.radio_button_unchecked,
+                        size: 20,
+                        color: answersLocked && i == displayedCorrectIndex
+                            ? palette.emerald
+                            : answersLocked && i == displayedSelectedIndex
+                            ? palette.signal
+                            : !answersLocked && i == displayedSelectedIndex
+                            ? routeAccent
+                            : palette.textMuted,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
       ];
     }
 
-    Widget buildQuizPromptBlock() {
-      if (displayedPrompt.isEmpty) {
-        return const SizedBox.shrink();
-      }
-      final isGuessLine = displayedQuizMode == GambitQuizMode.guessLine;
+    Widget buildQuizFeedbackBanner() {
+      final accent = isCorrectAnswer ? palette.emerald : palette.signal;
       return Container(
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
         decoration: BoxDecoration(
-          color: isGuessLine
-              ? Color.alphaBlend(
-                  const Color(
-                    0xFF5AAEE8,
-                  ).withValues(alpha: isDark ? 0.14 : 0.07),
-                  scheme.surface,
-                ).withValues(alpha: 0.95)
-              : Color.alphaBlend(
-                  scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
-                  scheme.surface,
-                ).withValues(alpha: 0.90),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isGuessLine
-                ? const Color(
-                    0xFF5AAEE8,
-                  ).withValues(alpha: isDark ? 0.55 : 0.45)
-                : scheme.outline.withValues(alpha: 0.30),
-            width: isGuessLine ? 1.5 : 1.0,
+          color: Color.alphaBlend(
+            accent.withValues(alpha: 0.14),
+            palette.panelAlt,
           ),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: accent.withValues(alpha: 0.72), width: 2),
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (isGuessLine) ...[
-              Text(
-                'Complete this opening line:',
-                style: TextStyle(
-                  color: const Color(
-                    0xFF5AAEE8,
-                  ).withValues(alpha: isDark ? 0.85 : 0.75),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
+          children: <Widget>[
+            Icon(
+              isCorrectAnswer
+                  ? Icons.check_circle_rounded
+                  : Icons.info_outline_rounded,
+              size: 18,
+              color: accent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                displayedFeedback,
+                style: _academyHudStyle(
+                  palette: palette,
+                  color: accent,
+                  size: 12.3,
+                  weight: FontWeight.w700,
+                  letterSpacing: 0.22,
                 ),
-              ),
-              const SizedBox(height: 5),
-            ],
-            Text(
-              displayedPrompt,
-              style: TextStyle(
-                color: isGuessLine
-                    ? scheme.onSurface
-                    : scheme.onSurface.withValues(alpha: 0.74),
-                fontSize: isGuessLine ? 17 : 12,
-                fontWeight: isGuessLine ? FontWeight.w800 : FontWeight.w600,
-                height: isGuessLine ? 1.25 : null,
               ),
             ),
-            if (displayedPromptFocus.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                displayedPromptFocus,
-                style: TextStyle(
-                  color: isGuessLine
-                      ? const Color(0xFFFFE09E)
-                      : const Color(0xFFFFD88A),
-                  fontSize: isGuessLine ? 18 : 14,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: isGuessLine ? 0.2 : 0.0,
-                ),
-              ),
-            ],
           ],
         ),
       );
@@ -4597,169 +5818,209 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     Widget buildQuizPrimaryActionButton() {
       final canSubmitGuess =
           _quizSelectedIndex >= 0 && _quizSelectedIndex < _quizOptions.length;
-      return Align(
-        alignment: Alignment.centerRight,
-        child: reviewMode
-            ? OutlinedButton.icon(
-                onPressed: _exitQuizReviewMode,
-                icon: const Icon(Icons.history_toggle_off_rounded),
-                label: const Text('Return to Current'),
+      return _academyHudButton(
+        palette: palette,
+        icon: reviewMode
+            ? Icons.history_toggle_off_rounded
+            : !_quizAnswered
+            ? Icons.check_rounded
+            : (_quizSessionAnswered >= _quizQuestionsTarget
+                  ? Icons.flag_rounded
+                  : Icons.navigate_next_rounded),
+        label: reviewMode
+            ? 'RETURN TO CURRENT'
+            : !_quizAnswered
+            ? 'LOCK GUESS'
+            : (_quizSessionAnswered >= _quizQuestionsTarget
+                  ? 'FINISH SESSION'
+                  : 'NEXT QUESTION'),
+        accent: reviewMode
+            ? palette.cyan
+            : !_quizAnswered
+            ? routeAccent
+            : (_quizSessionAnswered >= _quizQuestionsTarget
+                  ? palette.amber
+                  : palette.emerald),
+        onTap: reviewMode || _quizAnswered || canSubmitGuess
+            ? _handleQuizPrimaryAction
+            : null,
+        filled: true,
+      );
+    }
+
+    Widget buildQuizQuestionPanel({required bool useScrollableOptions}) {
+      final questionAccent = displayedQuizMode == GambitQuizMode.guessLine
+          ? palette.amber
+          : routeAccent;
+      final selectedLabel =
+          displayedSelectedIndex >= 0 &&
+              displayedSelectedIndex < displayedOptions.length
+          ? 'SELECTED ${String.fromCharCode(65 + displayedSelectedIndex)}'
+          : answersLocked
+          ? 'ROUND LOCKED'
+          : displayedQuizMode == GambitQuizMode.guessLine
+          ? 'PICK A LINE'
+          : 'PICK A NAME';
+      final questionLead = displayedQuizMode == GambitQuizMode.guessLine
+          ? 'Complete This Opening Line'
+          : 'Name This Opening';
+      final optionButtons = buildQuizOptionButtons();
+
+      final header = <Widget>[
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            _academyTag(
+              palette: palette,
+              label: questionLead.toUpperCase(),
+              accent: questionAccent,
+            ),
+            _academyTag(
+              palette: palette,
+              label: selectedLabel,
+              accent: displayedSelectedIndex >= 0 || answersLocked
+                  ? questionAccent
+                  : palette.textMuted,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (displayedPrompt.isNotEmpty) ...<Widget>[
+          Text(
+            displayedPrompt,
+            style: displayedQuizMode == GambitQuizMode.guessLine
+                ? _academyDisplayStyle(
+                    palette: palette,
+                    size: media.size.width < 420 ? 18 : 20,
+                    weight: FontWeight.w700,
+                    letterSpacing: 0.65,
+                  )
+                : sessionBodyStyle,
+          ),
+          const SizedBox(height: 8),
+        ],
+        Text(
+          displayedQuizMode == GambitQuizMode.guessLine
+              ? 'Tap each candidate to preview its continuation on the board before you commit.'
+              : 'Study the board and choose the opening name that matches it.',
+          style: sessionBodyStyle,
+        ),
+        if (displayedPromptFocus.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(displayedPromptFocus, style: sessionDetailStyle),
+        ],
+        if (!reviewMode &&
+            !_quizAnswered &&
+            displayedSelectedIndex < 0) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            'Choose an option to enable LOCK GUESS.',
+            style: _academyHudStyle(
+              palette: palette,
+              color: palette.signal,
+              size: 11.4,
+              weight: FontWeight.w700,
+              letterSpacing: 0.22,
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+      ];
+
+      final footer = <Widget>[
+        if (displayedFeedback.isNotEmpty) ...<Widget>[
+          buildQuizFeedbackBanner(),
+          const SizedBox(height: 12),
+        ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: buildQuizPrimaryActionButton(),
+        ),
+      ];
+
+      return _academyPixelPanel(
+        palette: palette,
+        accent: questionAccent,
+        fillColor: palette.panel,
+        padding: const EdgeInsets.all(12),
+        child: useScrollableOptions
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  ...header,
+                  Expanded(
+                    child: Scrollbar(child: ListView(children: optionButtons)),
+                  ),
+                  const SizedBox(height: 12),
+                  ...footer,
+                ],
               )
-            : FilledButton.icon(
-                onPressed: !_quizAnswered && !canSubmitGuess
-                    ? null
-                    : _handleQuizPrimaryAction,
-                icon: Icon(
-                  !_quizAnswered
-                      ? Icons.check_rounded
-                      : (_quizAnswered &&
-                                _quizSessionAnswered >= _quizQuestionsTarget
-                            ? Icons.flag_rounded
-                            : Icons.navigate_next_rounded),
-                ),
-                label: Text(
-                  !_quizAnswered
-                      ? 'Guess'
-                      : (_quizSessionAnswered >= _quizQuestionsTarget
-                            ? 'Finish Session'
-                            : 'Next Question'),
-                ),
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[...header, ...optionButtons, ...footer],
               ),
       );
     }
 
-    Widget buildQuizFeedbackText() {
-      // High-contrast colours that read clearly on both light and dark backgrounds.
-      final feedbackColor = isCorrectAnswer
-          ? (isDark ? const Color(0xFF6EF08A) : const Color(0xFF2F9E44))
-          : (isDark ? const Color(0xFFFFB347) : const Color(0xFFC97100));
-      return Text(
-        displayedFeedback,
-        style: TextStyle(color: feedbackColor, fontWeight: FontWeight.w700),
-      );
-    }
-
     return Stack(
-      children: [
-        Container(
-          color: quizBackground,
-          child: Padding(
-            padding: quizPadding,
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _returnToQuizSetup,
-                      color: lightHeaderColor,
-                      icon: const Icon(Icons.arrow_back),
-                      tooltip: 'Back to Setup',
-                    ),
-                    Expanded(
-                      child: Text(
-                        '${displayedQuizMode == GambitQuizMode.guessName ? 'Guess Name' : 'Guess Line'} · ${_quizAcademyBracketShortName(_quizDifficulty)} · $_quizQuestionsTarget Q',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _openAppearanceSettings,
-                      color: lightHeaderColor,
-                      icon: const Icon(Icons.palette_outlined),
-                      tooltip: 'Board & Pieces',
-                    ),
-                    IconButton(
-                      onPressed: _openQuizStatsSheet,
-                      color: lightHeaderColor,
-                      icon: const Icon(Icons.insights_outlined),
-                      tooltip: 'Performance Stats',
-                    ),
-                    Text(
-                      'Q ${min(_quizSessionAnswered + (_quizAnswered ? 0 : 1), _quizQuestionsTarget)}/$_quizQuestionsTarget',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.66),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (sideBySideLayout) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(
-                              flex: 5,
-                              child: LayoutBuilder(
-                                builder: (context, leftConstraints) {
-                                  const boardCardChromeHeight = 62.0;
-                                  final boardSize = max(
-                                    0.0,
-                                    min(
-                                      leftConstraints.maxWidth - 24,
-                                      leftConstraints.maxHeight -
-                                          boardCardChromeHeight,
-                                    ),
-                                  );
-                                  return buildQuizBoardCard(
-                                    maxBoardSize: boardSize,
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 6,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  buildQuizPromptBlock(),
-                                  Expanded(
-                                    child: ListView(
-                                      children: buildQuizOptionButtons(),
-                                    ),
+      children: <Widget>[
+        Positioned.fill(child: ColoredBox(color: palette.backdrop)),
+        Positioned.fill(child: _academyBackdropLayer(palette: palette)),
+        Padding(
+          padding: quizPadding,
+          child: Column(
+            children: <Widget>[
+              buildQuizTopPanel(),
+              const SizedBox(height: 12),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (sideBySideLayout) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Expanded(
+                            flex: 5,
+                            child: LayoutBuilder(
+                              builder: (context, leftConstraints) {
+                                const boardCardChromeHeight = 168.0;
+                                final boardSize = max(
+                                  0.0,
+                                  min(
+                                    leftConstraints.maxWidth - 24,
+                                    leftConstraints.maxHeight -
+                                        boardCardChromeHeight,
                                   ),
-                                  if (displayedFeedback.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        top: 2,
-                                        bottom: 8,
-                                      ),
-                                      child: buildQuizFeedbackText(),
-                                    ),
-                                  buildQuizPrimaryActionButton(),
-                                ],
-                              ),
+                                );
+                                return buildQuizBoardCard(
+                                  maxBoardSize: boardSize,
+                                );
+                              },
                             ),
-                          ],
-                        );
-                      }
-
-                      return ListView(
-                        children: [
-                          if (hasQuizBoard) buildQuizBoardCard(),
-                          if (hasQuizBoard) const SizedBox(height: 8),
-                          buildQuizPromptBlock(),
-                          ...buildQuizOptionButtons(),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 6,
+                            child: buildQuizQuestionPanel(
+                              useScrollableOptions: true,
+                            ),
+                          ),
                         ],
                       );
-                    },
-                  ),
+                    }
+
+                    return ListView(
+                      children: <Widget>[
+                        if (hasQuizBoard) buildQuizBoardCard(),
+                        if (hasQuizBoard) const SizedBox(height: 12),
+                        buildQuizQuestionPanel(useScrollableOptions: false),
+                      ],
+                    );
+                  },
                 ),
-                if (displayedFeedback.isNotEmpty && !sideBySideLayout)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2, bottom: 8),
-                    child: buildQuizFeedbackText(),
-                  ),
-                if (!sideBySideLayout) buildQuizPrimaryActionButton(),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         Positioned(
@@ -4771,7 +6032,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               width: 120,
               height: 120,
               fit: BoxFit.contain,
-              opacity: AlwaysStoppedAnimation(0.85),
+              opacity: const AlwaysStoppedAnimation(0.82),
             ),
           ),
         ),
@@ -4788,8 +6049,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required ValueChanged<int?> onDaysChanged,
     required Future<void> Function() onReset,
   });
-
-  void _showOpeningsViewedInfoDialog();
 
   Widget _buildQuizBoard({
     required Map<String, String> boardState,

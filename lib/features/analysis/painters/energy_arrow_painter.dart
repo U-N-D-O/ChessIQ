@@ -246,6 +246,11 @@ class EnergyArrowPainter extends CustomPainter {
         const badgeRadius = 9.2;
         final markerCenter =
             badgeCenters[line.multiPv] ?? Offset.lerp(start, lineEnd, 0.5)!;
+        final badgeBorderColor = isFirstArrow
+            ? const Color(0xFF00FF88)
+            : (useStaticStyle
+                  ? baseColor
+                  : baseColor.withValues(alpha: alphaScale));
 
         if (useStaticStyle) {
           canvas.drawCircle(
@@ -284,11 +289,7 @@ class EnergyArrowPainter extends CustomPainter {
           markerCenter,
           badgeRadius,
           Paint()
-            ..color = useStaticStyle
-                ? baseColor
-                : (isFirstArrow
-                      ? const Color(0xFFFFD700)
-                      : baseColor.withValues(alpha: alphaScale))
+            ..color = badgeBorderColor
             ..style = PaintingStyle.stroke
             ..strokeWidth = useStaticStyle ? 1.8 : (isFirstArrow ? 2.5 : 1.5),
         );

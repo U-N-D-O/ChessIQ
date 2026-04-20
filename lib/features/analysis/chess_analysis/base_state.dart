@@ -236,10 +236,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   QuizDifficulty _quizDifficulty = QuizDifficulty.easy;
   QuizAcademyProgress _quizAcademyProgress = QuizAcademyProgress.initial();
   bool _quizStudyMode = false;
+  bool _quizOpeningsRoutePage = false;
   QuizStudyCategory _quizStudyCategory = QuizStudyCategory.basic;
   bool _quizStudyShelfExpanded = false;
   String _quizStudySearchQuery = '';
   bool _quizStudyDetailOpen = false;
+  bool _quizStudyInfoExpanded = false;
   String? _quizStudySelectedOpeningName;
   String? _quizStudyExpandedFamily;
   Map<String, int> _quizStudyOpeningCounts = <String, int>{};
@@ -5014,7 +5016,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             unawaited(_enterAnalysisBoard()),
                                       ),
                                       _menuGlyphButton(
-                                        label: 'PUZZLE ACADEMY',
+                                        label: 'ACADEMY',
                                         icon: Icons.auto_stories_outlined,
                                         accent: isMono
                                             ? scheme.onSurface.withValues(

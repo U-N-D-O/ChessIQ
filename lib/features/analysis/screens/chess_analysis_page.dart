@@ -29,6 +29,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+part '../../quiz/core/quiz_academy_surface.dart';
 part '../../quiz/core/quiz_components.dart';
 part '../../quiz/core/quiz_screen.dart';
 part '../../quiz/core/quiz_study_screen.dart';
