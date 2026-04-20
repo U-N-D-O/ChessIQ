@@ -1033,6 +1033,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  TextStyle _mainMenuPixelStyle({
+    required Color color,
+    double size = 10.2,
+    double height = 1.2,
+    double letterSpacing = 0.0,
+  }) {
+    return TextStyle(
+      fontFamily: 'PressStart2P',
+      fontFamilyFallback: const <String>['Courier New'],
+      color: color,
+      fontSize: size,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
+
   Future<void> _restoreSnapshotAndStart() async {
     await _loadUiPrefs();
     await _loadStoreState();
@@ -2607,12 +2623,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           ),
                           decoration: BoxDecoration(
                             color: Color.alphaBlend(
-                              sheetScheme.primary.withOpacity(0.06),
+                              sheetScheme.primary.withValues(alpha: 0.06),
                               sheetScheme.surface,
                             ),
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: sheetScheme.outline.withOpacity(0.28),
+                              color: sheetScheme.outline.withValues(alpha: 0.28),
                             ),
                           ),
                           child: Column(
@@ -5055,7 +5071,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               ? Icons.volume_off_rounded
                               : Icons.volume_up_rounded,
                         ),
-                        label: Text(_muteSounds ? 'Muted' : 'Sound On'),
+                        label: Text(
+                          _muteSounds ? 'Muted' : 'Sound On',
+                          style: _mainMenuPixelStyle(
+                            color: scheme.onSurface,
+                            size: 8.4,
+                            height: 1.12,
+                          ),
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: controlSurface,
                           foregroundColor: scheme.onSurface,
@@ -5065,7 +5088,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       FilledButton.icon(
                         onPressed: () => _openSettings(),
                         icon: const Icon(Icons.settings_outlined),
-                        label: const Text('Settings'),
+                        label: Text(
+                          'Settings',
+                          style: _mainMenuPixelStyle(
+                            color: scheme.onSurface,
+                            size: 8.4,
+                            height: 1.12,
+                          ),
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: controlSurface,
                           foregroundColor: scheme.onSurface,
@@ -5129,10 +5159,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               Expanded(
                 child: Text(
                   label,
-                  style: TextStyle(
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
+                  softWrap: false,
+                  style: _mainMenuPixelStyle(
                     color: labelColor,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.9,
+                    size: 10.0,
+                    height: 1.22,
                   ),
                 ),
               ),

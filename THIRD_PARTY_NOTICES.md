@@ -79,6 +79,16 @@ This project bundles third-party pixel font assets used by the Opening Academy r
 - Publisher website: https://www.ggbot.net
 - License note supplied with the downloaded font package: Creative Commons Zero v1.0 Universal (CC0 1.0), Public Domain
 
+- Asset: `assets/fonts/Cairopixel-Regular.ttf`
+- Font name: `Cairopixel`
+- Source page: https://www.fontspace.com/cairopixel-font-f155783
+- License note supplied with the downloaded font package: SIL Open Font License (OFL)
+
+- Asset: `assets/fonts/PressStart2P-Regular.ttf`
+- Font name: `Press Start 2P`
+- Source page: https://www.fontspace.com/press-start-2p-font-f11591
+- License note supplied with the downloaded font package: SIL Open Font License (OFL)
+
 ## 6. Audio Asset Attribution
 
 This project includes third-party audio assets used chess sound effects, coin sound effects and rewards feedback.

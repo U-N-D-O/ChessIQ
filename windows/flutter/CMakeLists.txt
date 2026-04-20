@@ -14,6 +14,9 @@ set(WRAPPER_ROOT "${EPHEMERAL_DIR}/cpp_client_wrapper")
 if (NOT DEFINED FLUTTER_TARGET_PLATFORM)
   set(FLUTTER_TARGET_PLATFORM "windows-x64")
 endif()
+set(WRAPPER_SOURCE_ROOT "${FLUTTER_ROOT}/bin/cache/artifacts/engine/${FLUTTER_TARGET_PLATFORM}/cpp_client_wrapper")
+file(MAKE_DIRECTORY "${WRAPPER_ROOT}")
+file(COPY "${WRAPPER_SOURCE_ROOT}/" DESTINATION "${WRAPPER_ROOT}")
 
 # === Flutter Library ===
 set(FLUTTER_LIBRARY "${EPHEMERAL_DIR}/flutter_windows.dll")
@@ -94,6 +97,10 @@ add_custom_command(
     ${CPP_WRAPPER_SOURCES_CORE} ${CPP_WRAPPER_SOURCES_PLUGIN}
     ${CPP_WRAPPER_SOURCES_APP}
     ${PHONY_OUTPUT}
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${WRAPPER_ROOT}"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${WRAPPER_SOURCE_ROOT}"
+    "${WRAPPER_ROOT}"
   COMMAND ${CMAKE_COMMAND} -E env
     ${FLUTTER_TOOL_ENVIRONMENT}
     "${FLUTTER_ROOT}/packages/flutter_tools/bin/tool_backend.bat"

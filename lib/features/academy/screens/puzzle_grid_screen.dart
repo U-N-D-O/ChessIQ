@@ -4,6 +4,7 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
+import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
@@ -90,8 +91,12 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     final academy = context.watch<PuzzleAcademyProvider>();
     final appTheme = context.watch<AppThemeProvider>();
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final monochrome = appTheme.isMonochrome || widget.cinematicThemeEnabled;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    final nodeAccent = widget.node.goldCrown ? palette.amber : palette.cyan;
     final total = academy.gridPuzzleCountForNode(widget.node);
     final frontier = academy.frontierPuzzleIndexForNode(widget.node);
     final examTarget = academy.examUnlockSolveTarget(widget.node);
@@ -158,113 +163,174 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      Hero(
-                        tag: widget.heroTag,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: Container(
-                            width: 30,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: widget.node.goldCrown
-                                    ? const Color(0xFFD8B640)
-                                    : const Color(0xFF6FE7FF),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${widget.node.startElo}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: scheme.onSurface.withValues(
-                                    alpha: 0.92,
+                Container(
+                  decoration: puzzleAcademyPanelDecoration(
+                    palette: palette,
+                    accent: nodeAccent,
+                    radius: 10,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Hero(
+                              tag: widget.heroTag,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: nodeAccent.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: nodeAccent.withValues(alpha: 0.68),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${widget.node.startElo}',
+                                      style: puzzleAcademyHudStyle(
+                                        palette: palette,
+                                        size: 11.6,
+                                        weight: FontWeight.w800,
+                                        letterSpacing: 0.85,
+                                        height: 1.0,
+                                        color: palette.text,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Frontier #${frontier + 1}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: scheme.onSurface.withValues(alpha: 0.95),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _StatusPill(
-                        label: '$completedCount/$examTarget',
-                        icon: Icons.verified_outlined,
-                        tone: examUnlocked
-                            ? const Color(0xFF89DBA7)
-                            : const Color(0xFFD8B640),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _ModeChip(
-                        label: 'All',
-                        selected: _viewMode == _GridViewMode.all,
-                        icon: Icons.grid_view_rounded,
-                        onTap: () {
-                          setState(() => _viewMode = _GridViewMode.all);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      _ModeChip(
-                        label: 'Action Queue',
-                        selected: _viewMode == _GridViewMode.actionable,
-                        icon: Icons.bolt_rounded,
-                        onTap: () {
-                          setState(() => _viewMode = _GridViewMode.actionable);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      _ModeChip(
-                        label: 'Grid Overlay',
-                        selected: false,
-                        icon: Icons.open_in_full_rounded,
-                        onTap: () {
-                          _openGridPopup(
-                            academy: academy,
-                            visibleIndices: visibleIndices,
-                            frontier: frontier,
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: infoItems
-                        .map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: _InfoQuickButton(
-                              item: item,
-                              onTap: () => _showInfoSheet(item),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${widget.node.title} Grid',
+                                    style: puzzleAcademyDisplayStyle(
+                                      palette: palette,
+                                      size: 18,
+                                      color: nodeAccent,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Frontier #${frontier + 1} of $total. Keep the live surface minimal and open intel buttons for rules, scoring, and tile detail.',
+                                    style: puzzleAcademyHudStyle(
+                                      palette: palette,
+                                      size: 11.7,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        )
-                        .toList(growable: false),
+                            const SizedBox(width: 10),
+                            PuzzleAcademyInfoButton(
+                              title: 'Grid Intel',
+                              message:
+                                  'All shows every slot in the node. Action Queue only shows positions you can act on now: frontier, skipped, and replayable slots. Open tile detail on long press for specific state and queue placement.',
+                              accent: nodeAccent,
+                              monochromeOverride: monochrome,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _StatusPill(
+                              label: 'FRONTIER ${frontier + 1}',
+                              icon: Icons.navigation_rounded,
+                              tone: nodeAccent,
+                              monochrome: monochrome,
+                            ),
+                            _StatusPill(
+                              label: examUnlocked
+                                  ? 'EXAM READY'
+                                  : '$remainingToExam LEFT',
+                              icon: Icons.workspace_premium_outlined,
+                              tone: examUnlocked
+                                  ? const Color(0xFF89DBA7)
+                                  : const Color(0xFFD8B640),
+                              monochrome: monochrome,
+                            ),
+                            if (bestExam != null)
+                              _StatusPill(
+                                label:
+                                    'BEST ${bestExam.grade} ${bestExam.score}',
+                                icon: Icons.military_tech_outlined,
+                                tone: palette.amber,
+                                monochrome: monochrome,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _ModeChip(
+                              label: 'All',
+                              selected: _viewMode == _GridViewMode.all,
+                              icon: Icons.grid_view_rounded,
+                              monochrome: monochrome,
+                              onTap: () {
+                                setState(() => _viewMode = _GridViewMode.all);
+                              },
+                            ),
+                            _ModeChip(
+                              label: 'Action Queue',
+                              selected: _viewMode == _GridViewMode.actionable,
+                              icon: Icons.bolt_rounded,
+                              monochrome: monochrome,
+                              onTap: () {
+                                setState(
+                                  () => _viewMode = _GridViewMode.actionable,
+                                );
+                              },
+                            ),
+                            _ModeChip(
+                              label: 'Grid Overlay',
+                              selected: false,
+                              icon: Icons.open_in_full_rounded,
+                              monochrome: monochrome,
+                              onTap: () {
+                                _openGridPopup(
+                                  academy: academy,
+                                  visibleIndices: visibleIndices,
+                                  frontier: frontier,
+                                  monochrome: monochrome,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: infoItems
+                              .map(
+                                (item) => _InfoQuickButton(
+                                  item: item,
+                                  monochrome: monochrome,
+                                  onTap: () => _showInfoSheet(item),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -279,17 +345,34 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                           _jumpToFrontier(frontier);
                         });
                       },
+                      style: puzzleAcademyOutlinedButtonStyle(
+                        palette: palette,
+                        accent: palette.cyan,
+                      ),
                       icon: const Icon(Icons.navigation_rounded),
                       label: const Text('Show full grid and jump to frontier'),
                     ),
                   ),
                 Expanded(
-                  child: _buildGridView(
-                    academy: academy,
-                    visibleIndices: visibleIndices,
-                    frontier: frontier,
-                    controller: _scrollController,
-                    gridMetrics: gridMetrics,
+                  child: Container(
+                    decoration: puzzleAcademyPanelDecoration(
+                      palette: palette,
+                      accent: nodeAccent,
+                      fillColor: palette.panel.withValues(alpha: 0.90),
+                      radius: 10,
+                      elevated: false,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: _buildGridView(
+                        academy: academy,
+                        visibleIndices: visibleIndices,
+                        frontier: frontier,
+                        controller: _scrollController,
+                        gridMetrics: gridMetrics,
+                        monochrome: monochrome,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -300,9 +383,18 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     );
 
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: palette.backdrop,
       appBar: AppBar(
-        title: Text(widget.node.title),
+        backgroundColor: palette.panel.withValues(alpha: 0.94),
+        surfaceTintColor: Colors.transparent,
+        title: Text(
+          'Puzzle Grid',
+          style: puzzleAcademyDisplayStyle(
+            palette: palette,
+            size: 16,
+            color: nodeAccent,
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Jump to frontier',
@@ -312,9 +404,12 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: Center(
-              child: Text(
-                '${widget.node.solvedCount}/${widget.node.masteryTarget}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              child: PuzzleAcademyTag(
+                label:
+                    '${widget.node.solvedCount}/${widget.node.masteryTarget}',
+                accent: palette.amber,
+                icon: Icons.verified_outlined,
+                monochromeOverride: monochrome,
               ),
             ),
           ),
@@ -330,6 +425,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     required int frontier,
     required ScrollController controller,
     required _GridMetrics gridMetrics,
+    required bool monochrome,
     bool compactTiles = false,
   }) {
     return GridView.builder(
@@ -356,6 +452,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
             isFrontier: index == frontier,
             enabled: enabled,
             compact: compactTiles,
+            monochrome: monochrome,
             onLongPress: () {
               _showTileDetails(
                 index: index,
@@ -395,6 +492,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     required PuzzleAcademyProvider academy,
     required List<int> visibleIndices,
     required int frontier,
+    required bool monochrome,
   }) async {
     final metrics = _gridMetricsForWidth(
       MediaQuery.sizeOf(context).width,
@@ -412,49 +510,32 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
 
     await showModalBottomSheet<void>(
       context: context,
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      showDragHandle: true,
+      showDragHandle: false,
       builder: (sheetContext) {
-        final sheetTheme = Theme.of(sheetContext);
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.sizeOf(sheetContext).height * 0.88,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Grid Focus Mode',
-                        style: sheetTheme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        'Frontier #${frontier + 1}',
-                        style: TextStyle(
-                          color: sheetTheme.colorScheme.onSurface.withValues(
-                            alpha: 0.74,
-                          ),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: _buildGridView(
-                      academy: academy,
-                      visibleIndices: visibleIndices,
-                      frontier: frontier,
-                      controller: popupController,
-                      gridMetrics: metrics,
-                      compactTiles: true,
-                    ),
-                  ),
-                ],
+        return SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.88,
+          child: PuzzleAcademySheetShell(
+            title: 'Grid Focus Mode',
+            subtitle: 'Compact overlay for quick route scanning.',
+            accent: const Color(0xFF6FE7FF),
+            icon: Icons.open_in_full_rounded,
+            trailing: PuzzleAcademyTag(
+              label: 'FRONTIER ${frontier + 1}',
+              accent: const Color(0xFF6FE7FF),
+              monochromeOverride: monochrome,
+            ),
+            monochromeOverride: monochrome,
+            child: Expanded(
+              child: _buildGridView(
+                academy: academy,
+                visibleIndices: visibleIndices,
+                frontier: frontier,
+                controller: popupController,
+                gridMetrics: metrics,
+                monochrome: monochrome,
+                compactTiles: true,
               ),
             ),
           ),
@@ -486,49 +567,31 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
   }
 
   Future<void> _showInfoSheet(_GridInfoItem item) async {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(item.icon, color: item.tone),
-                    const SizedBox(width: 8),
-                    Text(
-                      item.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  item.preview,
-                  style: TextStyle(
-                    color: item.tone,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  item.detail,
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.78),
-                    height: 1.35,
-                  ),
-                ),
-              ],
+      backgroundColor: Colors.transparent,
+      showDragHandle: false,
+      builder: (sheetContext) {
+        final palette = puzzleAcademyPalette(
+          sheetContext,
+          monochromeOverride: monochrome,
+        );
+        return PuzzleAcademySheetShell(
+          title: item.title,
+          subtitle: item.preview,
+          accent: item.tone,
+          icon: item.icon,
+          monochromeOverride: monochrome,
+          child: Text(
+            item.detail,
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 12.1,
+              weight: FontWeight.w600,
+              height: 1.45,
             ),
           ),
         );
@@ -563,8 +626,9 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     required bool enabled,
   }) async {
     final academy = context.read<PuzzleAcademyProvider>();
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
     final status = _stateLabel(state);
     final frontier = academy.frontierPuzzleIndexForNode(widget.node);
     final queueDelta = index - frontier;
@@ -576,48 +640,59 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
 
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Puzzle #${index + 1} • $status',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+      backgroundColor: Colors.transparent,
+      showDragHandle: false,
+      builder: (sheetContext) {
+        final palette = puzzleAcademyPalette(
+          sheetContext,
+          monochromeOverride: monochrome,
+        );
+        final accent = switch (state) {
+          PuzzleGridTileState.solved => const Color(0xFF9BE27C),
+          PuzzleGridTileState.skipped => const Color(0xFFD8B640),
+          PuzzleGridTileState.nextAvailable => const Color(0xFF6FE7FF),
+          PuzzleGridTileState.replayable => const Color(0xFF89A7C7),
+          PuzzleGridTileState.locked => palette.signal,
+        };
+        return PuzzleAcademySheetShell(
+          title: 'Puzzle #${index + 1}',
+          subtitle: status,
+          accent: accent,
+          icon: Icons.extension_outlined,
+          monochromeOverride: monochrome,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  PuzzleAcademyTag(
+                    label: queueLabel.toUpperCase(),
+                    accent: accent,
+                    monochromeOverride: monochrome,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  queueLabel,
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.74),
-                    fontWeight: FontWeight.w600,
+                  PuzzleAcademyTag(
+                    label: 'RATING ${puzzle?.rating ?? 'N/A'}',
+                    accent: palette.amber,
+                    monochromeOverride: monochrome,
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                enabled
+                    ? 'This slot is runnable now. Any solved or skipped result here still advances long-term exam unlock progress.'
+                    : 'This slot is currently gated. Clear earlier frontier positions before this slot opens.',
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: 12.1,
+                  weight: FontWeight.w600,
+                  height: 1.45,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Rating band: ${widget.node.title} • Puzzle rating: ${puzzle?.rating ?? 'unavailable'}',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.70),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  enabled
-                      ? 'This slot is runnable now. Long-term completion also contributes to the 150-puzzle exam threshold.'
-                      : 'This slot is currently gated. Progress earlier frontier positions to unlock it.',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.70),
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -858,21 +933,26 @@ class _StatusPill extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.tone,
+    required this.monochrome,
   });
 
   final String label;
   final IconData icon;
   final Color tone;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: tone.withValues(alpha: 0.38)),
+        color: tone.withValues(alpha: monochrome ? 0.18 : 0.12),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: tone.withValues(alpha: 0.48), width: 2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -881,10 +961,13 @@ class _StatusPill extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.92),
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 10.8,
+              weight: FontWeight.w800,
+              letterSpacing: 0.9,
+              height: 1.0,
+              color: palette.text,
             ),
           ),
         ],
@@ -894,25 +977,36 @@ class _StatusPill extends StatelessWidget {
 }
 
 class _InfoQuickButton extends StatelessWidget {
-  const _InfoQuickButton({required this.item, required this.onTap});
+  const _InfoQuickButton({
+    required this.item,
+    required this.onTap,
+    required this.monochrome,
+  });
 
   final _GridInfoItem item;
   final VoidCallback onTap;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
-            color: item.tone.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: item.tone.withValues(alpha: 0.42)),
+            color: item.tone.withValues(alpha: monochrome ? 0.18 : 0.12),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: item.tone.withValues(alpha: 0.52),
+              width: 2,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -920,11 +1014,14 @@ class _InfoQuickButton extends StatelessWidget {
               Icon(item.icon, size: 14, color: item.tone),
               const SizedBox(width: 6),
               Text(
-                '${item.title}: ${item.preview}',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.90),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                item.title.toUpperCase(),
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: 10.6,
+                  weight: FontWeight.w800,
+                  letterSpacing: 0.9,
+                  height: 1.0,
+                  color: palette.text,
                 ),
               ),
               const SizedBox(width: 4),
@@ -942,40 +1039,42 @@ class _ModeChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.icon,
+    required this.monochrome,
     required this.onTap,
   });
 
   final String label;
   final bool selected;
   final IconData icon;
+  final bool monochrome;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Use a visible cyan in dark mode, a deeper teal in light mode.
-    final accentCyan = isDark
-        ? const Color(0xFF6FE7FF)
-        : const Color(0xFF0E7490);
-    final tone = selected ? accentCyan : scheme.onSurface;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    final accentCyan = palette.cyan;
+    final tone = selected ? accentCyan : palette.text;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
         color: selected
-            ? accentCyan.withValues(alpha: isDark ? 0.16 : 0.12)
-            : scheme.surface.withValues(alpha: isDark ? 0.28 : 0.85),
+            ? accentCyan.withValues(alpha: monochrome ? 0.20 : 0.14)
+            : palette.panelAlt.withValues(alpha: monochrome ? 0.94 : 0.90),
         border: Border.all(
           color: selected
-              ? accentCyan.withValues(alpha: isDark ? 0.62 : 0.80)
-              : scheme.outline.withValues(alpha: 0.28),
+              ? accentCyan.withValues(alpha: 0.74)
+              : palette.line.withValues(alpha: 0.48),
+          width: 2,
         ),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           child: Row(
@@ -985,9 +1084,13 @@ class _ModeChip extends StatelessWidget {
               const SizedBox(width: 7),
               Text(
                 label,
-                style: TextStyle(
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: 10.8,
+                  weight: FontWeight.w800,
+                  letterSpacing: 0.9,
+                  height: 1.0,
                   color: tone.withValues(alpha: selected ? 0.96 : 0.82),
-                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -1079,6 +1182,7 @@ class _GridTile extends StatelessWidget {
     required this.isFrontier,
     required this.enabled,
     required this.compact,
+    required this.monochrome,
     required this.onTap,
     required this.onLongPress,
   });
@@ -1088,12 +1192,17 @@ class _GridTile extends StatelessWidget {
   final bool isFrontier;
   final bool enabled;
   final bool compact;
+  final bool monochrome;
   final VoidCallback? onTap;
   final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    final isDark = palette.isDark;
     final color = switch (state) {
       PuzzleGridTileState.solved => const Color(0xFF9BE27C),
       PuzzleGridTileState.skipped => const Color(0xFFD8B640),
@@ -1109,13 +1218,16 @@ class _GridTile extends StatelessWidget {
         isDark ? const Color(0xFFE9FBFF) : const Color(0xFF004455),
       _ => (isDark ? Colors.white : Colors.black87).withValues(alpha: 0.90),
     };
-    // In light mode use stronger fill alpha so tiles stand out.
     final tileAlpha = enabled ? (isDark ? 0.32 : 0.52) : (isDark ? 0.18 : 0.35);
+    final fillColor = Color.alphaBlend(
+      color.withValues(alpha: tileAlpha),
+      palette.panel,
+    );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(compact ? 7 : 16),
+        borderRadius: BorderRadius.circular(compact ? 6 : 8),
         boxShadow: isFrontier
             ? [
                 BoxShadow(
@@ -1131,39 +1243,30 @@ class _GridTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(compact ? 7 : 16),
+          borderRadius: BorderRadius.circular(compact ? 6 : 8),
           child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(compact ? 7 : 16),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  color.withValues(alpha: tileAlpha + 0.08),
-                  color.withValues(alpha: tileAlpha),
-                ],
-              ),
-              border: Border.all(
-                color: color.withValues(alpha: enabled ? 0.88 : 0.45),
-                width: compact ? 0.8 : (enabled ? 1.2 : 1.0),
-              ),
+            decoration: puzzleAcademyPanelDecoration(
+              palette: palette,
+              accent: color,
+              fillColor: fillColor,
+              borderColor: color.withValues(alpha: enabled ? 0.88 : 0.45),
+              radius: compact ? 6 : 8,
+              borderWidth: compact ? 1.4 : 2,
+              elevated: isFrontier,
             ),
             child: Center(
               child: Text(
                 '${index + 1}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: compact ? 9 : 16,
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: compact ? 8.6 : 14.2,
+                  weight: FontWeight.w800,
+                  letterSpacing: compact ? 0.45 : 0.8,
+                  height: 1.0,
                   color: enabled
                       ? tileTextColor
                       : tileTextColor.withValues(alpha: 0.78),
-                  shadows: const [
-                    Shadow(
-                      color: Color(0x7F000000),
-                      blurRadius: 3,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
+                  withGlow: true,
                 ),
               ),
             ),

@@ -14,7 +14,9 @@ import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart'
 import 'package:chessiq/features/academy/screens/puzzle_grid_screen.dart';
 import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
 import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
+import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
 import 'package:confetti/confetti.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
@@ -109,6 +111,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   String? _academyHubPressedCardId;
   bool _academyHubLaunchInFlight = false;
   _AcademyHubFlightData? _academyHubFlight;
+
+  bool get _useReducedWindowsVisualEffects =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   @override
   void initState() {
@@ -214,6 +219,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           lockHandle: lockHandle,
           lockCountry: lockCountry,
           allowExitToMenu: allowExitToMenu,
+          cinematicThemeEnabled: widget.cinematicThemeEnabled,
         );
       },
     );
@@ -384,74 +390,117 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         : provider.progress.country.trim().isNotEmpty
         ? '${provider.progress.country.trim()} Top 10'
         : 'National Top 10';
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    final profileMissing = provider.shouldAskForProfile;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Expanded(
-              child: FilledButton(
-                onPressed: () {
-                  setState(() {
-                    _leaderboardScope = _LeaderboardScope.international;
-                  });
-                  provider.refreshRemoteScoreboard(national: false);
-                },
-                style: _academyFilledButtonStyle(
-                  backgroundColor: selectedInternational
-                      ? internationalTone.withValues(
-                          alpha: monochrome ? 0.88 : 0.94,
-                        )
-                      : internationalTone.withValues(
-                          alpha: monochrome ? 0.20 : 0.14,
-                        ),
-                  foregroundColor: selectedInternational
-                      ? const Color(0xFF081517)
-                      : internationalTone,
-                  monochrome: monochrome,
-                  side: BorderSide(
-                    color: internationalTone.withValues(
-                      alpha: selectedInternational ? 0.92 : 0.42,
-                    ),
-                  ),
-                  radius: 18,
+              child: Text(
+                'Retro Scoreboard',
+                style: puzzleAcademyDisplayStyle(
+                  palette: palette,
+                  size: 16,
+                  color: palette.cyan,
                 ),
-                child: const Text('International'),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton(
-                onPressed: () {
-                  setState(() {
-                    _leaderboardScope = _LeaderboardScope.national;
-                  });
-                  provider.refreshRemoteScoreboard(national: true);
-                },
-                style: _academyFilledButtonStyle(
-                  backgroundColor: selectedNational
-                      ? nationalTone.withValues(alpha: monochrome ? 0.88 : 0.94)
-                      : nationalTone.withValues(
-                          alpha: monochrome ? 0.22 : 0.15,
-                        ),
-                  foregroundColor: selectedNational
-                      ? const Color(0xFF191204)
-                      : nationalTone,
-                  monochrome: monochrome,
-                  side: BorderSide(
-                    color: nationalTone.withValues(
-                      alpha: selectedNational ? 0.92 : 0.44,
-                    ),
-                  ),
-                  radius: 18,
+            if (provider.scoreboardSyncing)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: PuzzleAcademyTag(
+                  label: 'SYNCING',
+                  accent: palette.amber,
+                  icon: Icons.sync_rounded,
                 ),
-                child: const Text('National'),
               ),
+            PuzzleAcademyInfoButton(
+              title: 'Scoreboard Scope',
+              message:
+                  'International compares every submitted academy exam. National filters the same board to your selected country or region. Leaderboard scoring uses your best recorded exam results, not daily challenge progress.',
+              accent: palette.cyan,
+              monochromeOverride: monochrome,
             ),
           ],
         ),
         const SizedBox(height: 10),
+        Text(
+          profileMissing
+              ? 'Set up your academy profile to appear on the live board.'
+              : 'Switch between worldwide and local exam standings without leaving the map.',
+          style: puzzleAcademyHudStyle(
+            palette: palette,
+            size: 11.8,
+            weight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _leaderboardScope = _LeaderboardScope.international;
+                });
+                provider.refreshRemoteScoreboard(national: false);
+              },
+              style: _academyFilledButtonStyle(
+                backgroundColor: selectedInternational
+                    ? internationalTone.withValues(
+                        alpha: monochrome ? 0.88 : 0.94,
+                      )
+                    : internationalTone.withValues(
+                        alpha: monochrome ? 0.20 : 0.14,
+                      ),
+                foregroundColor: selectedInternational
+                    ? const Color(0xFF081517)
+                    : internationalTone,
+                monochrome: monochrome,
+                side: BorderSide(
+                  color: internationalTone.withValues(
+                    alpha: selectedInternational ? 0.92 : 0.42,
+                  ),
+                ),
+                radius: 8,
+              ),
+              child: const Text('International'),
+            ),
+            FilledButton(
+              onPressed: () {
+                setState(() {
+                  _leaderboardScope = _LeaderboardScope.national;
+                });
+                provider.refreshRemoteScoreboard(national: true);
+              },
+              style: _academyFilledButtonStyle(
+                backgroundColor: selectedNational
+                    ? nationalTone.withValues(alpha: monochrome ? 0.88 : 0.94)
+                    : nationalTone.withValues(
+                        alpha: monochrome ? 0.22 : 0.15,
+                      ),
+                foregroundColor: selectedNational
+                    ? const Color(0xFF191204)
+                    : nationalTone,
+                monochrome: monochrome,
+                side: BorderSide(
+                  color: nationalTone.withValues(
+                    alpha: selectedNational ? 0.92 : 0.44,
+                  ),
+                ),
+                radius: 8,
+              ),
+              child: const Text('National'),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         _LeaderboardCard(
           entries: entries,
@@ -509,77 +558,45 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   Future<void> _showSemesterIntroDialog(SemesterRange semester) async {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final panelTop = Color.alphaBlend(
-      scheme.primary.withValues(alpha: isDark ? 0.24 : 0.12),
-      scheme.surface,
-    );
-    final panelBottom = Color.alphaBlend(
-      scheme.secondary.withValues(alpha: isDark ? 0.18 : 0.10),
-      scheme.surface,
-    );
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
 
     await showDialog<void>(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [panelTop, panelBottom],
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: scheme.outline.withValues(alpha: 0.38),
-                ),
+      builder: (dialogContext) {
+        final palette = puzzleAcademyPalette(
+          dialogContext,
+          monochromeOverride: monochrome,
+        );
+        return PuzzleAcademyDialogShell(
+          title: semester.title,
+          subtitle: 'Semester briefing',
+          accent: palette.amber,
+          icon: Icons.school_outlined,
+          monochromeOverride: monochrome,
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: puzzleAcademyFilledButtonStyle(
+                palette: palette,
+                backgroundColor: palette.amber,
+                foregroundColor: const Color(0xFF191204),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    semester.title,
-                    style: TextStyle(
-                      color: scheme.primary,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    semester.intro,
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.82),
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: scheme.primary,
-                        foregroundColor: scheme.onPrimary,
-                      ),
-                      child: const Text('Enter Semester'),
-                    ),
-                  ),
-                ],
-              ),
+              child: const Text('ENTER SEMESTER'),
+            ),
+          ],
+          child: Text(
+            semester.intro,
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 12.3,
+              weight: FontWeight.w600,
+              height: 1.45,
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -628,147 +645,99 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         widget.cinematicThemeEnabled;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            style: _academyFilledButtonStyle(
-              backgroundColor: Theme.of(dialogContext).colorScheme.primary,
-              foregroundColor: Theme.of(dialogContext).colorScheme.onPrimary,
-              monochrome: monochrome,
+      builder: (dialogContext) {
+        final palette = puzzleAcademyPalette(
+          dialogContext,
+          monochromeOverride: monochrome,
+        );
+        return PuzzleAcademyDialogShell(
+          title: title,
+          accent: palette.cyan,
+          icon: Icons.info_outline_rounded,
+          monochromeOverride: monochrome,
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: puzzleAcademyFilledButtonStyle(
+                palette: palette,
+                backgroundColor: palette.cyan,
+                foregroundColor: const Color(0xFF081517),
+              ),
+              child: const Text('OK'),
             ),
-            child: const Text('OK'),
+          ],
+          child: Text(
+            message,
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 12.2,
+              weight: FontWeight.w600,
+              height: 1.4,
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Future<void> _showGrandmasterOracleDialog() async {
-    await showGeneralDialog<void>(
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      barrierLabel: 'Grandmaster Oracle',
-      pageBuilder: (context, _, _) {
-        return Scaffold(
-          backgroundColor: Colors.black.withValues(alpha: 0.72),
-          body: Stack(
+      builder: (dialogContext) {
+        final palette = puzzleAcademyPalette(
+          dialogContext,
+          monochromeOverride: monochrome,
+        );
+        return PuzzleAcademyDialogShell(
+          title: 'Neural Constraints Lifted',
+          subtitle: 'Stockfish Depth 35 Unlocked',
+          accent: palette.amber,
+          icon: Icons.auto_awesome,
+          monochromeOverride: monochrome,
+          maxWidth: 680,
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: puzzleAcademyFilledButtonStyle(
+                palette: palette,
+                backgroundColor: palette.amber,
+                foregroundColor: const Color(0xFF191204),
+              ),
+              child: const Text('ACCEPT UPGRADE'),
+            ),
+          ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(-0.25, -0.35),
-                      radius: 1.25,
-                      colors: [
-                        const Color(0xFF6FE7FF).withValues(alpha: 0.28),
-                        const Color(0xFF102443).withValues(alpha: 0.18),
-                        Colors.transparent,
-                      ],
-                    ),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  PuzzleAcademyTag(
+                    label: 'ORACLE SEMESTER',
+                    accent: palette.cyan,
+                    icon: Icons.extension_outlined,
                   ),
-                ),
+                  PuzzleAcademyTag(
+                    label: 'DEPTH 33-35',
+                    accent: palette.amber,
+                    icon: Icons.memory_rounded,
+                  ),
+                ],
               ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(0.5, 0.2),
-                      radius: 1.2,
-                      colors: [
-                        const Color(0xFFD8B640).withValues(alpha: 0.24),
-                        const Color(0xFF2D1F08).withValues(alpha: 0.14),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 680),
-                        padding: const EdgeInsets.fromLTRB(28, 30, 28, 24),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              const Color(0xFF09111E).withValues(alpha: 0.88),
-                              const Color(0xFF0B2134).withValues(alpha: 0.84),
-                              const Color(0xFF251A09).withValues(alpha: 0.82),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: const Color(
-                              0xFFD8B640,
-                            ).withValues(alpha: 0.55),
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ShaderMask(
-                              shaderCallback: (bounds) => const LinearGradient(
-                                colors: [Color(0xFF6FE7FF), Color(0xFFD8B640)],
-                              ).createShader(bounds),
-                              child: const Icon(
-                                Icons.auto_awesome,
-                                size: 56,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            const Text(
-                              'Neural Constraints Lifted',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Stockfish Depth 35 Unlocked',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Color(0xFFD8B640),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'The final academy seal is broken. Analysis Mode now has permanent access to Depth 33-35.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white70,
-                                height: 1.35,
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            FilledButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFFD8B640),
-                                foregroundColor: Colors.black,
-                              ),
-                              child: const Text('Accept Upgrade'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+              const SizedBox(height: 14),
+              Text(
+                'The final academy seal is broken. Analysis Mode now has permanent access to Depth 33-35.',
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: 12.3,
+                  weight: FontWeight.w600,
+                  height: 1.45,
                 ),
               ),
             ],
@@ -1054,6 +1023,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required IconData icon,
     required VoidCallback onComplete,
   }) async {
+    if (_useReducedWindowsVisualEffects) {
+      onComplete();
+      return;
+    }
+
     if (_academyHubLaunchInFlight) {
       return;
     }
@@ -1125,15 +1099,19 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   final altTone = monochrome
                       ? const Color(0xFFA6A6A6)
                       : scheme.secondary;
+                  final useReducedWindowsVisuals =
+                      _useReducedWindowsVisualEffects;
                   final rootContent = Stack(
                     key: _academyRootContentKey,
                     children: [
-                      Positioned.fill(
-                        child: _buildAtmosphere(
-                          monochrome,
-                          includeYellow: _activeView == _AcademyEntryView.hub,
+                      if (!useReducedWindowsVisuals)
+                        Positioned.fill(
+                          child: _buildAtmosphere(
+                            monochrome,
+                            includeYellow:
+                                _activeView == _AcademyEntryView.hub,
+                          ),
                         ),
-                      ),
                       if (_activeView == _AcademyEntryView.hub)
                         _buildAcademyHub(
                           constraints: constraints,
@@ -1147,27 +1125,29 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           themeProvider: themeProvider,
                           monochrome: monochrome,
                         ),
-                      Align(
-                        alignment: Alignment.topCenter,
-                        child: IgnorePointer(
-                          child: ConfettiWidget(
-                            confettiController: _confettiController,
-                            blastDirectionality: BlastDirectionality.explosive,
-                            emissionFrequency: 0.06,
-                            numberOfParticles: 22,
-                            maxBlastForce: 28,
-                            minBlastForce: 12,
-                            gravity: 0.14,
-                            colors: const [
-                              Color(0xFFD8B640),
-                              Color(0xFFECCF7A),
-                              Color(0xFFF4E9C2),
-                              Color(0xFFB98A1B),
-                            ],
+                      if (!useReducedWindowsVisuals)
+                        Align(
+                          alignment: Alignment.topCenter,
+                          child: IgnorePointer(
+                            child: ConfettiWidget(
+                              confettiController: _confettiController,
+                              blastDirectionality:
+                                  BlastDirectionality.explosive,
+                              emissionFrequency: 0.06,
+                              numberOfParticles: 22,
+                              maxBlastForce: 28,
+                              minBlastForce: 12,
+                              gravity: 0.14,
+                              colors: const [
+                                Color(0xFFD8B640),
+                                Color(0xFFECCF7A),
+                                Color(0xFFF4E9C2),
+                                Color(0xFFB98A1B),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      if (_academyHubFlight != null)
+                      if (!useReducedWindowsVisuals && _academyHubFlight != null)
                         Positioned.fill(
                           child: _buildAcademyHubFlightOverlay(isDark: isDark),
                         ),
@@ -1386,6 +1366,42 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             ],
           );
 
+    if (_useReducedWindowsVisualEffects) {
+      return Container(
+        padding: EdgeInsets.fromLTRB(
+          sideBySide ? 18 : 14,
+          sideBySide ? 20 : 16,
+          sideBySide ? 18 : 14,
+          sideBySide ? 20 : 16,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(sideBySide ? 28 : 24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.surfaceContainerHighest
+                  .withValues(alpha: monochrome ? 0.82 : 0.92),
+              Theme.of(context).colorScheme.surface.withValues(
+                alpha: monochrome ? 0.94 : 0.98,
+              ),
+            ],
+          ),
+          border: Border.all(
+            color: activeAccent.withValues(alpha: monochrome ? 0.28 : 0.36),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: selectorBody,
+      );
+    }
+
     return AnimatedBuilder(
       animation: _academyBlueDotTime,
       builder: (context, child) {
@@ -1436,7 +1452,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             ClipRRect(
               borderRadius: radius,
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                filter: ImageFilter.blur(
+                  sigmaX: _useReducedWindowsVisualEffects ? 0 : 24,
+                  sigmaY: _useReducedWindowsVisualEffects ? 0 : 24,
+                ),
                 child: Container(
                   padding: EdgeInsets.fromLTRB(
                     sideBySide ? 22 : 14,
@@ -1611,6 +1630,20 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required bool isDark,
     required VoidCallback onTap,
   }) {
+    if (_useReducedWindowsVisualEffects) {
+      return _buildReducedAcademyHubCard(
+        cardId: cardId,
+        title: title,
+        imageAsset: imageAsset,
+        accent: accent,
+        shadowColor: shadowColor,
+        icon: icon,
+        monochrome: monochrome,
+        isDark: isDark,
+        onTap: onTap,
+      );
+    }
+
     final cardKey = _academyHubCardKeyFor(cardId);
     final isHovered = _academyHubHoveredCardId == cardId;
     final isPressed = _academyHubPressedCardId == cardId;
@@ -1794,7 +1827,20 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                                             imageAsset,
                                             fit: BoxFit.contain,
                                             alignment: Alignment.center,
-                                            filterQuality: FilterQuality.high,
+                                            filterQuality:
+                                                _useReducedWindowsVisualEffects
+                                                ? FilterQuality.medium
+                                                : FilterQuality.high,
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                                  return const Center(
+                                                    child: Icon(
+                                                      Icons.image_not_supported,
+                                                      size: 42,
+                                                      color: Colors.white70,
+                                                    ),
+                                                  );
+                                                },
                                           ),
                                         ),
                                       ),
@@ -2066,6 +2112,125 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
+  Widget _buildReducedAcademyHubCard({
+    required String cardId,
+    required String title,
+    required String imageAsset,
+    required Color accent,
+    required Color shadowColor,
+    required IconData icon,
+    required bool monochrome,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    final cardKey = _academyHubCardKeyFor(cardId);
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: RepaintBoundary(
+        key: cardKey,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(24),
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    accent.withValues(alpha: monochrome ? 0.14 : 0.18),
+                    Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
+                  ],
+                ),
+                border: Border.all(
+                  color: accent.withValues(alpha: monochrome ? 0.34 : 0.46),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: shadowColor.withValues(alpha: isDark ? 0.20 : 0.14),
+                    blurRadius: 16,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(icon, color: accent, size: 26),
+                          const SizedBox(height: 12),
+                          Text(
+                            title,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: puzzleAcademyDisplayStyle(
+                              palette: puzzleAcademyPalette(
+                                context,
+                                monochromeOverride: monochrome,
+                              ),
+                              size: 15,
+                              color: monochrome
+                                  ? const Color(0xFFF2F2F2)
+                                  : Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            cardId == 'exams'
+                                ? 'Practice, exams, and semester progress.'
+                                : 'Study openings and test recognition.',
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: puzzleAcademyHudStyle(
+                              palette: puzzleAcademyPalette(
+                                context,
+                                monochromeOverride: monochrome,
+                              ),
+                              size: 10.5,
+                              color: monochrome
+                                  ? const Color(0xFFD8D8D8)
+                                  : Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      flex: 4,
+                      child: Image.asset(
+                        imageAsset,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.low,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Icon(
+                              Icons.image_not_supported,
+                              size: 40,
+                              color: accent.withValues(alpha: 0.8),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAcademyHubFlightOverlay({required bool isDark}) {
     final flight = _academyHubFlight;
     if (flight == null) {
@@ -2158,7 +2323,19 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                                 flight.imageAsset,
                                 fit: BoxFit.contain,
                                 alignment: Alignment.center,
-                                filterQuality: FilterQuality.high,
+                                filterQuality:
+                                    _useReducedWindowsVisualEffects
+                                    ? FilterQuality.medium
+                                    : FilterQuality.high,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported,
+                                      size: 46,
+                                      color: Colors.white70,
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                             DecoratedBox(
@@ -2827,18 +3004,16 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required AppThemeProvider themeProvider,
     required bool monochrome,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
 
     return SliverAppBar(
       pinned: true,
-      expandedHeight: 132,
-      backgroundColor: Color.alphaBlend(
-        scheme.primary.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.12 : 0.05,
-        ),
-        scheme.surface,
-      ).withValues(alpha: 0.90),
+      expandedHeight: 136,
+      backgroundColor: palette.panel.withValues(alpha: 0.92),
+      surfaceTintColor: Colors.transparent,
       leading: IconButton(
         onPressed: _handleAcademyBack,
         icon: const Icon(Icons.arrow_back_rounded),
@@ -2861,35 +3036,31 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         expandedTitleScale: 1.0,
         titlePadding: const EdgeInsetsDirectional.only(bottom: 12),
         title: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: widget.onShowCredits,
-                child: Image.asset(
-                  'assets/ChessIQ.png',
-                  width: 120,
-                  height: 34,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Puzzle Academy',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                  letterSpacing: monochrome ? 0.22 : 0,
-                  shadows: _academyMonoTextGlow(
-                    monochrome ? const Color(0xFFDCE5EE) : scheme.primary,
-                    monochrome: monochrome,
-                    strength: 1.1,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: widget.onShowCredits,
+                  child: Image.asset(
+                    'assets/ChessIQ.png',
+                    width: 72,
+                    height: 20,
+                    fit: BoxFit.contain,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Text(
+                  'Puzzle Academy',
+                  style: puzzleAcademyDisplayStyle(
+                    palette: palette,
+                    size: 13.6,
+                    color: palette.cyan,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         background: Container(
@@ -2898,17 +3069,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                scheme.primary.withValues(
-                  alpha: monochrome
-                      ? 0.10
-                      : (theme.brightness == Brightness.dark ? 0.16 : 0.08),
-                ),
-                scheme.secondary.withValues(
-                  alpha: monochrome
-                      ? 0.08
-                      : (theme.brightness == Brightness.dark ? 0.12 : 0.06),
-                ),
-                Colors.transparent,
+                palette.shell,
+                palette.panelAlt,
+                palette.backdrop.withValues(alpha: 0.0),
               ],
             ),
           ),
@@ -2921,6 +3084,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     PuzzleAcademyProvider provider, {
     required bool monochrome,
   }) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
     return SafeArea(
       right: false,
       child: ListView(
@@ -2936,17 +3103,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               Expanded(
                 child: Text(
                   'Mastery Dashboard',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: monochrome ? 0.24 : 0,
-                    shadows: _academyMonoTextGlow(
-                      monochrome
-                          ? const Color(0xFFE7E2DA)
-                          : Theme.of(context).colorScheme.primary,
-                      monochrome: monochrome,
-                      strength: 1.15,
-                    ),
+                  style: puzzleAcademyDisplayStyle(
+                    palette: palette,
+                    size: 22,
+                    color: palette.amber,
                   ),
                 ),
               ),
@@ -2966,9 +3126,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   provider.progress.handle.isNotEmpty
                       ? provider.progress.handle
                       : provider.currentTitle,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: puzzleAcademyIdentityStyle(
+                    palette: palette,
+                    size: 13.4,
+                    color: palette.text,
+                    withGlow: true,
                   ),
                 ),
                 if (provider.progress.handle.isNotEmpty)
@@ -2976,11 +3140,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
                       provider.currentTitle,
-                      style: TextStyle(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: puzzleAcademyIdentityStyle(
+                        palette: palette,
+                        size: 10.2,
                         color: Theme.of(
                           context,
                         ).colorScheme.onSurface.withValues(alpha: 0.72),
-                        fontSize: 13,
                       ),
                     ),
                   ),
@@ -3005,9 +3172,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           Expanded(
                             child: Text(
                               semester.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                              style: puzzleAcademyCompactStyle(
+                                palette: palette,
+                                size: 13.6,
+                                weight: FontWeight.w700,
+                                color: palette.text,
+                                height: 1.2,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -3016,10 +3186,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           const SizedBox(width: 8),
                           Text(
                             '$pct%',
-                            style: const TextStyle(
-                              color: Color(0xFF6FE7FF),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
+                            style: puzzleAcademyCompactStyle(
+                              palette: palette,
+                              size: 13.2,
+                              weight: FontWeight.w700,
+                              color: palette.cyan,
+                              height: 1.0,
                             ),
                           ),
                         ],
@@ -3058,62 +3230,54 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   Widget _buildHeroStatsBar(PuzzleAcademyProvider provider) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              scheme.primary.withValues(
-                alpha: theme.brightness == Brightness.dark ? 0.12 : 0.04,
-              ),
-              scheme.surface,
-            ).withValues(alpha: 0.70),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride:
+          context.read<AppThemeProvider>().isMonochrome ||
+          widget.cinematicThemeEnabled,
+    );
+    return PuzzleAcademyPanel(
+      accent: palette.cyan,
+      radius: 10,
+      padding: const EdgeInsets.all(16),
+      monochromeOverride:
+          context.read<AppThemeProvider>().isMonochrome ||
+          widget.cinematicThemeEnabled,
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _StatChip(
+            label: 'Coins',
+            value: provider.progress.coins.toString(),
+            color: const Color(0xFFD8B640),
           ),
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _StatChip(
-                label: 'Coins',
-                value: provider.progress.coins.toString(),
-                color: const Color(0xFFD8B640),
-              ),
-              _StatChip(
-                label: 'Streak',
-                value: provider.progress.streak.toString(),
-                color: const Color(0xFF6FE7FF),
-              ),
-              _StatChip(
-                label: 'Hints',
-                value: provider.progress.freeHints.toString(),
-                color: const Color(0xFF71B7FF),
-              ),
-              _StatChip(
-                label: 'Skipped',
-                value: provider.unresolvedSkippedPuzzleCount.toString(),
-                color: const Color(0xFFE0A6FF),
-              ),
-              _StatChip(
-                label: 'Solved',
-                value: provider.totalSolved.toString(),
-                color: const Color(0xFF9BE27C),
-              ),
-              _StatChip(
-                label: 'Crowns',
-                value: provider.masteredNodeCount.toString(),
-                color: const Color(0xFFD8B640),
-              ),
-            ],
+          _StatChip(
+            label: 'Streak',
+            value: provider.progress.streak.toString(),
+            color: const Color(0xFF6FE7FF),
           ),
-        ),
+          _StatChip(
+            label: 'Hints',
+            value: provider.progress.freeHints.toString(),
+            color: const Color(0xFF71B7FF),
+          ),
+          _StatChip(
+            label: 'Skipped',
+            value: provider.unresolvedSkippedPuzzleCount.toString(),
+            color: const Color(0xFFE0A6FF),
+          ),
+          _StatChip(
+            label: 'Solved',
+            value: provider.totalSolved.toString(),
+            color: const Color(0xFF9BE27C),
+          ),
+          _StatChip(
+            label: 'Crowns',
+            value: provider.masteredNodeCount.toString(),
+            color: const Color(0xFFD8B640),
+          ),
+        ],
       ),
     );
   }
@@ -3337,6 +3501,7 @@ class _AcademyProfileDialog extends StatefulWidget {
     this.lockHandle = false,
     this.lockCountry = false,
     this.allowExitToMenu = false,
+    this.cinematicThemeEnabled = false,
   });
 
   final String initialHandle;
@@ -3344,6 +3509,7 @@ class _AcademyProfileDialog extends StatefulWidget {
   final bool lockHandle;
   final bool lockCountry;
   final bool allowExitToMenu;
+  final bool cinematicThemeEnabled;
 
   @override
   State<_AcademyProfileDialog> createState() => _AcademyProfileDialogState();
@@ -3368,10 +3534,47 @@ class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: const Text('Academy Leaderboard Setup'),
-      content: SingleChildScrollView(
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    return PuzzleAcademyDialogShell(
+      title: 'Academy Leaderboard Setup',
+      subtitle: 'Choose the handle and country shown on global and local boards.',
+      accent: palette.cyan,
+      icon: Icons.leaderboard_rounded,
+      monochromeOverride: monochrome,
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.of(context).pop(),
+          style: puzzleAcademyOutlinedButtonStyle(
+            palette: palette,
+            accent: palette.cyan,
+          ),
+          child: Text(widget.allowExitToMenu ? 'BACK TO MENU' : 'CANCEL'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_formKey.currentState?.validate() != true) return;
+            final handle = _handleController.text.trim();
+            final countryText = _countryController?.text.trim() ?? '';
+            final country = canonicalCountryName(countryText) ?? countryText;
+            Navigator.of(
+              context,
+            ).pop(<String, String>{'handle': handle, 'country': country});
+          },
+          style: puzzleAcademyFilledButtonStyle(
+            palette: palette,
+            backgroundColor: palette.cyan,
+            foregroundColor: const Color(0xFF07131F),
+          ),
+          child: const Text('SAVE'),
+        ),
+      ],
+      child: SingleChildScrollView(
         child: Form(
           key: _formKey,
           child: Column(
@@ -3379,9 +3582,12 @@ class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Choose a nickname and country so you can appear on global and local leaderboards.',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.78),
+                'This information is only used for leaderboard display. No email, account details, or precise location are collected.',
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: 12.0,
+                  weight: FontWeight.w600,
+                  height: 1.45,
                 ),
               ),
               const SizedBox(height: 16),
@@ -3481,36 +3687,10 @@ class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
                       );
                     },
               ),
-              const SizedBox(height: 16),
-              Text(
-                'This information is only used for leaderboard display. No email, account details, or precise location are collected.',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                  fontSize: 12,
-                ),
-              ),
             ],
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(widget.allowExitToMenu ? 'Back to Menu' : 'Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (_formKey.currentState?.validate() != true) return;
-            final handle = _handleController.text.trim();
-            final countryText = _countryController?.text.trim() ?? '';
-            final country = canonicalCountryName(countryText) ?? countryText;
-            Navigator.of(
-              context,
-            ).pop(<String, String>{'handle': handle, 'country': country});
-          },
-          child: const Text('Save'),
-        ),
-      ],
     );
   }
 }

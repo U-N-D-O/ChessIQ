@@ -13,7 +13,10 @@ class _PerspectiveEvalBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
     final playerShare =
         ((evalFromPlayerPerspective.clamp(-12.0, 12.0) + 12.0) / 24.0).clamp(
           0.0,
@@ -34,9 +37,13 @@ class _PerspectiveEvalBar extends StatelessWidget {
 
     return Container(
       width: 18,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.48)),
+      decoration: puzzleAcademyPanelDecoration(
+        palette: palette,
+        accent: monochrome ? palette.text : palette.cyan,
+        fillColor: palette.panelAlt,
+        radius: 999,
+        borderWidth: 2,
+        elevated: false,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(999),
@@ -133,14 +140,22 @@ class _GreyArrowPainter extends CustomPainter {
 }
 
 class _InfoLine extends StatelessWidget {
-  const _InfoLine({required this.label, required this.value});
+  const _InfoLine({
+    required this.label,
+    required this.value,
+    required this.monochrome,
+  });
 
   final String label;
   final String value;
+  final bool monochrome;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -150,18 +165,24 @@ class _InfoLine extends StatelessWidget {
             width: 96,
             child: Text(
               label,
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.62),
-                fontWeight: FontWeight.w300,
+              style: puzzleAcademyHudStyle(
+                palette: palette,
+                size: 10.6,
+                weight: FontWeight.w700,
+                letterSpacing: 0.85,
+                height: 1.0,
+                color: palette.textMuted,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
+              style: puzzleAcademyHudStyle(
+                palette: palette,
+                size: 11.2,
+                weight: FontWeight.w700,
+                color: palette.text,
               ),
               overflow: TextOverflow.ellipsis,
             ),

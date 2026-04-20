@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:chess/chess.dart' as chess;
@@ -13,6 +12,7 @@ import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/services/puzzle_engine_service.dart';
 import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
+import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -373,52 +373,86 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         ? 0
         : ((result.correctCount / totalCount) * 100).round();
     final heading = timedOut ? 'Exam Time Expired' : 'Exam Complete';
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
 
     final reviewMistakes = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        final theme = Theme.of(dialogContext);
-        final scheme = theme.colorScheme;
-        return AlertDialog(
-          title: Text(heading),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Exam Score: ${result.score}'),
-              const SizedBox(height: 8),
-              Text('Leaderboard Score: ${result.leaderboardScore}'),
-              const SizedBox(height: 8),
-              Text('Grade: $grade'),
-              const SizedBox(height: 8),
-              Text('Accuracy: $accuracy%'),
-              const SizedBox(height: 4),
-              Text('Solved: ${result.correctCount}/$totalCount'),
-              const SizedBox(height: 4),
-              Text(
-                'Time used: ${_formatDuration(Duration(milliseconds: elapsedMs))}',
+        final palette = puzzleAcademyPalette(
+          dialogContext,
+          monochromeOverride: monochrome,
+        );
+        return PuzzleAcademyDialogShell(
+          title: heading,
+          subtitle: 'Bracket ${widget.node.title} archived to the academy board.',
+          accent: palette.amber,
+          icon: Icons.workspace_premium_outlined,
+          monochromeOverride: monochrome,
+          actions: [
+            if (_examMistakePuzzles.isNotEmpty)
+              OutlinedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: puzzleAcademyOutlinedButtonStyle(
+                  palette: palette,
+                  accent: palette.cyan,
+                ),
+                child: const Text('REVIEW MISTAKES'),
               ),
-              const SizedBox(height: 10),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              style: puzzleAcademyFilledButtonStyle(
+                palette: palette,
+                backgroundColor: palette.amber,
+                foregroundColor: const Color(0xFF191204),
+              ),
+              child: const Text('BACK TO ACADEMY'),
+            ),
+          ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  PuzzleAcademyTag(
+                    label: 'SCORE ${result.score}',
+                    accent: palette.cyan,
+                    monochromeOverride: monochrome,
+                  ),
+                  PuzzleAcademyTag(
+                    label: 'BOARD ${result.leaderboardScore}',
+                    accent: palette.amber,
+                    monochromeOverride: monochrome,
+                  ),
+                  PuzzleAcademyTag(
+                    label: 'GRADE $grade',
+                    accent: palette.emerald,
+                    monochromeOverride: monochrome,
+                  ),
+                  PuzzleAcademyTag(
+                    label: 'ACCURACY $accuracy%',
+                    accent: palette.signal,
+                    monochromeOverride: monochrome,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               Text(
-                'Score blends 80% accuracy and 20% speed, so faster clean runs rank higher.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
+                'Solved ${result.correctCount}/$totalCount in ${_formatDuration(Duration(milliseconds: elapsedMs))}. Score blends 80% accuracy and 20% speed, so faster clean runs rank higher.',
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: 12.2,
+                  weight: FontWeight.w600,
+                  height: 1.45,
                 ),
               ),
             ],
           ),
-          actions: [
-            if (_examMistakePuzzles.isNotEmpty)
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Review Mistakes'),
-              ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Back to Academy'),
-            ),
-          ],
         );
       },
     );
@@ -452,65 +486,44 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   Future<void> _showRewardAdUnavailableDialog() async {
     if (!mounted) return;
 
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final useMonochrome =
         context.read<AppThemeProvider>().isMonochrome ||
         widget.cinematicThemeEnabled;
-    final panelColor = useMonochrome
-        ? (isDark ? const Color(0xFF111111) : const Color(0xFFF7F7F7))
-        : Color.alphaBlend(
-            scheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
-            scheme.surface,
-          );
-    final accent = useMonochrome
-        ? (isDark ? const Color(0xFFD0D0D0) : const Color(0xFF4A4A4A))
-        : const Color(0xFF5AAEE8);
 
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: panelColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
-        contentPadding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
-        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        title: Row(
-          children: [
-            Icon(Icons.error_outline_rounded, color: accent, size: 22),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Ad Unavailable',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w700,
-                ),
+      builder: (dialogContext) {
+        final palette = puzzleAcademyPalette(
+          dialogContext,
+          monochromeOverride: useMonochrome,
+        );
+        return PuzzleAcademyDialogShell(
+          title: 'Ad Unavailable',
+          accent: palette.signal,
+          icon: Icons.error_outline_rounded,
+          monochromeOverride: useMonochrome,
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: puzzleAcademyFilledButtonStyle(
+                palette: palette,
+                backgroundColor: palette.signal,
+                foregroundColor: const Color(0xFF171107),
               ),
+              child: const Text('OK'),
             ),
           ],
-        ),
-        content: Text(
-          'Rewarded ad is unavailable or was not completed.\n\nTry again when you have internet connection.',
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.88),
-            height: 1.3,
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            style: FilledButton.styleFrom(
-              backgroundColor: accent,
-              foregroundColor: useMonochrome
-                  ? (isDark ? Colors.black : Colors.white)
-                  : const Color(0xFF07131F),
+          child: Text(
+            'Rewarded ad is unavailable or was not completed. Try again when you have a stable internet connection.',
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 12.1,
+              weight: FontWeight.w600,
+              height: 1.45,
             ),
-            child: const Text('OK'),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -519,18 +532,43 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     required String message,
   }) async {
     if (!mounted) return;
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('OK'),
+      builder: (dialogContext) {
+        final palette = puzzleAcademyPalette(
+          dialogContext,
+          monochromeOverride: monochrome,
+        );
+        return PuzzleAcademyDialogShell(
+          title: title,
+          accent: palette.cyan,
+          icon: Icons.info_outline_rounded,
+          monochromeOverride: monochrome,
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: puzzleAcademyFilledButtonStyle(
+                palette: palette,
+                backgroundColor: palette.cyan,
+                foregroundColor: const Color(0xFF07131F),
+              ),
+              child: const Text('OK'),
+            ),
+          ],
+          child: Text(
+            message,
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 12.2,
+              weight: FontWeight.w600,
+              height: 1.45,
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1326,18 +1364,24 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     await provider.syncCoinsFromStoreState(notify: true);
 
     if (!mounted) return;
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        final theme = Theme.of(dialogContext);
+        final palette = puzzleAcademyPalette(
+          dialogContext,
+          monochromeOverride: monochrome,
+        );
         final navigator = Navigator.of(dialogContext);
-        return AlertDialog(
-          title: const Text('Daily Challenge Complete!'),
-          content: Text(
-            '+$rewardAmount coins awarded. Great work completing today’s daily challenge!',
-            style: theme.textTheme.bodyMedium,
-          ),
+        return PuzzleAcademyDialogShell(
+          title: 'Daily Challenge Complete!',
+          subtitle: 'Reward confirmed for today\'s academy run.',
+          accent: palette.emerald,
+          icon: Icons.emoji_events_rounded,
+          monochromeOverride: monochrome,
           actions: [
             FilledButton(
               onPressed: () async {
@@ -1355,9 +1399,23 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 }
                 navigator.pop();
               },
-              child: const Text('Confirm'),
+              style: puzzleAcademyFilledButtonStyle(
+                palette: palette,
+                backgroundColor: palette.emerald,
+                foregroundColor: const Color(0xFF07131F),
+              ),
+              child: const Text('CONFIRM'),
             ),
           ],
+          child: Text(
+            '+$rewardAmount coins awarded. Great work completing today\'s daily challenge!',
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 12.2,
+              weight: FontWeight.w600,
+              height: 1.45,
+            ),
+          ),
         );
       },
     );
@@ -1415,24 +1473,49 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
   Future<void> _exitToMap() async {
     if (_isExamMode && !_examFinished) {
+      final monochrome =
+          context.read<AppThemeProvider>().isMonochrome ||
+          widget.cinematicThemeEnabled;
       final shouldSubmit = await showDialog<bool>(
         context: context,
         builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('End Exam Early?'),
-            content: const Text(
-              'Leaving now submits your current score and returns to the Academy map.',
-            ),
+          final palette = puzzleAcademyPalette(
+            dialogContext,
+            monochromeOverride: monochrome,
+          );
+          return PuzzleAcademyDialogShell(
+            title: 'End Exam Early?',
+            accent: palette.signal,
+            icon: Icons.warning_amber_rounded,
+            monochromeOverride: monochrome,
             actions: [
-              TextButton(
+              OutlinedButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Continue Exam'),
+                style: puzzleAcademyOutlinedButtonStyle(
+                  palette: palette,
+                  accent: palette.cyan,
+                ),
+                child: const Text('CONTINUE EXAM'),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Submit Exam'),
+                style: puzzleAcademyFilledButtonStyle(
+                  palette: palette,
+                  backgroundColor: palette.signal,
+                  foregroundColor: const Color(0xFF171107),
+                ),
+                child: const Text('SUBMIT EXAM'),
               ),
             ],
+            child: Text(
+              'Leaving now submits your current score and returns to the Academy map.',
+              style: puzzleAcademyHudStyle(
+                palette: palette,
+                size: 12.1,
+                weight: FontWeight.w600,
+                height: 1.45,
+              ),
+            ),
           );
         },
       );
@@ -1496,16 +1579,15 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   Widget build(BuildContext context) {
     final provider = context.watch<PuzzleAcademyProvider>();
     final themeProvider = context.watch<AppThemeProvider>();
-    final materialTheme = Theme.of(context);
-    final scheme = materialTheme.colorScheme;
     final puzzle = _puzzle;
     final useMonochrome =
         themeProvider.isMonochrome || widget.cinematicThemeEnabled;
+    final palette = _academyPalette(useMonochrome);
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
 
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: palette.backdrop,
       body: SafeArea(
         child: Stack(
           children: [
@@ -1583,6 +1665,33 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     );
   }
 
+  PuzzleAcademyPalette _academyPalette(bool monochrome) {
+    return puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+  }
+
+  Color _modeAccent(PuzzleAcademyPalette palette) {
+    if (_isExamMode) return palette.amber;
+    if (_isDailySequence) return palette.emerald;
+    if (widget.initialReviewMode) return palette.signal;
+    return palette.cyan;
+  }
+
+  String _modeIntelMessage() {
+    if (_isExamMode) {
+      return 'Exam mode runs a fixed 50-puzzle bracket. Score weights 80% accuracy and 20% speed, and leaving early submits the current run.';
+    }
+    if (_isDailySequence) {
+      return 'Daily mode runs today\'s sequence in order. Keep live status minimal here and use reward/status popups for secondary rules and reward handling.';
+    }
+    if (widget.initialReviewMode) {
+      return 'Review mode replays archived mistakes without changing progression. Use it to clean up weak spots and move back to the academy when the sequence is done.';
+    }
+    return 'Training mode tracks the current puzzle, eval swing, and action economy. Hints, skips, and regret remain available without changing the puzzle progression rules.';
+  }
+
   Widget _nonBoardChromeFilter(bool monochrome, Widget child) {
     if (!monochrome) return child;
     return ColorFiltered(
@@ -1613,22 +1722,20 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Widget _buildBackdrop(BuildContext context, bool monochrome) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final baseSurface = scheme.surface;
-    final leadGlow = monochrome ? const Color(0xFF808080) : scheme.primary;
-    final altGlow = monochrome ? const Color(0xFFA6A6A6) : scheme.secondary;
+    final palette = _academyPalette(monochrome);
+    final leadGlow = _modeAccent(palette);
+    final altGlow = _isExamMode ? palette.signal : palette.amber;
     final topColor = Color.alphaBlend(
       leadGlow.withValues(
-        alpha: theme.brightness == Brightness.dark ? 0.14 : 0.05,
+        alpha: palette.isDark ? 0.14 : 0.06,
       ),
-      baseSurface,
+      palette.backdrop,
     );
     final bottomColor = Color.alphaBlend(
       altGlow.withValues(
-        alpha: theme.brightness == Brightness.dark ? 0.10 : 0.04,
+        alpha: palette.isDark ? 0.10 : 0.05,
       ),
-      baseSurface,
+      palette.backdrop,
     );
 
     return DecoratedBox(
@@ -1636,7 +1743,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [topColor, baseSurface, bottomColor],
+          colors: [topColor, palette.backdrop, bottomColor],
           stops: const [0.0, 0.55, 1.0],
         ),
       ),
@@ -1673,8 +1780,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     PuzzleAcademyProvider provider,
     AppThemeProvider themeProvider,
   ) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final monochrome = themeProvider.isMonochrome || widget.cinematicThemeEnabled;
+    final palette = _academyPalette(monochrome);
+    final accent = _modeAccent(palette);
     final currentRating = _puzzle?.rating ?? widget.node.startElo;
     final displayedStartElo = (currentRating ~/ 50) * 50;
     final total = _usesCustomSequence
@@ -1689,107 +1797,157 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final subtitle = _isExamMode
         ? 'Puzzle #$index of $total • ${_formatDuration(_examRemaining)} left'
         : 'Puzzle #$index of $total';
+    final modeInfoTitle = _isExamMode
+        ? 'Exam Mode'
+        : _isDailySequence
+        ? 'Daily Sequence'
+        : widget.initialReviewMode
+        ? 'Review Mode'
+        : 'Training Mode';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Exit to Map',
-            onPressed: _exitToMap,
-            icon: const Icon(Icons.close_rounded),
-          ),
-          Hero(
-            tag: widget.heroTag,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 48,
-                height: 48,
+      child: Container(
+        decoration: puzzleAcademyPanelDecoration(
+          palette: palette,
+          accent: accent,
+          radius: 10,
+          elevated: false,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      Color.alphaBlend(
-                        scheme.primary.withValues(alpha: 0.26),
-                        scheme.surface,
-                      ),
-                      Color.alphaBlend(
-                        scheme.primary.withValues(alpha: 0.12),
-                        scheme.surface,
-                      ),
-                    ],
-                  ),
-                  border: Border.all(
-                    color: scheme.primary.withValues(alpha: 0.72),
-                  ),
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: accent.withValues(alpha: 0.50), width: 2),
                 ),
-                child: Center(
-                  child: Text(
-                    '$displayedStartElo',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
+                child: IconButton(
+                  tooltip: 'Exit to Map',
+                  padding: EdgeInsets.zero,
+                  onPressed: _exitToMap,
+                  icon: Icon(Icons.close_rounded, color: accent, size: 18),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Hero(
+                tag: widget.heroTag,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.68),
+                        width: 2,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$displayedStartElo',
+                        style: puzzleAcademyHudStyle(
+                          palette: palette,
+                          size: 11.6,
+                          weight: FontWeight.w800,
+                          letterSpacing: 0.9,
+                          height: 1.0,
+                          color: palette.text,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 18,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.w300,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_isExamMode)
-            Container(
-              margin: const EdgeInsets.only(right: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: Color.alphaBlend(
-                  scheme.primary.withValues(alpha: 0.10),
-                  scheme.surface,
-                ),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: scheme.outline.withValues(alpha: 0.28),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      style: puzzleAcademyDisplayStyle(
+                        palette: palette,
+                        size: 18,
+                        color: accent,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      overflow: TextOverflow.ellipsis,
+                      style: puzzleAcademyHudStyle(
+                        palette: palette,
+                        size: 11.7,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Text(
-                '$_examCorrectCount/${_activeSequence.length}',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_isExamMode)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: PuzzleAcademyTag(
+                        label: '$_examCorrectCount/${_activeSequence.length}',
+                        accent: palette.amber,
+                        icon: Icons.verified_outlined,
+                        monochromeOverride: monochrome,
+                      ),
+                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PuzzleAcademyInfoButton(
+                        title: modeInfoTitle,
+                        message: _modeIntelMessage(),
+                        accent: accent,
+                        monochromeOverride: monochrome,
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: accent.withValues(alpha: 0.46),
+                            width: 2,
+                          ),
+                        ),
+                        child: IconButton(
+                          tooltip: 'Settings',
+                          padding: EdgeInsets.zero,
+                          onPressed: () =>
+                              _openBoardAndPieceThemeSettings(themeProvider),
+                          icon: Icon(
+                            Icons.settings_outlined,
+                            color: accent,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ),
-          IconButton(
-            tooltip: 'Settings',
-            onPressed: () => _openBoardAndPieceThemeSettings(themeProvider),
-            icon: const Icon(Icons.settings_outlined),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1832,22 +1990,17 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Widget _buildBoardCard(AppThemeProvider theme, {required bool monochrome}) {
-    final materialTheme = Theme.of(context);
-    final scheme = materialTheme.colorScheme;
-    final cardSurface = Color.alphaBlend(
-      scheme.primary.withValues(
-        alpha: materialTheme.brightness == Brightness.dark ? 0.10 : 0.04,
-      ),
-      scheme.surface,
-    );
+    final palette = _academyPalette(monochrome);
+    final accent = _modeAccent(palette);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Container(
-        decoration: BoxDecoration(
-          color: cardSurface.withValues(alpha: monochrome ? 0.94 : 0.90),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: scheme.outline.withValues(alpha: 0.34)),
+        decoration: puzzleAcademyPanelDecoration(
+          palette: palette,
+          accent: accent,
+          fillColor: palette.panel,
+          radius: 10,
         ),
         padding: const EdgeInsets.all(10),
         child: Row(
@@ -1862,10 +2015,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                           ? -_evalWhitePawns
                           : _evalWhitePawns,
                     ),
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                    style: puzzleAcademyHudStyle(
+                      palette: palette,
+                      size: 10.8,
+                      weight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      height: 1.0,
+                      color: palette.text,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -2156,81 +2312,104 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   Widget _buildIntelPanel(PuzzleAcademyProvider provider) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
+    final palette = _academyPalette(monochrome);
+    final accent = _modeAccent(palette);
+    final total = _usesCustomSequence
+        ? _activeSequence.length
+        : provider.gridPuzzleCountForNode(widget.node);
+    final modeLabel = _isExamMode
+        ? 'Exam'
+        : _isDailySequence
+        ? 'Daily'
+        : widget.initialReviewMode
+        ? 'Review'
+        : 'Training';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                scheme.primary.withValues(
-                  alpha: theme.brightness == Brightness.dark ? 0.12 : 0.04,
-                ),
-                scheme.surface,
-              ).withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: scheme.outline.withValues(alpha: 0.30)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: puzzleAcademyPanelDecoration(
+          palette: palette,
+          accent: accent,
+          fillColor: palette.panelAlt,
+          radius: 10,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  'Puzzle Intel',
-                  style: TextStyle(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _InfoLine(
-                  label: 'State',
-                  value: _solved
-                      ? 'Solved'
-                      : (_busy
-                            ? 'Engine Response'
-                            : (_coachingOffScript
-                                  ? 'Coach Review'
-                                  : 'Solving')),
-                ),
-                _InfoLine(
-                  label: 'Eval',
-                  value: _formatEval(
-                    _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
-                  ),
-                ),
-                _InfoLine(
-                  label: 'Eval',
-                  value: _formatEval(
-                    _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
-                  ),
-                ),
-                if (_lastMistakeFromEval != null && _lastMistakeToEval != null)
-                  _InfoLine(
-                    label: 'Swing',
-                    value:
-                        '${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeFromEval! : _lastMistakeFromEval!)} -> ${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeToEval! : _lastMistakeToEval!)}',
-                  ),
-                const SizedBox(height: 8),
                 Expanded(
                   child: Text(
-                    _status,
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.76),
-                      height: 1.35,
-                      fontWeight: FontWeight.w300,
+                    'Puzzle Intel',
+                    style: puzzleAcademyDisplayStyle(
+                      palette: palette,
+                      size: 15,
+                      color: accent,
                     ),
                   ),
                 ),
+                PuzzleAcademyInfoButton(
+                  title: 'Puzzle Intel',
+                  message: _modeIntelMessage(),
+                  accent: accent,
+                  monochromeOverride: monochrome,
+                ),
               ],
             ),
-          ),
+            const SizedBox(height: 12),
+            _InfoLine(
+              label: 'Mode',
+              value: modeLabel,
+              monochrome: monochrome,
+            ),
+            _InfoLine(
+              label: 'State',
+              value: _solved
+                  ? 'Solved'
+                  : (_busy
+                        ? 'Engine Response'
+                        : (_coachingOffScript
+                              ? 'Coach Review'
+                              : 'Solving')),
+              monochrome: monochrome,
+            ),
+            _InfoLine(
+              label: 'Progress',
+              value: '${_puzzleIndex + 1}/$total',
+              monochrome: monochrome,
+            ),
+            _InfoLine(
+              label: 'Eval',
+              value: _formatEval(
+                _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
+              ),
+              monochrome: monochrome,
+            ),
+            if (_lastMistakeFromEval != null && _lastMistakeToEval != null)
+              _InfoLine(
+                label: 'Swing',
+                value:
+                    '${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeFromEval! : _lastMistakeFromEval!)} -> ${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeToEval! : _lastMistakeToEval!)}',
+                monochrome: monochrome,
+              ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: Text(
+                _status,
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: 12.1,
+                  weight: FontWeight.w600,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2260,38 +2439,57 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     PuzzleAcademyProvider provider, {
     bool vertical = false,
   }) {
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
+    final palette = _academyPalette(monochrome);
     if (_isExamMode) {
       final accuracy = _examCompletedCount <= 0
           ? 0
           : ((_examCorrectCount / _examCompletedCount) * 100).round();
-      final scheme = Theme.of(context).colorScheme;
       final statusCard = Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.06),
-            scheme.surface,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: scheme.outline.withValues(alpha: 0.28)),
+        decoration: puzzleAcademyPanelDecoration(
+          palette: palette,
+          accent: palette.amber,
+          fillColor: palette.panelAlt,
+          radius: 10,
+          elevated: false,
         ),
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                'Correct $_examCorrectCount/${_activeSequence.length}',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Correct $_examCorrectCount/${_activeSequence.length}',
+                    style: puzzleAcademyHudStyle(
+                      palette: palette,
+                      size: 11.3,
+                      weight: FontWeight.w800,
+                      color: palette.text,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Accuracy $accuracy% • ${_formatDuration(_examRemaining)} left',
+                    style: puzzleAcademyHudStyle(
+                      palette: palette,
+                      size: 11.0,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              'Accuracy $accuracy%',
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.76),
-                fontWeight: FontWeight.w600,
-              ),
+            PuzzleAcademyInfoButton(
+              title: 'Exam Scoring',
+              message:
+                  'Exam score blends 80% accuracy and 20% speed. Your leaderboard score then scales that result by node difficulty so stronger brackets are worth more.',
+              accent: palette.amber,
+              monochromeOverride: monochrome,
             ),
           ],
         ),
@@ -2352,41 +2550,34 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     const nextEnabledColor = Color(0xFF7EDC8A);
     const nextDisabledColor = Color(0xFF6B7280);
 
-    ButtonStyle filledAccentStyle(Color color) {
-      return FilledButton.styleFrom(
+    ButtonStyle filledAccentStyle(
+      Color color, {
+      Color? foregroundColor,
+      Color? disabledBackgroundColor,
+      Color? disabledForegroundColor,
+    }) {
+      return puzzleAcademyFilledButtonStyle(
+        palette: palette,
         backgroundColor: color,
-        foregroundColor: const Color(0xFF08131F),
-        disabledBackgroundColor: color.withValues(alpha: 0.22),
-        disabledForegroundColor: const Color(
-          0xFF08131F,
-        ).withValues(alpha: 0.55),
+        foregroundColor: foregroundColor ??
+            (color.computeLuminance() > 0.55
+                ? const Color(0xFF08131F)
+                : Colors.white),
+        disabledBackgroundColor: disabledBackgroundColor,
+        disabledForegroundColor: disabledForegroundColor,
       );
     }
 
     ButtonStyle outlinedAccentStyle(Color color) {
-      return ButtonStyle(
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.disabled)) {
-            return color.withValues(alpha: 0.20);
-          }
-          return color;
-        }),
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.disabled)) {
-            return color.withValues(alpha: 0.025);
-          }
-          return color.withValues(alpha: 0.10);
-        }),
-        side: WidgetStateProperty.resolveWith((states) {
-          final alpha = states.contains(WidgetState.disabled) ? 0.10 : 0.82;
-          return BorderSide(color: color.withValues(alpha: alpha));
-        }),
-        overlayColor: WidgetStatePropertyAll(color.withValues(alpha: 0.08)),
+      return puzzleAcademyOutlinedButtonStyle(
+        palette: palette,
+        accent: color,
       );
     }
 
     final previousButton = OutlinedButton.icon(
       onPressed: hasPrevious ? _openPreviousPuzzle : null,
+      style: outlinedAccentStyle(palette.cyan),
       icon: const Icon(Icons.skip_previous_rounded),
       label: const Text('Previous Puzzle'),
     );
@@ -2415,10 +2606,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final nextButton = isLastReviewMistake
         ? FilledButton(
             onPressed: canReturnToAcademy ? _exitToMap : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: canReturnToAcademy
-                  ? nextEnabledColor
-                  : nextDisabledColor,
+            style: filledAccentStyle(
+              canReturnToAcademy ? nextEnabledColor : nextDisabledColor,
               foregroundColor: canReturnToAcademy
                   ? const Color(0xFF07131F)
                   : Colors.white.withValues(alpha: 0.88),
@@ -2429,10 +2618,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
           )
         : FilledButton.icon(
             onPressed: canAdvanceToNext ? _openNextPuzzle : null,
-            style: FilledButton.styleFrom(
-              backgroundColor: canAdvanceToNext
-                  ? nextEnabledColor
-                  : nextDisabledColor,
+            style: filledAccentStyle(
+              canAdvanceToNext ? nextEnabledColor : nextDisabledColor,
               foregroundColor: canAdvanceToNext
                   ? const Color(0xFF07131F)
                   : Colors.white.withValues(alpha: 0.88),
@@ -2447,10 +2634,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       onPressed: canClaimDailyReward
           ? () => _claimDailySequenceReward(provider)
           : null,
-      style: FilledButton.styleFrom(
-        backgroundColor: canClaimDailyReward
-            ? nextEnabledColor
-            : nextDisabledColor,
+      style: filledAccentStyle(
+        canClaimDailyReward ? nextEnabledColor : nextDisabledColor,
         foregroundColor: canClaimDailyReward
             ? const Color(0xFF07131F)
             : Colors.white.withValues(alpha: 0.88),
