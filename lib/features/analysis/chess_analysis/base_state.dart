@@ -378,12 +378,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _menuSparkLastUpdate = DateTime.now();
     _creditsBackdropLastUpdate = DateTime.now();
     final random = Random();
+    const menuDotRadiusScale = 1.15;
     _blueDotPhase = random.nextDouble() * 2 * pi;
     _yellowDotPhase = random.nextDouble() * 2 * pi;
     _blueDotSpeed = (0.28 + random.nextDouble() * 0.12) * 1.40;
     _yellowDotSpeed = (0.25 + random.nextDouble() * 0.12) * 1.40;
-    _blueDotRadius = 0.58 + random.nextDouble() * 0.12;
-    _yellowDotRadius = 0.52 + random.nextDouble() * 0.12;
+    _blueDotRadius = (0.58 + random.nextDouble() * 0.12) * menuDotRadiusScale;
+    _yellowDotRadius = (0.52 + random.nextDouble() * 0.12) * menuDotRadiusScale;
     _blueDotTrajectoryNoise = random.nextDouble();
     _yellowDotTrajectoryNoise = random.nextDouble();
     _blueDotShapeSeed = random.nextDouble() * 3.2;
@@ -2546,14 +2547,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<String?> _showPromotionPicker(bool whitePiece) async {
+    final scheme = Theme.of(context).colorScheme;
+    final options = <({String value, String label})>[
+      (value: 'q', label: 'Queen'),
+      (value: 't', label: 'Rook'),
+      (value: 'b', label: 'Bishop'),
+      (value: 'n', label: 'Knight'),
+    ];
+
     return showModalBottomSheet<String>(
       context: context,
-      backgroundColor: const Color(0xFF0E0F17),
+      backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (context) {
-        final options = <String>['q', 't', 'b', 'n'];
+      builder: (sheetContext) {
+        final sheetScheme = Theme.of(sheetContext).colorScheme;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -2561,43 +2570,66 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 36,
+                  width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
+                    color: sheetScheme.outline.withAlpha(77),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Choose Promotion',
                   style: TextStyle(
-                    color: Colors.white,
                     fontSize: 18,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
+                    color: sheetScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.center,
                   children: [
                     for (final option in options)
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(option),
+                      InkWell(
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop(option.value),
+                        borderRadius: BorderRadius.circular(18),
                         child: Container(
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF161A24),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white12),
+                          width: 132,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
                           ),
-                          child: Center(
-                            child: _pieceImage(
-                              '${option}_${whitePiece ? 'w' : 'b'}',
-                              width: 34,
-                              height: 34,
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              sheetScheme.primary.withOpacity(0.06),
+                              sheetScheme.surface,
                             ),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: sheetScheme.outline.withOpacity(0.28),
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _pieceImage(
+                                '${option.value}_${whitePiece ? 'w' : 'b'}',
+                                width: 60,
+                                height: 60,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                option.label,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: sheetScheme.onSurface,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -4886,7 +4918,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           alignment: Alignment.center,
                           children: [
                             _buildMenuCenterShape(
-                              size: 360,
+                              size: 360 * 1.10,
                               strokeColor: scheme.outline.withValues(
                                 alpha: 0.38,
                               ),
@@ -4895,7 +4927,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               sides: _menuCenterShapeSidesA,
                             ),
                             _buildMenuCenterShape(
-                              size: 285,
+                              size: 285 * 1.10,
                               strokeColor: scheme.outline.withValues(
                                 alpha: 0.30,
                               ),
