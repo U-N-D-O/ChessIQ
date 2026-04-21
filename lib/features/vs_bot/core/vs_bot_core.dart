@@ -1847,10 +1847,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         ? arcade.line
         : Color.lerp(profileAccent, difficultyAccent, 0.55)!;
     final statusText = locked
-      ? 'Clear all ${_botCharacters[max(0, index - 1)].name} tiers first.'
-      : clearedTierCount == 3
-      ? 'Cabinet cleared. Replay any tier or jump back in for a rematch.'
-      : 'Approx. ${previewSettings.elo} Elo | $clearedTierCount/3 tiers cleared';
+        ? 'Clear all ${_botCharacters[max(0, index - 1)].name} tiers first.'
+        : clearedTierCount == 3
+        ? 'Cabinet cleared. Replay any tier or jump back in for a rematch.'
+        : 'Approx. ${previewSettings.elo} Elo | $clearedTierCount/3 tiers cleared';
     final posterHeight = compact ? 156.0 : 214.0;
     final filledTagForeground = arcade.monochrome
         ? arcade.text
