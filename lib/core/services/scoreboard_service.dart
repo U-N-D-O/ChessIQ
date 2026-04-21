@@ -389,6 +389,7 @@ class ScoreboardService {
     String? country,
     int limit = 10,
   }) async {
+    _lastFunctionError = null;
     try {
       final path = country == null || country.trim().isEmpty
           ? _globalPath
@@ -405,7 +406,11 @@ class ScoreboardService {
         response = await http.get(await _authedUrl(path));
       }
 
-      if (response.statusCode != 200) return const <LeaderboardEntry>[];
+      if (response.statusCode != 200) {
+        _lastFunctionError =
+            'Leaderboard request failed with status ${response.statusCode}.';
+        throw Exception(_lastFunctionError);
+      }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>?;
       if (data == null) return const <LeaderboardEntry>[];
@@ -440,8 +445,9 @@ class ScoreboardService {
         );
       }
       return entries;
-    } catch (_) {
-      return const <LeaderboardEntry>[];
+    } catch (e) {
+      _lastFunctionError ??= e.toString();
+      rethrow;
     }
   }
 }

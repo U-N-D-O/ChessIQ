@@ -2628,7 +2628,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ),
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: sheetScheme.outline.withValues(alpha: 0.28),
+                              color: sheetScheme.outline.withValues(
+                                alpha: 0.28,
+                              ),
                             ),
                           ),
                           child: Column(

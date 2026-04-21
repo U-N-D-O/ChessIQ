@@ -140,6 +140,52 @@ PuzzleAcademyPalette puzzleAcademyPalette(
   );
 }
 
+bool puzzleAcademyShouldReduceEffects(BuildContext context) {
+  final disableAnimations =
+      MediaQuery.maybeOf(context)?.disableAnimations ??
+      WidgetsBinding
+          .instance
+          .platformDispatcher
+          .accessibilityFeatures
+          .disableAnimations;
+  return disableAnimations;
+}
+
+Duration puzzleAcademyMotionDuration({
+  required bool reducedEffects,
+  int milliseconds = 180,
+  int reducedMilliseconds = 0,
+}) {
+  return Duration(
+    milliseconds: reducedEffects ? reducedMilliseconds : milliseconds,
+  );
+}
+
+Curve puzzleAcademyMotionCurve({required bool reducedEffects}) {
+  return reducedEffects ? Curves.linear : Curves.easeOutCubic;
+}
+
+WidgetStateProperty<Color?> puzzleAcademyInteractiveOverlay({
+  required PuzzleAcademyPalette palette,
+  required Color accent,
+}) {
+  return WidgetStateProperty.resolveWith<Color?>((states) {
+    if (states.contains(WidgetState.disabled)) {
+      return null;
+    }
+    if (states.contains(WidgetState.pressed)) {
+      return accent.withValues(alpha: palette.monochrome ? 0.18 : 0.12);
+    }
+    if (states.contains(WidgetState.focused)) {
+      return accent.withValues(alpha: palette.monochrome ? 0.14 : 0.09);
+    }
+    if (states.contains(WidgetState.hovered)) {
+      return accent.withValues(alpha: palette.monochrome ? 0.10 : 0.06);
+    }
+    return null;
+  });
+}
+
 List<BoxShadow> puzzleAcademySurfaceGlow(
   Color color, {
   required bool monochrome,
@@ -204,6 +250,49 @@ List<Shadow> puzzleAcademyTextGlow(
       blurRadius: 18 * strength,
     ),
   ];
+}
+
+BoxDecoration puzzleAcademyTagDecoration({
+  required PuzzleAcademyPalette palette,
+  required Color accent,
+  bool filled = false,
+  double radius = 5,
+}) {
+  final base = Color.alphaBlend(
+    accent.withValues(
+      alpha: filled
+          ? (palette.monochrome ? 0.24 : 0.18)
+          : (palette.monochrome ? 0.16 : 0.11),
+    ),
+    palette.panelAlt,
+  );
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[
+        Color.alphaBlend(accent.withValues(alpha: filled ? 0.14 : 0.08), base),
+        base,
+        Color.alphaBlend(
+          palette.boardLight.withValues(
+            alpha: palette.monochrome ? 0.04 : 0.06,
+          ),
+          base,
+        ),
+      ],
+      stops: const <double>[0.0, 0.58, 1.0],
+    ),
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(
+      color: accent.withValues(alpha: filled ? 0.68 : 0.56),
+      width: 2,
+    ),
+    boxShadow: puzzleAcademySurfaceGlow(
+      accent,
+      monochrome: palette.monochrome,
+      strength: filled ? 0.16 : 0.10,
+    ),
+  );
 }
 
 TextStyle puzzleAcademyDisplayStyle({
@@ -403,15 +492,10 @@ ButtonStyle puzzleAcademyFilledButtonStyle({
       color: foregroundColor,
     ),
   ).copyWith(
-    overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(WidgetState.pressed)) {
-        return Colors.white.withValues(alpha: palette.monochrome ? 0.14 : 0.10);
-      }
-      if (states.contains(WidgetState.hovered)) {
-        return Colors.white.withValues(alpha: palette.monochrome ? 0.10 : 0.06);
-      }
-      return null;
-    }),
+    overlayColor: puzzleAcademyInteractiveOverlay(
+      palette: palette,
+      accent: palette.monochrome ? foregroundColor : Colors.white,
+    ),
   );
 }
 
@@ -443,16 +527,136 @@ ButtonStyle puzzleAcademyOutlinedButtonStyle({
       color: accent,
     ),
   ).copyWith(
-    overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(WidgetState.pressed)) {
-        return accent.withValues(alpha: palette.monochrome ? 0.16 : 0.10);
-      }
-      if (states.contains(WidgetState.hovered)) {
-        return accent.withValues(alpha: palette.monochrome ? 0.10 : 0.05);
-      }
-      return null;
-    }),
+    overlayColor: puzzleAcademyInteractiveOverlay(
+      palette: palette,
+      accent: accent,
+    ),
   );
+}
+
+class PuzzleAcademyAnimatedSwap extends StatelessWidget {
+  const PuzzleAcademyAnimatedSwap({
+    super.key,
+    required this.child,
+    this.duration = const Duration(milliseconds: 180),
+  });
+
+  final Widget child;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    if (puzzleAcademyShouldReduceEffects(context)) {
+      return child;
+    }
+    return AnimatedSwitcher(
+      duration: duration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.03),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class PuzzleAcademyPressable extends StatefulWidget {
+  const PuzzleAcademyPressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.accent,
+    this.monochromeOverride,
+    this.borderRadius = const BorderRadius.all(Radius.circular(10)),
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final Color? accent;
+  final bool? monochromeOverride;
+  final BorderRadius borderRadius;
+
+  @override
+  State<PuzzleAcademyPressable> createState() => _PuzzleAcademyPressableState();
+}
+
+class _PuzzleAcademyPressableState extends State<PuzzleAcademyPressable> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  void _setHovered(bool hovered) {
+    if (!mounted || widget.onTap == null || _hovered == hovered) {
+      return;
+    }
+    setState(() => _hovered = hovered);
+  }
+
+  void _setPressed(bool pressed) {
+    if (!mounted || widget.onTap == null || _pressed == pressed) {
+      return;
+    }
+    setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: widget.monochromeOverride,
+    );
+    final reducedEffects = puzzleAcademyShouldReduceEffects(context);
+    final effectiveAccent = widget.accent ?? palette.cyan;
+    final slideOffset = reducedEffects
+        ? Offset.zero
+        : Offset(0, _pressed ? 0.008 : (_hovered ? -0.012 : 0));
+
+    return MouseRegion(
+      cursor: widget.onTap == null
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) {
+        _setHovered(false);
+        _setPressed(false);
+      },
+      child: AnimatedSlide(
+        duration: puzzleAcademyMotionDuration(
+          reducedEffects: reducedEffects,
+          milliseconds: 150,
+        ),
+        curve: puzzleAcademyMotionCurve(reducedEffects: reducedEffects),
+        offset: slideOffset,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: _setPressed,
+            borderRadius: widget.borderRadius,
+            overlayColor: puzzleAcademyInteractiveOverlay(
+              palette: palette,
+              accent: effectiveAccent,
+            ),
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class PuzzleAcademyPanel extends StatelessWidget {
@@ -512,12 +716,22 @@ class PuzzleAcademyTag extends StatelessWidget {
     required this.label,
     required this.accent,
     this.icon,
+    this.foregroundColor,
+    this.padding,
+    this.radius = 5,
+    this.compact = false,
+    this.filled = false,
     this.monochromeOverride,
   });
 
   final String label;
   final Color accent;
   final IconData? icon;
+  final Color? foregroundColor;
+  final EdgeInsetsGeometry? padding;
+  final double radius;
+  final bool compact;
+  final bool filled;
   final bool? monochromeOverride;
 
   @override
@@ -526,33 +740,274 @@ class PuzzleAcademyTag extends StatelessWidget {
       context,
       monochromeOverride: monochromeOverride,
     );
+    final contentColor = foregroundColor ?? accent;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: palette.monochrome ? 0.18 : 0.13),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: accent.withValues(alpha: 0.56), width: 2),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (icon != null) ...<Widget>[
-            Icon(icon, size: 13, color: accent),
-            const SizedBox(width: 6),
-          ],
-          Text(
-            label,
-            style: puzzleAcademyHudStyle(
-              palette: palette,
-              size: 10.8,
-              weight: FontWeight.w800,
-              letterSpacing: 0.95,
-              height: 1.0,
-              color: accent,
-            ),
+      padding:
+          padding ??
+          EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 10,
+            vertical: compact ? 4 : 6,
           ),
-        ],
+      decoration: puzzleAcademyTagDecoration(
+        palette: palette,
+        accent: accent,
+        filled: filled,
+        radius: radius,
       ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (icon != null) ...<Widget>[
+                Icon(icon, size: compact ? 12 : 13, color: contentColor),
+                SizedBox(width: compact ? 4 : 6),
+              ],
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.visible,
+                softWrap: false,
+                style: puzzleAcademyHudStyle(
+                  palette: palette,
+                  size: compact ? 10.2 : 10.8,
+                  weight: FontWeight.w800,
+                  letterSpacing: compact ? 0.82 : 0.95,
+                  height: 1.0,
+                  color: contentColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PuzzleAcademySectionHeader extends StatelessWidget {
+  const PuzzleAcademySectionHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.accent,
+    this.icon,
+    this.trailing,
+    this.titleColor,
+    this.subtitleColor,
+    this.titleSize = 14,
+    this.subtitleSize = 12.2,
+    this.titleWeight = FontWeight.w800,
+    this.monochromeOverride,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Color? accent;
+  final IconData? icon;
+  final Widget? trailing;
+  final Color? titleColor;
+  final Color? subtitleColor;
+  final double titleSize;
+  final double subtitleSize;
+  final FontWeight titleWeight;
+  final bool? monochromeOverride;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochromeOverride,
+    );
+    final effectiveAccent = accent ?? palette.cyan;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stackTrailing = trailing != null && constraints.maxWidth < 220;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (stackTrailing)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      if (icon != null) ...<Widget>[
+                        Icon(icon, color: effectiveAccent, size: titleSize + 2),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: puzzleAcademyDisplayStyle(
+                            palette: palette,
+                            size: titleSize,
+                            weight: titleWeight,
+                            color: titleColor ?? effectiveAccent,
+                            letterSpacing: palette.monochrome ? 0.24 : 0.10,
+                            height: 1.0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  trailing!,
+                ],
+              )
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  if (icon != null) ...<Widget>[
+                    Icon(icon, color: effectiveAccent, size: titleSize + 2),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: puzzleAcademyDisplayStyle(
+                        palette: palette,
+                        size: titleSize,
+                        weight: titleWeight,
+                        color: titleColor ?? effectiveAccent,
+                        letterSpacing: palette.monochrome ? 0.24 : 0.10,
+                        height: 1.0,
+                      ),
+                    ),
+                  ),
+                  if (trailing != null) ...<Widget>[
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: trailing!,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            if (subtitle != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                subtitle!,
+                style: puzzleAcademyCompactStyle(
+                  palette: palette,
+                  size: subtitleSize,
+                  weight: FontWeight.w600,
+                  color: subtitleColor ?? palette.textMuted,
+                  height: 1.26,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class PuzzleAcademySkeletonBlock extends StatelessWidget {
+  const PuzzleAcademySkeletonBlock({
+    super.key,
+    this.width,
+    this.height = 12,
+    this.radius = 6,
+    this.accent,
+    this.monochromeOverride,
+  });
+
+  final double? width;
+  final double height;
+  final double radius;
+  final Color? accent;
+  final bool? monochromeOverride;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochromeOverride,
+    );
+    final effectiveAccent = accent ?? palette.line;
+    final base = Color.alphaBlend(
+      effectiveAccent.withValues(alpha: palette.monochrome ? 0.12 : 0.08),
+      palette.panelAlt,
+    );
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: <Color>[
+            base,
+            Color.alphaBlend(palette.boardLight.withValues(alpha: 0.10), base),
+            base,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: effectiveAccent.withValues(
+            alpha: palette.monochrome ? 0.18 : 0.14,
+          ),
+          width: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+class PuzzleAcademySkeletonParagraph extends StatelessWidget {
+  const PuzzleAcademySkeletonParagraph({
+    super.key,
+    this.lines = 3,
+    this.lineHeight = 12,
+    this.spacing = 8,
+    this.lastLineWidthFactor = 0.72,
+    this.accent,
+    this.monochromeOverride,
+  });
+
+  final int lines;
+  final double lineHeight;
+  final double spacing;
+  final double lastLineWidthFactor;
+  final Color? accent;
+  final bool? monochromeOverride;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List<Widget>.generate(lines, (index) {
+            final isLast = index == lines - 1;
+            final width = isLast && constraints.maxWidth.isFinite
+                ? constraints.maxWidth * lastLineWidthFactor.clamp(0.2, 1.0)
+                : null;
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: index == lines - 1 ? 0 : spacing,
+              ),
+              child: PuzzleAcademySkeletonBlock(
+                width: width,
+                height: lineHeight,
+                accent: accent,
+                monochromeOverride: monochromeOverride,
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -798,6 +1253,10 @@ class PuzzleAcademyInfoButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(4),
+        overlayColor: puzzleAcademyInteractiveOverlay(
+          palette: palette,
+          accent: effectiveAccent,
+        ),
         onTap: () {
           showDialog<void>(
             context: context,

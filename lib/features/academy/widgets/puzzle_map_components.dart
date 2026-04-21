@@ -7,10 +7,7 @@ TextStyle _academyHeaderStyle(
   double size = 14,
   FontWeight weight = FontWeight.w800,
 }) {
-  final palette = puzzleAcademyPalette(
-    context,
-    monochromeOverride: monochrome,
-  );
+  final palette = puzzleAcademyPalette(context, monochromeOverride: monochrome);
   return puzzleAcademyDisplayStyle(
     palette: palette,
     size: size,
@@ -30,10 +27,7 @@ TextStyle _academyCompactTextStyle(
   double letterSpacing = 0.24,
   double height = 1.24,
 }) {
-  final palette = puzzleAcademyPalette(
-    context,
-    monochromeOverride: monochrome,
-  );
+  final palette = puzzleAcademyPalette(context, monochromeOverride: monochrome);
   return puzzleAcademyCompactStyle(
     palette: palette,
     size: size,
@@ -154,30 +148,21 @@ class _DashboardPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = puzzleAcademyPalette(
-      context,
-      monochromeOverride: monochrome,
-    );
-
-    return Container(
+    return PuzzleAcademyPanel(
       padding: const EdgeInsets.all(16),
-      decoration: puzzleAcademyPanelDecoration(
-        palette: palette,
-        accent: accent,
-        radius: 10,
-      ),
+      accent: accent,
+      radius: 10,
+      monochromeOverride: monochrome,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: _academyHeaderStyle(
-              context,
-              color: accent,
-              monochrome: monochrome,
-            ),
+          PuzzleAcademySectionHeader(
+            title: title,
+            accent: accent,
+            titleSize: 14,
+            monochromeOverride: monochrome,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -185,19 +170,66 @@ class _DashboardPanel extends StatelessWidget {
   }
 }
 
-class _DailyChallengeCard extends StatelessWidget {
-  const _DailyChallengeCard({
-    required this.total,
-    required this.completed,
-    required this.hasTodayPuzzle,
-    required this.onTap,
+class _DashboardLoadingState extends StatelessWidget {
+  const _DashboardLoadingState({required this.accent, this.monochrome = false});
+
+  final Color accent;
+  final bool monochrome;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        PuzzleAcademySkeletonBlock(
+          width: 118,
+          height: 14,
+          accent: accent,
+          monochromeOverride: monochrome,
+        ),
+        const SizedBox(height: 10),
+        PuzzleAcademySkeletonParagraph(
+          lines: 2,
+          lineHeight: 11,
+          accent: accent,
+          monochromeOverride: monochrome,
+        ),
+        const SizedBox(height: 12),
+        PuzzleAcademySkeletonBlock(
+          height: 8,
+          accent: accent,
+          monochromeOverride: monochrome,
+        ),
+        const SizedBox(height: 12),
+        PuzzleAcademySkeletonBlock(
+          width: 144,
+          height: 34,
+          radius: 8,
+          accent: accent,
+          monochromeOverride: monochrome,
+        ),
+      ],
+    );
+  }
+}
+
+class _DashboardStateNotice extends StatelessWidget {
+  const _DashboardStateNotice({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.accent,
+    this.actionLabel,
+    this.onAction,
     this.monochrome = false,
   });
 
-  final int total;
-  final int completed;
-  final bool hasTodayPuzzle;
-  final VoidCallback onTap;
+  final IconData icon;
+  final String title;
+  final String message;
+  final Color accent;
+  final String? actionLabel;
+  final VoidCallback? onAction;
   final bool monochrome;
 
   @override
@@ -208,106 +240,305 @@ class _DailyChallengeCard extends StatelessWidget {
       context,
       monochromeOverride: monochrome,
     );
-    final progress = total <= 0
-        ? 0.0
-        : (completed / max(1, total)).clamp(0.0, 1.0);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: puzzleAcademyPanelDecoration(
-        palette: palette,
-        accent: _accentGold(context),
-        fillColor: palette.panelAlt,
-        radius: 10,
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.calendar_month_rounded, color: _accentGold(context)),
-                const SizedBox(width: 8),
-                Text(
-                  'Daily Challenge',
-                  style: _academyHeaderStyle(
-                    context,
-                    color: monochrome ? _accentGold(context) : scheme.onSurface,
-                    monochrome: monochrome,
-                    size: 15.6,
-                  ),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: accent.withValues(alpha: monochrome ? 0.14 : 0.10),
+                border: Border.all(
+                  color: accent.withValues(alpha: monochrome ? 0.42 : 0.30),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              !hasTodayPuzzle
-                  ? 'No daily set available for today yet.'
-                  : '$completed / $total solved in today\'s challenge set',
-              style: _academyCompactTextStyle(
-                context,
-                color: scheme.onSurface.withValues(alpha: 0.78),
-                monochrome: monochrome,
-                size: 13.4,
-                height: 1.28,
               ),
+              child: Icon(icon, color: accent, size: 18),
             ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                value: progress,
-                backgroundColor: scheme.outline.withValues(alpha: 0.22),
-                valueColor: AlwaysStoppedAnimation<Color>(_accentGold(context)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: hasTodayPuzzle ? onTap : null,
-                style:
-                    FilledButton.styleFrom(
-                      backgroundColor: _accentBlue(context),
-                    ).merge(
-                      _academyFilledButtonStyle(
-                        backgroundColor: _accentBlue(context),
-                        foregroundColor: theme.brightness == Brightness.dark
-                            ? const Color(0xFF07131F)
-                            : Colors.white,
-                        disabledBackgroundColor: scheme.outline.withValues(
-                          alpha: 0.20,
-                        ),
-                        disabledForegroundColor: scheme.onSurface.withValues(
-                          alpha: 0.42,
-                        ),
-                        monochrome: monochrome,
-                      ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: _academyHeaderStyle(
+                      context,
+                      color: scheme.onSurface,
+                      monochrome: monochrome,
+                      size: 13.8,
                     ),
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(
-                  hasTodayPuzzle
-                      ? "Solve Today's Puzzles"
-                      : 'Check Back Later!',
-                  style: _academyCompactTextStyle(
-                    context,
-                    color: hasTodayPuzzle
-                        ? (theme.brightness == Brightness.dark
-                              ? const Color(0xFF07131F)
-                              : Colors.white)
-                        : scheme.onSurface.withValues(alpha: 0.42),
-                    monochrome: monochrome,
-                    size: 11.8,
-                    weight: FontWeight.w700,
-                    height: 1.14,
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  Text(
+                    message,
+                    style: _academyCompactTextStyle(
+                      context,
+                      color: palette.textMuted,
+                      monochrome: monochrome,
+                      size: 12.0,
+                      weight: FontWeight.w600,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
+        ),
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onAction,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: Text(actionLabel!),
+            style: _academyFilledButtonStyle(
+              backgroundColor: accent,
+              foregroundColor: theme.brightness == Brightness.dark
+                  ? const Color(0xFF08141A)
+                  : Colors.white,
+              monochrome: monochrome,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              radius: 8,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DailyChallengeCard extends StatelessWidget {
+  const _DailyChallengeCard({
+    required this.total,
+    required this.completed,
+    required this.hasTodayPuzzle,
+    required this.onTap,
+    this.isLoading = false,
+    this.errorMessage,
+    this.onRetry,
+    this.monochrome = false,
+  });
+
+  final int total;
+  final int completed;
+  final bool hasTodayPuzzle;
+  final VoidCallback onTap;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback? onRetry;
+  final bool monochrome;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    final accentGold = _accentGold(context);
+    final actionTone = _accentBlue(context);
+    final progress = total <= 0
+        ? 0.0
+        : (completed / max(1, total)).clamp(0.0, 1.0);
+    final canLaunch = hasTodayPuzzle && !isLoading && errorMessage == null;
+
+    late final Widget content;
+    if (isLoading) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PuzzleAcademySectionHeader(
+            title: 'Daily Challenge',
+            subtitle:
+                'Loading today\'s challenge set and your completion state.',
+            accent: accentGold,
+            titleColor: monochrome ? accentGold : scheme.onSurface,
+            subtitleColor: scheme.onSurface.withValues(alpha: 0.78),
+            icon: Icons.calendar_month_rounded,
+            trailing: PuzzleAcademyTag(
+              label: 'LOADING',
+              accent: actionTone,
+              compact: true,
+              monochromeOverride: monochrome,
+            ),
+            monochromeOverride: monochrome,
+            titleSize: 15.6,
+            subtitleSize: 13.0,
+          ),
+          const SizedBox(height: 12),
+          _DashboardLoadingState(accent: accentGold, monochrome: monochrome),
+        ],
+      );
+    } else if (errorMessage != null) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PuzzleAcademySectionHeader(
+            title: 'Daily Challenge',
+            subtitle: 'Today\'s challenge feed did not refresh cleanly.',
+            accent: accentGold,
+            titleColor: monochrome ? accentGold : scheme.onSurface,
+            subtitleColor: scheme.onSurface.withValues(alpha: 0.78),
+            icon: Icons.calendar_month_rounded,
+            trailing: PuzzleAcademyTag(
+              label: 'RETRY',
+              accent: palette.signal,
+              compact: true,
+              monochromeOverride: monochrome,
+            ),
+            monochromeOverride: monochrome,
+            titleSize: 15.6,
+            subtitleSize: 13.0,
+          ),
+          const SizedBox(height: 12),
+          _DashboardStateNotice(
+            icon: Icons.wifi_off_rounded,
+            title: 'Daily board unavailable',
+            message: errorMessage!,
+            accent: palette.signal,
+            actionLabel: onRetry == null ? null : 'Retry Daily Challenge',
+            onAction: onRetry,
+            monochrome: monochrome,
+          ),
+        ],
+      );
+    } else if (!hasTodayPuzzle || total <= 0) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PuzzleAcademySectionHeader(
+            title: 'Daily Challenge',
+            subtitle: 'No fresh daily set is available at the moment.',
+            accent: accentGold,
+            titleColor: monochrome ? accentGold : scheme.onSurface,
+            subtitleColor: scheme.onSurface.withValues(alpha: 0.78),
+            icon: Icons.calendar_month_rounded,
+            trailing: PuzzleAcademyTag(
+              label: 'WAITING',
+              accent: palette.signal,
+              compact: true,
+              monochromeOverride: monochrome,
+            ),
+            monochromeOverride: monochrome,
+            titleSize: 15.6,
+            subtitleSize: 13.0,
+          ),
+          const SizedBox(height: 12),
+          _DashboardStateNotice(
+            icon: Icons.hourglass_bottom_rounded,
+            title: 'Waiting for the next drop',
+            message:
+                'Check back later for the next daily challenge set, or refresh if a new board should already be live.',
+            accent: actionTone,
+            actionLabel: onRetry == null ? null : 'Refresh Daily Challenge',
+            onAction: onRetry,
+            monochrome: monochrome,
+          ),
+        ],
+      );
+    } else {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PuzzleAcademySectionHeader(
+            title: 'Daily Challenge',
+            subtitle: '$completed / $total solved in today\'s challenge set',
+            accent: accentGold,
+            titleColor: monochrome ? accentGold : scheme.onSurface,
+            subtitleColor: scheme.onSurface.withValues(alpha: 0.78),
+            icon: Icons.calendar_month_rounded,
+            trailing: PuzzleAcademyTag(
+              label: '$completed/$total',
+              accent: actionTone,
+              filled: true,
+              monochromeOverride: monochrome,
+            ),
+            monochromeOverride: monochrome,
+            titleSize: 15.6,
+            subtitleSize: 13.0,
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 8,
+              value: progress,
+              backgroundColor: scheme.outline.withValues(alpha: 0.22),
+              valueColor: AlwaysStoppedAnimation<Color>(accentGold),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(backgroundColor: actionTone).merge(
+                _academyFilledButtonStyle(
+                  backgroundColor: actionTone,
+                  foregroundColor: theme.brightness == Brightness.dark
+                      ? const Color(0xFF07131F)
+                      : Colors.white,
+                  disabledBackgroundColor: scheme.outline.withValues(
+                    alpha: 0.20,
+                  ),
+                  disabledForegroundColor: scheme.onSurface.withValues(
+                    alpha: 0.42,
+                  ),
+                  monochrome: monochrome,
+                ),
+              ),
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: Text(
+                'Solve Today\'s Puzzles',
+                style: _academyCompactTextStyle(
+                  context,
+                  color: theme.brightness == Brightness.dark
+                      ? const Color(0xFF07131F)
+                      : Colors.white,
+                  monochrome: monochrome,
+                  size: 11.8,
+                  weight: FontWeight.w700,
+                  height: 1.14,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return PuzzleAcademyPressable(
+      onTap: canLaunch ? onTap : null,
+      accent: accentGold,
+      monochromeOverride: monochrome,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: puzzleAcademyPanelDecoration(
+          palette: palette,
+          accent: accentGold,
+          fillColor: palette.panelAlt,
+          radius: 10,
+        ),
+        child: PuzzleAcademyAnimatedSwap(
+          child: KeyedSubtree(
+            key: ValueKey<String>(
+              isLoading
+                  ? 'daily-loading'
+                  : errorMessage != null
+                  ? 'daily-error'
+                  : !hasTodayPuzzle || total <= 0
+                  ? 'daily-empty'
+                  : 'daily-filled',
+            ),
+            child: content,
+          ),
         ),
       ),
     );
@@ -319,12 +550,18 @@ class _LeaderboardCard extends StatelessWidget {
     required this.entries,
     this.title = 'Top 10 Global',
     this.emptyLabel = 'No scores yet.',
+    this.isLoading = false,
+    this.errorMessage,
+    this.onRetry,
     this.monochrome = false,
   });
 
   final List<LeaderboardEntry> entries;
   final String title;
   final String emptyLabel;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback? onRetry;
   final bool monochrome;
 
   @override
@@ -335,92 +572,132 @@ class _LeaderboardCard extends StatelessWidget {
       title: title,
       accent: _accentCyan(context),
       monochrome: monochrome,
-      child: entries.isEmpty
-          ? Text(
-              emptyLabel,
-              style: _academyCompactTextStyle(
-                context,
-                color: scheme.onSurface.withValues(alpha: 0.76),
-                monochrome: monochrome,
-                size: 13.2,
-              ),
-            )
-          : Column(
-              children: entries
-                  .map(
-                    (entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 40,
-                            child: Text(
-                              '${entry.rank}',
-                              style: puzzleAcademyIdentityStyle(
-                                palette: puzzleAcademyPalette(
-                                  context,
-                                  monochromeOverride: monochrome,
-                                ),
-                                color: _accentGold(context),
-                                size: 11.2,
-                                height: 1.18,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  entry.handle,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: _academyCompactTextStyle(
-                                    context,
-                                    color: scheme.onSurface,
-                                    monochrome: monochrome,
-                                    size: 13.8,
-                                    weight: FontWeight.w700,
+      child: PuzzleAcademyAnimatedSwap(
+        child: KeyedSubtree(
+          key: ValueKey<String>(
+            isLoading
+                ? 'leaderboard-loading'
+                : errorMessage != null
+                ? 'leaderboard-error'
+                : entries.isEmpty
+                ? 'leaderboard-empty'
+                : 'leaderboard-filled',
+          ),
+          child: isLoading
+              ? _DashboardLoadingState(
+                  accent: _accentCyan(context),
+                  monochrome: monochrome,
+                )
+              : errorMessage != null
+              ? _DashboardStateNotice(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Leaderboard sync failed',
+                  message: errorMessage!,
+                  accent: _accentCyan(context),
+                  actionLabel: onRetry == null ? null : 'Retry Leaderboard',
+                  onAction: onRetry,
+                  monochrome: monochrome,
+                )
+              : entries.isEmpty
+              ? _DashboardStateNotice(
+                  icon: Icons.emoji_events_outlined,
+                  title: 'Leaderboard awaiting results',
+                  message: emptyLabel,
+                  accent: _accentCyan(context),
+                  actionLabel: onRetry == null ? null : 'Refresh Leaderboard',
+                  onAction: onRetry,
+                  monochrome: monochrome,
+                )
+              : Column(
+                  children: entries
+                      .map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 34,
+                                child: Text(
+                                  '${entry.rank}',
+                                  style: puzzleAcademyIdentityStyle(
+                                    palette: puzzleAcademyPalette(
+                                      context,
+                                      monochromeOverride: monochrome,
+                                    ),
+                                    color: _accentGold(context),
+                                    size: 11.2,
                                     height: 1.18,
                                   ),
                                 ),
-                                if (entry.title.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      entry.title,
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      entry.handle,
+                                      overflow: TextOverflow.ellipsis,
                                       style: _academyCompactTextStyle(
                                         context,
-                                        color: scheme.onSurface.withValues(
-                                          alpha: 0.68,
-                                        ),
+                                        color: scheme.onSurface,
                                         monochrome: monochrome,
-                                        size: 12.2,
-                                        height: 1.16,
+                                        size: 13.8,
+                                        weight: FontWeight.w700,
+                                        height: 1.18,
                                       ),
                                     ),
+                                    if (entry.title.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          entry.title,
+                                          style: _academyCompactTextStyle(
+                                            context,
+                                            color: scheme.onSurface.withValues(
+                                              alpha: 0.68,
+                                            ),
+                                            monochrome: monochrome,
+                                            size: 12.2,
+                                            height: 1.16,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Align(
+                                  alignment: Alignment.topRight,
+                                  child: Text(
+                                    entry.score.toString(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.fade,
+                                    softWrap: false,
+                                    textAlign: TextAlign.right,
+                                    style: _academyCompactTextStyle(
+                                      context,
+                                      color: scheme.onSurface.withValues(
+                                        alpha: 0.78,
+                                      ),
+                                      monochrome: monochrome,
+                                      size: 13.2,
+                                      weight: FontWeight.w700,
+                                      height: 1.12,
+                                    ),
                                   ),
-                              ],
-                            ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            entry.score.toString(),
-                            style: _academyCompactTextStyle(
-                              context,
-                              color: scheme.onSurface.withValues(alpha: 0.78),
-                              monochrome: monochrome,
-                              size: 13.2,
-                              weight: FontWeight.w700,
-                              height: 1.12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
+                        ),
+                      )
+                      .toList(),
+                ),
+        ),
+      ),
     );
   }
 }
@@ -449,15 +726,18 @@ class _SemesterHeader extends StatelessWidget {
       context,
       monochromeOverride: monochrome,
     );
+    final accentCyan = _accentCyan(context);
 
-    return InkWell(
+    return PuzzleAcademyPressable(
       onTap: onTap,
+      accent: accentCyan,
+      monochromeOverride: monochrome,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: puzzleAcademyPanelDecoration(
           palette: palette,
-          accent: _accentCyan(context),
+          accent: accentCyan,
           radius: 10,
         ),
         child: Column(
@@ -486,28 +766,30 @@ class _SemesterHeader extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Row(
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                Text(
-                  '$nodeCount Levels',
-                  style: _academyCompactTextStyle(
-                    context,
-                    color: scheme.onSurface.withValues(alpha: 0.74),
-                    monochrome: monochrome,
-                    size: 12.0,
-                  ),
+                PuzzleAcademyTag(
+                  label: '$nodeCount Levels',
+                  accent: accentCyan,
+                  compact: true,
+                  monochromeOverride: monochrome,
                 ),
-                const Spacer(),
-                Text(
-                  expanded ? 'Hide' : 'Show',
-                  style: _academyCompactTextStyle(
-                    context,
-                    color: scheme.onSurface.withValues(alpha: 0.74),
-                    monochrome: monochrome,
-                    size: 12.0,
-                    weight: FontWeight.w700,
-                  ),
+                PuzzleAcademyTag(
+                  label: '${(progress * 100).round()}% clear',
+                  accent: palette.amber,
+                  compact: true,
+                  filled: progress >= 1.0,
+                  monochromeOverride: monochrome,
+                ),
+                PuzzleAcademyTag(
+                  label: expanded ? 'COLLAPSE' : 'EXPAND',
+                  accent: scheme.outline,
+                  foregroundColor: scheme.onSurface.withValues(alpha: 0.74),
+                  compact: true,
+                  monochromeOverride: monochrome,
                 ),
               ],
             ),
@@ -518,7 +800,7 @@ class _SemesterHeader extends StatelessWidget {
                 minHeight: 7,
                 value: progress,
                 backgroundColor: scheme.outline.withValues(alpha: 0.22),
-                valueColor: AlwaysStoppedAnimation<Color>(_accentCyan(context)),
+                valueColor: AlwaysStoppedAnimation<Color>(accentCyan),
               ),
             ),
           ],
@@ -583,24 +865,37 @@ class _PuzzleNodeCard extends StatelessWidget {
       scheme.surface,
     );
 
-    return Container(
-      decoration: puzzleAcademyPanelDecoration(
-        palette: palette,
-        accent: locked ? scheme.outline : _accentBlue(context),
-        fillColor: cardBase.withValues(alpha: locked ? 0.84 : 0.94),
-        borderColor: locked
-            ? scheme.outline.withValues(alpha: 0.34)
-            : _accentBlue(context).withValues(alpha: 0.42),
-        radius: 10,
-        borderWidth: 2.5,
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+    return PuzzleAcademyPressable(
+      onTap: onTap,
+      accent: locked ? scheme.outline : _accentBlue(context),
+      monochromeOverride: monochrome,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        decoration: puzzleAcademyPanelDecoration(
+          palette: palette,
+          accent: locked ? scheme.outline : _accentBlue(context),
+          fillColor: cardBase.withValues(alpha: locked ? 0.84 : 0.94),
+          borderColor: locked
+              ? scheme.outline.withValues(alpha: 0.34)
+              : _accentBlue(context).withValues(alpha: 0.42),
+          radius: 10,
+          borderWidth: 2.5,
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
           child: compact
-              ? _buildCompactContent(context, locked)
+              ? LayoutBuilder(
+                  builder: (context, constraints) {
+                    final content = _buildCompactContent(context, locked);
+                    if (constraints.maxHeight < 220) {
+                      return SingleChildScrollView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: content,
+                      );
+                    }
+                    return content;
+                  },
+                )
               : _buildPortraitContent(context, locked),
         ),
       ),
@@ -654,6 +949,7 @@ class _PuzzleNodeCard extends StatelessWidget {
                               ? '$bestExamGrade $bestExamScore'
                               : '$bestExamScore pts',
                           accent: _accentGold(context),
+                          filled: true,
                         ),
                     ],
                   ),
@@ -663,13 +959,13 @@ class _PuzzleNodeCard extends StatelessWidget {
           ],
         ),
         if (hasStatusBadges) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           _statusCluster(context),
         ],
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         if (locked || showExamButton)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -712,7 +1008,7 @@ class _PuzzleNodeCard extends StatelessWidget {
               child: FilledButton(
                 onPressed: onTap,
                 style: _academyFilledButtonStyle(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   backgroundColor: locked
                       ? Theme.of(
                           context,
@@ -741,25 +1037,12 @@ class _PuzzleNodeCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            if (locked && previousSolveRequirementText != null)
-              _InfoTag(
-                label: previousSolveRequirementText!,
-                accent: _accentBlue(context),
-              ),
-            if (locked && lockedRequirementText != null)
-              _InfoTag(
-                label: lockedRequirementText!,
-                accent: _accentGold(context),
-              ),
-            _InfoTag(
-              label: locked ? 'Locked' : 'Training',
-              accent: locked ? scheme.outline : _accentBlue(context),
-            ),
-          ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _InfoTag(
+            label: locked ? 'Locked' : 'Training',
+            accent: locked ? scheme.outline : _accentBlue(context),
+          ),
         ),
         const SizedBox(height: 6),
         ClipRRect(
@@ -1050,14 +1333,24 @@ class _HeroBadge extends StatelessWidget {
 }
 
 class _InfoTag extends StatelessWidget {
-  const _InfoTag({required this.label, required this.accent});
+  const _InfoTag({
+    required this.label,
+    required this.accent,
+    this.filled = false,
+  });
 
   final String label;
   final Color accent;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
-    return PuzzleAcademyTag(label: label, accent: accent);
+    return PuzzleAcademyTag(
+      label: label,
+      accent: accent,
+      compact: true,
+      filled: filled,
+    );
   }
 }
 
@@ -1070,7 +1363,13 @@ class _Tag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PuzzleAcademyTag(label: text, accent: color, icon: icon);
+    return PuzzleAcademyTag(
+      label: text,
+      accent: color,
+      icon: icon,
+      compact: true,
+      filled: true,
+    );
   }
 }
 
@@ -1087,7 +1386,11 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PuzzleAcademyTag(label: '$label ${value.toUpperCase()}', accent: color);
+    return PuzzleAcademyTag(
+      label: '$label ${value.toUpperCase()}',
+      accent: color,
+      filled: true,
+    );
   }
 }
 
@@ -1129,26 +1432,15 @@ class _StoreRow extends StatelessWidget {
           Icon(icon, color: scheme.primary),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: _academyHeaderStyle(
-                    context,
-                    color: scheme.onSurface,
-                    monochrome: monochrome,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: puzzleAcademyHudStyle(
-                    palette: palette,
-                    size: 11.5,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            child: PuzzleAcademySectionHeader(
+              title: title,
+              subtitle: subtitle,
+              accent: _accentGold(context),
+              titleColor: scheme.onSurface,
+              subtitleColor: palette.textMuted,
+              titleSize: 14,
+              subtitleSize: 11.5,
+              monochromeOverride: monochrome,
             ),
           ),
           Text(

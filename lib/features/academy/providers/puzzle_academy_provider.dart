@@ -277,14 +277,22 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   bool _shouldShowBrainBreak = false;
   bool _shouldShowGrandmasterOracle = false;
   String? _celebrationNodeKey;
+  bool _dailyPuzzleLoading = false;
+  bool _dailyPuzzleLoaded = false;
+  String? _lastDailyPuzzleError;
   bool _remoteScoreboardLoaded = false;
   List<LeaderboardEntry> _remoteScoreboardEntries = const <LeaderboardEntry>[];
   bool _scoreboardSyncing = false;
+  String? _lastScoreboardError;
 
   bool get initialized => _initialized;
   bool get isLoading => _isLoading;
+  bool get dailyPuzzleLoading => _dailyPuzzleLoading;
+  bool get dailyPuzzleLoaded => _dailyPuzzleLoaded;
+  String? get lastDailyPuzzleError => _lastDailyPuzzleError;
   bool get scoreboardLoaded => _remoteScoreboardLoaded;
   bool get scoreboardSyncing => _scoreboardSyncing;
+  String? get lastScoreboardError => _lastScoreboardError;
   bool get shouldShowBrainBreak => _shouldShowBrainBreak;
   bool get shouldShowGrandmasterOracle => _shouldShowGrandmasterOracle;
   String? get celebrationNodeKey => _celebrationNodeKey;
@@ -1190,17 +1198,26 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   Future<void> refreshRemoteScoreboard({required bool national}) async {
     if (_scoreboardSyncing) return;
     _scoreboardSyncing = true;
+    _lastScoreboardError = null;
     notifyListeners();
 
-    final country = national ? progress.country.trim() : null;
-    final entries = await ScoreboardService.instance.fetchTopScores(
-      country: country,
-      limit: 10,
-    );
-    _remoteScoreboardEntries = entries;
-    _remoteScoreboardLoaded = true;
-    _scoreboardSyncing = false;
-    notifyListeners();
+    try {
+      final country = national ? progress.country.trim() : null;
+      final entries = await ScoreboardService.instance.fetchTopScores(
+        country: country,
+        limit: 10,
+      );
+      _remoteScoreboardEntries = entries;
+      _remoteScoreboardLoaded = true;
+    } catch (_) {
+      _lastScoreboardError =
+          ScoreboardService.instance.lastFunctionError ??
+          'Unable to load the live Academy leaderboard right now.';
+      _remoteScoreboardLoaded = true;
+    } finally {
+      _scoreboardSyncing = false;
+      notifyListeners();
+    }
   }
 
   Future<void> ensureNodePuzzlesLoadedForNode(EloNodeProgress node) async {
@@ -1560,33 +1577,48 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshTodayDailyPuzzle({required bool notify}) async {
-    if (_serverDateStamp == null) {
-      await _initServerDate();
-    }
-    if (_serverDateStamp == null) {
-      _todayDailyPuzzleAssetPath = null;
-      _todayDailyPuzzle = null;
-      _dailyPuzzles = const <PuzzleItem>[];
-      if (notify) notifyListeners();
-      return;
-    }
-    final todayStamp = _todayStamp();
-    final matchedPath = _dailyPuzzleAssetPaths.lastWhere(
-      (path) => path.contains('daily_puzzles_${todayStamp}_'),
-      orElse: () => '',
-    );
-    _todayDailyPuzzleAssetPath = matchedPath.isEmpty ? null : matchedPath;
-    if (_todayDailyPuzzleAssetPath == null) {
-      _todayDailyPuzzle = null;
-      _dailyPuzzles = const <PuzzleItem>[];
-      if (notify) notifyListeners();
-      return;
-    }
+    final previousAssetPath = _todayDailyPuzzleAssetPath;
+    final previousTodayPuzzle = _todayDailyPuzzle;
+    final previousDailyPuzzles = _dailyPuzzles;
 
-    final puzzles = await _loadPuzzleList(_todayDailyPuzzleAssetPath!);
-    _dailyPuzzles = puzzles.take(20).toList(growable: false);
-    _todayDailyPuzzle = _dailyPuzzles.isEmpty ? null : _dailyPuzzles.first;
+    _dailyPuzzleLoading = true;
+    _lastDailyPuzzleError = null;
     if (notify) notifyListeners();
+
+    try {
+      if (_dailyPuzzleAssetPaths.isEmpty) {
+        _dailyPuzzleAssetPaths = await _loadDailyAssetPaths();
+      }
+      if (_serverDateStamp == null) {
+        await _initServerDate().catchError((_) {});
+      }
+
+      final todayStamp = _todayStamp();
+      final matchedPath = _dailyPuzzleAssetPaths.lastWhere(
+        (path) => path.contains('daily_puzzles_${todayStamp}_'),
+        orElse: () => '',
+      );
+      _todayDailyPuzzleAssetPath = matchedPath.isEmpty ? null : matchedPath;
+      if (_todayDailyPuzzleAssetPath == null) {
+        _todayDailyPuzzle = null;
+        _dailyPuzzles = const <PuzzleItem>[];
+        return;
+      }
+
+      final puzzles = await _loadPuzzleList(_todayDailyPuzzleAssetPath!);
+      _dailyPuzzles = puzzles.take(20).toList(growable: false);
+      _todayDailyPuzzle = _dailyPuzzles.isEmpty ? null : _dailyPuzzles.first;
+    } catch (_) {
+      _todayDailyPuzzleAssetPath = previousAssetPath;
+      _todayDailyPuzzle = previousTodayPuzzle;
+      _dailyPuzzles = previousDailyPuzzles;
+      _lastDailyPuzzleError =
+          'Unable to load today\'s challenge set right now.';
+    } finally {
+      _dailyPuzzleLoading = false;
+      _dailyPuzzleLoaded = true;
+      if (notify) notifyListeners();
+    }
   }
 
   String _dateStamp(DateTime value) {
