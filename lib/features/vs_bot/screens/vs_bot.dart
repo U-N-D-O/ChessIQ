@@ -53,19 +53,27 @@ abstract class _VsBotState extends _StoreState {
       return const SizedBox.shrink();
     }
 
+    final isLandscape = scene.width > scene.height;
+    final bubbleMaxWidth = min(
+      228 * scale,
+      scene.width * (isLandscape ? 0.42 : 0.58),
+    );
+
     final left = (center.dx + (26 * scale)).clamp(
       8.0,
-      max(8.0, scene.width - (228 * scale)),
+      max(8.0, scene.width - bubbleMaxWidth - (12 * scale)),
     );
     final top = (center.dy - (20 * scale)).clamp(
       6.0,
-      max(6.0, scene.height - (56 * scale)),
+      max(6.0, scene.height - ((isLandscape ? 92 : 82) * scale)),
     );
 
     return Positioned(
       left: left.toDouble(),
       top: top.toDouble(),
-      child: IgnorePointer(child: _buildBotSpeechBubble(scale)),
+      child: IgnorePointer(
+        child: _buildBotSpeechBubble(scale, maxWidth: bubbleMaxWidth),
+      ),
     );
   }
 
@@ -110,6 +118,13 @@ abstract class _VsBotState extends _StoreState {
 
   Widget _buildVsBotIntroAvatar(BotCharacter bot, double size) {
     final avatarAsset = bot.avatarAssetFor(_selectedBotDifficulty);
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final profileAccent = _vsBotProfileAccent(bot.profile, arcade);
+    final difficultyAccent = _botDifficultyColor(_selectedBotDifficulty);
+    final frameAccent = Color.lerp(profileAccent, difficultyAccent, 0.55)!;
 
     return Container(
       width: size,
@@ -117,34 +132,39 @@ abstract class _VsBotState extends _StoreState {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: const Color(0xFFFFA2A2).withValues(alpha: 0.92),
-          width: max(1.6, size * 0.038),
+          color: frameAccent.withValues(alpha: 0.88),
+          width: max(1.8, size * 0.045),
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF4D4D).withValues(alpha: 0.34),
-            blurRadius: size * 0.34,
-            spreadRadius: size * 0.018,
+            color: frameAccent.withValues(
+              alpha: arcade.monochrome ? 0.18 : 0.28,
+            ),
+            blurRadius: max(10.0, size * 0.22),
+            spreadRadius: max(1.0, size * 0.03),
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: size * 0.18,
-            offset: Offset(0, size * 0.06),
+            color: Colors.black.withValues(alpha: 0.30),
+            blurRadius: max(10.0, size * 0.20),
+            offset: Offset(0, max(4.0, size * 0.08)),
           ),
         ],
       ),
-      child: ClipOval(
-        child: avatarAsset != null
-            ? Image.asset(avatarAsset, fit: BoxFit.cover)
-            : Container(
-                color: const Color(0xFF230B0B),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.smart_toy_outlined,
-                  color: const Color(0xFFFFB3B3),
-                  size: size * 0.52,
+      child: Padding(
+        padding: EdgeInsets.all(max(3.0, size * 0.055)),
+        child: ClipOval(
+          child: avatarAsset != null
+              ? Image.asset(avatarAsset, fit: BoxFit.cover)
+              : Container(
+                  color: arcade.shell,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.smart_toy_outlined,
+                    color: difficultyAccent,
+                    size: size * 0.42,
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -154,20 +174,33 @@ abstract class _VsBotState extends _StoreState {
     if (bot == null) {
       return const SizedBox.shrink();
     }
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final profileAccent = _vsBotProfileAccent(bot.profile, arcade);
+    final difficultyAccent = _botDifficultyColor(_selectedBotDifficulty);
+    final stageAccent = Color.lerp(profileAccent, difficultyAccent, 0.55)!;
+    final glyphAccent = Color.lerp(arcade.crimson, stageAccent, 0.45)!;
+    final glyphSecondary = Color.lerp(arcade.pink, arcade.cyan, 0.28)!;
+    final compactScene = scene.width <= 390 || scene.height <= 430;
 
     return AnimatedBuilder(
       animation: _introController,
       builder: (context, child) {
         final t = _introController.value.clamp(0.0, 1.0);
         final fade = 1.0 - ((t - 0.80) / 0.15).clamp(0.0, 1.0);
-        final baseCenter = Offset(scene.width * 0.5, scene.height * 0.42);
+        final baseCenter = Offset(
+          scene.width * 0.5,
+          scene.height * (compactScene ? 0.39 : 0.42),
+        );
         final impactT = Curves.easeOut.transform(
           ((t - 0.28) / 0.12).clamp(0.0, 1.0),
         );
         final impactShake =
             sin(impactT * pi * 9.0) * (1.0 - impactT) * (12 * scale);
         final center = baseCenter.translate(impactShake, 0);
-        final glyphSize = 76.0 * scale;
+        final glyphSize = (compactScene ? 64.0 : 76.0) * scale;
         final hazeOpacity = ((t - 0.06) / 0.18).clamp(0.0, 1.0) * fade;
         final impactFlash = sin(impactT * pi).clamp(0.0, 1.0);
         final shockwaveT = ((t - 0.27) / 0.34).clamp(0.0, 1.0);
@@ -208,7 +241,8 @@ abstract class _VsBotState extends _StoreState {
         final avatarTravelT = Curves.easeInOutCubic.transform(
           ((t - 0.48) / 0.30).clamp(0.0, 1.0),
         );
-        final avatarStart = center + Offset(92 * scale, 6 * scale);
+        final avatarStart =
+            center + Offset((compactScene ? 78 : 92) * scale, 6 * scale);
         final avatarTarget =
             _vsBotIntroAvatarTarget(scene) ??
             Offset(scene.width - (34 * scale), scene.height * 0.78);
@@ -220,13 +254,21 @@ abstract class _VsBotState extends _StoreState {
         final avatarArcLift = sin(pi * avatarTravelT) * (54 * scale);
         final avatarPosition = avatarBase.translate(0, -avatarArcLift);
         final avatarSize = ui.lerpDouble(
-          64 * scale,
+          (compactScene ? 56 : 64) * scale,
           34 * scale,
           avatarTravelT,
         )!;
         final avatarRotation = ui.lerpDouble(0.26, 0.0, avatarTravelT)!;
         final avatarOpacity = ((t - 0.32) / 0.08).clamp(0.0, 1.0) * fade;
         final glyphYOffset = -16 * scale * exitLiftT;
+        final introPlateWidth = min(
+          224 * scale,
+          scene.width * (compactScene ? 0.72 : 0.76),
+        );
+        final namePlateWidth = min(
+          276 * scale,
+          scene.width * (compactScene ? 0.82 : 0.88),
+        );
 
         Widget buildGlyph(String glyph, Offset offset, double rotation) {
           final glyphLeft = center.dx + offset.dx - (glyphSize * 0.28);
@@ -267,11 +309,7 @@ abstract class _VsBotState extends _StoreState {
                         opacity: 0.44 * fade,
                         child: Transform.scale(
                           scale: 1.28 + (impactFlash * 0.16),
-                          child: glowText(
-                            1.0,
-                            const Color(0xFFFF5A5A),
-                            glyphGlow * 1.1,
-                          ),
+                          child: glowText(1.0, glyphAccent, glyphGlow * 1.1),
                         ),
                       ),
                       if (glyphTrailOpacity > 0.01)
@@ -284,14 +322,18 @@ abstract class _VsBotState extends _StoreState {
                             ),
                             child: glowText(
                               0.98,
-                              const Color(0xFFFF1F1F),
+                              glyphSecondary,
                               glyphGlow * 0.85,
                             ),
                           ),
                         ),
                       glowText(
                         1.0,
-                        const Color(0xFFFFC3C3).withValues(alpha: 0.82),
+                        Color.lerp(
+                          glyphSecondary,
+                          Colors.white,
+                          0.36,
+                        )!.withValues(alpha: 0.82),
                         glyphGlow * 0.34,
                       ),
                       Text(
@@ -300,12 +342,10 @@ abstract class _VsBotState extends _StoreState {
                           fontSize: glyphSize,
                           fontWeight: FontWeight.w900,
                           height: 0.84,
-                          color: const Color(0xFFFF2F2F),
+                          color: glyphAccent,
                           shadows: [
                             Shadow(
-                              color: const Color(
-                                0xFFFF2F2F,
-                              ).withValues(alpha: 0.95),
+                              color: glyphAccent.withValues(alpha: 0.95),
                               blurRadius: glyphGlow * 0.42,
                             ),
                             Shadow(
@@ -333,6 +373,44 @@ abstract class _VsBotState extends _StoreState {
               child: Stack(
                 children: [
                   Positioned(
+                    left: center.dx - (introPlateWidth / 2),
+                    top:
+                        center.dy -
+                        ((compactScene ? 102 : 118) * scale) +
+                        glyphYOffset,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: (0.44 + (impactFlash * 0.18)) * fade,
+                        child: Container(
+                          width: introPlateWidth,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: (compactScene ? 12 : 14) * scale,
+                            vertical: (compactScene ? 8 : 9) * scale,
+                          ),
+                          decoration: _vsBotArcadePanelDecoration(
+                            palette: arcade,
+                            accent: stageAccent,
+                            radius: 18 * scale,
+                            borderWidth: max(1.4, 2.0 * scale),
+                            inset: true,
+                            elevated: false,
+                            fillColor: arcade.marquee,
+                          ),
+                          child: Text(
+                            'MATCH START',
+                            textAlign: TextAlign.center,
+                            style: puzzleAcademyIdentityStyle(
+                              palette: arcade.base,
+                              size: 7.8 * scale,
+                              color: stageAccent,
+                              withGlow: true,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
                     left: center.dx - (scene.width * 0.40),
                     top: center.dy - (scene.width * 0.40) + glyphYOffset,
                     child: IgnorePointer(
@@ -347,12 +425,8 @@ abstract class _VsBotState extends _StoreState {
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  const Color(
-                                    0xFFFF4A4A,
-                                  ).withValues(alpha: 0.34),
-                                  const Color(
-                                    0xFFFF1C1C,
-                                  ).withValues(alpha: 0.14),
+                                  glyphAccent.withValues(alpha: 0.32),
+                                  glyphSecondary.withValues(alpha: 0.14),
                                   Colors.transparent,
                                 ],
                                 stops: const [0.0, 0.52, 1.0],
@@ -379,9 +453,7 @@ abstract class _VsBotState extends _StoreState {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(
-                                0xFFFFB0B0,
-                              ).withValues(alpha: 0.55),
+                              color: stageAccent.withValues(alpha: 0.55),
                               width: max(
                                 1.4,
                                 3.6 * scale * (1.0 - shockwaveT * 0.45),
@@ -389,9 +461,7 @@ abstract class _VsBotState extends _StoreState {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(
-                                  0xFFFF3B3B,
-                                ).withValues(alpha: 0.24),
+                                color: glyphAccent.withValues(alpha: 0.24),
                                 blurRadius: 24 * scale,
                                 spreadRadius: 4 * scale,
                               ),
@@ -416,16 +486,54 @@ abstract class _VsBotState extends _StoreState {
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
                                 colors: [
-                                  const Color(
-                                    0xFFFFE0E0,
-                                  ).withValues(alpha: 0.58),
-                                  const Color(
-                                    0xFFFF9090,
-                                  ).withValues(alpha: 0.20),
+                                  Color.lerp(
+                                    glyphSecondary,
+                                    Colors.white,
+                                    0.40,
+                                  )!.withValues(alpha: 0.58),
+                                  glyphAccent.withValues(alpha: 0.20),
                                   Colors.transparent,
                                 ],
                                 stops: const [0.0, 0.32, 1.0],
                               ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: center.dx - (namePlateWidth / 2),
+                    top:
+                        center.dy +
+                        ((compactScene ? 38 : 44) * scale) +
+                        glyphYOffset,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: (0.38 + (impactFlash * 0.18)) * fade,
+                        child: Container(
+                          width: namePlateWidth,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: (compactScene ? 12 : 16) * scale,
+                            vertical: 8 * scale,
+                          ),
+                          decoration: _vsBotArcadePanelDecoration(
+                            palette: arcade,
+                            accent: profileAccent,
+                            radius: 16 * scale,
+                            borderWidth: max(1.2, 1.8 * scale),
+                            inset: true,
+                            elevated: false,
+                            fillColor: arcade.panelAlt,
+                          ),
+                          child: Text(
+                            '${bot.name.toUpperCase()} // ${_selectedBotDifficulty.label.toUpperCase()}',
+                            textAlign: TextAlign.center,
+                            style: puzzleAcademyIdentityStyle(
+                              palette: arcade.base,
+                              size: 6.8 * scale,
+                              color: profileAccent,
+                              withGlow: true,
                             ),
                           ),
                         ),
@@ -455,11 +563,6 @@ abstract class _VsBotState extends _StoreState {
         );
       },
     );
-  }
-
-  @override
-  void _recordVsBotSessionResult(GameOutcome outcome) {
-    super._recordVsBotSessionResult(outcome);
   }
 
   void _clearBotSpeechState() {
@@ -582,19 +685,26 @@ abstract class _VsBotState extends _StoreState {
     });
   }
 
-  Widget _buildBotSpeechBubble(double scale) {
+  Widget _buildBotSpeechBubble(double scale, {double? maxWidth}) {
     final full = _botSpeechFullText;
     if (full == null || full.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final bot = _selectedBot;
+    final profileAccent = bot == null
+        ? arcade.cyan
+        : _vsBotProfileAccent(bot.profile, arcade);
+    final difficultyAccent = _botDifficultyColor(_selectedBotDifficulty);
+    final bubbleAccent = Color.lerp(profileAccent, difficultyAccent, 0.45)!;
     final text = _botSpeechVisibleText.isEmpty ? '...' : _botSpeechVisibleText;
 
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: 184 * scale),
+      constraints: BoxConstraints(maxWidth: maxWidth ?? (214 * scale)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -605,42 +715,64 @@ abstract class _VsBotState extends _StoreState {
               size: Size(12 * scale, 16 * scale),
               painter: _SpeechTailPainter(
                 fillColor: Color.alphaBlend(
-                  (isDark ? Colors.white : Colors.black).withValues(
-                    alpha: 0.06,
+                  bubbleAccent.withValues(
+                    alpha: arcade.monochrome ? 0.08 : 0.14,
                   ),
-                  scheme.surface,
+                  arcade.panelAlt,
                 ),
-                strokeColor: scheme.outline.withValues(alpha: 0.42),
+                strokeColor: bubbleAccent.withValues(alpha: 0.72),
               ),
             ),
           ),
           Flexible(
             child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: 10 * scale,
-                vertical: 7 * scale,
+              padding: EdgeInsets.fromLTRB(
+                11 * scale,
+                8 * scale,
+                11 * scale,
+                10 * scale,
               ),
-              decoration: BoxDecoration(
-                color: Color.alphaBlend(
-                  (isDark ? Colors.white : Colors.black).withValues(
-                    alpha: 0.06,
+              decoration: _vsBotArcadePanelDecoration(
+                palette: arcade,
+                accent: bubbleAccent,
+                radius: 14 * scale,
+                borderWidth: max(1.2, 1.8 * scale),
+                inset: true,
+                elevated: false,
+                fillColor: arcade.panelAlt,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    bot == null
+                        ? 'BOT COMMS'
+                        : '${bot.name.toUpperCase()} COMMS',
+                    style: puzzleAcademyIdentityStyle(
+                      palette: arcade.base,
+                      size: 7.2 * scale,
+                      color: bubbleAccent,
+                      withGlow: true,
+                    ),
                   ),
-                  scheme.surface,
-                ),
-                borderRadius: BorderRadius.circular(12 * scale),
-                border: Border.all(
-                  color: scheme.outline.withValues(alpha: 0.42),
-                ),
-              ),
-              child: Text(
-                text,
-                softWrap: true,
-                style: GoogleFonts.pixelifySans(
-                  color: scheme.onSurface.withValues(alpha: 0.94),
-                  fontSize: 12.2 * scale,
-                  height: 1.12,
-                  fontWeight: FontWeight.w500,
-                ),
+                  SizedBox(height: 4 * scale),
+                  Text(
+                    text,
+                    softWrap: true,
+                    style: GoogleFonts.pixelifySans(
+                      color: arcade.text,
+                      fontSize: 12.0 * scale,
+                      height: 1.14,
+                      fontWeight: FontWeight.w500,
+                      shadows: puzzleAcademyTextGlow(
+                        arcade.text,
+                        monochrome: arcade.monochrome,
+                        strength: 0.44,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

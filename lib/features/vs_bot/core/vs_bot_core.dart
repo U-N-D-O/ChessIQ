@@ -2,6 +2,278 @@
 
 part of '../../analysis/screens/chess_analysis_page.dart';
 
+class _VsBotArcadePalette {
+  const _VsBotArcadePalette({
+    required this.base,
+    required this.reducedEffects,
+    required this.backdrop,
+    required this.shell,
+    required this.panel,
+    required this.panelAlt,
+    required this.marquee,
+    required this.line,
+    required this.text,
+    required this.textMuted,
+    required this.cyan,
+    required this.amber,
+    required this.pink,
+    required this.crimson,
+    required this.victory,
+    required this.shadow,
+  });
+
+  final PuzzleAcademyPalette base;
+  final bool reducedEffects;
+  final Color backdrop;
+  final Color shell;
+  final Color panel;
+  final Color panelAlt;
+  final Color marquee;
+  final Color line;
+  final Color text;
+  final Color textMuted;
+  final Color cyan;
+  final Color amber;
+  final Color pink;
+  final Color crimson;
+  final Color victory;
+  final Color shadow;
+
+  bool get monochrome => base.monochrome;
+
+  bool get isDark => base.isDark;
+}
+
+_VsBotArcadePalette _vsBotArcadePaletteFor(
+  BuildContext context, {
+  required bool monochrome,
+}) {
+  final base = puzzleAcademyPalette(context, monochromeOverride: monochrome);
+  final reducedEffects = puzzleAcademyShouldReduceEffects(context);
+  final cyan = monochrome
+      ? base.text.withValues(alpha: base.isDark ? 0.86 : 0.76)
+      : const Color(0xFF87E8FF);
+  final amber = monochrome
+      ? base.text.withValues(alpha: base.isDark ? 0.72 : 0.60)
+      : const Color(0xFFFFC857);
+  final pink = monochrome
+      ? base.text.withValues(alpha: base.isDark ? 0.80 : 0.68)
+      : const Color(0xFFFF8AB6);
+  final crimson = monochrome
+      ? base.text.withValues(alpha: base.isDark ? 0.76 : 0.64)
+      : const Color(0xFFFF6464);
+  final victory = monochrome
+      ? base.text.withValues(alpha: base.isDark ? 0.74 : 0.62)
+      : const Color(0xFF58E09A);
+  final backdrop = Color.alphaBlend(
+    crimson.withValues(alpha: monochrome ? 0.02 : 0.08),
+    base.backdrop,
+  );
+  final shell = Color.alphaBlend(
+    cyan.withValues(alpha: monochrome ? 0.03 : 0.07),
+    base.shell,
+  );
+  final panel = Color.alphaBlend(
+    pink.withValues(alpha: monochrome ? 0.03 : 0.06),
+    base.panel,
+  );
+  final panelAlt = Color.alphaBlend(
+    amber.withValues(alpha: monochrome ? 0.03 : 0.08),
+    base.panelAlt,
+  );
+  final marquee = Color.alphaBlend(
+    crimson.withValues(alpha: monochrome ? 0.04 : 0.12),
+    shell,
+  );
+  final line = Color.alphaBlend(
+    cyan.withValues(alpha: monochrome ? 0.14 : 0.28),
+    base.line,
+  );
+
+  return _VsBotArcadePalette(
+    base: base,
+    reducedEffects: reducedEffects,
+    backdrop: backdrop,
+    shell: shell,
+    panel: panel,
+    panelAlt: panelAlt,
+    marquee: marquee,
+    line: line,
+    text: base.text,
+    textMuted: base.textMuted,
+    cyan: cyan,
+    amber: amber,
+    pink: pink,
+    crimson: crimson,
+    victory: victory,
+    shadow: Colors.black.withValues(alpha: base.isDark ? 0.54 : 0.24),
+  );
+}
+
+BoxDecoration _vsBotArcadePanelDecoration({
+  required _VsBotArcadePalette palette,
+  required Color accent,
+  Color? fillColor,
+  double radius = 18,
+  double borderWidth = 2.6,
+  bool inset = false,
+  bool elevated = true,
+}) {
+  final background = fillColor ?? (inset ? palette.panelAlt : palette.panel);
+  final useSoftInsetShadow = inset && elevated;
+  final highlight = Color.alphaBlend(
+    accent.withValues(alpha: palette.monochrome ? 0.06 : (inset ? 0.10 : 0.16)),
+    background,
+  );
+  final lowlight = Color.alphaBlend(
+    palette.backdrop.withValues(alpha: palette.monochrome ? 0.10 : 0.24),
+    background,
+  );
+
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[highlight, background, lowlight],
+      stops: const <double>[0.0, 0.50, 1.0],
+    ),
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(
+      color: accent.withValues(alpha: inset ? 0.58 : 0.82),
+      width: borderWidth,
+    ),
+    boxShadow: <BoxShadow>[
+      if (elevated)
+        BoxShadow(
+          color: useSoftInsetShadow
+              ? accent.withValues(alpha: palette.monochrome ? 0.08 : 0.16)
+              : palette.shadow,
+          blurRadius: useSoftInsetShadow ? 18 : 0,
+          offset: useSoftInsetShadow ? const Offset(0, 5) : const Offset(7, 7),
+        ),
+      ...puzzleAcademySurfaceGlow(
+        accent,
+        monochrome: palette.monochrome,
+        strength: palette.reducedEffects
+            ? 0.14
+            : (inset
+                  ? (useSoftInsetShadow ? 0.20 : 0.30)
+                  : (elevated ? 0.88 : 0.54)),
+      ),
+    ],
+  );
+}
+
+Color _vsBotReadableAccentColor(Color accent, _VsBotArcadePalette palette) {
+  if (palette.monochrome) {
+    return palette.text;
+  }
+
+  final luminance = accent.computeLuminance();
+  if (luminance >= 0.78) {
+    return const Color(0xFF18202A);
+  }
+  if (luminance >= 0.50) {
+    return HSLColor.fromColor(accent).withLightness(0.24).toColor();
+  }
+  return accent;
+}
+
+ButtonStyle _vsBotArcadeFilledButtonStyle({
+  required _VsBotArcadePalette palette,
+  required Color backgroundColor,
+  Color foregroundColor = const Color(0xFF0B0F16),
+  BorderSide? side,
+  EdgeInsetsGeometry? padding,
+  double radius = 14,
+}) {
+  return puzzleAcademyFilledButtonStyle(
+    palette: palette.base,
+    backgroundColor: backgroundColor,
+    foregroundColor: foregroundColor,
+    side:
+        side ??
+        BorderSide(
+          color: Colors.white.withValues(
+            alpha: palette.monochrome ? 0.16 : 0.22,
+          ),
+          width: 2,
+        ),
+    padding: padding,
+    radius: radius,
+  );
+}
+
+ButtonStyle _vsBotArcadeOutlinedButtonStyle({
+  required _VsBotArcadePalette palette,
+  required Color accent,
+  EdgeInsetsGeometry? padding,
+  double radius = 14,
+}) {
+  return puzzleAcademyOutlinedButtonStyle(
+    palette: palette.base,
+    accent: accent,
+    padding: padding,
+    radius: radius,
+  );
+}
+
+Color _vsBotProfileAccent(
+  BotSkillProfile profile,
+  _VsBotArcadePalette palette,
+) {
+  switch (profile) {
+    case BotSkillProfile.baby:
+      return palette.pink;
+    case BotSkillProfile.nephew:
+      return palette.amber;
+    case BotSkillProfile.bestFriend:
+      return palette.cyan;
+    case BotSkillProfile.nerdyGirl:
+      return Color.lerp(palette.cyan, palette.pink, 0.55)!;
+    case BotSkillProfile.teenBoy:
+      return palette.crimson;
+    case BotSkillProfile.uncle:
+      return Color.lerp(palette.amber, palette.crimson, 0.45)!;
+    case BotSkillProfile.grandpa:
+      return Color.lerp(palette.cyan, palette.amber, 0.28)!;
+    case BotSkillProfile.interGm:
+      return Color.lerp(palette.crimson, palette.pink, 0.40)!;
+  }
+}
+
+String _vsBotProfileLabel(BotSkillProfile profile) {
+  switch (profile) {
+    case BotSkillProfile.baby:
+      return 'Chaos Rookie';
+    case BotSkillProfile.nephew:
+      return 'Mate Hunter';
+    case BotSkillProfile.bestFriend:
+      return 'Sparring Pal';
+    case BotSkillProfile.nerdyGirl:
+      return 'Theory Driver';
+    case BotSkillProfile.teenBoy:
+      return 'Center Crusher';
+    case BotSkillProfile.uncle:
+      return 'Trap Dealer';
+    case BotSkillProfile.grandpa:
+      return 'Board Sage';
+    case BotSkillProfile.interGm:
+      return 'Prime Engine';
+  }
+}
+
+String _vsBotTierTitle(BotDifficulty difficulty) {
+  switch (difficulty) {
+    case BotDifficulty.easy:
+      return 'ENTRY';
+    case BotDifficulty.medium:
+      return 'ADVANCE';
+    case BotDifficulty.hard:
+      return 'EXPERT';
+  }
+}
+
 abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   @override
   Future<void> _loadVsBotSetupPrefs() async {
@@ -116,11 +388,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     return BotDifficulty.values
         .where((difficulty) => _hasClearedBotTier(bot, difficulty))
         .length;
-  }
-
-  @override
-  int get _totalBotTierCount {
-    return _botCharacters.length * BotDifficulty.values.length;
   }
 
   @override
@@ -812,6 +1079,13 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       builder: (dialogContext) {
         final media = MediaQuery.of(dialogContext);
         final isLandscape = media.orientation == Orientation.landscape;
+        final useMonochrome =
+            dialogContext.watch<AppThemeProvider>().isMonochrome ||
+            _isCinematicThemeEnabled;
+        final arcade = _vsBotArcadePaletteFor(
+          dialogContext,
+          monochrome: useMonochrome,
+        );
         final progressActionLabel = _vsBotProgressActionLabel(
           currentBot: _selectedBot,
           targetBot: progressNextBot,
@@ -820,10 +1094,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         final isWin = _isWinningOutcomeForPov;
         final isDraw = outcome == GameOutcome.draw;
         final accent = isDraw
-            ? const Color(0xFFD8B640)
+            ? arcade.amber
             : isWin
-            ? const Color(0xFF2ECC71)
-            : const Color(0xFFE45C5C);
+            ? arcade.victory
+            : arcade.crimson;
         final title = isDraw
             ? 'Draw'
             : isWin
@@ -852,21 +1126,28 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         if (selectedBot != null) {
           challengeChip = Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: challengeAccent.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: challengeAccent.withValues(alpha: 0.34),
+            decoration: _vsBotArcadePanelDecoration(
+              palette: arcade,
+              accent: challengeAccent,
+              radius: 999,
+              borderWidth: 2.0,
+              inset: true,
+              elevated: false,
+              fillColor: Color.alphaBlend(
+                challengeAccent.withValues(
+                  alpha: arcade.monochrome ? 0.08 : 0.14,
+                ),
+                arcade.panelAlt,
               ),
             ),
             child: Text(
-              '${selectedBot.name} - ${selectedDifficulty.label}',
+              '${selectedBot.name.toUpperCase()} // ${selectedDifficulty.label.toUpperCase()}',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: puzzleAcademyIdentityStyle(
+                palette: arcade.base,
+                size: 8.0,
                 color: challengeAccent,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
+                withGlow: true,
               ),
             ),
           );
@@ -877,33 +1158,41 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           progressCard = Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: challengeAccent.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: challengeAccent.withValues(alpha: 0.28),
+            decoration: _vsBotArcadePanelDecoration(
+              palette: arcade,
+              accent: challengeAccent,
+              radius: 16,
+              borderWidth: 2.2,
+              inset: true,
+              elevated: false,
+              fillColor: Color.alphaBlend(
+                challengeAccent.withValues(
+                  alpha: arcade.monochrome ? 0.06 : 0.12,
+                ),
+                arcade.panelAlt,
               ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  progressTitle,
+                  progressTitle.toUpperCase(),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: puzzleAcademyIdentityStyle(
+                    palette: arcade.base,
+                    size: 8.0,
                     color: challengeAccent,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                    withGlow: true,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   progressMessage,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.76),
-                    fontSize: 11.8,
-                    height: 1.3,
+                  style: puzzleAcademyHudStyle(
+                    palette: arcade.base,
+                    size: 11.2,
+                    color: arcade.textMuted,
                   ),
                 ),
               ],
@@ -934,6 +1223,12 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 style: TextButton.styleFrom(
                   foregroundColor: foregroundColor,
                   shape: shape,
+                  textStyle: puzzleAcademyHudStyle(
+                    palette: arcade.base,
+                    size: 11.8,
+                    weight: FontWeight.w800,
+                    color: foregroundColor,
+                  ),
                 ),
                 icon: Icon(icon, size: 18),
                 label: Text(label),
@@ -947,10 +1242,19 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               height: height,
               child: FilledButton.icon(
                 onPressed: () => Navigator.of(dialogContext).pop(resultValue),
-                style: FilledButton.styleFrom(
+                style: _vsBotArcadeFilledButtonStyle(
+                  palette: arcade,
                   backgroundColor: backgroundColor,
                   foregroundColor: foregroundColor,
-                  shape: shape,
+                  side: BorderSide(
+                    color: foregroundColor.withValues(alpha: 0.18),
+                    width: 2,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  radius: 14,
                 ),
                 icon: Icon(icon, size: 18),
                 label: Text(label, textAlign: TextAlign.center),
@@ -963,10 +1267,14 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             height: height,
             child: OutlinedButton.icon(
               onPressed: () => Navigator.of(dialogContext).pop(resultValue),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: foregroundColor,
-                side: side,
-                shape: shape,
+              style: _vsBotArcadeOutlinedButtonStyle(
+                palette: arcade,
+                accent: side?.color ?? foregroundColor,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                radius: 14,
               ),
               icon: Icon(icon, size: 18),
               label: Text(label),
@@ -1028,21 +1336,21 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: isLandscape ? 28 : 32,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.35,
+                style: puzzleAcademyDisplayStyle(
+                  palette: arcade.base,
+                  size: isLandscape ? 28 : 32,
+                  color: accent,
+                  withGlow: true,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 summaryText,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  fontSize: 12.5,
-                  letterSpacing: 0.24,
+                style: puzzleAcademyHudStyle(
+                  palette: arcade.base,
+                  size: 12.2,
+                  color: arcade.textMuted,
                 ),
               ),
               if (challengeChip != null) ...[
@@ -1114,26 +1422,12 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               maxWidth: dialogMaxWidth,
               maxHeight: media.size.height - (isLandscape ? 24 : 48),
             ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(26),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF141B2A), Color(0xFF0C121D)],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withValues(alpha: 0.15),
-                  blurRadius: 34,
-                  spreadRadius: 1.5,
-                ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 40,
-                  offset: const Offset(0, 16),
-                ),
-              ],
+            decoration: _vsBotArcadePanelDecoration(
+              palette: arcade,
+              accent: accent,
+              radius: 28,
+              borderWidth: 3.2,
+              fillColor: arcade.marquee,
             ),
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
@@ -1142,7 +1436,42 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 isLandscape ? 18 : 26,
                 isLandscape ? 14 : 20,
               ),
-              child: isLandscape ? buildLandscapeBody() : buildPortraitBody(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      PuzzleAcademyTag(
+                        label: title.toUpperCase(),
+                        accent: accent,
+                        compact: true,
+                        filled: true,
+                        foregroundColor: arcade.monochrome
+                            ? arcade.text
+                            : const Color(0xFF0B0F16),
+                      ),
+                      if (selectedBot != null)
+                        PuzzleAcademyTag(
+                          label:
+                              '${selectedBot.name.toUpperCase()} // ${selectedDifficulty.label.toUpperCase()}',
+                          accent: challengeAccent,
+                          compact: true,
+                        ),
+                      if (progressActionLabel != null)
+                        PuzzleAcademyTag(
+                          label: 'NEXT CHALLENGE READY',
+                          accent: arcade.cyan,
+                          compact: true,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  isLandscape ? buildLandscapeBody() : buildPortraitBody(),
+                ],
+              ),
             ),
           ),
         );
@@ -1315,24 +1644,33 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
 
   @override
   Widget _buildVsBotSessionScoreboard(Color accent) {
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white10),
+      decoration: _vsBotArcadePanelDecoration(
+        palette: arcade,
+        accent: accent,
+        radius: 20,
+        borderWidth: 2.4,
+        inset: true,
+        elevated: false,
+        fillColor: arcade.panelAlt,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Session Score',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.62),
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
+            'SESSION SCORE',
+            style: puzzleAcademyIdentityStyle(
+              palette: arcade.base,
+              size: 8.0,
+              color: accent,
+              withGlow: true,
             ),
           ),
           const SizedBox(height: 10),
@@ -1342,7 +1680,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 child: _buildVsBotScoreTile(
                   label: 'Wins',
                   value: _vsBotSessionWins,
-                  valueColor: const Color(0xFF4BE38F),
+                  valueColor: arcade.victory,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1350,7 +1688,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 child: _buildVsBotScoreTile(
                   label: 'Losses',
                   value: _vsBotSessionLosses,
-                  valueColor: const Color(0xFFFF7E7E),
+                  valueColor: arcade.crimson,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1374,31 +1712,40 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     required int value,
     required Color valueColor,
   }) {
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      decoration: _vsBotArcadePanelDecoration(
+        palette: arcade,
+        accent: valueColor,
+        radius: 14,
+        borderWidth: 2.0,
+        inset: true,
+        elevated: false,
+        fillColor: arcade.panel,
       ),
       child: Column(
         children: [
           Text(
             '$value',
-            style: TextStyle(
+            style: puzzleAcademyDisplayStyle(
+              palette: arcade.base,
+              size: 20,
               color: valueColor,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
+              withGlow: true,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.65),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
+            label.toUpperCase(),
+            style: puzzleAcademyIdentityStyle(
+              palette: arcade.base,
+              size: 7.4,
+              color: arcade.textMuted,
             ),
           ),
         ],
@@ -1481,12 +1828,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     int index, {
     required bool compact,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
     final previewDifficulty = index == _botSetupSelectedIndex
         ? _botSetupSelectedDifficulty
         : BotDifficulty.easy;
@@ -1495,11 +1840,21 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     final locked = !_isBotUnlocked(bot);
     final clearedTierCount = _clearedTierCountForBot(bot);
     final difficultyAccent = locked
-        ? scheme.outline
+        ? arcade.line
         : _botDifficultyColor(previewDifficulty);
+    final profileAccent = _vsBotProfileAccent(bot.profile, arcade);
+    final shellAccent = locked
+        ? arcade.line
+        : Color.lerp(profileAccent, difficultyAccent, 0.55)!;
     final statusText = locked
-        ? 'Clear all ${_botCharacters[max(0, index - 1)].name} tiers first.'
-        : 'Approx. ${previewSettings.elo} Elo | $clearedTierCount/3 tiers cleared';
+      ? 'Clear all ${_botCharacters[max(0, index - 1)].name} tiers first.'
+      : clearedTierCount == 3
+      ? 'Cabinet cleared. Replay any tier or jump back in for a rematch.'
+      : 'Approx. ${previewSettings.elo} Elo | $clearedTierCount/3 tiers cleared';
+    final posterHeight = compact ? 156.0 : 214.0;
+    final filledTagForeground = arcade.monochrome
+        ? arcade.text
+        : const Color(0xFF0B0F16);
 
     return AnimatedBuilder(
       animation: _botSetupPageController,
@@ -1511,164 +1866,223 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         },
         child: Padding(
           padding: EdgeInsets.symmetric(
-            horizontal: compact ? 6 : 8,
-            vertical: compact ? 6 : 10,
+            horizontal: compact ? 8 : 10,
+            vertical: compact ? 10 : 12,
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              GestureDetector(
-                onTap: () {
-                  unawaited(_launchBotFromSelector(bot, index));
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Stack(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: compact ? 190 : 236),
+            child: Container(
+              decoration: _vsBotArcadePanelDecoration(
+                palette: arcade,
+                accent: shellAccent,
+                radius: compact ? 26 : 30,
+                borderWidth: 2.8,
+                fillColor: arcade.marquee,
+              ),
+              padding: EdgeInsets.fromLTRB(
+                compact ? 10 : 12,
+                compact ? 10 : 12,
+                compact ? 10 : 12,
+                compact ? 12 : 14,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
                     children: [
-                      Container(
-                        width: compact ? 96 : 144,
-                        height: compact ? 96 : 144,
-                        color: Color.alphaBlend(
-                          scheme.primary.withValues(
-                            alpha: isDark ? 0.16 : 0.05,
-                          ),
-                          scheme.surface,
+                      Expanded(
+                        child: PuzzleAcademyTag(
+                          label: 'RANK ${bot.rank}',
+                          accent: arcade.amber,
+                          compact: true,
+                          filled: true,
+                          foregroundColor: filledTagForeground,
                         ),
-                        child: avatarAsset != null
-                            ? Image.asset(avatarAsset, fit: BoxFit.cover)
-                            : Center(
-                                child: Text(
-                                  '#${bot.rank}',
-                                  style: TextStyle(
-                                    color: scheme.onSurface,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 30,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: PuzzleAcademyTag(
+                          label: _vsBotProfileLabel(bot.profile).toUpperCase(),
+                          accent: profileAccent,
+                          compact: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: compact ? 8 : 10),
+                  GestureDetector(
+                    onTap: () => unawaited(_launchBotFromSelector(bot, index)),
+                    child: Container(
+                      decoration: _vsBotArcadePanelDecoration(
+                        palette: arcade,
+                        accent: shellAccent,
+                        radius: 22,
+                        borderWidth: 2.2,
+                        inset: true,
+                        elevated: !locked,
+                        fillColor: arcade.panelAlt,
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              height: posterHeight,
+                              child: avatarAsset != null
+                                  ? Image.asset(avatarAsset, fit: BoxFit.cover)
+                                  : Container(
+                                      color: arcade.shell,
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '#${bot.rank}',
+                                        style: puzzleAcademyDisplayStyle(
+                                          palette: arcade.base,
+                                          size: compact ? 32 : 38,
+                                          color: arcade.text,
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: <Color>[
+                                      Colors.transparent,
+                                      Colors.transparent,
+                                      Colors.black.withValues(alpha: 0.52),
+                                      Colors.black.withValues(alpha: 0.82),
+                                    ],
+                                    stops: const <double>[0.0, 0.44, 0.78, 1.0],
                                   ),
                                 ),
                               ),
-                      ),
-                      if (locked)
-                        Positioned.fill(
-                          child: Container(
-                            color: Colors.black.withValues(alpha: 0.44),
-                            alignment: Alignment.center,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.lock_outline_rounded,
-                                  color: Colors.white.withValues(alpha: 0.92),
-                                  size: compact ? 24 : 28,
-                                ),
-                                SizedBox(height: compact ? 4 : 6),
-                                Text(
-                                  'Locked',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: compact ? 11 : 13,
-                                    letterSpacing: 0.2,
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: PuzzleAcademyTag(
+                                label: locked
+                                    ? 'LOCKED'
+                                    : '${previewSettings.elo} ELO',
+                                accent: locked ? arcade.line : profileAccent,
+                                compact: true,
+                                filled: locked,
+                                foregroundColor: locked
+                                    ? arcade.text
+                                    : filledTagForeground,
+                              ),
+                            ),
+                            if (locked)
+                              Positioned.fill(
+                                child: Container(
+                                  color: Colors.black.withValues(alpha: 0.58),
+                                  alignment: Alignment.center,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.lock_outline_rounded,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.92,
+                                        ),
+                                        size: compact ? 26 : 30,
+                                      ),
+                                      SizedBox(height: compact ? 6 : 8),
+                                      Text(
+                                        'LOCKED',
+                                        style: puzzleAcademyDisplayStyle(
+                                          palette: arcade.base,
+                                          size: compact ? 14 : 16,
+                                          color: Colors.white,
+                                          withGlow: true,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                          ],
                         ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: compact ? 10 : 12),
+                  Text(
+                    bot.name,
+                    textAlign: TextAlign.center,
+                    style: puzzleAcademyDisplayStyle(
+                      palette: arcade.base,
+                      size: compact ? 18 : 20,
+                      color: arcade.text,
+                    ),
+                  ),
+                  SizedBox(height: compact ? 4 : 6),
+                  Text(
+                    _vsBotProfileLabel(bot.profile).toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: puzzleAcademyIdentityStyle(
+                      palette: arcade.base,
+                      size: compact ? 8.4 : 9.0,
+                      color: profileAccent,
+                      withGlow: true,
+                    ),
+                  ),
+                  SizedBox(height: compact ? 8 : 10),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      PuzzleAcademyTag(
+                        label: locked
+                            ? 'LADDER LOCK'
+                            : previewDifficulty.label.toUpperCase(),
+                        accent: difficultyAccent,
+                        compact: true,
+                        filled: !locked,
+                        foregroundColor: !locked ? filledTagForeground : null,
+                      ),
+                      PuzzleAcademyTag(
+                        label: '$clearedTierCount/3 CLEARED',
+                        accent: clearedTierCount == 3
+                            ? arcade.victory
+                            : arcade.cyan,
+                        compact: true,
+                      ),
                     ],
                   ),
-                ),
-              ),
-              SizedBox(height: compact ? 8 : 12),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: useMonochrome
-                          ? scheme.outline.withValues(alpha: 0.24)
-                          : const Color(0xFFD8B640).withValues(alpha: 0.20),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: useMonochrome
-                            ? scheme.outline.withValues(alpha: 0.42)
-                            : const Color(0xFFD8B640).withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Text(
-                      '#${bot.rank}',
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: compact ? 10 : 11,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  SizedBox(height: compact ? 8 : 10),
+                  Text(
+                    statusText,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: puzzleAcademyHudStyle(
+                      palette: arcade.base,
+                      size: compact ? 10.0 : 10.8,
+                      color: arcade.text.withValues(alpha: 0.86),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: difficultyAccent.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: difficultyAccent.withValues(alpha: 0.44),
-                      ),
-                    ),
-                    child: Text(
-                      locked ? 'Locked' : previewDifficulty.label,
-                      style: TextStyle(
-                        color: locked ? scheme.onSurface : difficultyAccent,
-                        fontSize: compact ? 10 : 11,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  SizedBox(height: compact ? 6 : 8),
+                  Text(
+                    bot.description,
+                    maxLines: compact ? 2 : 3,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: puzzleAcademyCompactStyle(
+                      palette: arcade.base,
+                      size: compact ? 10.2 : 10.8,
+                      color: arcade.textMuted,
                     ),
                   ),
                 ],
               ),
-              SizedBox(height: compact ? 8 : 12),
-              Text(
-                bot.name,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w800,
-                  fontSize: compact ? 15 : 18,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              SizedBox(height: compact ? 6 : 10),
-              Text(
-                statusText,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.74),
-                  fontSize: compact ? 10 : 11,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                ),
-              ),
-              SizedBox(height: compact ? 6 : 8),
-              Text(
-                bot.description,
-                maxLines: compact ? 2 : 3,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.66),
-                  fontSize: compact ? 10.5 : 11.6,
-                  height: 1.25,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1688,10 +2102,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           1.0,
           Curves.easeOut.transform(focus),
         )!;
-        final opacity = ui.lerpDouble(0.28, 1.0, focus)!;
-        final lift = ui.lerpDouble(26, 0, Curves.easeOut.transform(focus))!;
+        final opacity = ui.lerpDouble(0.26, 1.0, focus)!;
+        final lift = ui.lerpDouble(28, 0, Curves.easeOut.transform(focus))!;
         final rotation = delta * -0.24;
-        final horizontal = delta * 18;
+        final horizontal = delta * 16;
 
         return Opacity(
           opacity: opacity,
@@ -1705,51 +2119,44 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 ..scaleByDouble(scale, scale, 1.0, 1.0),
               child: Container(
                 decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(compact ? 30 : 34),
+                  border: Border.all(
+                    color: Color.lerp(
+                      arcade.line.withValues(alpha: 0.26),
+                      shellAccent.withValues(alpha: 0.82),
+                      focus,
+                    )!,
+                    width: focus > 0.74 ? 2.4 : 1.2,
+                  ),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      Color.lerp(
-                        Color.alphaBlend(
-                          scheme.primary.withValues(alpha: 0.10),
-                          scheme.surface,
-                        ),
-                        Color.alphaBlend(
-                          scheme.secondary.withValues(alpha: 0.22),
-                          scheme.surface,
-                        ),
-                        focus,
-                      )!,
-                      Color.lerp(
-                        Color.alphaBlend(
-                          scheme.primary.withValues(alpha: 0.06),
-                          scheme.surface,
-                        ),
-                        Color.alphaBlend(
-                          scheme.secondary.withValues(alpha: 0.14),
-                          scheme.surface,
-                        ),
-                        focus,
-                      )!,
+                    colors: <Color>[
+                      Color.alphaBlend(
+                        shellAccent.withValues(alpha: 0.10 + (0.14 * focus)),
+                        arcade.marquee,
+                      ),
+                      arcade.marquee,
+                      Color.alphaBlend(
+                        arcade.backdrop.withValues(alpha: 0.26),
+                        arcade.panelAlt,
+                      ),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Color.lerp(
-                      scheme.outline.withValues(alpha: 0.28),
-                      const Color(0xFF7FC4FF),
-                      focus,
-                    )!,
-                    width: focus > 0.75 ? 1.6 : 1.0,
-                  ),
-                  boxShadow: [
+                  boxShadow: <BoxShadow>[
                     BoxShadow(
-                      color: const Color(
-                        0xFF5AAEE8,
-                      ).withValues(alpha: 0.10 + (0.20 * focus)),
-                      blurRadius: 14 + (24 * focus),
-                      spreadRadius: focus > 0.8 ? 1.0 : 0,
-                      offset: const Offset(0, 10),
+                      color: arcade.shadow.withValues(
+                        alpha: 0.20 + (0.18 * focus),
+                      ),
+                      blurRadius: 0,
+                      offset: const Offset(8, 10),
+                    ),
+                    ...puzzleAcademySurfaceGlow(
+                      shellAccent,
+                      monochrome: arcade.monochrome,
+                      strength: arcade.reducedEffects
+                          ? 0.18
+                          : (0.36 + (0.44 * focus)),
                     ),
                   ],
                 ),
@@ -1822,12 +2229,91 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     }
   }
 
+  Widget _buildVsBotSelectorChoiceTile({
+    required _VsBotArcadePalette arcade,
+    required String caption,
+    required String label,
+    required Widget leading,
+    required Color accent,
+    required bool selected,
+    required bool enabled,
+    required VoidCallback? onTap,
+  }) {
+    final fillColor = selected
+        ? Color.alphaBlend(
+            accent.withValues(alpha: arcade.monochrome ? 0.08 : 0.14),
+            arcade.panelAlt,
+          )
+        : arcade.panel;
+    final readableAccent = _vsBotReadableAccentColor(accent, arcade);
+
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.46,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(16),
+          overlayColor: puzzleAcademyInteractiveOverlay(
+            palette: arcade.base,
+            accent: accent,
+          ),
+          child: Ink(
+            decoration: _vsBotArcadePanelDecoration(
+              palette: arcade,
+              accent: selected ? accent : arcade.line,
+              fillColor: fillColor,
+              radius: 16,
+              borderWidth: selected ? 2.8 : 2.0,
+              inset: true,
+              elevated: selected,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      leading,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          caption.toUpperCase(),
+                          style: puzzleAcademyIdentityStyle(
+                            palette: arcade.base,
+                            size: 7.8,
+                            color: selected ? readableAccent : arcade.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: puzzleAcademyDisplayStyle(
+                      palette: arcade.base,
+                      size: 15.5,
+                      color: enabled ? arcade.text : arcade.textMuted,
+                      withGlow: selected,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget _buildBotSetupScreen() {
     final selectedBot = _botCharacters[_botSetupSelectedIndex];
-    final selectedBotSettings = selectedBot.settingsFor(
-      _botSetupSelectedDifficulty,
-    );
     final selectedTierLockReason = _botTierLockReason(
       selectedBot,
       _botSetupSelectedDifficulty,
@@ -1848,26 +2334,102 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             : 'Win this tier to unlock the next step in the ladder.');
     final pulse = _pulseController.value;
     final media = MediaQuery.of(context);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
     final isLandscape = media.orientation == Orientation.landscape;
-    final pageBackground = useMonochrome
-        ? (isDark ? const Color(0xFF050505) : Colors.white)
-        : scheme.surface;
-    final lightHeaderColor = isDark ? scheme.onSurface : Colors.black;
     final compactLandscape = isLandscape && media.size.height <= 460;
+    final compactPortrait = !isLandscape && media.size.height <= 760;
+    final tightPortrait = !isLandscape && media.size.width <= 375;
+    final compactPhoneLayout = compactLandscape || compactPortrait;
     final cardViewportHeight = compactLandscape
-        ? 248.0
-        : (isLandscape ? 292.0 : 372.0);
+        ? 300.0
+        : isLandscape
+        ? 346.0
+        : tightPortrait
+        ? 356.0
+        : compactPortrait
+        ? 384.0
+        : 426.0;
+    final sectionGap = compactPhoneLayout ? 12.0 : 14.0;
+    final profileAccent = _vsBotProfileAccent(selectedBot.profile, arcade);
+    final marqueeAccent = Color.lerp(
+      profileAccent,
+      selectedDifficultyColor,
+      0.45,
+    )!;
+    final filledTagForeground = arcade.monochrome
+        ? arcade.text
+        : const Color(0xFF0B0F16);
 
     return Container(
-      color: pageBackground,
+      color: arcade.backdrop,
       child: Stack(
         children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      Color.alphaBlend(
+                        marqueeAccent.withValues(alpha: 0.08),
+                        arcade.backdrop,
+                      ),
+                      arcade.backdrop,
+                      Color.alphaBlend(
+                        arcade.crimson.withValues(alpha: 0.06),
+                        arcade.backdrop,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (!arcade.reducedEffects)
+            Positioned(
+              left: -80,
+              top: -120,
+              child: IgnorePointer(
+                child: Container(
+                  width: 260,
+                  height: 260,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: <Color>[
+                        profileAccent.withValues(alpha: 0.18),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (!arcade.reducedEffects)
+            Positioned(
+              right: -60,
+              bottom: -80,
+              child: IgnorePointer(
+                child: Container(
+                  width: 220,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: <Color>[
+                        selectedDifficultyColor.withValues(alpha: 0.16),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           LayoutBuilder(
             builder: (context, constraints) {
               final currentLayoutSize = Size(
@@ -1881,6 +2443,71 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   double.infinity,
                 );
               }
+
+              final contentMaxWidth = isLandscape ? 1180.0 : 760.0;
+
+              IconButton buildChromeButton({
+                required VoidCallback onPressed,
+                required IconData icon,
+                required String tooltip,
+                required Color accent,
+              }) {
+                return IconButton(
+                  onPressed: onPressed,
+                  tooltip: tooltip,
+                  icon: Icon(icon),
+                  color: arcade.text,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Color.alphaBlend(
+                      accent.withValues(alpha: arcade.monochrome ? 0.08 : 0.14),
+                      arcade.panel,
+                    ),
+                    side: BorderSide(
+                      color: accent.withValues(alpha: 0.62),
+                      width: 2,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                );
+              }
+
+              Widget buildNavButton({
+                required IconData icon,
+                required VoidCallback? onPressed,
+              }) {
+                return AnimatedOpacity(
+                  opacity: onPressed == null ? 0.34 : 1.0,
+                  duration: puzzleAcademyMotionDuration(
+                    reducedEffects: arcade.reducedEffects,
+                    milliseconds: 160,
+                  ),
+                  child: IconButton(
+                    onPressed: onPressed,
+                    icon: Icon(icon, size: compactPhoneLayout ? 22 : 26),
+                    color: arcade.text,
+                    style: IconButton.styleFrom(
+                      backgroundColor: Color.alphaBlend(
+                        marqueeAccent.withValues(
+                          alpha: arcade.monochrome ? 0.08 : 0.14,
+                        ),
+                        arcade.panelAlt,
+                      ),
+                      side: BorderSide(
+                        color: marqueeAccent.withValues(alpha: 0.70),
+                        width: 2,
+                      ),
+                      shadowColor: marqueeAccent.withValues(alpha: 0.22),
+                      elevation: arcade.monochrome ? 2 : 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                );
+              }
+
               return NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
                   if (notification is ScrollUpdateNotification) {
@@ -1906,305 +2533,308 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       minHeight: constraints.maxHeight,
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              IconButton(
-                                onPressed: _goToMenu,
-                                color: lightHeaderColor,
-                                icon: const Icon(Icons.arrow_back),
-                                tooltip: 'Back to menu',
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  'Play Chess',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 20,
-                                    color: lightHeaderColor,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () => _openSettings(),
-                                color: lightHeaderColor,
-                                icon: const Icon(Icons.settings_outlined),
-                                tooltip: 'Settings',
-                              ),
-                            ],
+                      padding: EdgeInsets.fromLTRB(
+                        tightPortrait ? 12 : 16,
+                        compactPhoneLayout ? 12 : 14,
+                        tightPortrait ? 12 : 16,
+                        compactPhoneLayout ? 14 : 18,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: contentMaxWidth,
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Color.alphaBlend(
-                                    scheme.primary.withValues(
-                                      alpha: isDark ? 0.16 : 0.06,
-                                    ),
-                                    scheme.surface,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  buildChromeButton(
+                                    onPressed: _goToMenu,
+                                    icon: Icons.arrow_back_rounded,
+                                    tooltip: 'Back to menu',
+                                    accent: arcade.cyan,
                                   ),
-                                  Color.alphaBlend(
-                                    scheme.secondary.withValues(
-                                      alpha: isDark ? 0.10 : 0.04,
-                                    ),
-                                    scheme.surface,
+                                  const Spacer(),
+                                  buildChromeButton(
+                                    onPressed: () => _openSettings(),
+                                    icon: Icons.settings_outlined,
+                                    tooltip: 'Settings',
+                                    accent: arcade.amber,
                                   ),
-                                  scheme.surface,
                                 ],
-                                stops: const [0.0, 0.55, 1.0],
                               ),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: const Color(
-                                  0xFF5AAEE8,
-                                ).withValues(alpha: 0.25),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF5AAEE8).withValues(
-                                    alpha:
-                                        0.10 +
-                                        (0.08 *
-                                            (0.5 + 0.5 * sin(pulse * pi * 2))),
-                                  ),
-                                  blurRadius: 20,
-                                  spreadRadius: 1,
+                              SizedBox(height: sectionGap),
+                              Container(
+                                decoration: _vsBotArcadePanelDecoration(
+                                  palette: arcade,
+                                  accent: marqueeAccent,
+                                  radius: 32,
+                                  borderWidth: 3.4,
+                                  fillColor: arcade.shell,
                                 ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                const SizedBox(height: 6),
-                                SizedBox(
-                                  height: cardViewportHeight,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Positioned(
-                                        left: 18 + (sin(pulse * pi * 2) * 8),
-                                        top: 18 + (cos(pulse * pi * 2) * 6),
-                                        child: Container(
-                                          width: 26,
-                                          height: 26,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color:
-                                                (useMonochrome
-                                                        ? scheme.outline
-                                                        : const Color(
-                                                            0xFF8FD0FF,
-                                                          ))
-                                                    .withValues(
-                                                      alpha: useMonochrome
-                                                          ? 0.12
-                                                          : 0.16,
-                                                    ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color:
-                                                    (useMonochrome
-                                                            ? scheme.outline
-                                                            : const Color(
-                                                                0xFF8FD0FF,
-                                                              ))
-                                                        .withValues(
-                                                          alpha: useMonochrome
-                                                              ? 0.18
-                                                              : 0.28,
-                                                        ),
-                                                blurRadius: 14,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        right: 20 + (cos(pulse * pi * 2) * 9),
-                                        bottom: 20 + (sin(pulse * pi * 2) * 7),
-                                        child: Container(
-                                          width: 22,
-                                          height: 22,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color:
-                                                (useMonochrome
-                                                        ? scheme.outline
-                                                        : const Color(
-                                                            0xFFD8B640,
-                                                          ))
-                                                    .withValues(
-                                                      alpha: useMonochrome
-                                                          ? 0.10
-                                                          : 0.15,
-                                                    ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color:
-                                                    (useMonochrome
-                                                            ? scheme.outline
-                                                            : const Color(
-                                                                0xFFD8B640,
-                                                              ))
-                                                        .withValues(
-                                                          alpha: useMonochrome
-                                                              ? 0.16
-                                                              : 0.25,
-                                                        ),
-                                                blurRadius: 12,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned.fill(
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(
-                                              24,
+                                padding: const EdgeInsets.fromLTRB(
+                                  14,
+                                  14,
+                                  14,
+                                  14,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            selectedBot.name,
+                                            style: puzzleAcademyDisplayStyle(
+                                              palette: arcade.base,
+                                              size: compactLandscape ? 18 : 22,
+                                              color: arcade.text,
                                             ),
-                                            gradient: RadialGradient(
-                                              center: Alignment(
-                                                sin(pulse * pi * 2) * 0.08,
-                                                -0.12 +
-                                                    cos(pulse * pi * 2) * 0.05,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        PuzzleAcademyTag(
+                                          label: selectedTierUnlocked
+                                              ? 'READY'
+                                              : 'LOCKED',
+                                          accent: selectedTierUnlocked
+                                              ? selectedDifficultyColor
+                                              : arcade.crimson,
+                                          compact: true,
+                                          filled: selectedTierUnlocked,
+                                          foregroundColor: selectedTierUnlocked
+                                              ? filledTagForeground
+                                              : null,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      height: cardViewportHeight,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          Positioned.fill(
+                                            child: Container(
+                                              decoration:
+                                                  _vsBotArcadePanelDecoration(
+                                                    palette: arcade,
+                                                    accent: profileAccent,
+                                                    radius: 26,
+                                                    borderWidth: 2.2,
+                                                    inset: true,
+                                                    elevated: false,
+                                                    fillColor: arcade.panelAlt,
+                                                  ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            left: 8,
+                                            top: 18,
+                                            bottom: 18,
+                                            child: IgnorePointer(
+                                              child: Container(
+                                                width: 14,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.topCenter,
+                                                    end: Alignment.bottomCenter,
+                                                    colors: <Color>[
+                                                      marqueeAccent.withValues(
+                                                        alpha: 0.92,
+                                                      ),
+                                                      arcade.crimson.withValues(
+                                                        alpha: 0.30,
+                                                      ),
+                                                      Colors.black.withValues(
+                                                        alpha: 0.12,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
-                                              radius: 0.95,
-                                              colors: [
-                                                (useMonochrome
-                                                        ? scheme.outline
-                                                        : const Color(
-                                                            0xFF5AAEE8,
-                                                          ))
-                                                    .withValues(
-                                                      alpha: useMonochrome
-                                                          ? 0.10
+                                            ),
+                                          ),
+                                          Positioned(
+                                            right: 8,
+                                            top: 18,
+                                            bottom: 18,
+                                            child: IgnorePointer(
+                                              child: Container(
+                                                width: 14,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.topCenter,
+                                                    end: Alignment.bottomCenter,
+                                                    colors: <Color>[
+                                                      profileAccent.withValues(
+                                                        alpha: 0.92,
+                                                      ),
+                                                      arcade.cyan.withValues(
+                                                        alpha: 0.28,
+                                                      ),
+                                                      Colors.black.withValues(
+                                                        alpha: 0.12,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          Positioned.fill(
+                                            child: DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(26),
+                                                gradient: RadialGradient(
+                                                  center: Alignment(
+                                                    sin(pulse * pi * 2) * 0.08,
+                                                    -0.18 +
+                                                        cos(pulse * pi * 2) *
+                                                            0.05,
+                                                  ),
+                                                  radius: 1.02,
+                                                  colors: <Color>[
+                                                    marqueeAccent.withValues(
+                                                      alpha:
+                                                          arcade.reducedEffects
+                                                          ? 0.08
                                                           : 0.18,
                                                     ),
-                                                (useMonochrome
-                                                        ? scheme.outline
-                                                        : const Color(
-                                                            0xFF5AAEE8,
-                                                          ))
-                                                    .withValues(alpha: 0.0),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      PageView.builder(
-                                        controller: _botSetupPageController,
-                                        itemCount: _botCharacters.length,
-                                        physics: const BouncingScrollPhysics(),
-                                        allowImplicitScrolling: true,
-                                        onPageChanged: (index) {
-                                          setState(
-                                            () => _setBotSetupSelectionFields(
-                                              index,
-                                            ),
-                                          );
-                                          _saveLastBotIndex(index);
-                                        },
-                                        itemBuilder: (context, index) =>
-                                            _buildBotSetupCard(
-                                              _botCharacters[index],
-                                              index,
-                                              compact: compactLandscape,
-                                            ),
-                                      ),
-                                      Positioned(
-                                        left: 0,
-                                        top: 0,
-                                        bottom: 0,
-                                        child: IgnorePointer(
-                                          child: Container(
-                                            width: 52,
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(24),
-                                              gradient: LinearGradient(
-                                                begin: Alignment.centerLeft,
-                                                end: Alignment.centerRight,
-                                                colors: [
-                                                  scheme.surface.withValues(
-                                                    alpha: isDark ? 0.95 : 0.82,
-                                                  ),
-                                                  scheme.surface.withValues(
-                                                    alpha: 0.0,
-                                                  ),
-                                                ],
+                                                    Colors.transparent,
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        right: 0,
-                                        top: 0,
-                                        bottom: 0,
-                                        child: IgnorePointer(
-                                          child: Container(
-                                            width: 52,
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(24),
-                                              gradient: LinearGradient(
-                                                begin: Alignment.centerRight,
-                                                end: Alignment.centerLeft,
-                                                colors: [
-                                                  scheme.surface.withValues(
-                                                    alpha: isDark ? 0.95 : 0.82,
+                                          PageView.builder(
+                                            controller: _botSetupPageController,
+                                            itemCount: _botCharacters.length,
+                                            physics:
+                                                const BouncingScrollPhysics(),
+                                            allowImplicitScrolling: true,
+                                            onPageChanged: (index) {
+                                              setState(
+                                                () =>
+                                                    _setBotSetupSelectionFields(
+                                                      index,
+                                                    ),
+                                              );
+                                              _saveLastBotIndex(index);
+                                            },
+                                            itemBuilder: (context, index) =>
+                                                _buildBotSetupCard(
+                                                  _botCharacters[index],
+                                                  index,
+                                                  compact: compactLandscape,
+                                                ),
+                                          ),
+                                          Positioned(
+                                            left: tightPortrait ? 8 : 12,
+                                            child: buildNavButton(
+                                              icon: Icons.chevron_left_rounded,
+                                              onPressed:
+                                                  _botSetupSelectedIndex == 0
+                                                  ? null
+                                                  : () => _animateBotSetupTo(
+                                                      _botSetupSelectedIndex -
+                                                          1,
+                                                    ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            right: tightPortrait ? 8 : 12,
+                                            child: buildNavButton(
+                                              icon: Icons.chevron_right_rounded,
+                                              onPressed:
+                                                  _botSetupSelectedIndex ==
+                                                      _botCharacters.length - 1
+                                                  ? null
+                                                  : () => _animateBotSetupTo(
+                                                      _botSetupSelectedIndex +
+                                                          1,
+                                                    ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            left: 0,
+                                            top: 0,
+                                            bottom: 0,
+                                            child: IgnorePointer(
+                                              child: Container(
+                                                width: compactPhoneLayout
+                                                    ? 44
+                                                    : 52,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(24),
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.centerLeft,
+                                                    end: Alignment.centerRight,
+                                                    colors: <Color>[
+                                                      arcade.shell.withValues(
+                                                        alpha: 0.94,
+                                                      ),
+                                                      arcade.shell.withValues(
+                                                        alpha: 0.0,
+                                                      ),
+                                                    ],
                                                   ),
-                                                  scheme.surface.withValues(
-                                                    alpha: 0.0,
-                                                  ),
-                                                ],
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      onPressed: _botSetupSelectedIndex == 0
-                                          ? null
-                                          : () => _animateBotSetupTo(
-                                              _botSetupSelectedIndex - 1,
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            bottom: 0,
+                                            child: IgnorePointer(
+                                              child: Container(
+                                                width: compactPhoneLayout
+                                                    ? 44
+                                                    : 52,
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(24),
+                                                  gradient: LinearGradient(
+                                                    begin:
+                                                        Alignment.centerRight,
+                                                    end: Alignment.centerLeft,
+                                                    colors: <Color>[
+                                                      arcade.shell.withValues(
+                                                        alpha: 0.94,
+                                                      ),
+                                                      arcade.shell.withValues(
+                                                        alpha: 0.0,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
                                             ),
-                                      icon: const Icon(
-                                        Icons.chevron_left_rounded,
-                                      ),
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: Color.alphaBlend(
-                                          scheme.primary.withValues(
-                                            alpha: isDark ? 0.12 : 0.05,
                                           ),
-                                          scheme.surface,
-                                        ),
-                                        side: BorderSide(
-                                          color: scheme.outline.withValues(
-                                            alpha: 0.32,
-                                          ),
-                                        ),
+                                        ],
                                       ),
                                     ),
-                                    Expanded(
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
+                                    const SizedBox(height: 12),
+                                    Align(
+                                      alignment: Alignment.center,
+                                      child: Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
                                         children: List.generate(
                                           _botCharacters.length,
                                           (index) {
@@ -2218,40 +2848,40 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                               bot,
                                             );
                                             final dotColor = active
-                                                ? const Color(0xFF7FC4FF)
+                                                ? marqueeAccent
                                                 : cleared
-                                                ? const Color(0xFF59C98A)
+                                                ? arcade.victory
                                                 : unlocked
-                                                ? Colors.white54
-                                                : Colors.white24;
+                                                ? arcade.text.withValues(
+                                                    alpha: 0.44,
+                                                  )
+                                                : arcade.text.withValues(
+                                                    alpha: 0.18,
+                                                  );
                                             return AnimatedContainer(
-                                              duration: const Duration(
-                                                milliseconds: 220,
+                                              duration:
+                                                  puzzleAcademyMotionDuration(
+                                                    reducedEffects:
+                                                        arcade.reducedEffects,
+                                                    milliseconds: 220,
+                                                  ),
+                                              curve: puzzleAcademyMotionCurve(
+                                                reducedEffects:
+                                                    arcade.reducedEffects,
                                               ),
-                                              curve: Curves.easeOutCubic,
                                               width: active ? 22 : 8,
                                               height: 8,
-                                              margin:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                  ),
                                               decoration: BoxDecoration(
                                                 borderRadius:
                                                     BorderRadius.circular(999),
                                                 color: dotColor,
                                                 boxShadow: active
-                                                    ? [
-                                                        BoxShadow(
-                                                          color:
-                                                              const Color(
-                                                                0xFF5AAEE8,
-                                                              ).withValues(
-                                                                alpha: 0.32,
-                                                              ),
-                                                          blurRadius: 10,
-                                                          spreadRadius: 1,
-                                                        ),
-                                                      ]
+                                                    ? puzzleAcademySurfaceGlow(
+                                                        dotColor,
+                                                        monochrome:
+                                                            arcade.monochrome,
+                                                        strength: 0.26,
+                                                      )
                                                     : null,
                                               ),
                                             );
@@ -2259,384 +2889,326 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                         ),
                                       ),
                                     ),
-                                    IconButton(
-                                      onPressed:
-                                          _botSetupSelectedIndex ==
-                                              _botCharacters.length - 1
-                                          ? null
-                                          : () => _animateBotSetupTo(
-                                              _botSetupSelectedIndex + 1,
-                                            ),
-                                      icon: const Icon(
-                                        Icons.chevron_right_rounded,
-                                      ),
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: Color.alphaBlend(
-                                          scheme.primary.withValues(
-                                            alpha: isDark ? 0.12 : 0.05,
-                                          ),
-                                          scheme.surface,
-                                        ),
-                                        side: BorderSide(
-                                          color: scheme.outline.withValues(
-                                            alpha: 0.32,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                            decoration: BoxDecoration(
-                              color: Color.alphaBlend(
-                                scheme.primary.withValues(
-                                  alpha: isDark ? 0.12 : 0.05,
+                              ),
+                              SizedBox(height: sectionGap),
+                              Container(
+                                decoration: _vsBotArcadePanelDecoration(
+                                  palette: arcade,
+                                  accent: selectedDifficultyColor,
+                                  radius: 24,
+                                  borderWidth: 2.8,
+                                  fillColor: arcade.panel,
                                 ),
-                                scheme.surface,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: scheme.outline.withValues(alpha: 0.32),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  14,
+                                  16,
+                                  16,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
-                                    Icon(
-                                      Icons.videogame_asset_rounded,
-                                      size: 16,
-                                      color: selectedDifficultyColor,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Arcade Ladder',
-                                        style: TextStyle(
-                                          color: scheme.onSurface,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14,
+                                    Row(
+                                      children: [
+                                        const Spacer(),
+                                        PuzzleAcademyTag(
+                                          label:
+                                              '$selectedBotClearedCount/3 TIERS',
+                                          accent: selectedBotClearedCount == 3
+                                              ? arcade.victory
+                                              : arcade.amber,
+                                          compact: true,
                                         ),
-                                      ),
+                                      ],
                                     ),
+                                    const SizedBox(height: 8),
                                     Text(
-                                      '${_completedBotTierIds.length}/$_totalBotTierCount cleared',
-                                      style: TextStyle(
-                                        color: scheme.onSurface.withValues(
-                                          alpha: 0.70,
-                                        ),
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
+                                      '${selectedBot.name.toUpperCase()} // ${_vsBotProfileLabel(selectedBot.profile).toUpperCase()}',
+                                      textAlign: TextAlign.center,
+                                      style: puzzleAcademyIdentityStyle(
+                                        palette: arcade.base,
+                                        size: 8.4,
+                                        color: profileAccent,
+                                        withGlow: true,
                                       ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      ladderStatusText,
+                                      textAlign: TextAlign.center,
+                                      style: puzzleAcademyHudStyle(
+                                        palette: arcade.base,
+                                        size: 11.8,
+                                        color: arcade.textMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    LayoutBuilder(
+                                      builder: (context, inner) {
+                                        final spacing = inner.maxWidth < 460
+                                            ? 8.0
+                                            : 12.0;
+                                        final tileWidth =
+                                            ((inner.maxWidth - (spacing * 2)) /
+                                                    3)
+                                                .toDouble();
+                                        return Wrap(
+                                          alignment: WrapAlignment.center,
+                                          spacing: spacing,
+                                          runSpacing: spacing,
+                                          children: BotDifficulty.values
+                                              .map((difficulty) {
+                                                final tierUnlocked =
+                                                    _isBotTierUnlocked(
+                                                      selectedBot,
+                                                      difficulty,
+                                                    );
+                                                final tierCleared =
+                                                    _hasClearedBotTier(
+                                                      selectedBot,
+                                                      difficulty,
+                                                    );
+                                                final tierSelected =
+                                                    _botSetupSelectedDifficulty ==
+                                                    difficulty;
+                                                final accent = tierUnlocked
+                                                    ? _botDifficultyColor(
+                                                        difficulty,
+                                                      )
+                                                    : arcade.line;
+                                                final caption = tierUnlocked
+                                                    ? tierCleared
+                                                          ? 'Clear // ${selectedBot.settingsFor(difficulty).elo} Elo'
+                                                          : '${_vsBotTierTitle(difficulty)} // ${selectedBot.settingsFor(difficulty).elo} Elo'
+                                                    : (_botTierLockReason(
+                                                            selectedBot,
+                                                            difficulty,
+                                                          ) ??
+                                                          'Locked');
+
+                                                return SizedBox(
+                                                  width: tileWidth,
+                                                  child: _buildVsBotSelectorChoiceTile(
+                                                    arcade: arcade,
+                                                    caption: caption,
+                                                    label: difficulty.label,
+                                                    leading: Icon(
+                                                      tierCleared
+                                                          ? Icons
+                                                                .check_circle_rounded
+                                                          : tierUnlocked
+                                                          ? Icons.bolt_rounded
+                                                          : Icons
+                                                                .lock_outline_rounded,
+                                                      size: 18,
+                                                      color: tierUnlocked
+                                                          ? accent
+                                                          : arcade.textMuted,
+                                                    ),
+                                                    accent: accent,
+                                                    selected: tierSelected,
+                                                    enabled: tierUnlocked,
+                                                    onTap: () {
+                                                      setState(
+                                                        () =>
+                                                            _botSetupSelectedDifficulty =
+                                                                difficulty,
+                                                      );
+                                                    },
+                                                  ),
+                                                );
+                                              })
+                                              .toList(growable: false),
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${selectedBot.name} - ${_botSetupSelectedDifficulty.label}',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: scheme.onSurface,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 16,
-                                  ),
+                              ),
+                              SizedBox(height: sectionGap),
+                              Container(
+                                decoration: _vsBotArcadePanelDecoration(
+                                  palette: arcade,
+                                  accent: arcade.cyan,
+                                  radius: 24,
+                                  borderWidth: 2.8,
+                                  fillColor: arcade.panel,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Approx. ${selectedBotSettings.elo} Elo | $selectedBotClearedCount/3 tiers cleared',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: scheme.onSurface.withValues(
-                                      alpha: 0.66,
-                                    ),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  14,
+                                  16,
+                                  16,
                                 ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  alignment: WrapAlignment.center,
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: BotDifficulty.values
-                                      .map((difficulty) {
-                                        final tierUnlocked = _isBotTierUnlocked(
-                                          selectedBot,
-                                          difficulty,
-                                        );
-                                        final tierCleared = _hasClearedBotTier(
-                                          selectedBot,
-                                          difficulty,
-                                        );
-                                        final tierSelected =
-                                            _botSetupSelectedDifficulty ==
-                                            difficulty;
-                                        final accent = tierUnlocked
-                                            ? _botDifficultyColor(difficulty)
-                                            : scheme.outline;
-
-                                        return ChoiceChip(
-                                          selected: tierSelected,
-                                          showCheckmark: false,
-                                          selectedColor: accent.withValues(
-                                            alpha: 0.20,
-                                          ),
-                                          side: BorderSide(
-                                            color: tierSelected
-                                                ? accent
-                                                : accent.withValues(
-                                                    alpha: tierUnlocked
-                                                        ? 0.40
-                                                        : 0.28,
-                                                  ),
-                                          ),
-                                          avatar: Icon(
-                                            tierCleared
-                                                ? Icons.check_circle_rounded
-                                                : tierUnlocked
-                                                ? Icons.bolt_rounded
-                                                : Icons.lock_outline_rounded,
-                                            size: 16,
-                                            color: tierUnlocked
-                                                ? accent
-                                                : scheme.onSurface.withValues(
-                                                    alpha: 0.46,
-                                                  ),
-                                          ),
-                                          label: Text(
-                                            difficulty.label,
-                                            style: TextStyle(
-                                              color: tierUnlocked
-                                                  ? accent
-                                                  : scheme.onSurface.withValues(
-                                                      alpha: 0.54,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    LayoutBuilder(
+                                      builder: (context, inner) {
+                                        final spacing = inner.maxWidth < 460
+                                            ? 8.0
+                                            : 12.0;
+                                        final tileWidth =
+                                            ((inner.maxWidth - (spacing * 2)) /
+                                                    3)
+                                                .toDouble();
+                                        return Wrap(
+                                          alignment: WrapAlignment.center,
+                                          spacing: spacing,
+                                          runSpacing: spacing,
+                                          children: [
+                                            SizedBox(
+                                              width: tileWidth,
+                                              child:
+                                                  _buildVsBotSelectorChoiceTile(
+                                                    arcade: arcade,
+                                                    caption: 'You move first',
+                                                    label: 'White',
+                                                    leading: _pieceImage(
+                                                      'p_w',
+                                                      width: 18,
+                                                      height: 18,
                                                     ),
-                                              fontWeight: FontWeight.w700,
+                                                    accent: const Color(
+                                                      0xFFEDEFF4,
+                                                    ),
+                                                    selected:
+                                                        _botSideChoice ==
+                                                        BotSideChoice.white,
+                                                    enabled: true,
+                                                    onTap: () {
+                                                      setState(
+                                                        () => _botSideChoice =
+                                                            BotSideChoice.white,
+                                                      );
+                                                    },
+                                                  ),
                                             ),
-                                          ),
-                                          onSelected: tierUnlocked
-                                              ? (_) {
-                                                  setState(
-                                                    () =>
-                                                        _botSetupSelectedDifficulty =
-                                                            difficulty,
-                                                  );
-                                                }
-                                              : null,
+                                            SizedBox(
+                                              width: tileWidth,
+                                              child:
+                                                  _buildVsBotSelectorChoiceTile(
+                                                    arcade: arcade,
+                                                    caption:
+                                                        'Randomized launch',
+                                                    label: 'Random',
+                                                    leading: Icon(
+                                                      Icons.shuffle_rounded,
+                                                      size: 18,
+                                                      color: arcade.cyan,
+                                                    ),
+                                                    accent: arcade.cyan,
+                                                    selected:
+                                                        _botSideChoice ==
+                                                        BotSideChoice.random,
+                                                    enabled: true,
+                                                    onTap: () {
+                                                      setState(
+                                                        () => _botSideChoice =
+                                                            BotSideChoice
+                                                                .random,
+                                                      );
+                                                    },
+                                                  ),
+                                            ),
+                                            SizedBox(
+                                              width: tileWidth,
+                                              child:
+                                                  _buildVsBotSelectorChoiceTile(
+                                                    arcade: arcade,
+                                                    caption:
+                                                        'Bot opens the round',
+                                                    label: 'Black',
+                                                    leading: _pieceImage(
+                                                      'p_b',
+                                                      width: 18,
+                                                      height: 18,
+                                                    ),
+                                                    accent: const Color(
+                                                      0xFF46566C,
+                                                    ),
+                                                    selected:
+                                                        _botSideChoice ==
+                                                        BotSideChoice.black,
+                                                    enabled: true,
+                                                    onTap: () {
+                                                      setState(
+                                                        () => _botSideChoice =
+                                                            BotSideChoice.black,
+                                                      );
+                                                    },
+                                                  ),
+                                            ),
+                                          ],
                                         );
-                                      })
-                                      .toList(growable: false),
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  ladderStatusText,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: scheme.onSurface.withValues(
-                                      alpha: 0.70,
+                                      },
                                     ),
-                                    fontSize: 11.8,
-                                    height: 1.3,
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: sectionGap),
+                              Container(
+                                decoration: _vsBotArcadePanelDecoration(
+                                  palette: arcade,
+                                  accent: selectedTierUnlocked
+                                      ? selectedDifficultyColor
+                                      : arcade.crimson,
+                                  radius: 26,
+                                  borderWidth: 3.0,
+                                  fillColor: arcade.marquee,
+                                ),
+                                padding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  18,
+                                  18,
+                                  18,
+                                ),
+                                child: SizedBox(
+                                  height: compactPhoneLayout ? 52 : 56,
+                                  child: FilledButton.icon(
+                                    onPressed: selectedTierUnlocked
+                                        ? () {
+                                            unawaited(
+                                              _launchBotFromSelector(
+                                                selectedBot,
+                                                _botSetupSelectedIndex,
+                                              ),
+                                            );
+                                          }
+                                        : null,
+                                    style: _vsBotArcadeFilledButtonStyle(
+                                      palette: arcade,
+                                      backgroundColor: selectedTierUnlocked
+                                          ? selectedDifficultyColor
+                                          : arcade.line,
+                                      foregroundColor: selectedTierUnlocked
+                                          ? filledTagForeground
+                                          : arcade.textMuted,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 18,
+                                        vertical: 12,
+                                      ),
+                                      radius: 16,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.play_arrow_rounded,
+                                      size: 22,
+                                    ),
+                                    label: Text(
+                                      selectedTierUnlocked
+                                          ? 'START ${_botSetupSelectedDifficulty.label.toUpperCase()}'
+                                          : 'LOCKED',
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                            decoration: BoxDecoration(
-                              color: Color.alphaBlend(
-                                scheme.primary.withValues(
-                                  alpha: isDark ? 0.12 : 0.05,
-                                ),
-                                scheme.surface,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: scheme.outline.withValues(alpha: 0.32),
-                              ),
-                            ),
-                            child: Center(
-                              child: Wrap(
-                                alignment: WrapAlignment.center,
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  ChoiceChip(
-                                    selected:
-                                        _botSideChoice == BotSideChoice.white,
-                                    checkmarkColor: const Color(0xFF1A2232),
-                                    selectedColor: const Color(0xFFDEE4EF),
-                                    side: BorderSide(
-                                      color:
-                                          _botSideChoice == BotSideChoice.white
-                                          ? const Color(0xFFEDEFF4)
-                                          : scheme.outline.withValues(
-                                              alpha: 0.34,
-                                            ),
-                                    ),
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        _pieceImage(
-                                          'p_w',
-                                          width: 16,
-                                          height: 16,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'White',
-                                          style: TextStyle(
-                                            color:
-                                                _botSideChoice ==
-                                                    BotSideChoice.white
-                                                ? const Color(0xFF1A2232)
-                                                : scheme.onSurface.withValues(
-                                                    alpha: 0.82,
-                                                  ),
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    onSelected: (_) {
-                                      setState(
-                                        () => _botSideChoice =
-                                            BotSideChoice.white,
-                                      );
-                                    },
-                                  ),
-                                  ChoiceChip(
-                                    selected:
-                                        _botSideChoice == BotSideChoice.random,
-                                    checkmarkColor: const Color(0xFF8FD0FF),
-                                    selectedColor: const Color(
-                                      0xFF5AAEE8,
-                                    ).withValues(alpha: 0.22),
-                                    side: BorderSide(
-                                      color:
-                                          _botSideChoice == BotSideChoice.random
-                                          ? const Color(0xFF5AAEE8)
-                                          : scheme.outline.withValues(
-                                              alpha: 0.34,
-                                            ),
-                                    ),
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.shuffle_rounded,
-                                          size: 16,
-                                          color:
-                                              _botSideChoice ==
-                                                  BotSideChoice.random
-                                              ? const Color(0xFF8FD0FF)
-                                              : scheme.onSurface.withValues(
-                                                  alpha: 0.82,
-                                                ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'Random',
-                                          style: TextStyle(
-                                            color:
-                                                _botSideChoice ==
-                                                    BotSideChoice.random
-                                                ? const Color(0xFF8FD0FF)
-                                                : scheme.onSurface.withValues(
-                                                    alpha: 0.82,
-                                                  ),
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    onSelected: (_) {
-                                      setState(
-                                        () => _botSideChoice =
-                                            BotSideChoice.random,
-                                      );
-                                    },
-                                  ),
-                                  ChoiceChip(
-                                    selected:
-                                        _botSideChoice == BotSideChoice.black,
-                                    checkmarkColor: Colors.white,
-                                    selectedColor: const Color(0xFF222933),
-                                    side: BorderSide(
-                                      color:
-                                          _botSideChoice == BotSideChoice.black
-                                          ? const Color(0xFF49576B)
-                                          : scheme.outline.withValues(
-                                              alpha: 0.34,
-                                            ),
-                                    ),
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        _pieceImage(
-                                          'p_b',
-                                          width: 16,
-                                          height: 16,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'Black',
-                                          style: TextStyle(
-                                            color:
-                                                _botSideChoice ==
-                                                    BotSideChoice.black
-                                                ? Colors.white
-                                                : scheme.onSurface.withValues(
-                                                    alpha: 0.82,
-                                                  ),
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    onSelected: (_) {
-                                      setState(
-                                        () => _botSideChoice =
-                                            BotSideChoice.black,
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 360),
-                              child: FilledButton(
-                                onPressed: selectedTierUnlocked
-                                    ? () {
-                                        unawaited(
-                                          _launchBotFromSelector(
-                                            selectedBot,
-                                            _botSetupSelectedIndex,
-                                          ),
-                                        );
-                                      }
-                                    : null,
-                                child: Text(
-                                  selectedTierUnlocked
-                                      ? 'Start ${_botSetupSelectedDifficulty.label}'
-                                      : 'Locked',
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -2665,14 +3237,12 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 height: 16,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.45),
-                      blurRadius: 18,
-                      spreadRadius: 3,
-                    ),
-                  ],
+                  color: arcade.cyan.withValues(alpha: 0.92),
+                  boxShadow: puzzleAcademySurfaceGlow(
+                    arcade.cyan,
+                    monochrome: arcade.monochrome,
+                    strength: 0.36,
+                  ),
                 ),
               ),
             ),

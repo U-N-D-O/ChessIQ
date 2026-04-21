@@ -5183,6 +5183,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildBotSetupScreen();
+  Color _botDifficultyColor(BotDifficulty difficulty);
 
   Widget _buildAnalysisBoardScaffold(BuildContext context) {
     final theme = Theme.of(context);
@@ -5668,8 +5669,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final compactBotHeader =
+        _playVsBot && !isLandscape && media.size.width <= 390;
     final displayedEval = _displayEvalForPov();
     final displayedEvalColor = useMonochrome
         ? const Color(0xFFEEEEEE)
@@ -5678,201 +5681,366 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final selectedBotAvatarAsset = selectedBot == null
         ? null
         : _selectedBotAvatarAsset(selectedBot);
+    final botArcade = _vsBotArcadePaletteFor(
+      context,
+      monochrome: useMonochrome,
+    );
+    final botAccent = selectedBot == null
+        ? botArcade.cyan
+        : Color.lerp(
+            _vsBotProfileAccent(selectedBot.profile, botArcade),
+            _botDifficultyColor(_selectedBotDifficulty),
+            0.45,
+          )!;
     if (isLandscape) {
       return SizedBox.shrink();
     }
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 14 * scale,
-        vertical: 8 * scale,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    Widget buildCompactBotHeaderIdentity() {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (!isLandscape)
-            Expanded(
-              child: Stack(
-                alignment: Alignment.centerLeft,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.only(
-                      right: (_playVsBot && selectedBot != null)
-                          ? (46 * scale)
-                          : 0,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          InkWell(
-                            onTap: _showCreditsDialog,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                vertical: 2 * scale,
-                                horizontal: 2 * scale,
-                              ),
-                              child: Image.asset(
-                                'assets/ChessIQ.png',
-                                width: 120 * scale,
-                                height: 34 * scale,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 120 * scale,
-                            child: !_playVsBot
-                                ? Text(
-                                    'Engine: Stockfish 18',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: scheme.onSurface.withValues(
-                                        alpha: 0.54,
-                                      ),
-                                      fontSize: 10 * scale,
-                                      letterSpacing: 0.4,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: _showCreditsDialog,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: 2 * scale,
+                    horizontal: 2 * scale,
                   ),
-                  if (_playVsBot && selectedBot != null)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.centerRight,
-                        children: [
-                          Positioned(
-                            left: _botAvatarOverlayOnRight ? 42 * scale : null,
-                            right: _botAvatarOverlayOnRight ? null : 42 * scale,
-                            child: IgnorePointer(
-                              child: _buildBotAvatarOverlay(scale),
-                            ),
-                          ),
-                          _wrapBotAvatarInteractive(
-                            scale,
-                            InkWell(
-                              onTap: _onBotAvatarTapped,
-                              borderRadius: BorderRadius.circular(999),
-                              child: Opacity(
-                                opacity: _botAvatarIntroOpacity,
-                                child: Container(
-                                  key: _botAvatarWidgetKey,
-                                  width: 34 * scale,
-                                  height: 34 * scale,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFF9ED8FF,
-                                      ).withValues(alpha: 0.38),
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: isDark ? 0.24 : 0.10,
-                                        ),
-                                        blurRadius: 10 * scale,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipOval(
-                                    child: selectedBotAvatarAsset != null
-                                        ? Image.asset(
-                                            selectedBotAvatarAsset,
-                                            fit: BoxFit.cover,
-                                          )
-                                        : Container(
-                                            color: Color.alphaBlend(
-                                              scheme.primary.withValues(
-                                                alpha: 0.08,
-                                              ),
-                                              scheme.surface,
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: Icon(
-                                              Icons.smart_toy_outlined,
-                                              color: const Color(0xFF9ED8FF),
-                                              size: 18 * scale,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+                  child: Image.asset(
+                    'assets/ChessIQ.png',
+                    width: 98 * scale,
+                    height: 28 * scale,
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
-            ),
-          if (!isLandscape)
-            Expanded(
-              child: Center(
-                child: Visibility(
-                  visible: _shouldShowCenterEvalCounter,
-                  maintainSize: true,
-                  maintainAnimation: true,
-                  maintainState: true,
+              SizedBox(
+                width: 98 * scale,
+                child: Text(
+                  selectedBot?.name ?? '',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: puzzleAcademyIdentityStyle(
+                    palette: botArcade.base,
+                    size: 5.8 * scale,
+                    color: botAccent,
+                    withGlow: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_playVsBot && selectedBot != null) ...[
+            SizedBox(width: 8 * scale),
+            _wrapBotAvatarInteractive(
+              scale,
+              InkWell(
+                onTap: _onBotAvatarTapped,
+                borderRadius: BorderRadius.circular(999),
+                child: Opacity(
+                  opacity: _botAvatarIntroOpacity,
                   child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 14 * scale,
-                      vertical: 6 * scale,
-                    ),
+                    key: _botAvatarWidgetKey,
+                    width: 30 * scale,
+                    height: 30 * scale,
                     decoration: BoxDecoration(
-                      color: useMonochrome
-                          ? const Color(0xFF161B21)
-                          : Color.alphaBlend(
-                              scheme.primary.withValues(
-                                alpha: isDark ? 0.14 : 0.05,
-                              ),
-                              scheme.surface,
-                            ).withValues(alpha: 0.92),
-                      borderRadius: BorderRadius.circular(14),
+                      shape: BoxShape.circle,
                       border: Border.all(
-                        color: useMonochrome
-                            ? const Color(0xFF89929D).withValues(alpha: 0.34)
-                            : scheme.outline.withValues(alpha: 0.34),
+                        color: botAccent.withValues(alpha: 0.58),
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(
-                            alpha: isDark ? 0.30 : 0.10,
+                            alpha: isDark ? 0.24 : 0.10,
                           ),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
+                          blurRadius: 8 * scale,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: Text(
-                      _evalTextForUi(displayedEval),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: displayedEvalColor,
-                        fontSize: 14 * scale,
-                      ),
+                    child: ClipOval(
+                      child: selectedBotAvatarAsset != null
+                          ? Image.asset(
+                              selectedBotAvatarAsset,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              color: Color.alphaBlend(
+                                scheme.primary.withValues(alpha: 0.08),
+                                scheme.surface,
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.smart_toy_outlined,
+                                color: botAccent,
+                                size: 16 * scale,
+                              ),
+                            ),
                     ),
                   ),
                 ),
               ),
             ),
-          Expanded(
+          ],
+        ],
+      );
+    }
+
+    Widget buildHeaderIdentity() {
+      return Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+              right: (_playVsBot && selectedBot != null) ? (46 * scale) : 0,
+            ),
             child: Align(
-              alignment: Alignment.center,
-              child: _buildEditModeDepthCluster(scale, scheme),
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: _showCreditsDialog,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 2 * scale,
+                        horizontal: 2 * scale,
+                      ),
+                      child: Image.asset(
+                        'assets/ChessIQ.png',
+                        width: 120 * scale,
+                        height: 34 * scale,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 120 * scale,
+                    child: !_playVsBot
+                        ? Text(
+                            'Engine: Stockfish 18',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.54),
+                              fontSize: 10 * scale,
+                              letterSpacing: 0.4,
+                            ),
+                          )
+                        : Text(
+                            selectedBot?.name ?? '',
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: puzzleAcademyIdentityStyle(
+                              palette: botArcade.base,
+                              size: 6.8 * scale,
+                              color: botAccent,
+                              withGlow: true,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
+          if (_playVsBot && selectedBot != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.centerRight,
+                children: [
+                  Positioned(
+                    left: _botAvatarOverlayOnRight ? 42 * scale : null,
+                    right: _botAvatarOverlayOnRight ? null : 42 * scale,
+                    child: IgnorePointer(child: _buildBotAvatarOverlay(scale)),
+                  ),
+                  _wrapBotAvatarInteractive(
+                    scale,
+                    InkWell(
+                      onTap: _onBotAvatarTapped,
+                      borderRadius: BorderRadius.circular(999),
+                      child: Opacity(
+                        opacity: _botAvatarIntroOpacity,
+                        child: Container(
+                          key: _botAvatarWidgetKey,
+                          width: 34 * scale,
+                          height: 34 * scale,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: botAccent.withValues(alpha: 0.58),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha: isDark ? 0.24 : 0.10,
+                                ),
+                                blurRadius: 10 * scale,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: selectedBotAvatarAsset != null
+                                ? Image.asset(
+                                    selectedBotAvatarAsset,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    color: Color.alphaBlend(
+                                      scheme.primary.withValues(alpha: 0.08),
+                                      scheme.surface,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      Icons.smart_toy_outlined,
+                                      color: botAccent,
+                                      size: 18 * scale,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
+      );
+    }
+
+    Widget buildCenterEvalCounter() {
+      return Visibility(
+        visible: _shouldShowCenterEvalCounter,
+        maintainSize: true,
+        maintainAnimation: true,
+        maintainState: true,
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: 14 * scale,
+            vertical: 6 * scale,
+          ),
+          decoration: BoxDecoration(
+            color: useMonochrome
+                ? const Color(0xFF161B21)
+                : Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
+                    scheme.surface,
+                  ).withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: useMonochrome
+                  ? const Color(0xFF89929D).withValues(alpha: 0.34)
+                  : scheme.outline.withValues(alpha: 0.34),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.10),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Text(
+            _evalTextForUi(displayedEval),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: displayedEvalColor,
+              fontSize: 14 * scale,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final headerIdentity = buildHeaderIdentity();
+    final centerEvalCounter = buildCenterEvalCounter();
+    final depthCluster = _buildEditModeDepthCluster(scale, scheme);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: 14 * scale,
+        vertical: 8 * scale,
       ),
+      child: compactBotHeader
+          ? LayoutBuilder(
+              builder: (context, constraints) {
+                final compactGap = 8 * scale;
+                final centerReservedWidth = _shouldShowCenterEvalCounter
+                    ? min(100 * scale, constraints.maxWidth * 0.30)
+                    : 0.0;
+                final sideMaxWidth = _shouldShowCenterEvalCounter
+                    ? max(
+                        0.0,
+                        (constraints.maxWidth -
+                                centerReservedWidth -
+                                (compactGap * 2)) /
+                            2,
+                      )
+                    : max(0.0, (constraints.maxWidth - compactGap) / 2);
+
+                return SizedBox(
+                  height: 44 * scale,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (_shouldShowCenterEvalCounter)
+                        Align(
+                          alignment: Alignment.center,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: centerEvalCounter,
+                          ),
+                        ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: sideMaxWidth),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: buildCompactBotHeaderIdentity(),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: sideMaxWidth),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: depthCluster,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: headerIdentity),
+                Expanded(child: Center(child: centerEvalCounter)),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: depthCluster,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
@@ -6192,209 +6360,245 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Widget _buildBoard(bool reverse) {
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
+    final media = MediaQuery.of(context);
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final compactBotFrame =
+        _playVsBot &&
+        (media.size.width <= 390 ||
+            (media.orientation == Orientation.landscape &&
+                media.size.height <= 430));
+    final boardAccent = _playVsBot
+        ? (_selectedBot == null
+              ? arcade.cyan
+              : Color.lerp(
+                  _vsBotProfileAccent(_selectedBot!.profile, arcade),
+                  _botDifficultyColor(_selectedBotDifficulty),
+                  0.45,
+                )!)
+        : Colors.white10;
+    final innerBoardRadius = _playVsBot ? (compactBotFrame ? 8.0 : 10.0) : 4.0;
 
     return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.white10, width: 2),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 8,
-        ),
-        itemCount: 64,
-        itemBuilder: (context, i) {
-          final visualFile = i % 8;
-          final visualRankFromTop = i ~/ 8;
-          int row = reverse ? (i ~/ 8) : (7 - i ~/ 8);
-          int col = reverse ? (7 - i % 8) : (i % 8);
-          String sq = String.fromCharCode(97 + col) + (row + 1).toString();
-          bool isDark = (row + col) % 2 == 0;
-          String? p = boardState[sq];
-          final showFileLabel = visualRankFromTop == 7;
-          final showRankLabel = visualFile == 0;
-          final labelColor = isDark ? lightSquareColor : darkSquareColor;
-          final isGambitSelected = _gambitSelectedFrom == sq;
-          final isHoldSelected = _holdSelectedFrom == sq;
-          final isLegalTarget = _legalTargets.contains(sq);
-          final isGambitAvailableTarget = _gambitAvailableTargets.contains(sq);
-          final showOpeningSelectionDots =
-              _isOpeningSelectionMode && isGambitAvailableTarget;
-          final showLockedLegalDots =
-              !_analysisEditMode && !_isOpeningSelectionMode;
-          final showTargetDot =
-              isLegalTarget &&
-              (showOpeningSelectionDots || showLockedLegalDots);
-          final isCaptureTarget = isLegalTarget && p != null;
-          const legalDotBase = Color(0xFF9EA8BA);
+      decoration: _playVsBot
+          ? _vsBotArcadePanelDecoration(
+              palette: arcade,
+              accent: boardAccent,
+              radius: compactBotFrame ? 16 : 18,
+              borderWidth: 2.8,
+              fillColor: arcade.panelAlt,
+            )
+          : BoxDecoration(
+              border: Border.all(color: Colors.white10, width: 2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+      padding: _playVsBot
+          ? EdgeInsets.all(compactBotFrame ? 6 : 8)
+          : EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(innerBoardRadius),
+        child: GridView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 8,
+          ),
+          itemCount: 64,
+          itemBuilder: (context, i) {
+            final visualFile = i % 8;
+            final visualRankFromTop = i ~/ 8;
+            int row = reverse ? (i ~/ 8) : (7 - i ~/ 8);
+            int col = reverse ? (7 - i % 8) : (i % 8);
+            String sq = String.fromCharCode(97 + col) + (row + 1).toString();
+            bool isDark = (row + col) % 2 == 0;
+            String? p = boardState[sq];
+            final showFileLabel = visualRankFromTop == 7;
+            final showRankLabel = visualFile == 0;
+            final labelColor = isDark ? lightSquareColor : darkSquareColor;
+            final isGambitSelected = _gambitSelectedFrom == sq;
+            final isHoldSelected = _holdSelectedFrom == sq;
+            final isLegalTarget = _legalTargets.contains(sq);
+            final isGambitAvailableTarget = _gambitAvailableTargets.contains(
+              sq,
+            );
+            final showOpeningSelectionDots =
+                _isOpeningSelectionMode && isGambitAvailableTarget;
+            final showLockedLegalDots =
+                !_analysisEditMode && !_isOpeningSelectionMode;
+            final showTargetDot =
+                isLegalTarget &&
+                (showOpeningSelectionDots || showLockedLegalDots);
+            final isCaptureTarget = isLegalTarget && p != null;
+            const legalDotBase = Color(0xFF9EA8BA);
 
-          return DragTarget<String>(
-            onAcceptWithDetails: (d) {
-              if (_isOpeningSelectionMode && _selectedGambit == null) {
-                _handleGambitDragDrop(d.data, sq);
-                return;
-              }
-              unawaited(_attemptMove(d.data, sq));
-            },
-            builder: (context, candidateData, rejectedData) => Container(
-              decoration: BoxDecoration(
-                color: isDark ? darkSquareColor : lightSquareColor,
-                border: (isGambitSelected || isHoldSelected)
-                    ? Border.all(color: _openingSelectionAccent, width: 2)
-                    : null,
-              ),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () =>
-                    (_isOpeningSelectionMode && _selectedGambit == null)
-                    ? _handleBoardTap(sq)
-                    : _handleHoldTap(sq),
-                onLongPress: () {
-                  if (_openingMode != OpeningMode.off) return;
-                  if (!_analysisEditMode && !_isCurrentTurnPiece(p)) return;
-                  setState(() {
-                    _holdSelectedFrom = sq;
-                    _gambitSelectedFrom = null;
-                    _legalTargets
-                      ..clear()
-                      ..addAll(
-                        _analysisEditMode ? <String>{} : _legalMovesFrom(sq),
-                      );
-                  });
-                },
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (showTargetDot)
-                      Center(
-                        child: Container(
-                          width: isCaptureTarget ? 26 : 12,
-                          height: isCaptureTarget ? 26 : 12,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isCaptureTarget
-                                ? Colors.transparent
-                                : (showOpeningSelectionDots
-                                      ? _openingSelectionAccent.withValues(
-                                          alpha: 0.55,
-                                        )
-                                      : legalDotBase.withValues(alpha: 0.6)),
-                            border: isCaptureTarget
-                                ? Border.all(
-                                    color: showOpeningSelectionDots
+            return DragTarget<String>(
+              onAcceptWithDetails: (d) {
+                if (_isOpeningSelectionMode && _selectedGambit == null) {
+                  _handleGambitDragDrop(d.data, sq);
+                  return;
+                }
+                unawaited(_attemptMove(d.data, sq));
+              },
+              builder: (context, candidateData, rejectedData) => Container(
+                decoration: BoxDecoration(
+                  color: isDark ? darkSquareColor : lightSquareColor,
+                  border: (isGambitSelected || isHoldSelected)
+                      ? Border.all(color: _openingSelectionAccent, width: 2)
+                      : null,
+                ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () =>
+                      (_isOpeningSelectionMode && _selectedGambit == null)
+                      ? _handleBoardTap(sq)
+                      : _handleHoldTap(sq),
+                  onLongPress: () {
+                    if (_openingMode != OpeningMode.off) return;
+                    if (!_analysisEditMode && !_isCurrentTurnPiece(p)) return;
+                    setState(() {
+                      _holdSelectedFrom = sq;
+                      _gambitSelectedFrom = null;
+                      _legalTargets
+                        ..clear()
+                        ..addAll(
+                          _analysisEditMode ? <String>{} : _legalMovesFrom(sq),
+                        );
+                    });
+                  },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (showTargetDot)
+                        Center(
+                          child: Container(
+                            width: isCaptureTarget ? 26 : 12,
+                            height: isCaptureTarget ? 26 : 12,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isCaptureTarget
+                                  ? Colors.transparent
+                                  : (showOpeningSelectionDots
                                         ? _openingSelectionAccent.withValues(
-                                            alpha: 0.75,
+                                            alpha: 0.55,
                                           )
-                                        : legalDotBase.withValues(alpha: 0.8),
-                                    width: 2,
-                                  )
-                                : null,
+                                        : legalDotBase.withValues(alpha: 0.6)),
+                              border: isCaptureTarget
+                                  ? Border.all(
+                                      color: showOpeningSelectionDots
+                                          ? _openingSelectionAccent.withValues(
+                                              alpha: 0.75,
+                                            )
+                                          : legalDotBase.withValues(alpha: 0.8),
+                                      width: 2,
+                                    )
+                                  : null,
+                            ),
                           ),
                         ),
-                      ),
-                    if (showFileLabel || showRankLabel)
-                      Positioned(
-                        left: 3,
-                        bottom: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (showRankLabel)
-                              Text(
-                                (row + 1).toString(),
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  height: 1,
-                                  letterSpacing: 0.1,
-                                  fontWeight: FontWeight.w600,
-                                  color: labelColor.withValues(alpha: 0.92),
+                      if (showFileLabel || showRankLabel)
+                        Positioned(
+                          left: 3,
+                          bottom: 2,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (showRankLabel)
+                                Text(
+                                  (row + 1).toString(),
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    height: 1,
+                                    letterSpacing: 0.1,
+                                    fontWeight: FontWeight.w600,
+                                    color: labelColor.withValues(alpha: 0.92),
+                                  ),
                                 ),
-                              ),
-                            if (showFileLabel)
-                              Text(
-                                String.fromCharCode(97 + col),
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  height: 1,
-                                  letterSpacing: 0.1,
-                                  fontWeight: FontWeight.w600,
-                                  color: labelColor.withValues(alpha: 0.92),
+                              if (showFileLabel)
+                                Text(
+                                  String.fromCharCode(97 + col),
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    height: 1,
+                                    letterSpacing: 0.1,
+                                    fontWeight: FontWeight.w600,
+                                    color: labelColor.withValues(alpha: 0.92),
+                                  ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    if (p != null)
-                      Center(
-                        child: Draggable<String>(
-                          data: sq,
-                          feedback: _buildPieceGlow(p),
-                          onDragStarted: () {
-                            if (_isOpeningSelectionMode &&
-                                !_isCurrentTurnPiece(p)) {
-                              return;
-                            }
-                            if (!_isOpeningSelectionMode &&
-                                !_analysisEditMode &&
-                                !_isCurrentTurnPiece(p)) {
-                              return;
-                            }
-                            setState(() {
-                              if (_isOpeningSelectionMode) {
-                                _selectGambitSource(sq);
-                              } else {
-                                _holdSelectedFrom = sq;
-                                _gambitSelectedFrom = null;
-                                _legalTargets
-                                  ..clear()
-                                  ..addAll(
-                                    _analysisEditMode
-                                        ? <String>{}
-                                        : _legalMovesFrom(sq),
-                                  );
-                                _gambitAvailableTargets.clear();
+                      if (p != null)
+                        Center(
+                          child: Draggable<String>(
+                            data: sq,
+                            feedback: _buildPieceGlow(p),
+                            onDragStarted: () {
+                              if (_isOpeningSelectionMode &&
+                                  !_isCurrentTurnPiece(p)) {
+                                return;
                               }
-                            });
-                          },
-                          onDragEnd: (details) {
-                            if (!details.wasAccepted) {
+                              if (!_isOpeningSelectionMode &&
+                                  !_analysisEditMode &&
+                                  !_isCurrentTurnPiece(p)) {
+                                return;
+                              }
                               setState(() {
-                                _holdSelectedFrom = null;
-                                _gambitSelectedFrom = null;
-                                _legalTargets.clear();
-                                _gambitAvailableTargets.clear();
+                                if (_isOpeningSelectionMode) {
+                                  _selectGambitSource(sq);
+                                } else {
+                                  _holdSelectedFrom = sq;
+                                  _gambitSelectedFrom = null;
+                                  _legalTargets
+                                    ..clear()
+                                    ..addAll(
+                                      _analysisEditMode
+                                          ? <String>{}
+                                          : _legalMovesFrom(sq),
+                                    );
+                                  _gambitAvailableTargets.clear();
+                                }
                               });
-                            }
-                          },
-                          childWhenDragging: Opacity(
-                            opacity: 0.2,
-                            child: _pieceImage(p),
+                            },
+                            onDragEnd: (details) {
+                              if (!details.wasAccepted) {
+                                setState(() {
+                                  _holdSelectedFrom = null;
+                                  _gambitSelectedFrom = null;
+                                  _legalTargets.clear();
+                                  _gambitAvailableTargets.clear();
+                                });
+                              }
+                            },
+                            childWhenDragging: Opacity(
+                              opacity: 0.2,
+                              child: _pieceImage(p),
+                            ),
+                            child: () {
+                              String? glowColor;
+                              if (_isOpeningSelectionMode &&
+                                  _gambitSelectedFrom == sq) {
+                                glowColor = _isGambitsOnlyOpeningMode
+                                    ? 'violet'
+                                    : 'yellow';
+                              } else if (_gambitPreviewLines.isNotEmpty &&
+                                  _getPreviewMoveSqares().contains(sq)) {
+                                glowColor = _isGambitsOnlyOpeningMode
+                                    ? 'violet'
+                                    : 'blue';
+                              }
+                              return _buildPieceWithGlow(p, glowColor);
+                            }(),
                           ),
-                          child: () {
-                            String? glowColor;
-                            if (_isOpeningSelectionMode &&
-                                _gambitSelectedFrom == sq) {
-                              glowColor = _isGambitsOnlyOpeningMode
-                                  ? 'violet'
-                                  : 'yellow';
-                            } else if (_gambitPreviewLines.isNotEmpty &&
-                                _getPreviewMoveSqares().contains(sq)) {
-                              glowColor = _isGambitsOnlyOpeningMode
-                                  ? 'violet'
-                                  : 'blue';
-                            }
-                            return _buildPieceWithGlow(p, glowColor);
-                          }(),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -6568,6 +6772,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }) {
     final showSuggestions =
         _shouldShowVisualSuggestions && _topLines.isNotEmpty;
+
+    if (_playVsBot) {
+      return const SizedBox.shrink();
+    }
 
     return SizedBox(
       height: height,
@@ -6749,36 +6957,117 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _analyze();
   }
 
-  Widget _buildBotUndoButton() {
-    final enabled = _moveHistory.isNotEmpty;
-    return GestureDetector(
-      onTap: enabled ? _undoBotTurn : null,
-      child: AnimatedOpacity(
-        opacity: enabled ? 1.0 : 0.4,
-        duration: const Duration(milliseconds: 150),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF173048), Color(0xFF245782)],
+  Widget _buildVsBotControlButton({
+    Key? controlKey,
+    required IconData icon,
+    required VoidCallback? onTap,
+    required Color accent,
+  }) {
+    final media = MediaQuery.of(context);
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final compactControl =
+        media.size.width <= 390 ||
+        (media.orientation == Orientation.landscape &&
+            media.size.height <= 430);
+    final controlSize = compactControl ? 52.0 : 56.0;
+    final controlRadius = compactControl ? 16.0 : 18.0;
+    final readableAccent = _vsBotReadableAccentColor(accent, arcade);
+
+    return AnimatedOpacity(
+      opacity: onTap == null ? 0.42 : 1.0,
+      duration: const Duration(milliseconds: 150),
+      child: SizedBox(
+        key: controlKey,
+        width: controlSize,
+        height: controlSize,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(controlRadius),
+            overlayColor: puzzleAcademyInteractiveOverlay(
+              palette: arcade.base,
+              accent: accent,
             ),
-            border: Border.all(
-              color: const Color(0xFF7FC4FF).withValues(alpha: 0.45),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF5AAEE8).withValues(alpha: 0.28),
-                blurRadius: 12,
-                spreadRadius: 1,
+            child: Ink(
+              decoration: _vsBotArcadePanelDecoration(
+                palette: arcade,
+                accent: accent,
+                radius: controlRadius,
+                borderWidth: 2.4,
+                inset: true,
+                elevated: onTap != null,
+                fillColor: arcade.panelAlt,
               ),
-            ],
+              child: Icon(
+                icon,
+                color: onTap == null ? arcade.textMuted : readableAccent,
+                size: compactControl ? 22 : 24,
+              ),
+            ),
           ),
-          child: const Icon(Icons.undo_rounded, color: Color(0xFF9ED8FF)),
         ),
       ),
+    );
+  }
+
+  Widget _buildVsBotActionPod({
+    required String label,
+    required Widget control,
+    required Color accent,
+  }) {
+    final media = MediaQuery.of(context);
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final compactPod =
+        media.size.width <= 390 ||
+        (media.orientation == Orientation.landscape &&
+            media.size.height <= 430);
+    final readableAccent = _vsBotReadableAccentColor(accent, arcade);
+
+    return SizedBox(
+      width: compactPod ? 70 : 78,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          control,
+          const SizedBox(height: 6),
+          Text(
+            label.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: puzzleAcademyIdentityStyle(
+              palette: arcade.base,
+              size: compactPod ? 6.2 : 6.8,
+              color: readableAccent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBotUndoButton() {
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final undoAccent = _selectedBot == null
+        ? arcade.cyan
+        : Color.lerp(
+            _vsBotProfileAccent(_selectedBot!.profile, arcade),
+            _botDifficultyColor(_selectedBotDifficulty),
+            0.35,
+          )!;
+
+    return _buildVsBotControlButton(
+      icon: Icons.undo_rounded,
+      onTap: _moveHistory.isNotEmpty ? _undoBotTurn : null,
+      accent: undoAccent,
     );
   }
 
@@ -6786,6 +7075,206 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
+
+    if (_playVsBot) {
+      final useMonochrome =
+          context.watch<AppThemeProvider>().isMonochrome ||
+          _isCinematicThemeEnabled;
+      final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+      final selectedBot = _selectedBot;
+      final profileAccent = selectedBot == null
+          ? arcade.cyan
+          : _vsBotProfileAccent(selectedBot.profile, arcade);
+      final difficultyAccent = selectedBot == null
+          ? arcade.amber
+          : _botDifficultyColor(_selectedBotDifficulty);
+      final statusAccent = _gameOutcome != null
+          ? (_gameOutcome == GameOutcome.draw
+                ? arcade.amber
+                : _isWinningOutcomeForPov
+                ? arcade.victory
+                : arcade.crimson)
+          : _botThinking
+          ? arcade.amber
+          : _isHumanTurnInBotGame
+          ? arcade.cyan
+          : arcade.crimson;
+      final statusLabel = _gameOutcome != null
+          ? 'MATCH END'
+          : _botThinking
+          ? 'BOT THINKING'
+          : _isHumanTurnInBotGame
+          ? 'PLAYER TURN'
+          : 'BOT TURN';
+      final filledTagForeground = arcade.monochrome
+          ? arcade.text
+          : const Color(0xFF0B0F16);
+
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: compactBottom,
+          left: horizontal,
+          right: horizontal,
+        ),
+        child: Container(
+          decoration: _vsBotArcadePanelDecoration(
+            palette: arcade,
+            accent: profileAccent,
+            radius: 22,
+            borderWidth: 2.8,
+            fillColor: arcade.panel,
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: LayoutBuilder(
+            builder: (context, inner) {
+              final compactDeck = inner.maxWidth <= 320;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  compactDeck
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'COMMAND DECK',
+                              style: puzzleAcademyIdentityStyle(
+                                palette: arcade.base,
+                                size: 8.0,
+                                color: profileAccent,
+                                withGlow: true,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: PuzzleAcademyTag(
+                                label: statusLabel,
+                                accent: statusAccent,
+                                compact: true,
+                                filled:
+                                    _gameOutcome == null &&
+                                    _isHumanTurnInBotGame,
+                                foregroundColor:
+                                    _gameOutcome == null &&
+                                        _isHumanTurnInBotGame
+                                    ? filledTagForeground
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'COMMAND DECK',
+                                style: puzzleAcademyIdentityStyle(
+                                  palette: arcade.base,
+                                  size: 8.0,
+                                  color: profileAccent,
+                                  withGlow: true,
+                                ),
+                              ),
+                            ),
+                            PuzzleAcademyTag(
+                              label: statusLabel,
+                              accent: statusAccent,
+                              compact: true,
+                              filled:
+                                  _gameOutcome == null && _isHumanTurnInBotGame,
+                              foregroundColor:
+                                  _gameOutcome == null && _isHumanTurnInBotGame
+                                  ? filledTagForeground
+                                  : null,
+                            ),
+                          ],
+                        ),
+                  const SizedBox(height: 10),
+                  Builder(
+                    builder: (context) {
+                      final actionSpacing = inner.maxWidth <= 280
+                          ? 4.0
+                          : inner.maxWidth <= 360
+                          ? 6.0
+                          : 8.0;
+                      final powerPod = _buildVsBotActionPod(
+                        label: _isEngineActive
+                            ? (_vsBotEvalBarOnly ? 'Power' : 'Hints')
+                            : 'Eval',
+                        accent: difficultyAccent,
+                        control: _buildSuggestionTriggerButton(),
+                      );
+                      final actionPods = <Widget>[
+                        _buildVsBotActionPod(
+                          label: 'Return',
+                          accent: arcade.crimson,
+                          control: _buildVsBotControlButton(
+                            icon: Icons.exit_to_app_rounded,
+                            onTap: _openBotSetupFromMenu,
+                            accent: arcade.crimson,
+                          ),
+                        ),
+                        _buildVsBotActionPod(
+                          label: 'Store',
+                          accent: arcade.amber,
+                          control: _buildVsBotControlButton(
+                            controlKey: _storeButtonKey,
+                            icon: Icons.storefront_outlined,
+                            onTap: _openStore,
+                            accent: arcade.amber,
+                          ),
+                        ),
+                        _buildVsBotActionPod(
+                          label: 'Undo',
+                          accent: profileAccent,
+                          control: _buildBotUndoButton(),
+                        ),
+                        _buildVsBotActionPod(
+                          label: 'Config',
+                          accent: arcade.cyan,
+                          control: _buildVsBotControlButton(
+                            icon: Icons.tune_rounded,
+                            onTap: () => _openSettings(fromAnalysisMode: false),
+                            accent: arcade.cyan,
+                          ),
+                        ),
+                      ];
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Align(alignment: Alignment.center, child: powerPod),
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (
+                                int index = 0;
+                                index < actionPods.length;
+                                index++
+                              ) ...[
+                                Expanded(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: actionPods[index],
+                                  ),
+                                ),
+                                if (index < actionPods.length - 1)
+                                  SizedBox(width: actionSpacing),
+                              ],
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.only(
