@@ -1,5 +1,79 @@
 ﻿part of '../screens/chess_analysis_page.dart';
 
+class _PendingMoveQualityGrading {
+  static const Object _sentinel = Object();
+
+  const _PendingMoveQualityGrading({
+    required this.moveIndex,
+    required this.uci,
+    required this.moverIsWhite,
+    required this.preMoveFen,
+    required this.preMoveLines,
+    required this.moverMaterialBefore,
+    required this.moverMaterialAfter,
+    required this.chargeBefore,
+    this.playedMoveRank,
+    this.cpGapFromBest,
+    this.preMoveMoverWinProbability,
+    this.preMoveMoverEvalPawns,
+    this.postMoveFen,
+    this.postMoveWhiteToMove,
+  });
+
+  final int moveIndex;
+  final String uci;
+  final bool moverIsWhite;
+  final String preMoveFen;
+  final List<EngineLine> preMoveLines;
+  final double moverMaterialBefore;
+  final double moverMaterialAfter;
+  final int chargeBefore;
+  final int? playedMoveRank;
+  final int? cpGapFromBest;
+  final double? preMoveMoverWinProbability;
+  final double? preMoveMoverEvalPawns;
+  final String? postMoveFen;
+  final bool? postMoveWhiteToMove;
+
+  _PendingMoveQualityGrading copyWith({
+    Object? postMoveFen = _sentinel,
+    Object? postMoveWhiteToMove = _sentinel,
+  }) {
+    return _PendingMoveQualityGrading(
+      moveIndex: moveIndex,
+      uci: uci,
+      moverIsWhite: moverIsWhite,
+      preMoveFen: preMoveFen,
+      preMoveLines: preMoveLines,
+      moverMaterialBefore: moverMaterialBefore,
+      moverMaterialAfter: moverMaterialAfter,
+      chargeBefore: chargeBefore,
+      playedMoveRank: playedMoveRank,
+      cpGapFromBest: cpGapFromBest,
+      preMoveMoverWinProbability: preMoveMoverWinProbability,
+      preMoveMoverEvalPawns: preMoveMoverEvalPawns,
+      postMoveFen: identical(postMoveFen, _sentinel)
+          ? this.postMoveFen
+          : postMoveFen as String?,
+      postMoveWhiteToMove: identical(postMoveWhiteToMove, _sentinel)
+          ? this.postMoveWhiteToMove
+          : postMoveWhiteToMove as bool?,
+    );
+  }
+
+  bool get isSacrifice => moverMaterialAfter < moverMaterialBefore;
+}
+
+class _GradingSearchSnapshot {
+  const _GradingSearchSnapshot({
+    required this.lines,
+    required this.whiteToMove,
+  });
+
+  final List<EngineLine> lines;
+  final bool whiteToMove;
+}
+
 abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   static const String _lastBotIndexKey = 'last_bot_index_v1';
@@ -16,6 +90,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
+  static const int _moveQualityGradingMultiPv = 4;
+  static const int _openingFeedbackOnlyPlyCount = 6;
 
   late Map<String, String> boardState;
   EngineService? _engine;
@@ -120,6 +196,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   PieceThemeMode _pieceThemeMode = _defaultPieceTheme;
 
   List<EngineLine> _topLines = [];
+  List<EngineLine> _analysisLines = [];
   final List<MoveRecord> _moveHistory = [];
   int _historyIndex = -1;
   late ScrollController _historyScrollController;
@@ -160,6 +237,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Completer<List<EngineLine>>? _botSearchCompleter;
   final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
   int _botSearchMultiPv = 1;
+  Completer<_GradingSearchSnapshot?>? _gradingSearchCompleter;
+  final Map<int, EngineLine> _gradingSearchLines = <int, EngineLine>{};
+  int _gradingSearchMultiPv = 1;
+  bool _gradingSearchWhiteToMove = true;
+  _PendingMoveQualityGrading? _pendingMoveQualityGrading;
   final PageController _botSetupPageController = PageController(
     viewportFraction: 0.60,
   );
@@ -188,7 +270,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _academyTuitionPassOwned = false;
   bool _introCompleted = true;
   bool _suggestionsEnabled = false;
-  bool _vsBotEvalBarOnly = false;
+  bool _vsBotEvalEnabled = false;
+  bool _vsBotOptimalLineRevealActive = false;
+  int _vsBotCharge = 0;
   bool _suggestionLaunchInProgress = false;
   bool _suggestionBurstActive = false;
   Offset? _launchStart;
@@ -210,6 +294,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _analysisEditMode = false;
   Timer? _editModeHintTimer;
   String? _editModeHintText;
+  Timer? _moveQualityOverlayTimer;
+  MoveQuality? _moveQualityOverlayQuality;
+  String? _moveQualityOverlayTitle;
+  String? _moveQualityOverlayMessage;
+  int? _moveQualityOverlayChargeDelta;
+  MoveQualityScoringSuppressionReason?
+  _moveQualityOverlayScoringSuppressedReason;
+  MoveQuality? _lastMoveQualityBadgeQuality;
+  String? _lastMoveQualityBadgeSquare;
   final Set<String> _viewedGambits = <String>{};
   String _quizPrompt = '';
   String _quizPromptFocus = '';
@@ -1145,28 +1238,201 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   int get _effectiveMultiPvCount => max(1, _multiPvCount);
 
-  bool get _isEngineActive => _suggestionsEnabled;
+  int get _visualSuggestionLineCount =>
+      _playVsBot ? max(1, _multiPvCount) : _effectiveMultiPvCount;
 
-  bool get _shouldShowVisualSuggestions =>
-      _isEngineActive &&
-      _multiPvCount > 0 &&
-      !(_playVsBot && _vsBotEvalBarOnly);
+  int get _analysisMultiPvCount {
+    final visibleCount = _shouldShowVisualSuggestions
+        ? _visualSuggestionLineCount
+        : 1;
+    final needsGradingContext =
+        !kIsWeb &&
+        (_playVsBot
+            ? _vsBotEvalEnabled && _isHumanTurnInBotGame
+            : _suggestionsEnabled);
+    return max(
+      visibleCount,
+      needsGradingContext ? _moveQualityGradingMultiPv : 1,
+    );
+  }
 
-  bool get _shouldKeepEvalActive => _isEngineActive;
+  bool get _isEngineActive =>
+      _playVsBot ? _vsBotEvalEnabled : _suggestionsEnabled;
 
-  bool get _shouldShowCenterEvalCounter =>
-      _shouldKeepEvalActive && !(_playVsBot && _vsBotEvalBarOnly);
+  bool get _shouldShowVisualSuggestions => _playVsBot
+      ? _vsBotOptimalLineRevealActive && _isHumanTurnInBotGame
+      : _isEngineActive && _multiPvCount > 0;
+
+  bool get _shouldKeepEvalActive =>
+      _playVsBot ? _vsBotEvalEnabled : _isEngineActive;
+
+  bool get _shouldShowCenterEvalCounter => _shouldKeepEvalActive && !_playVsBot;
 
   bool get _shouldShowDepthCounter => _shouldShowCenterEvalCounter;
 
   void _disableEngineInsights() {
     setState(() {
-      _suggestionsEnabled = false;
-      _vsBotEvalBarOnly = false;
+      if (_playVsBot) {
+        _vsBotOptimalLineRevealActive = false;
+      } else {
+        _suggestionsEnabled = false;
+      }
       _topLines = [];
+      _analysisLines = [];
       _currentDepth = 0;
     });
     _send('stop');
+  }
+
+  int? get _vsBotDifficultyElo => !_playVsBot || _selectedBot == null
+      ? null
+      : _selectedBot!.settingsFor(_selectedBotDifficulty).elo;
+
+  void _clearMoveQualityOverlay() {
+    _moveQualityOverlayTimer?.cancel();
+    _moveQualityOverlayTimer = null;
+    _moveQualityOverlayQuality = null;
+    _moveQualityOverlayTitle = null;
+    _moveQualityOverlayMessage = null;
+    _moveQualityOverlayChargeDelta = null;
+    _moveQualityOverlayScoringSuppressedReason = null;
+  }
+
+  void _clearMoveQualityBadge() {
+    _lastMoveQualityBadgeQuality = null;
+    _lastMoveQualityBadgeSquare = null;
+  }
+
+  void _cancelPendingMoveQualityGrading() {
+    final active = _gradingSearchCompleter;
+    if (active != null && !active.isCompleted) {
+      active.complete(null);
+    }
+    _gradingSearchCompleter = null;
+    _gradingSearchLines.clear();
+    _pendingMoveQualityGrading = null;
+  }
+
+  double _pieceMaterialValue(String piece) {
+    switch (piece[0]) {
+      case 'p':
+        return 1.0;
+      case 'n':
+      case 'b':
+        return 3.0;
+      case 't':
+        return 5.0;
+      case 'q':
+        return 9.0;
+      default:
+        return 0.0;
+    }
+  }
+
+  double _materialCountForSide(Map<String, String> state, bool whiteSide) {
+    var total = 0.0;
+    for (final piece in state.values) {
+      if (piece.endsWith('_w') != whiteSide) {
+        continue;
+      }
+      total += _pieceMaterialValue(piece);
+    }
+    return total;
+  }
+
+  double _whiteEvalPawnsFromLiveState() {
+    return _evalWhiteTurn ? _currentEval : -_currentEval;
+  }
+
+  double _moverEvalPawnsFromWhiteEval(
+    double whiteEvalPawns,
+    bool moverIsWhite,
+  ) {
+    return moverIsWhite ? whiteEvalPawns : -whiteEvalPawns;
+  }
+
+  double _moverWinProbabilityFromWhiteEval(
+    double whiteEvalPawns,
+    bool moverIsWhite,
+  ) {
+    return centipawnsToWinProbability(
+      _moverEvalPawnsFromWhiteEval(whiteEvalPawns, moverIsWhite) * 100,
+    );
+  }
+
+  double _moverWinProbabilityFromEngineLine(
+    EngineLine line, {
+    required bool whiteToMove,
+    required bool moverIsWhite,
+  }) {
+    final whiteCentipawns = whiteToMove ? line.eval : -line.eval;
+    return whiteCentipawnsToMoverWinProbability(
+      whiteCentipawns,
+      moverIsWhite: moverIsWhite,
+    );
+  }
+
+  int _preservingContinuationCount(
+    List<EngineLine> lines,
+    bool Function(double winProbability) predicate,
+  ) {
+    var count = 0;
+    for (final line in lines) {
+      if (predicate(centipawnsToWinProbability(line.eval))) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  int? _moveRankFromLines(List<EngineLine> lines, String uciMove) {
+    for (final line in lines) {
+      if (line.move == uciMove) {
+        return line.multiPv;
+      }
+    }
+    return null;
+  }
+
+  int? _cpGapFromBestFromLines(List<EngineLine> lines, String uciMove) {
+    if (lines.isEmpty) {
+      return null;
+    }
+    final bestEval = lines.first.eval;
+    for (final line in lines) {
+      if (line.move == uciMove) {
+        return max(0, bestEval - line.eval);
+      }
+    }
+    return null;
+  }
+
+  bool _openingFeedbackOnlyApplies(int moveIndex) {
+    return moveIndex < _openingFeedbackOnlyPlyCount;
+  }
+
+  MoveQualityConfidence _moveQualityConfidence({
+    required List<EngineLine> preMoveLines,
+    required int? playedMoveRank,
+    required int? cpGapFromBest,
+    required bool insideOpeningExemption,
+    required bool usedPreMoveFallback,
+  }) {
+    final hasDirectComparison = playedMoveRank != null || cpGapFromBest != null;
+    if (insideOpeningExemption && !hasDirectComparison) {
+      return MoveQualityConfidence.low;
+    }
+    if (preMoveLines.length >= _moveQualityGradingMultiPv &&
+        hasDirectComparison) {
+      return MoveQualityConfidence.high;
+    }
+    if (preMoveLines.length >= 2 && hasDirectComparison) {
+      return MoveQualityConfidence.medium;
+    }
+    if (usedPreMoveFallback && preMoveLines.length >= 2) {
+      return MoveQualityConfidence.medium;
+    }
+    return MoveQualityConfidence.low;
   }
 
   bool _isBoardThemeUnlocked(BoardThemeMode mode) {
@@ -1462,6 +1728,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     unawaited(_saveCurrentAsDefaultSnapshot(logChange: false));
   }
 
+  void _applySuggestionCount(int value, {bool persist = false}) {
+    final clampedValue = value.clamp(0, _maxSuggestionsAllowed);
+    setState(() {
+      _multiPvCount = clampedValue;
+    });
+    _analyze();
+    if (persist) {
+      _persistCurrentSettings();
+    }
+  }
+
   void _persistAnalysisSnapshotIfNeeded() {
     if (_playVsBot || _activeSection != AppSection.analysis) return;
     _persistCurrentSettings();
@@ -1538,6 +1815,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _send('ucinewgame');
     _clearBotGhostArrows();
     _clearVsBotOverlayState();
+    _cancelPendingMoveQualityGrading();
+    _clearMoveQualityOverlay();
+    _clearMoveQualityBadge();
     boardState = _initialBoardState();
     _isWhiteTurn = true;
     _resetSpecialMoveState();
@@ -1552,6 +1832,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _selectedGambit = null;
     _gambitPreviewLines = [];
     _suggestionsEnabled = false;
+    _vsBotEvalEnabled = _playVsBot;
+    _vsBotOptimalLineRevealActive = false;
+    _vsBotCharge = 0;
     _suggestionLaunchInProgress = false;
     _suggestionBurstActive = false;
     _botThinking = false;
@@ -1561,6 +1844,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _launchTargets = <Offset>[];
     _launchTargetsEvalBar = false;
     _topLines = [];
+    _analysisLines = [];
     _currentDepth = 0;
     _currentEval = 0.0;
     _evalWhiteTurn = true;
@@ -1641,11 +1925,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _analyze() {
     final shouldShowVisualSuggestions = _shouldShowVisualSuggestions;
-    if ((_playVsBot && !_isHumanTurnInBotGame) ||
-        (!_shouldKeepEvalActive && !shouldShowVisualSuggestions)) {
+    if (!_shouldKeepEvalActive && !shouldShowVisualSuggestions) {
       _send('stop');
       setState(() {
         _topLines = [];
+        _analysisLines = [];
         _currentDepth = 0;
       });
       return;
@@ -1653,46 +1937,536 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _send('stop');
     setState(() {
       _topLines = [];
+      _analysisLines = [];
       _currentDepth = 0;
     });
-    _send(
-      'setoption name MultiPV value ${shouldShowVisualSuggestions ? _effectiveMultiPvCount : 1}',
-    );
+    _send('setoption name MultiPV value $_analysisMultiPvCount');
     _send('position fen ${_genFen()}');
     _send('go depth $_engineDepth');
   }
 
-  void _applySuggestionCount(int count, {bool persist = false}) {
-    final nextCount = count.clamp(0, _maxSuggestionsAllowed);
-    final changed = nextCount != _multiPvCount;
+  _PendingMoveQualityGrading? _capturePendingMoveQualityGrading({
+    required String uciMove,
+    required bool moverIsWhite,
+    required Map<String, String> nextBoardState,
+  }) {
+    final canGrade =
+        !kIsWeb && (_playVsBot ? _vsBotEvalEnabled : _suggestionsEnabled);
+    if (!canGrade) {
+      return null;
+    }
+    if (_playVsBot && moverIsWhite != _humanPlaysWhite) {
+      return null;
+    }
 
-    setState(() {
-      _multiPvCount = nextCount;
-      if (nextCount <= 0) {
-        _topLines = [];
-        _currentDepth = 0;
-      } else {
-        _topLines =
-            _topLines.where((line) => line.multiPv <= nextCount).toList()
-              ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+    final preMoveWhiteEval = _currentDepth > 0
+        ? _whiteEvalPawnsFromLiveState()
+        : null;
+    final preMoveLines = List<EngineLine>.from(_analysisLines)
+      ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+    return _PendingMoveQualityGrading(
+      moveIndex: _historyIndex + 1,
+      uci: uciMove,
+      moverIsWhite: moverIsWhite,
+      preMoveFen: _genFen(),
+      preMoveLines: preMoveLines,
+      moverMaterialBefore: _materialCountForSide(boardState, moverIsWhite),
+      moverMaterialAfter: _materialCountForSide(nextBoardState, moverIsWhite),
+      chargeBefore: _vsBotCharge,
+      playedMoveRank: _moveRankFromLines(preMoveLines, uciMove),
+      cpGapFromBest: _cpGapFromBestFromLines(preMoveLines, uciMove),
+      preMoveMoverEvalPawns: preMoveWhiteEval == null
+          ? null
+          : _moverEvalPawnsFromWhiteEval(preMoveWhiteEval, moverIsWhite),
+      preMoveMoverWinProbability: preMoveWhiteEval == null
+          ? null
+          : _moverWinProbabilityFromWhiteEval(preMoveWhiteEval, moverIsWhite),
+    );
+  }
+
+  _GradingSearchSnapshot? _buildCurrentGradingSearchSnapshot() {
+    final lines = _gradingSearchLines.values.toList()
+      ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+    if (lines.isEmpty) {
+      return null;
+    }
+    return _GradingSearchSnapshot(
+      lines: lines,
+      whiteToMove: _gradingSearchWhiteToMove,
+    );
+  }
+
+  Future<_GradingSearchSnapshot?> _requestGradingSearch({
+    required String fen,
+    required bool whiteToMove,
+    int multiPv = _moveQualityGradingMultiPv,
+  }) async {
+    await _ensureEngineStarted();
+    if (_engine == null) {
+      return null;
+    }
+
+    _gradingSearchLines.clear();
+    _gradingSearchMultiPv = multiPv;
+    _gradingSearchWhiteToMove = whiteToMove;
+    final completer = Completer<_GradingSearchSnapshot?>();
+    _gradingSearchCompleter = completer;
+
+    _send('stop');
+    _send('setoption name MultiPV value $multiPv');
+    _send('position fen $fen');
+    _send('go depth $_engineDepth');
+
+    try {
+      final gradingTimeout = Duration(milliseconds: _playVsBot ? 700 : 1200);
+      return await completer.future.timeout(
+        gradingTimeout,
+        onTimeout: _buildCurrentGradingSearchSnapshot,
+      );
+    } finally {
+      if (identical(_gradingSearchCompleter, completer)) {
+        _gradingSearchCompleter = null;
       }
-    });
-
-    if (changed) {
-      _send('stop');
-      _send('setoption name MultiPV value ${max(1, nextCount)}');
-      if (_shouldKeepEvalActive || (_suggestionsEnabled && nextCount > 0)) {
+      _gradingSearchLines.clear();
+      _send(
+        'setoption name MultiPV value ${_shouldShowVisualSuggestions ? _visualSuggestionLineCount : 1}',
+      );
+      if (_shouldKeepEvalActive || _shouldShowVisualSuggestions) {
         _analyze();
       }
     }
+  }
 
-    if (persist) {
-      _persistCurrentSettings();
+  Future<void> _finalizePendingMoveQualityGrading(
+    _PendingMoveQualityGrading pending, {
+    EngineLine? livePostMoveLine,
+    bool? livePostMoveWhiteToMove,
+  }) async {
+    var preMoveLines = pending.preMoveLines;
+    var preMoveMoverWinProbability = pending.preMoveMoverWinProbability;
+    var preMoveMoverEvalPawns = pending.preMoveMoverEvalPawns;
+    var usedPreMoveFallback = false;
+
+    if (preMoveMoverWinProbability == null ||
+        preMoveLines.length < _moveQualityGradingMultiPv) {
+      final fallback = await _requestGradingSearch(
+        fen: pending.preMoveFen,
+        whiteToMove: pending.moverIsWhite,
+      );
+      if (fallback != null) {
+        usedPreMoveFallback = true;
+        preMoveLines = fallback.lines;
+        if (preMoveLines.isNotEmpty) {
+          final preMoveLine = preMoveLines.first;
+          final preMoveWhiteEvalPawns = fallback.whiteToMove
+              ? preMoveLine.eval / 100.0
+              : -preMoveLine.eval / 100.0;
+          preMoveMoverWinProbability = _moverWinProbabilityFromEngineLine(
+            preMoveLine,
+            whiteToMove: fallback.whiteToMove,
+            moverIsWhite: pending.moverIsWhite,
+          );
+          preMoveMoverEvalPawns = _moverEvalPawnsFromWhiteEval(
+            preMoveWhiteEvalPawns,
+            pending.moverIsWhite,
+          );
+        }
+      }
+    }
+
+    EngineLine? postMoveLine = livePostMoveLine;
+    var postMoveWhiteToMove =
+        livePostMoveWhiteToMove ?? pending.postMoveWhiteToMove ?? _isWhiteTurn;
+    if (postMoveLine == null) {
+      final postMoveFen = pending.postMoveFen;
+      if (postMoveFen == null) {
+        return;
+      }
+      final fallback = await _requestGradingSearch(
+        fen: postMoveFen,
+        whiteToMove: postMoveWhiteToMove,
+      );
+      if (fallback == null || fallback.lines.isEmpty) {
+        return;
+      }
+      postMoveLine = fallback.lines.first;
+      postMoveWhiteToMove = fallback.whiteToMove;
+    }
+
+    if (!mounted || pending.moveIndex >= _moveHistory.length) {
+      return;
+    }
+    final currentMove = _moveHistory[pending.moveIndex];
+    if (currentMove.uci != pending.uci) {
+      return;
+    }
+
+    final postMoveMoverWinProbability = _moverWinProbabilityFromEngineLine(
+      postMoveLine,
+      whiteToMove: postMoveWhiteToMove,
+      moverIsWhite: pending.moverIsWhite,
+    );
+    final effectivePreMoveMoverWinProbability =
+        preMoveMoverWinProbability ?? postMoveMoverWinProbability;
+    final loss = deltaWpLoss(
+      bestContinuationMoverWinProbability: effectivePreMoveMoverWinProbability,
+      playedMoveMoverWinProbability: postMoveMoverWinProbability,
+    );
+    final insideOpeningExemption = _openingFeedbackOnlyApplies(
+      pending.moveIndex,
+    );
+    final playedMoveRank =
+        pending.playedMoveRank ?? _moveRankFromLines(preMoveLines, pending.uci);
+    final cpGapFromBest =
+        pending.cpGapFromBest ??
+        _cpGapFromBestFromLines(preMoveLines, pending.uci);
+    final confidence = _moveQualityConfidence(
+      preMoveLines: preMoveLines,
+      playedMoveRank: playedMoveRank,
+      cpGapFromBest: cpGapFromBest,
+      insideOpeningExemption: insideOpeningExemption,
+      usedPreMoveFallback: usedPreMoveFallback,
+    );
+
+    final previousMove = pending.moveIndex > 0
+        ? _moveHistory[pending.moveIndex - 1]
+        : null;
+    double? availableReplySwing;
+    double? capturedReplySwing;
+    if (previousMove != null &&
+        previousMove.preMoveWinProbability != null &&
+        previousMove.postMoveWinProbability != null &&
+        previousMove.isWhite != pending.moverIsWhite) {
+      final currentMoverBeforeOpponent =
+          1 - previousMove.preMoveWinProbability!;
+      final currentMoverAfterOpponent =
+          1 - previousMove.postMoveWinProbability!;
+      availableReplySwing =
+          currentMoverAfterOpponent - currentMoverBeforeOpponent;
+      capturedReplySwing =
+          postMoveMoverWinProbability - currentMoverBeforeOpponent;
+    }
+
+    final assessment = classifyMoveQuality(
+      MoveQualityClassificationContext(
+        deltaWpLoss: loss,
+        playerStrengthEstimate:
+            _playVsBot && pending.moverIsWhite == _humanPlaysWhite
+            ? _vsBotDifficultyElo
+            : null,
+        preMoveMoverWinProbability: effectivePreMoveMoverWinProbability,
+        postMoveMoverWinProbability: postMoveMoverWinProbability,
+        preMoveMoverEvalPawns: preMoveMoverEvalPawns ?? 0.0,
+        cpGapFromBest: cpGapFromBest,
+        playedMoveRank: playedMoveRank,
+        insideOpeningExemption: insideOpeningExemption,
+        confidence: confidence,
+        isSacrifice: pending.isSacrifice,
+        preservingNonLosingContinuationCount: _preservingContinuationCount(
+          preMoveLines,
+          isNonLosingWinProbability,
+        ),
+        preservingWinningContinuationCount: _preservingContinuationCount(
+          preMoveLines,
+          isWinningWinProbability,
+        ),
+        previousOpponentQuality: previousMove?.quality,
+        availableReplySwing: availableReplySwing,
+        capturedReplySwing: capturedReplySwing,
+      ),
+    );
+
+    final isHumanVsBotMove =
+        _playVsBot && pending.moverIsWhite == _humanPlaysWhite;
+    final quality = assessment.quality;
+    final badgeSquare = pending.uci.length >= 4
+        ? pending.uci.substring(2, 4)
+        : null;
+    final chargeAfter = isHumanVsBotMove
+        ? updatedMoveQualityCharge(
+            current: pending.chargeBefore,
+            assessment: assessment,
+          )
+        : pending.chargeBefore;
+    final updatedMove = currentMove.copyWith(
+      quality: quality,
+      preMoveWinProbability: effectivePreMoveMoverWinProbability,
+      postMoveWinProbability: postMoveMoverWinProbability,
+      deltaWinProbabilityLoss: loss,
+      qualityExplanation: assessment.explanation,
+      moveRank: assessment.moveRank,
+      cpGapFromBest: assessment.cpGapFromBest,
+      qualityConfidence: assessment.confidence,
+      isSacrifice: pending.isSacrifice,
+      chargeBefore: pending.chargeBefore,
+      chargeAfter: chargeAfter,
+      scoringSuppressedReason: assessment.scoringSuppressedReason,
+    );
+
+    setState(() {
+      if (pending.moveIndex < _moveHistory.length &&
+          _moveHistory[pending.moveIndex].uci == pending.uci) {
+        _moveHistory[pending.moveIndex] = updatedMove;
+      }
+      if (isHumanVsBotMove) {
+        _vsBotCharge = chargeAfter;
+      }
+      if (!_playVsBot || isHumanVsBotMove) {
+        _lastMoveQualityBadgeQuality = quality;
+        _lastMoveQualityBadgeSquare = badgeSquare;
+        _showMoveQualityOverlay(
+          updatedMove,
+          chargeAfter - pending.chargeBefore,
+        );
+      }
+    });
+
+    if (_playVsBot &&
+        !_isHumanTurnInBotGame &&
+        !_botThinking &&
+        _gameOutcome == null) {
+      unawaited(_maybeTriggerBotMove());
     }
   }
 
+  void _showMoveQualityOverlay(MoveRecord move, int chargeDelta) {
+    final quality = move.quality;
+    if (quality == null) {
+      return;
+    }
+    _moveQualityOverlayTimer?.cancel();
+    _moveQualityOverlayQuality = quality;
+    _moveQualityOverlayTitle = quality == MoveQuality.masterstroke
+        ? 'MASTERSTROKE!'
+        : quality == MoveQuality.crucial
+        ? 'CRUCIAL!'
+        : quality.label.toUpperCase();
+    _moveQualityOverlayMessage = move.qualityExplanation ?? quality.explanation;
+    _moveQualityOverlayChargeDelta = _playVsBot ? chargeDelta : null;
+    _moveQualityOverlayScoringSuppressedReason = move.scoringSuppressedReason;
+    _moveQualityOverlayTimer = Timer(const Duration(milliseconds: 2400), () {
+      if (!mounted) {
+        return;
+      }
+      setState(_clearMoveQualityOverlay);
+    });
+  }
+
+  Color _vsBotChargeColor(double progress, _VsBotArcadePalette arcade) {
+    if (progress <= 0.5) {
+      return Color.lerp(arcade.crimson, arcade.amber, progress / 0.5)!;
+    }
+    return Color.lerp(arcade.amber, arcade.cyan, (progress - 0.5) / 0.5)!;
+  }
+
+  Future<void> _activateVsBotOptimalLineReveal() async {
+    if (!_playVsBot || !_isHumanTurnInBotGame || _vsBotCharge < 100) {
+      return;
+    }
+    setState(() {
+      _vsBotCharge = 0;
+      _vsBotOptimalLineRevealActive = true;
+      _topLines = [];
+      _currentDepth = 0;
+    });
+    _analyze();
+  }
+
+  Widget _buildMoveQualityBanner({required bool isLandscape}) {
+    final quality = _moveQualityOverlayQuality;
+    final title = _moveQualityOverlayTitle;
+    final message = _moveQualityOverlayMessage;
+    if (quality == null || title == null || message == null) {
+      return const SizedBox.shrink();
+    }
+
+    final contentPadding = EdgeInsets.fromLTRB(
+      isLandscape ? 0 : 16,
+      isLandscape ? 6 : 2,
+      isLandscape ? 0 : 16,
+      isLandscape ? 8 : 10,
+    );
+
+    if (_playVsBot) {
+      final useMonochrome =
+          context.watch<AppThemeProvider>().isMonochrome ||
+          _isCinematicThemeEnabled;
+      final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+      final accent = quality.color;
+      final chargeDelta = _moveQualityOverlayChargeDelta;
+      final chargeText = switch (_moveQualityOverlayScoringSuppressedReason) {
+        MoveQualityScoringSuppressionReason.openingFeedbackOnly =>
+          'No points in opening',
+        MoveQualityScoringSuppressionReason.obviousMove =>
+          'No points for obvious move',
+        null =>
+          chargeDelta == null
+              ? null
+              : chargeDelta > 0
+              ? '+$chargeDelta charge'
+              : chargeDelta < 0
+              ? '$chargeDelta charge'
+              : 'Charge steady',
+      };
+
+      return IgnorePointer(
+        child: Center(
+          child: Padding(
+            padding: contentPadding,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: isLandscape ? 280 : 320),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: _vsBotArcadePanelDecoration(
+                  palette: arcade,
+                  accent: accent,
+                  radius: 18,
+                  borderWidth: 2.2,
+                  inset: true,
+                  elevated: false,
+                  fillColor: arcade.panelAlt,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          quality.displaySymbol,
+                          style: puzzleAcademyIdentityStyle(
+                            palette: arcade.base,
+                            size: quality == MoveQuality.masterstroke ? 12 : 10,
+                            color: accent,
+                            withGlow: true,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: puzzleAcademyIdentityStyle(
+                              palette: arcade.base,
+                              size: 7.8,
+                              color: accent,
+                              withGlow: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      style: GoogleFonts.pixelifySans(
+                        color: arcade.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        height: 1.14,
+                      ),
+                    ),
+                    if (chargeText != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        chargeText.toUpperCase(),
+                        style: puzzleAcademyIdentityStyle(
+                          palette: arcade.base,
+                          size: 6.4,
+                          color: accent,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return IgnorePointer(
+      child: Center(
+        child: Padding(
+          padding: contentPadding,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: isLandscape ? 300 : 340),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0E1420).withValues(alpha: 0.94),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: quality.color.withValues(alpha: 0.42),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: quality.color.withValues(alpha: 0.20),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        quality.displaySymbol,
+                        style: TextStyle(
+                          color: quality.color,
+                          fontSize: quality == MoveQuality.masterstroke
+                              ? 22
+                              : 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _parseOutput(String line) {
+    final activeGradingSearch = _gradingSearchCompleter;
+    final gradingSearchActive =
+        activeGradingSearch != null && !activeGradingSearch.isCompleted;
+
     if (line.startsWith('bestmove')) {
+      if (gradingSearchActive) {
+        activeGradingSearch.complete(_buildCurrentGradingSearchSnapshot());
+        return;
+      }
+
       final activeSearch = _botSearchCompleter;
       if (activeSearch != null && !activeSearch.isCompleted) {
         final sorted = _sortedBotSearchLines();
@@ -1719,14 +2493,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final botSearchActive = activeSearch != null && !activeSearch.isCompleted;
     final shouldShowVisualSuggestions =
         _shouldShowVisualSuggestions && (!_playVsBot || _isHumanTurnInBotGame);
-    if (!botSearchActive &&
+    final analysisMultiPvCount = _analysisMultiPvCount;
+    if (!gradingSearchActive &&
+        !botSearchActive &&
         !shouldShowVisualSuggestions &&
         !_shouldKeepEvalActive) {
       return;
     }
-    if (_gameOutcome != null && !botSearchActive) {
+    if (_gameOutcome != null && !botSearchActive && !gradingSearchActive) {
       return;
     }
+
     final d = RegExp(r'depth (\d+)').firstMatch(line);
     final pv = RegExp(r'multipv (\d+)').firstMatch(line);
     final m = RegExp(r'pv ([a-h][1-8][a-h][1-8][nbrq]?)').firstMatch(line);
@@ -1734,11 +2511,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final sMate = RegExp(r'score mate (-?\d+)').firstMatch(line);
 
     if (d != null && pv != null && m != null) {
-      int depth = int.parse(d.group(1)!);
-      int multiPv = int.parse(pv.group(1)!);
-      final maxMultiPvAllowed = botSearchActive
+      final depth = int.parse(d.group(1)!);
+      final multiPv = int.parse(pv.group(1)!);
+      final maxMultiPvAllowed = gradingSearchActive
+          ? _gradingSearchMultiPv
+          : botSearchActive
           ? _botSearchMultiPv
-          : (shouldShowVisualSuggestions ? _multiPvCount : 1);
+          : analysisMultiPvCount;
       if (multiPv > maxMultiPvAllowed) {
         return;
       }
@@ -1746,6 +2525,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!_isLegalUciMove(move)) {
         return;
       }
+
       int cp;
       double normalizedEval;
       if (sCp != null) {
@@ -1768,13 +2548,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         normalizedEval = 0.0;
       }
 
+      if (gradingSearchActive) {
+        if (multiPv <= _gradingSearchMultiPv) {
+          _gradingSearchLines[multiPv] = EngineLine(move, cp, depth, multiPv);
+        }
+        return;
+      }
+
       if (botSearchActive) {
-        // Recovery guard: if bot search state leaked, unblock normal analysis.
         if (!_playVsBot || !_botThinking) {
           _botSearchCompleter = null;
         }
+        final parsedLine = EngineLine(move, cp, depth, multiPv);
         if (multiPv <= _botSearchMultiPv) {
-          _botSearchLines[multiPv] = EngineLine(move, cp, depth, multiPv);
+          _botSearchLines[multiPv] = parsedLine;
+        }
+        if (_shouldKeepEvalActive && multiPv == 1) {
+          setState(() {
+            _currentDepth = depth;
+            _currentEval = normalizedEval;
+            _evalWhiteTurn = _isWhiteTurn;
+          });
+        }
+        if (multiPv == 1) {
+          final pending = _pendingMoveQualityGrading;
+          if (pending != null) {
+            _pendingMoveQualityGrading = null;
+            unawaited(
+              _finalizePendingMoveQualityGrading(
+                pending,
+                livePostMoveLine: parsedLine,
+                livePostMoveWhiteToMove: _isWhiteTurn,
+              ),
+            );
+          }
         }
         if (_botSearchCompleter != null) {
           return;
@@ -1789,9 +2596,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             _evalWhiteTurn = _isWhiteTurn;
           }
         }
+        _analysisLines.removeWhere(
+          (e) => e.multiPv == multiPv || e.multiPv > analysisMultiPvCount,
+        );
+        _analysisLines.add(EngineLine(move, cp, depth, multiPv));
+        _analysisLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
         if (shouldShowVisualSuggestions) {
           _topLines.removeWhere(
-            (e) => e.multiPv == multiPv || e.multiPv > _multiPvCount,
+            (e) =>
+                e.multiPv == multiPv || e.multiPv > _visualSuggestionLineCount,
           );
           _topLines.add(EngineLine(move, cp, depth, multiPv));
           _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
@@ -1799,6 +2612,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _topLines = [];
         }
       });
+
+      if (multiPv == 1) {
+        final pending = _pendingMoveQualityGrading;
+        if (pending != null) {
+          _pendingMoveQualityGrading = null;
+          unawaited(
+            _finalizePendingMoveQualityGrading(
+              pending,
+              livePostMoveLine: EngineLine(move, cp, depth, multiPv),
+              livePostMoveWhiteToMove: _isWhiteTurn,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -3096,6 +3923,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         if (wasBotGame) {
           _suggestionsEnabled = false;
           _topLines = [];
+          _analysisLines = [];
           _currentDepth = 0;
           _botSearchCompleter = null;
           _botSearchLines.clear();
@@ -3784,6 +4612,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     if (from == to) return;
+    final previousPendingGrading = _pendingMoveQualityGrading;
+    if (previousPendingGrading != null) {
+      _pendingMoveQualityGrading = null;
+      unawaited(_finalizePendingMoveQualityGrading(previousPendingGrading));
+    }
+    final moverIsWhite = _isWhiteTurn;
     String piece = boardState[from]!;
     final normalizedPromotion = promotion == 'r' ? 't' : promotion;
     final uciPromotion = normalizedPromotion == null
@@ -3807,6 +4641,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       uciMove,
       enPassantTarget: _enPassantTarget,
     );
+    final pendingMoveQuality = _capturePendingMoveQualityGrading(
+      uciMove: uciMove,
+      moverIsWhite: moverIsWhite,
+      nextBoardState: nextBoardState,
+    );
+    final isHumanVsBotMove = _playVsBot && moverIsWhite == _humanPlaysWhite;
 
     // Opening matching needs SAN-like notation such as e4, exd5, Nf3, Rxe5.
     final notation = _buildMoveNotation(
@@ -3867,13 +4707,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           blackKingsideRookMoved: _blackKingsideRookMoved,
           blackQueensideRookMoved: _blackQueensideRookMoved,
           enPassantTarget: _enPassantTarget,
+          uci: uciMove,
+          chargeBefore: _vsBotCharge,
+          chargeAfter: _vsBotCharge,
         ),
       );
+      _pendingMoveQualityGrading = pendingMoveQuality;
       _historyIndex = _moveHistory.length - 1;
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
       _legalTargets.clear();
       _gambitAvailableTargets.clear();
+      if (_playVsBot && isHumanVsBotMove) {
+        _clearMoveQualityBadge();
+        _vsBotOptimalLineRevealActive = false;
+        _topLines = [];
+        _analysisLines = [];
+        _currentDepth = 0;
+      }
       _isWhiteTurn = !_isWhiteTurn;
       _updateCurrentOpening();
       _refreshGambitPreview();
@@ -3899,6 +4750,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (gameOutcome != null) {
       _send('stop');
       setState(() {
+        _pendingMoveQualityGrading = null;
         _recordVsBotSessionResult(gameOutcome);
         _gameOutcome = gameOutcome;
         _botThinking = false;
@@ -3906,6 +4758,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _persistAnalysisSnapshotIfNeeded();
       unawaited(_showGameResultDialog(gameOutcome));
       return;
+    }
+
+    if (pendingMoveQuality != null && _pendingMoveQualityGrading != null) {
+      _pendingMoveQualityGrading = pendingMoveQuality.copyWith(
+        postMoveFen: _genFen(),
+        postMoveWhiteToMove: _isWhiteTurn,
+      );
     }
 
     _persistAnalysisSnapshotIfNeeded();
@@ -3917,6 +4776,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _jumpToMove(int index) {
     setState(() {
+      _cancelPendingMoveQualityGrading();
+      _clearMoveQualityOverlay();
+      _clearMoveQualityBadge();
       _historyIndex = index;
       // Truncate any future moves so they don't interfere with opening/gambit lookups
       if (index < _moveHistory.length - 1) {
@@ -3924,6 +4786,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       boardState = Map.from(_moveHistory[index].state);
       _isWhiteTurn = !_moveHistory[index].isWhite;
+      _vsBotCharge = _moveHistory[index].chargeAfter ?? 0;
+      _vsBotOptimalLineRevealActive = false;
       _restoreSpecialMoveStateFromRecord(_moveHistory[index]);
       _gameOutcome = null;
       _currentOpening = _findOpeningFromHistory();
@@ -3934,6 +4798,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _selectedGambit = null;
       _gambitPreviewLines = [];
       _topLines = [];
+      _analysisLines = [];
       _currentDepth = 0;
       _currentEval = 0.0;
     });
@@ -4046,22 +4911,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     return sceneBox.globalToLocal(
       buttonBox.localToGlobal(buttonBox.size.center(Offset.zero)),
-    );
-  }
-
-  Offset? _evalBarCenterInScene() {
-    final evalContext =
-        _evalBarVerticalKey.currentContext ??
-        _evalBarHorizontalKey.currentContext;
-    final sceneContext = _sceneKey.currentContext;
-    if (evalContext == null || sceneContext == null) return null;
-
-    final evalBox = _renderBoxFromContext(evalContext);
-    final sceneBox = _renderBoxFromContext(sceneContext);
-    if (evalBox == null || sceneBox == null) return null;
-
-    return sceneBox.globalToLocal(
-      evalBox.localToGlobal(evalBox.size.center(Offset.zero)),
     );
   }
 
@@ -4443,35 +5292,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _launchStart = buttonCenter;
         _launchTargets = targets;
         _launchTargetsEvalBar = false;
-      });
-
-      _launchController.forward(from: 0).whenComplete(() {
-        if (!mounted) return;
-        setState(() {
-          _launchStart = null;
-          _launchTargets = <Offset>[];
-          _launchTargetsEvalBar = false;
-        });
-        if (!completer.isCompleted) completer.complete();
-      });
-    });
-    await completer.future;
-  }
-
-  Future<void> _fireEvalBarRevealLaunch() async {
-    final completer = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final buttonCenter = _suggestionButtonCenterInScene();
-      final target = _evalBarCenterInScene();
-      if (buttonCenter == null || target == null) {
-        if (!completer.isCompleted) completer.complete();
-        return;
-      }
-
-      setState(() {
-        _launchStart = buttonCenter;
-        _launchTargets = <Offset>[target];
-        _launchTargetsEvalBar = true;
       });
 
       _launchController.forward(from: 0).whenComplete(() {
@@ -5508,6 +6328,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                     vertical: 6,
                                                                   ),
                                                             ),
+                                                          _buildMoveQualityBanner(
+                                                            isLandscape: true,
+                                                          ),
                                                           const Spacer(),
                                                           _buildActionArea(
                                                             compactBottom: 8,
@@ -5578,6 +6401,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         ),
                                       ),
                                     ),
+                                    _buildMoveQualityBanner(isLandscape: false),
                                     if (!_playVsBot) _buildOpeningLabel(scale),
                                     _buildSuggestedMovesList(
                                       height: _playVsBot ? 168 : 130,
@@ -6380,6 +7204,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 )!)
         : Colors.white10;
     final innerBoardRadius = _playVsBot ? (compactBotFrame ? 8.0 : 10.0) : 4.0;
+    final activeMove = _historyIndex >= 0 && _historyIndex < _moveHistory.length
+        ? _moveHistory[_historyIndex]
+        : null;
+    final activeMoveQuality = _playVsBot
+        ? _lastMoveQualityBadgeQuality
+        : activeMove?.quality;
+    final activeMoveQualitySquare = _playVsBot
+        ? _lastMoveQualityBadgeSquare
+        : activeMove?.uci != null && activeMove!.uci!.length >= 4
+        ? activeMove.uci!.substring(2, 4)
+        : null;
 
     return Container(
       decoration: _playVsBot
@@ -6430,6 +7265,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 isLegalTarget &&
                 (showOpeningSelectionDots || showLockedLegalDots);
             final isCaptureTarget = isLegalTarget && p != null;
+            final showMoveQualityBadge =
+                activeMoveQuality != null && activeMoveQualitySquare == sq;
             const legalDotBase = Color(0xFF9EA8BA);
 
             return DragTarget<String>(
@@ -6469,6 +7306,51 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
+                      if (showMoveQualityBadge)
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(
+                                alpha: _playVsBot ? 0.72 : 0.56,
+                              ),
+                              borderRadius: BorderRadius.circular(7),
+                              border: Border.all(
+                                color: activeMoveQuality.color.withValues(
+                                  alpha: 0.55,
+                                ),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: activeMoveQuality.color.withValues(
+                                    alpha: 0.18,
+                                  ),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              activeMoveQuality.displaySymbol,
+                              style: TextStyle(
+                                color: activeMoveQuality.color,
+                                fontSize:
+                                    activeMoveQuality == MoveQuality.oversight
+                                    ? 8.5
+                                    : activeMoveQuality ==
+                                          MoveQuality.masterstroke
+                                    ? 10.5
+                                    : 9.2,
+                                fontWeight: FontWeight.w900,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
                       if (showTargetDot)
                         Center(
                           child: Container(
@@ -6633,6 +7515,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : useMonochrome
         ? scheme.onSurface.withValues(alpha: 0.70)
         : scheme.onSurface.withValues(alpha: 0.68);
+    final quality = move.quality;
+    final emphasisQuality =
+        quality == MoveQuality.masterstroke || quality == MoveQuality.crucial;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -6644,6 +7529,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       child: Row(
         children: [
           _pieceImage(move.pieceMoved, width: 18, height: 18),
+          if (quality != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              quality.displaySymbol,
+              style: TextStyle(
+                color: quality.color,
+                fontSize: quality == MoveQuality.oversight ? 11 : 13,
+                fontWeight: emphasisQuality ? FontWeight.w900 : FontWeight.w800,
+                letterSpacing: emphasisQuality ? 0.4 : 0.2,
+              ),
+            ),
+          ],
           const SizedBox(width: 4),
           Text(move.notation, style: TextStyle(color: textColor, fontSize: 13)),
           if (move.pieceCaptured != null) ...[
@@ -6772,10 +7669,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }) {
     final showSuggestions =
         _shouldShowVisualSuggestions && _topLines.isNotEmpty;
-
-    if (_playVsBot) {
-      return const SizedBox.shrink();
-    }
 
     return SizedBox(
       height: height,
@@ -6920,13 +7813,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!_playVsBot || _moveHistory.isEmpty) return;
 
     _send('stop');
+    int? restoredCharge;
     setState(() {
       _botThinking = false;
       _botSearchCompleter = null;
+      _pendingMoveQualityGrading = null;
+      _vsBotOptimalLineRevealActive = false;
+      _clearMoveQualityOverlay();
+      _clearMoveQualityBadge();
 
       int safety = 4;
       do {
-        _moveHistory.removeLast();
+        final removed = _moveHistory.removeLast();
+        if (removed.isWhite == _humanPlaysWhite) {
+          restoredCharge = removed.chargeBefore;
+        }
         _historyIndex = _moveHistory.length - 1;
 
         if (_moveHistory.isEmpty) {
@@ -6950,8 +7851,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _gambitPreviewLines = [];
       _openingMode = OpeningMode.off;
       _topLines = [];
+      _analysisLines = [];
       _currentDepth = 0;
       _currentEval = 0.0;
+      _vsBotCharge =
+          restoredCharge ??
+          (_moveHistory.isEmpty ? 0 : (_moveHistory.last.chargeAfter ?? 0));
     });
 
     _analyze();
@@ -7198,9 +8103,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           ? 6.0
                           : 8.0;
                       final powerPod = _buildVsBotActionPod(
-                        label: _isEngineActive
-                            ? (_vsBotEvalBarOnly ? 'Power' : 'Hints')
-                            : 'Eval',
+                        label: 'Charge',
                         accent: difficultyAccent,
                         control: _buildSuggestionTriggerButton(),
                       );
@@ -7468,19 +8371,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       onTap: (!_buttonUnlocked || _suggestionLaunchInProgress)
           ? null
           : () async {
-              if (_playVsBot) {
-                setState(() {
-                  _vsBotEvalBarOnly = false;
-                  _suggestionsEnabled = true;
-                });
-                _analyze();
-                _addLog(
-                  _multiPvCount > 0
-                      ? 'Stockfish suggestions activated'
-                      : 'Stockfish evaluation activated',
-                );
-                return;
-              }
               if (kIsWeb) {
                 _addLog(
                   'Suggestions unavailable on web (engine process not supported).',
@@ -7753,369 +8643,100 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildVsBotSuggestionTriggerButton() {
-    final palette = _suggestionButtonPalette();
-    final isEvalOnlyStage = _isEngineActive && _vsBotEvalBarOnly;
-    final isFullSuggestionStage = _isEngineActive && !_vsBotEvalBarOnly;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final progress = (_vsBotCharge.clamp(0, 100)) / 100;
+    final fillColor = _vsBotChargeColor(progress, arcade);
+    final canActivate =
+        _buttonUnlocked &&
+        !_suggestionLaunchInProgress &&
+        _isHumanTurnInBotGame &&
+        !_botThinking &&
+        _vsBotCharge >= 100 &&
+        !_vsBotOptimalLineRevealActive;
+    final locked = !_isHumanTurnInBotGame || _botThinking;
+    final statusText = _vsBotOptimalLineRevealActive
+        ? 'LIVE'
+        : _vsBotCharge >= 100
+        ? 'READY'
+        : '${_vsBotCharge.clamp(0, 100)}%';
 
     return GestureDetector(
       key: _suggestionButtonKey,
-      onTap: (!_buttonUnlocked || _suggestionLaunchInProgress)
-          ? null
-          : () async {
-              if (isFullSuggestionStage) {
-                _disableEngineInsights();
-                return;
-              }
-
-              if (isEvalOnlyStage) {
-                await _activateVsBotSuggestionsFromEvalBar();
-                return;
-              }
-
-              await _activateVsBotEvalBarStage();
-            },
-      child: AnimatedBuilder(
-        animation: Listenable.merge([_pulseController, _introController]),
-        builder: (context, child) {
-          final buttonOpacity = _buttonIntroOpacity();
-          final buttonScale = _buttonIntroScale();
-          final introT = _introController.value.clamp(0.0, 1.0);
-          final ignition = Curves.easeOut.transform(
-            ((introT - 0.58) / 0.42).clamp(0.0, 1.0),
-          );
-          final pulseT = _pulseController.value;
-
-          final Widget base;
-          if (isFullSuggestionStage) {
-            base = Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: palette.powerBackground,
-                border: Border.all(color: palette.powerBorder, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.powerShadow,
-                    blurRadius: palette.isDark ? 14 : 10,
-                    offset: Offset(0, palette.isDark ? 4 : 3),
+      onTap: canActivate ? _activateVsBotOptimalLineReveal : null,
+      child: AnimatedOpacity(
+        opacity: locked ? 0.52 : 1.0,
+        duration: const Duration(milliseconds: 160),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: _vsBotArcadePanelDecoration(
+            palette: arcade,
+            accent: fillColor,
+            radius: 18,
+            borderWidth: 2.4,
+            inset: true,
+            elevated: !locked,
+            fillColor: arcade.panelAlt,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: arcade.shell.withValues(alpha: 0.96),
                   ),
-                ],
-              ),
-              child: Icon(
-                Icons.power_settings_new_rounded,
-                color: palette.powerIcon,
-                size: 22,
-              ),
-            );
-          } else if (isEvalOnlyStage) {
-            base = _buildVsBotEvalOnlySuggestionStageButton(
-              introT: introT,
-              pulseT: pulseT,
-            );
-          } else {
-            base = _buildVsBotEvalBarSeedButton(
-              ignition: ignition,
-              isActivating: _suggestionLaunchInProgress,
-            );
-          }
-
-          return Opacity(
-            opacity: buttonOpacity,
-            child: Transform.scale(scale: buttonScale, child: base),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _activateVsBotEvalBarStage() async {
-    setState(() {
-      _suggestionLaunchInProgress = true;
-    });
-    await _fireEvalBarRevealLaunch();
-    if (!mounted) return;
-    setState(() {
-      _suggestionsEnabled = true;
-      _vsBotEvalBarOnly = true;
-      _topLines = [];
-      _currentDepth = 0;
-      _suggestionLaunchInProgress = false;
-    });
-    _analyze();
-    _addLog('Stockfish eval bar activated');
-  }
-
-  Future<void> _activateVsBotSuggestionsFromEvalBar() async {
-    setState(() {
-      _suggestionLaunchInProgress = true;
-    });
-    await _triggerButtonRipple();
-    if (!mounted) return;
-    setState(() {
-      _vsBotEvalBarOnly = false;
-      _suggestionsEnabled = true;
-      _suggestionLaunchInProgress = false;
-    });
-    _analyze();
-    _addLog(
-      _multiPvCount > 0
-          ? 'Stockfish suggestions activated'
-          : 'Stockfish evaluation activated',
-    );
-  }
-
-  Widget _buildVsBotEvalBarSeedButton({
-    required double ignition,
-    required bool isActivating,
-  }) {
-    final palette = _suggestionButtonPalette();
-    final centerAlpha = palette.isDark
-        ? (isActivating ? 0.46 : 0.30)
-        : (isActivating ? 0.90 : 0.82);
-    final borderAlpha = palette.isDark
-        ? (isActivating ? 0.46 : 0.34)
-        : (isActivating ? 0.26 : 0.20);
-    final primaryShadowAlpha = palette.isDark
-        ? (isActivating ? 0.24 : 0.14)
-        : (isActivating ? 0.14 : 0.08);
-    final secondaryShadowAlpha = palette.isDark
-        ? (isActivating ? 0.18 : 0.10)
-        : (isActivating ? 0.12 : 0.06);
-
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            Color.lerp(
-              palette.surfaceCore,
-              palette.energyPrimary,
-              ignition,
-            )!.withValues(alpha: centerAlpha),
-            palette.surfaceBase,
-          ],
-        ),
-        border: Border.all(
-          color: palette.borderAccent.withValues(alpha: borderAlpha),
-          width: palette.isDark ? 1.6 : 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: palette.energyPrimary.withValues(alpha: primaryShadowAlpha),
-            blurRadius: isActivating
-                ? (palette.isDark ? 16 : 12)
-                : (palette.isDark ? 10 : 8),
-          ),
-          BoxShadow(
-            color: palette.energySecondary.withValues(
-              alpha: secondaryShadowAlpha,
-            ),
-            blurRadius: isActivating
-                ? (palette.isDark ? 14 : 11)
-                : (palette.isDark ? 8 : 6),
-          ),
-        ],
-      ),
-      child: Center(
-        child: isActivating
-            ? Icon(
-                Icons.bolt_rounded,
-                size: 22,
-                color: palette.boltColor.withValues(
-                  alpha: palette.isDark ? 0.82 : 0.92,
                 ),
-              )
-            : _buildVsBotEvalBarGlyph(),
-      ),
-    );
-  }
-
-  Widget _buildVsBotEvalOnlySuggestionStageButton({
-    required double introT,
-    required double pulseT,
-  }) {
-    final palette = _suggestionButtonPalette();
-    final ignition = Curves.easeOut.transform(
-      ((introT - 0.58) / 0.42).clamp(0.0, 1.0),
-    );
-
-    Offset yellowOffset;
-    Offset blueOffset;
-    double coreIntensity;
-
-    if (introT < 0.32) {
-      final p = Curves.easeOutCubic.transform(introT / 0.32);
-      yellowOffset = Offset(-6 + (6 * p), -82 + (82 * p));
-      blueOffset = Offset(6 - (6 * p), -62 + (62 * p));
-      coreIntensity = 0.25 + (0.35 * p);
-    } else if (introT < 0.74) {
-      final q = (introT - 0.32) / 0.42;
-      final radius = (14 - (11 * Curves.easeIn.transform(q))).clamp(3.0, 14.0);
-      final fastAngle = q * pi * 2 * 5.5;
-      yellowOffset = Offset(cos(fastAngle) * radius, sin(fastAngle) * radius);
-      blueOffset = Offset(
-        cos(fastAngle + pi) * radius,
-        sin(fastAngle + pi) * radius,
-      );
-      coreIntensity = 0.55 + (0.35 * q);
-    } else {
-      final angle = pulseT * pi * 2;
-      yellowOffset = Offset(cos(angle) * 11, sin(angle) * 11);
-      blueOffset = Offset(cos(angle + pi) * 11, sin(angle + pi) * 11);
-      coreIntensity = 0.9;
-    }
-
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            Color.lerp(
-              palette.surfaceCore,
-              palette.energyPrimary,
-              ignition,
-            )!.withValues(
-              alpha: palette.isDark
-                  ? 0.6 * coreIntensity
-                  : 0.72 + (0.16 * coreIntensity),
-            ),
-            palette.surfaceBase,
-          ],
-        ),
-        border: Border.all(
-          color: palette.borderAccent.withValues(
-            alpha: palette.isDark ? 0.45 : 0.26,
-          ),
-          width: palette.isDark ? 1.6 : 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: palette.energyPrimary.withValues(
-              alpha: palette.isDark
-                  ? 0.25 + 0.25 * coreIntensity
-                  : 0.10 + 0.12 * coreIntensity,
-            ),
-            blurRadius: (palette.isDark ? 14 : 10) + (8 * coreIntensity),
-          ),
-          BoxShadow(
-            color: palette.energySecondary.withValues(
-              alpha: palette.isDark
-                  ? 0.18 + 0.22 * coreIntensity
-                  : 0.08 + 0.12 * coreIntensity,
-            ),
-            blurRadius: (palette.isDark ? 18 : 12) + (10 * coreIntensity),
-          ),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Transform.translate(
-            offset: yellowOffset,
-            child: _buildThemedSuggestionOrb(
-              palette,
-              color: palette.energySecondary,
-            ),
-          ),
-          Transform.translate(
-            offset: blueOffset,
-            child: _buildThemedSuggestionOrb(
-              palette,
-              color: palette.energyPrimary,
-            ),
-          ),
-          Icon(
-            Icons.bolt_rounded,
-            size: 22,
-            color: palette.boltColor.withValues(
-              alpha: palette.isDark ? 0.55 + 0.35 * ignition : 0.90,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThemedSuggestionOrb(
-    _SuggestionButtonPalette palette, {
-    required Color color,
-  }) {
-    final glowAlpha = palette.isDark
-        ? (palette.useMonochrome ? 0.42 : 0.70)
-        : (palette.useMonochrome ? 0.18 : 0.36);
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: glowAlpha),
-            blurRadius: palette.isDark ? 10 : 7,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _triggerButtonRipple() async {
-    final buttonContext = _suggestionButtonKey.currentContext;
-    final sceneContext = _sceneKey.currentContext;
-    if (buttonContext == null || sceneContext == null) return;
-
-    final buttonBox = _renderBoxFromContext(buttonContext);
-    final sceneBox = _renderBoxFromContext(sceneContext);
-    if (buttonBox == null || sceneBox == null) return;
-
-    final center = sceneBox.globalToLocal(
-      buttonBox.localToGlobal(buttonBox.size.center(Offset.zero)),
-    );
-
-    setState(() => _buttonRippleCenter = center);
-    await _buttonRippleController.forward(from: 0);
-    if (!mounted) return;
-    setState(() => _buttonRippleCenter = null);
-  }
-
-  Widget _buildVsBotEvalBarGlyph() {
-    final palette = _suggestionButtonPalette();
-    final glyphWidth = palette.useMonochrome ? 36.0 : 34.0;
-    final glyphHeight = palette.useMonochrome ? 8.0 : 6.0;
-    return Center(
-      child: Container(
-        width: glyphWidth,
-        height: glyphHeight,
-        decoration: BoxDecoration(
-          color: palette.glyphShell,
-          borderRadius: BorderRadius.circular(glyphHeight / 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(
-                alpha: palette.useMonochrome
-                    ? 0.16
-                    : (palette.isDark ? 0.20 : 0.08),
-              ),
-              blurRadius: palette.useMonochrome ? 4 : (palette.isDark ? 6 : 4),
-              offset: const Offset(0, 1),
-            ),
-          ],
-          border: Border.all(
-            color: palette.glyphBorder,
-            width: palette.useMonochrome ? 0.9 : 0.7,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(glyphHeight / 2),
-          child: CustomPaint(
-            painter: _VsBotEvalBarPainter(
-              isMono: palette.useMonochrome,
-              isDark: palette.isDark,
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: FractionallySizedBox(
+                      heightFactor: progress.clamp(0.0, 1.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              fillColor.withValues(alpha: 0.96),
+                              fillColor.withValues(alpha: 0.62),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _vsBotOptimalLineRevealActive
+                            ? Icons.visibility_rounded
+                            : locked
+                            ? Icons.lock_outline_rounded
+                            : Icons.bolt_rounded,
+                        color: locked ? arcade.textMuted : arcade.text,
+                        size: 18,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        statusText,
+                        style: puzzleAcademyIdentityStyle(
+                          palette: arcade.base,
+                          size: 5.9,
+                          color: locked ? arcade.textMuted : arcade.text,
+                          withGlow: !locked,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -11265,6 +11886,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _cancelIdleInterstitialTimer();
     WidgetsBinding.instance.removeObserver(this);
     _editModeHintTimer?.cancel();
+    _moveQualityOverlayTimer?.cancel();
+    _cancelPendingMoveQualityGrading();
     _clearBotGhostArrows();
     unawaited(_engine?.stop());
     _cancelIdleInterstitialTimer();
@@ -11291,154 +11914,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       player.dispose();
     }
     super.dispose();
-  }
-}
-
-class _VsBotEvalBarPainter extends CustomPainter {
-  const _VsBotEvalBarPainter({required this.isMono, required this.isDark});
-
-  final bool isMono;
-  final bool isDark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final radius = Radius.circular(size.height / 2);
-
-    if (isMono) {
-      final innerRect = Rect.fromLTWH(
-        0.9,
-        0.9,
-        size.width - 1.8,
-        size.height - 1.8,
-      );
-      final innerRadius = Radius.circular(innerRect.height / 2);
-      final splitX = innerRect.left + (innerRect.width * 0.5);
-      final dividerWidth = 1.2;
-
-      final leftRect = Rect.fromLTRB(
-        innerRect.left,
-        innerRect.top,
-        splitX - (dividerWidth / 2),
-        innerRect.bottom,
-      );
-      final rightRect = Rect.fromLTRB(
-        splitX + (dividerWidth / 2),
-        innerRect.top,
-        innerRect.right,
-        innerRect.bottom,
-      );
-
-      final leftPaint = Paint()
-        ..color = const Color(0xFFF2F4F6)
-        ..style = PaintingStyle.fill;
-      final rightPaint = Paint()
-        ..color = const Color(0xFF1B222C)
-        ..style = PaintingStyle.fill;
-      final dividerPaint = Paint()
-        ..color = const Color(0xFF7A838E)
-        ..style = PaintingStyle.fill;
-      final outlinePaint = Paint()
-        ..color = const Color(0xFF9EA7B2).withValues(alpha: 0.34)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.8;
-
-      canvas.drawRRect(
-        RRect.fromRectAndCorners(
-          leftRect,
-          topLeft: innerRadius,
-          bottomLeft: innerRadius,
-        ),
-        leftPaint,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndCorners(
-          rightRect,
-          topRight: innerRadius,
-          bottomRight: innerRadius,
-        ),
-        rightPaint,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            splitX - (dividerWidth / 2),
-            innerRect.top + 0.3,
-            dividerWidth,
-            innerRect.height - 0.6,
-          ),
-          const Radius.circular(1.2),
-        ),
-        dividerPaint,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(innerRect, innerRadius),
-        outlinePaint,
-      );
-      return;
-    }
-
-    final paint = Paint()..style = PaintingStyle.fill;
-    paint.shader =
-        (isDark
-                ? const LinearGradient(
-                    colors: [
-                      Color(0xFFFF4747),
-                      Color(0xFFD93434),
-                      Color(0xFFF4D249),
-                      Color(0xFF95E572),
-                      Color(0xFF4FC15E),
-                      Color(0xFF2F8E46),
-                      Color(0xFF166534),
-                    ],
-                    stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
-                  )
-                : const LinearGradient(
-                    colors: [
-                      Color(0xFFE44A4A),
-                      Color(0xFFC93A3A),
-                      Color(0xFFE1C344),
-                      Color(0xFF84D669),
-                      Color(0xFF4DBA5E),
-                      Color(0xFF2E8C45),
-                      Color(0xFF166534),
-                    ],
-                    stops: [0.0, 0.40, 0.40, 0.60, 0.76, 0.90, 1.0],
-                  ))
-            .createShader(rect);
-
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), paint);
-
-    final highlightPaint = Paint()
-      ..color = Colors.white.withValues(
-        alpha: isMono ? 0.0 : (isDark ? 0.08 : 0.04),
-      )
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0.6, 0.6, size.width - 1.2, size.height * 0.34),
-        const Radius.circular(2),
-      ),
-      highlightPaint,
-    );
-
-    final shadowPaint = Paint()
-      ..color = Colors.black.withValues(
-        alpha: isDark ? (isMono ? 0.14 : 0.18) : (isMono ? 0.08 : 0.10),
-      )
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0.8, size.height - 1.4, size.width - 1.6, 0.8),
-        const Radius.circular(1),
-      ),
-      shadowPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _VsBotEvalBarPainter oldDelegate) {
-    return oldDelegate.isMono != isMono || oldDelegate.isDark != isDark;
   }
 }
 

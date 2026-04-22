@@ -2201,7 +2201,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         _playVsBot = true;
         _selectedBot = bot;
         _selectedBotDifficulty = difficulty;
-        _vsBotEvalBarOnly = false;
+        _vsBotEvalEnabled = true;
+        _vsBotOptimalLineRevealActive = false;
+        _vsBotCharge = 0;
         if (switchedChallenge) {
           _vsBotSessionWins = 0;
           _vsBotSessionLosses = 0;
