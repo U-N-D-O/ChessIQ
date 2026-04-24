@@ -6937,7 +6937,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                               );
                                                       final hasLandscapeTitle =
                                                           !_playVsBot &&
-                                                          (_selectedGambit != null ||
+                                                          (_selectedGambit !=
+                                                                  null ||
                                                               _currentOpening
                                                                   .isNotEmpty);
                                                       final landscapeBannerTop =
@@ -6947,8 +6948,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                           ? 54.0
                                                           : 30.0;
                                                       return Stack(
-                                                        clipBehavior:
-                                                            Clip.none,
+                                                        clipBehavior: Clip.none,
                                                         children: [
                                                           SizedBox.expand(
                                                             child: Column(
@@ -6980,37 +6980,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                     alignment:
                                                                         Alignment
                                                                             .center,
-                                                                    child:
-                                                                        Padding(
-                                                                          padding:
-                                                                              const EdgeInsets.only(
-                                                                                bottom:
-                                                                                    6,
-                                                                              ),
-                                                                          child:
-                                                                              Text(
-                                                                                _selectedGambit!
-                                                                                    .name,
-                                                                                style: TextStyle(
-                                                                                  fontSize:
-                                                                                      13,
-                                                                                  fontWeight:
-                                                                                      FontWeight.w700,
-                                                                                  color:
-                                                                                      useMonochrome
-                                                                                      ? scheme.onSurface.withValues(
-                                                                                          alpha: 0.86,
-                                                                                        )
-                                                                                      : const Color(
-                                                                                          0xFFD8B640,
-                                                                                        ),
+                                                                    child: Padding(
+                                                                      padding: const EdgeInsets.only(
+                                                                        bottom:
+                                                                            6,
+                                                                      ),
+                                                                      child: Text(
+                                                                        _selectedGambit!
+                                                                            .name,
+                                                                        style: TextStyle(
+                                                                          fontSize:
+                                                                              13,
+                                                                          fontWeight:
+                                                                              FontWeight.w700,
+                                                                          color:
+                                                                              useMonochrome
+                                                                              ? scheme.onSurface.withValues(
+                                                                                  alpha: 0.86,
+                                                                                )
+                                                                              : const Color(
+                                                                                  0xFFD8B640,
                                                                                 ),
-                                                                                maxLines:
-                                                                                    2,
-                                                                                overflow:
-                                                                                    TextOverflow.ellipsis,
-                                                                              ),
                                                                         ),
+                                                                        maxLines:
+                                                                            2,
+                                                                        overflow:
+                                                                            TextOverflow.ellipsis,
+                                                                      ),
+                                                                    ),
                                                                   )
                                                                 else if (!_playVsBot &&
                                                                     _currentOpening
@@ -7019,32 +7016,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                     alignment:
                                                                         Alignment
                                                                             .center,
-                                                                    child:
-                                                                        Padding(
-                                                                          padding:
-                                                                              const EdgeInsets.only(
-                                                                                bottom:
-                                                                                    6,
-                                                                              ),
-                                                                          child:
-                                                                              Text(
-                                                                                _currentOpening,
-                                                                                style: TextStyle(
-                                                                                  fontSize:
-                                                                                      13,
-                                                                                  fontWeight:
-                                                                                      FontWeight.w700,
-                                                                                  color: scheme.onSurface.withValues(
-                                                                                    alpha:
-                                                                                        0.72,
-                                                                                  ),
-                                                                                ),
-                                                                                maxLines:
-                                                                                    2,
-                                                                                overflow:
-                                                                                    TextOverflow.ellipsis,
-                                                                              ),
+                                                                    child: Padding(
+                                                                      padding: const EdgeInsets.only(
+                                                                        bottom:
+                                                                            6,
+                                                                      ),
+                                                                      child: Text(
+                                                                        _currentOpening,
+                                                                        style: TextStyle(
+                                                                          fontSize:
+                                                                              13,
+                                                                          fontWeight:
+                                                                              FontWeight.w700,
+                                                                          color: scheme.onSurface.withValues(
+                                                                            alpha:
+                                                                                0.72,
+                                                                          ),
                                                                         ),
+                                                                        maxLines:
+                                                                            2,
+                                                                        overflow:
+                                                                            TextOverflow.ellipsis,
+                                                                      ),
+                                                                    ),
                                                                   ),
                                                                 _buildSuggestedMovesList(
                                                                   height:
@@ -7078,8 +7072,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                 _buildActionArea(
                                                                   compactBottom:
                                                                       8,
-                                                                  horizontal:
-                                                                      0,
+                                                                  horizontal: 0,
                                                                 ),
                                                               ],
                                                             ),
