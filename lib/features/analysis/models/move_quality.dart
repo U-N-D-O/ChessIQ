@@ -104,6 +104,7 @@ class MoveQualityClassificationContext {
     required this.preMoveMoverWinProbability,
     required this.postMoveMoverWinProbability,
     required this.preMoveMoverEvalPawns,
+    this.currentOpening = '',
     this.cpGapFromBest,
     this.cpGapFromNextBetter,
     this.playedMoveRank,
@@ -124,6 +125,7 @@ class MoveQualityClassificationContext {
   final double preMoveMoverWinProbability;
   final double postMoveMoverWinProbability;
   final double preMoveMoverEvalPawns;
+  final String currentOpening;
   final int? cpGapFromBest;
   final int? cpGapFromNextBetter;
   final int? playedMoveRank;
@@ -477,7 +479,8 @@ MoveQualityAssessment _assessment(
 
 String _equivalenceExplanation(MoveQualityClassificationContext context) {
   if (context.insideOpeningExemption) {
-    return 'Book move. This line still follows registered opening theory, so it is shown as opening feedback only and does not change charge.';
+    final opening = context.currentOpening.trim();
+    return opening.isEmpty ? 'Opening theory' : 'Opening: $opening';
   }
   if (context.isObviousBestMove) {
     return 'Obvious equal-position move. It keeps the game on track, but simple top-line moves do not build charge.';
@@ -640,6 +643,9 @@ MoveQualityAssessment classifyMoveQuality(
     return _assessment(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.solid,
       context,
+      explanation: context.insideOpeningExemption
+          ? _equivalenceExplanation(context)
+          : null,
     );
   }
 

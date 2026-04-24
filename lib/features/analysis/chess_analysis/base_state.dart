@@ -130,6 +130,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _gameResultRevealSkipDelay = Duration(
     milliseconds: 250,
   );
+  static const Duration _creditsModernDwell = Duration(milliseconds: 3600);
+  static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
+  static const Duration _creditsRetroDwell = Duration(milliseconds: 3400);
+  static const bool _creditsDisableLoopForTests = bool.fromEnvironment(
+    'FLUTTER_TEST',
+  );
 
   late Map<String, String> boardState;
   CoordinatedEngineService? _engine;
@@ -157,6 +163,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       <_CreditsBackdropDot>[];
   final Random _creditsBackdropRandom = Random();
   bool _creditsDialogOpen = false;
+  _CreditsVisualMode _creditsVisualMode = _CreditsVisualMode.modern;
+  double _creditsVisualElapsed = 0.0;
   bool _menuDotsPreviouslyColliding = false;
   Offset _blueMenuDotPosition = Offset.zero;
   Offset _yellowMenuDotPosition = Offset.zero;
@@ -916,6 +924,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final creditsLast = _creditsBackdropLastUpdate ?? now;
       final creditsDt = now.difference(creditsLast).inMilliseconds / 1000.0;
       _creditsBackdropLastUpdate = now;
+      _advanceCreditsVisualLoop(creditsDt);
       if (_creditsBackdropDots.isNotEmpty) {
         const gravityStrength = 0.019;
         const centralStiffness = 0.20;
@@ -1500,6 +1509,843 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     _creditsBackdropLastUpdate = DateTime.now();
+  }
+
+  void _resetCreditsVisualLoop() {
+    _creditsVisualMode = _CreditsVisualMode.modern;
+    _creditsVisualElapsed = 0.0;
+  }
+
+  double _creditsModeWindow(_CreditsVisualMode mode) {
+    switch (mode) {
+      case _CreditsVisualMode.modern:
+        return _creditsModernDwell.inMilliseconds / 1000.0;
+      case _CreditsVisualMode.glitchToRetro:
+      case _CreditsVisualMode.glitchToModern:
+        return _creditsGlitchWindow.inMilliseconds / 1000.0;
+      case _CreditsVisualMode.retro:
+        return _creditsRetroDwell.inMilliseconds / 1000.0;
+    }
+  }
+
+  _CreditsVisualMode _nextCreditsVisualMode(_CreditsVisualMode mode) {
+    switch (mode) {
+      case _CreditsVisualMode.modern:
+        return _CreditsVisualMode.glitchToRetro;
+      case _CreditsVisualMode.glitchToRetro:
+        return _CreditsVisualMode.retro;
+      case _CreditsVisualMode.retro:
+        return _CreditsVisualMode.glitchToModern;
+      case _CreditsVisualMode.glitchToModern:
+        return _CreditsVisualMode.modern;
+    }
+  }
+
+  void _advanceCreditsVisualLoop(double dt) {
+    if (_creditsDisableLoopForTests || dt <= 0) {
+      return;
+    }
+
+    _creditsVisualElapsed += dt;
+    var currentWindow = _creditsModeWindow(_creditsVisualMode);
+    while (currentWindow > 0 && _creditsVisualElapsed >= currentWindow) {
+      _creditsVisualElapsed -= currentWindow;
+      _creditsVisualMode = _nextCreditsVisualMode(_creditsVisualMode);
+      currentWindow = _creditsModeWindow(_creditsVisualMode);
+    }
+  }
+
+  _CreditsDialogVisuals _buildCreditsDialogVisuals(BuildContext context) {
+    final appTheme = context.watch<AppThemeProvider>();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome = appTheme.isMonochrome || _isCinematicThemeEnabled;
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: useMonochrome,
+    );
+    final reducedEffects =
+        puzzleAcademyShouldReduceEffects(context) ||
+        _useReducedMenuWindowsVisualEffects;
+    final window = _creditsModeWindow(_creditsVisualMode);
+    final progress = window <= 0
+        ? 1.0
+        : (_creditsVisualElapsed / window).clamp(0.0, 1.0);
+    final eased = Curves.easeOutCubic.transform(progress);
+
+    double themeBlend;
+    switch (_creditsVisualMode) {
+      case _CreditsVisualMode.modern:
+        themeBlend = 0.0;
+      case _CreditsVisualMode.glitchToRetro:
+        themeBlend = eased;
+      case _CreditsVisualMode.retro:
+        themeBlend = 1.0;
+      case _CreditsVisualMode.glitchToModern:
+        themeBlend = 1.0 - eased;
+    }
+
+    var rawGlitch = 0.0;
+    if (_creditsVisualMode == _CreditsVisualMode.glitchToRetro ||
+        _creditsVisualMode == _CreditsVisualMode.glitchToModern) {
+      rawGlitch = 1.0 - ((progress * 2.0) - 1.0).abs();
+    }
+    final glitchStrength = reducedEffects ? rawGlitch * 0.32 : rawGlitch;
+
+    final modernPrimary = useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.88)
+        : scheme.secondary;
+    final modernSecondary = useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.76)
+        : scheme.primary;
+    final modernTertiary = useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.64)
+        : scheme.tertiary;
+
+    final primaryAccent =
+        Color.lerp(modernPrimary, palette.cyan, themeBlend) ?? modernPrimary;
+    final secondaryAccent =
+        Color.lerp(modernSecondary, palette.amber, themeBlend) ??
+        modernSecondary;
+    final tertiaryAccent =
+        Color.lerp(modernTertiary, palette.emerald, themeBlend) ??
+        modernTertiary;
+
+    final shellStart =
+        Color.lerp(
+          Color.alphaBlend(
+            scheme.surface.withValues(alpha: isDark ? 0.98 : 0.99),
+            palette.shell,
+          ),
+          Color.alphaBlend(
+            palette.boardDark.withValues(alpha: isDark ? 0.58 : 0.22),
+            palette.backdrop,
+          ),
+          themeBlend,
+        ) ??
+        palette.shell;
+    final shellEnd =
+        Color.lerp(
+          Color.alphaBlend(
+            modernPrimary.withValues(alpha: isDark ? 0.10 : 0.05),
+            palette.panelAlt,
+          ),
+          Color.alphaBlend(
+            primaryAccent.withValues(alpha: palette.isDark ? 0.18 : 0.10),
+            palette.boardLight.withValues(alpha: palette.isDark ? 0.22 : 0.36),
+          ),
+          themeBlend,
+        ) ??
+        palette.panelAlt;
+    final panel =
+        Color.lerp(
+          palette.panel,
+          Color.alphaBlend(
+            palette.boardDark.withValues(alpha: palette.isDark ? 0.42 : 0.24),
+            palette.panel,
+          ),
+          themeBlend,
+        ) ??
+        palette.panel;
+    final panelAlt =
+        Color.lerp(
+          palette.panelAlt,
+          Color.alphaBlend(
+            palette.boardLight.withValues(alpha: palette.isDark ? 0.18 : 0.28),
+            palette.boardDark.withValues(alpha: palette.isDark ? 0.24 : 0.10),
+          ),
+          themeBlend,
+        ) ??
+        palette.panelAlt;
+    final frame =
+        Color.lerp(
+          scheme.outline.withValues(alpha: 0.30),
+          primaryAccent.withValues(alpha: palette.monochrome ? 0.54 : 0.68),
+          themeBlend,
+        ) ??
+        scheme.outline.withValues(alpha: 0.30);
+    final edgeGlow =
+        Color.lerp(primaryAccent, secondaryAccent, 0.42) ?? primaryAccent;
+    final titleColor =
+        Color.lerp(
+          palette.text,
+          Color.lerp(primaryAccent, palette.text, 0.22) ?? palette.text,
+          themeBlend,
+        ) ??
+        palette.text;
+
+    return _CreditsDialogVisuals(
+      palette: palette,
+      mode: _creditsVisualMode,
+      themeBlend: themeBlend,
+      glitchStrength: glitchStrength,
+      reducedEffects: reducedEffects,
+      shellStart: shellStart,
+      shellEnd: shellEnd,
+      panel: panel,
+      panelAlt: panelAlt,
+      frame: frame,
+      edgeGlow: edgeGlow,
+      primaryAccent: primaryAccent,
+      secondaryAccent: secondaryAccent,
+      tertiaryAccent: tertiaryAccent,
+      titleColor: titleColor,
+    );
+  }
+
+  TextStyle _creditsTitleStyle(
+    _CreditsDialogVisuals visuals, {
+    double size = 28,
+    Color? color,
+  }) {
+    final resolvedColor = color ?? visuals.titleColor;
+    if (visuals.isRetro) {
+      return puzzleAcademyDisplayStyle(
+        palette: visuals.palette,
+        size: size,
+        letterSpacing: 0.82,
+        color: resolvedColor,
+        withGlow: !visuals.reducedEffects,
+      );
+    }
+
+    return TextStyle(
+      color: resolvedColor,
+      fontSize: size,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.18,
+      height: 1.0,
+      shadows: puzzleAcademyTextGlow(
+        resolvedColor,
+        monochrome: visuals.palette.monochrome,
+        strength: 0.58,
+      ),
+    );
+  }
+
+  TextStyle _creditsLabelStyle(
+    _CreditsDialogVisuals visuals, {
+    double size = 11.5,
+    Color? color,
+    FontWeight weight = FontWeight.w700,
+  }) {
+    final resolvedColor = color ?? visuals.palette.textMuted;
+    if (visuals.isRetro) {
+      return puzzleAcademyHudStyle(
+        palette: visuals.palette,
+        size: size,
+        weight: weight,
+        letterSpacing: 0.72,
+        color: resolvedColor,
+        withGlow: !visuals.reducedEffects,
+      );
+    }
+
+    return TextStyle(
+      color: resolvedColor,
+      fontSize: size,
+      fontWeight: weight,
+      letterSpacing: 0.26,
+      height: 1.22,
+    );
+  }
+
+  TextStyle _creditsBodyStyle(
+    _CreditsDialogVisuals visuals, {
+    double size = 12.6,
+    Color? color,
+    FontWeight weight = FontWeight.w500,
+  }) {
+    return TextStyle(
+      color: color ?? visuals.palette.text,
+      fontSize: size,
+      fontWeight: weight,
+      height: 1.45,
+    );
+  }
+
+  TextStyle _creditsActionStyle(_CreditsDialogVisuals visuals, {Color? color}) {
+    final resolvedColor = color ?? visuals.palette.text;
+    if (visuals.isRetro) {
+      return puzzleAcademyHudStyle(
+        palette: visuals.palette,
+        size: 11.0,
+        weight: FontWeight.w700,
+        letterSpacing: 0.78,
+        color: resolvedColor,
+        withGlow: !visuals.reducedEffects,
+      );
+    }
+
+    return TextStyle(
+      color: resolvedColor,
+      fontSize: 12.0,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.24,
+    );
+  }
+
+  Widget _buildCreditsGlitchShell({
+    required _CreditsDialogVisuals visuals,
+    required Widget child,
+  }) {
+    final strength = visuals.glitchStrength;
+    if (strength <= 0.01 || visuals.reducedEffects) {
+      return child;
+    }
+
+    final phase = _pulseController.value * 2 * pi;
+    final tintOpacity = 0.08 + strength * 0.14;
+    final baseJitter = Offset(
+      sin(phase * 9.5) * strength * 1.3,
+      cos(phase * 7.0) * strength * 0.25,
+    );
+    final fragmentSpecs =
+        <
+          ({
+            double top,
+            double height,
+            double inset,
+            double offset,
+            double opacity,
+            Color tint,
+          })
+        >[
+          (
+            top: 0.08 + (sin(phase * 0.8) + 1.0) * 0.015,
+            height: 0.07,
+            inset: 0.02,
+            offset: -34 * strength,
+            opacity: 0.18 + strength * 0.12,
+            tint: visuals.primaryAccent,
+          ),
+          (
+            top: 0.23 + (cos(phase * 1.1) + 1.0) * 0.018,
+            height: 0.05,
+            inset: 0.10,
+            offset: 42 * strength,
+            opacity: 0.14 + strength * 0.10,
+            tint: visuals.secondaryAccent,
+          ),
+          (
+            top: 0.36 + (sin(phase * 1.6) + 1.0) * 0.012,
+            height: 0.09,
+            inset: 0.04,
+            offset: -22 * strength,
+            opacity: 0.16 + strength * 0.11,
+            tint: Colors.white,
+          ),
+          (
+            top: 0.55 + (cos(phase * 1.9) + 1.0) * 0.02,
+            height: 0.06,
+            inset: 0.14,
+            offset: 28 * strength,
+            opacity: 0.12 + strength * 0.10,
+            tint: visuals.primaryAccent,
+          ),
+          (
+            top: 0.72 + (sin(phase * 1.3) + 1.0) * 0.018,
+            height: 0.07,
+            inset: 0.03,
+            offset: -30 * strength,
+            opacity: 0.15 + strength * 0.12,
+            tint: visuals.secondaryAccent,
+          ),
+        ];
+
+    Widget tintedShiftedLayer({
+      required Color tint,
+      required Offset offset,
+      required double opacity,
+    }) {
+      return IgnorePointer(
+        child: Transform.translate(
+          offset: offset,
+          child: Opacity(
+            opacity: opacity,
+            child: ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                tint.withValues(alpha: 0.92),
+                BlendMode.srcATop,
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        Transform.translate(
+          offset: baseJitter,
+          child: Opacity(opacity: 0.96 - strength * 0.08, child: child),
+        ),
+        tintedShiftedLayer(
+          tint: visuals.primaryAccent,
+          offset: Offset(-10 * strength, 0),
+          opacity: tintOpacity,
+        ),
+        tintedShiftedLayer(
+          tint: visuals.secondaryAccent,
+          offset: Offset(9 * strength, 0),
+          opacity: tintOpacity * 0.92,
+        ),
+        for (final fragment in fragmentSpecs)
+          IgnorePointer(
+            child: ClipRect(
+              clipper: _CreditsGlitchBandClipper(
+                topFraction: fragment.top,
+                heightFraction: fragment.height,
+                horizontalInsetFraction: fragment.inset,
+              ),
+              child: Transform.translate(
+                offset: Offset(
+                  fragment.offset,
+                  sin(phase * 4.0 + fragment.top * 10) * strength * 0.8,
+                ),
+                child: Opacity(
+                  opacity: fragment.opacity,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      fragment.tint.withValues(alpha: 0.95),
+                      BlendMode.srcATop,
+                    ),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCreditsGlitchTitle({
+    required String text,
+    required TextStyle style,
+    required _CreditsDialogVisuals visuals,
+    Key? key,
+  }) {
+    final strength = visuals.glitchStrength;
+    if (strength <= 0.01 || visuals.reducedEffects) {
+      return Text(text, key: key, style: style);
+    }
+
+    final phase = _pulseController.value * 2 * pi;
+    final primaryOffset = Offset(
+      sin(phase * 1.7) * strength * 3.0,
+      cos(phase * 2.1) * strength * 0.5,
+    );
+    final secondaryOffset = Offset(-cos(phase * 1.3) * strength * 2.6, 0);
+
+    return Stack(
+      children: <Widget>[
+        Transform.translate(
+          offset: primaryOffset,
+          child: Opacity(
+            opacity: 0.24 + strength * 0.12,
+            child: Text(
+              text,
+              style: style.copyWith(color: visuals.primaryAccent),
+            ),
+          ),
+        ),
+        Transform.translate(
+          offset: secondaryOffset,
+          child: Opacity(
+            opacity: 0.18 + strength * 0.10,
+            child: Text(
+              text,
+              style: style.copyWith(color: visuals.secondaryAccent),
+            ),
+          ),
+        ),
+        Transform.translate(
+          offset: Offset(
+            sin(phase * 8.0) * strength * 0.6,
+            cos(phase * 6.0) * strength * 0.2,
+          ),
+          child: Text(text, key: key, style: style),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCreditsLogoMark(
+    _CreditsDialogVisuals visuals, {
+    required double width,
+  }) {
+    final baseLogo = Image.asset(
+      'assets/QILAmodus.png',
+      width: width,
+      fit: BoxFit.contain,
+    );
+    final strength = visuals.glitchStrength;
+
+    if (strength <= 0.01 || visuals.reducedEffects) {
+      return baseLogo;
+    }
+
+    final phase = _pulseController.value * 2 * pi;
+    return Stack(
+      alignment: Alignment.center,
+      children: <Widget>[
+        Transform.translate(
+          offset: Offset(-2.6 * strength + sin(phase * 1.8), 0),
+          child: Opacity(
+            opacity: 0.22 + strength * 0.10,
+            child: ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                visuals.primaryAccent.withValues(alpha: 0.85),
+                BlendMode.srcATop,
+              ),
+              child: baseLogo,
+            ),
+          ),
+        ),
+        Transform.translate(
+          offset: Offset(2.2 * strength - cos(phase * 1.4), 0),
+          child: Opacity(
+            opacity: 0.18 + strength * 0.08,
+            child: ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                visuals.secondaryAccent.withValues(alpha: 0.85),
+                BlendMode.srcATop,
+              ),
+              child: baseLogo,
+            ),
+          ),
+        ),
+        Transform.translate(
+          offset: Offset(sin(phase * 5.0) * strength * 0.4, 0),
+          child: baseLogo,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCreditsHero({
+    required _CreditsDialogVisuals visuals,
+    required Duration duration,
+    required Curve curve,
+    required bool condensed,
+  }) {
+    return AnimatedContainer(
+      duration: duration,
+      curve: curve,
+      padding: EdgeInsets.fromLTRB(
+        condensed ? 12 : 14,
+        condensed ? 12 : 14,
+        condensed ? 12 : 14,
+        condensed ? 12 : 14,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(visuals.isRetro ? 12 : 18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            visuals.panel.withValues(alpha: 0.96),
+            visuals.panelAlt.withValues(alpha: 0.84),
+          ],
+        ),
+        border: Border.all(
+          color: visuals.frame.withValues(alpha: visuals.isRetro ? 0.72 : 0.30),
+          width: visuals.isRetro ? 1.8 : 1.0,
+        ),
+        boxShadow: puzzleAcademySurfaceGlow(
+          visuals.edgeGlow,
+          monochrome: visuals.palette.monochrome,
+          strength: visuals.isRetro ? 0.18 : 0.10,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 420 || condensed;
+          final titleStyle = _creditsTitleStyle(
+            visuals,
+            size: compact ? (condensed ? 21 : 24) : 27,
+          );
+          final titleBlock = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _buildCreditsGlitchTitle(
+                text: 'Credits, Data & Legal',
+                key: const ValueKey<String>('credits_dialog_title'),
+                style: titleStyle,
+                visuals: visuals,
+              ),
+              SizedBox(height: condensed ? 8 : 10),
+              Text(
+                'Product lineage, data sources, and legal access points for the ChessIQ shell.',
+                style: _creditsBodyStyle(
+                  visuals,
+                  size: condensed ? 11.8 : 12.5,
+                  color: visuals.palette.text.withValues(alpha: 0.88),
+                ),
+              ),
+            ],
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Center(
+                  child: _buildCreditsLogoMark(
+                    visuals,
+                    width: condensed ? 180 : 220,
+                  ),
+                ),
+                SizedBox(height: condensed ? 10 : 14),
+                titleBlock,
+              ],
+            );
+          }
+
+          return Row(
+            children: <Widget>[
+              Expanded(
+                flex: 5,
+                child: Center(
+                  child: _buildCreditsLogoMark(
+                    visuals,
+                    width: condensed ? 186 : 230,
+                  ),
+                ),
+              ),
+              SizedBox(width: condensed ? 12 : 18),
+              Expanded(flex: 6, child: titleBlock),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCreditsOwnershipPanel({required _CreditsDialogVisuals visuals}) {
+    return Container(
+      key: const ValueKey<String>('credits_ownership_copy'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            visuals.panel.withValues(alpha: 0.96),
+            visuals.panelAlt.withValues(alpha: visuals.isRetro ? 0.84 : 0.92),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(visuals.isRetro ? 10 : 16),
+        border: Border.all(
+          color: visuals.frame.withValues(alpha: visuals.isRetro ? 0.72 : 0.28),
+          width: visuals.isRetro ? 1.8 : 1.0,
+        ),
+        boxShadow: puzzleAcademySurfaceGlow(
+          visuals.edgeGlow,
+          monochrome: visuals.palette.monochrome,
+          strength: visuals.isRetro ? 0.16 : 0.10,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.verified_outlined,
+                size: 16,
+                color: visuals.primaryAccent,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'OWNERSHIP / LEGAL',
+                style: _creditsLabelStyle(
+                  visuals,
+                  color: visuals.primaryAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'ChessIQ is developed by QILA modus, a division of Qila. Original code, product design, and project-specific assets remain under Qila ownership, while the linked documents below carry the full copyright, license, and third-party notice record.',
+            style: _creditsBodyStyle(
+              visuals,
+              size: 12.4,
+              color: visuals.palette.text.withValues(alpha: 0.90),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _buildLegalNoticeLink(
+                key: const ValueKey<String>('credits_legal_link_copyright'),
+                label: 'Copyright Notice',
+                icon: Icons.copyright_rounded,
+                accent: visuals.primaryAccent,
+                visuals: visuals,
+                onTap: () => _showLegalNoticeDialog(
+                  title: 'COPYRIGHT.md',
+                  assetPath: 'COPYRIGHT.md',
+                  accent: visuals.primaryAccent,
+                ),
+              ),
+              _buildLegalNoticeLink(
+                key: const ValueKey<String>('credits_legal_link_third_party'),
+                label: 'Third-Party Notices',
+                icon: Icons.policy_outlined,
+                accent: visuals.tertiaryAccent,
+                visuals: visuals,
+                onTap: () => _showLegalNoticeDialog(
+                  title: 'THIRD_PARTY_NOTICES.md',
+                  assetPath: 'THIRD_PARTY_NOTICES.md',
+                  accent: visuals.tertiaryAccent,
+                ),
+              ),
+              _buildLegalNoticeLink(
+                key: const ValueKey<String>('credits_legal_link_license'),
+                label: 'License',
+                icon: Icons.gavel_rounded,
+                accent: visuals.secondaryAccent,
+                visuals: visuals,
+                onTap: () => _showLegalNoticeDialog(
+                  title: 'LICENSE',
+                  assetPath: 'LICENSE',
+                  accent: visuals.secondaryAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Company identifiers remain in the legal documents rather than the main credits panel.',
+            style: _creditsLabelStyle(
+              visuals,
+              size: 10.9,
+              color: visuals.palette.textMuted,
+              weight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreditsFooterActions({
+    required BuildContext context,
+    required bool openedFromAnalysis,
+    required _CreditsDialogVisuals visuals,
+  }) {
+    final primaryColor = visuals.isRetro
+        ? visuals.secondaryAccent
+        : visuals.primaryAccent;
+    final foregroundColor =
+        ThemeData.estimateBrightnessForColor(primaryColor) == Brightness.light
+        ? const Color(0xFF10151A)
+        : Colors.white;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 400;
+        final logsButton = OutlinedButton.icon(
+          onPressed: _showLogsDialog,
+          icon: Icon(
+            Icons.bug_report_outlined,
+            size: visuals.isRetro ? 16 : 18,
+          ),
+          label: Text(
+            'View Logs',
+            style: _creditsActionStyle(visuals, color: visuals.primaryAccent),
+          ),
+          style: ButtonStyle(
+            foregroundColor: WidgetStatePropertyAll<Color>(
+              visuals.primaryAccent,
+            ),
+            backgroundColor: WidgetStatePropertyAll<Color>(
+              visuals.primaryAccent.withValues(
+                alpha: visuals.isRetro ? 0.14 : 0.08,
+              ),
+            ),
+            side: WidgetStatePropertyAll<BorderSide>(
+              BorderSide(
+                color: visuals.frame.withValues(
+                  alpha: visuals.isRetro ? 0.82 : 0.40,
+                ),
+                width: visuals.isRetro ? 1.6 : 1.0,
+              ),
+            ),
+            padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+              EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            shape: WidgetStatePropertyAll<RoundedRectangleBorder>(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(visuals.isRetro ? 8 : 14),
+              ),
+            ),
+          ),
+        );
+        final closeButton = FilledButton.icon(
+          onPressed: () {
+            Navigator.of(context).pop();
+            if (!openedFromAnalysis) {
+              Future.microtask(() {
+                if (mounted) {
+                  _goToMenu();
+                }
+              });
+            }
+          },
+          icon: Icon(
+            openedFromAnalysis ? Icons.close_rounded : Icons.home_rounded,
+            size: visuals.isRetro ? 16 : 18,
+          ),
+          label: Text(
+            openedFromAnalysis ? 'Close Credits' : 'Back to Main Menu',
+            style: _creditsActionStyle(visuals, color: foregroundColor),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: primaryColor,
+            foregroundColor: foregroundColor,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(visuals.isRetro ? 8 : 14),
+            ),
+            side: BorderSide(
+              color: visuals.frame.withValues(
+                alpha: visuals.isRetro ? 0.84 : 0.36,
+              ),
+              width: visuals.isRetro ? 1.5 : 0.8,
+            ),
+          ),
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              logsButton,
+              const SizedBox(height: 10),
+              closeButton,
+            ],
+          );
+        }
+
+        return Row(
+          children: <Widget>[
+            Expanded(child: logsButton),
+            const SizedBox(width: 10),
+            Expanded(child: closeButton),
+          ],
+        );
+      },
+    );
   }
 
   Alignment _menuDotAlignment(
@@ -3148,6 +3994,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         preMoveMoverWinProbability: effectivePreMoveMoverWinProbability,
         postMoveMoverWinProbability: postMoveMoverWinProbability,
         preMoveMoverEvalPawns: preMoveMoverEvalPawns ?? 0.0,
+        currentOpening: _currentOpening,
         cpGapFromBest: cpGapFromBest,
         cpGapFromNextBetter: cpGapFromNextBetter,
         playedMoveRank: playedMoveRank,
@@ -7200,9 +8047,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               child: Column(
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      key: const ValueKey<String>('analysis_credits_trigger'),
+                      onPressed: _showCreditsDialog,
+                      tooltip: 'Credits and legal',
+                      style: IconButton.styleFrom(
+                        backgroundColor: Color.alphaBlend(
+                          scheme.surface.withValues(alpha: 0.76),
+                          arcade.panel,
+                        ),
+                        foregroundColor: isMono
+                            ? scheme.onSurface
+                            : arcade.cyan,
+                        side: BorderSide(
+                          color: scheme.outline.withValues(alpha: 0.26),
+                        ),
+                      ),
+                      icon: const Icon(Icons.info_outline_rounded),
+                    ),
+                  ),
+                  SizedBox(height: showMenuLogo ? 4 : 0),
                   if (showMenuLogo)
                     Center(
                       child: GestureDetector(
+                        key: const ValueKey<String>(
+                          'analysis_menu_logo_credits_trigger',
+                        ),
                         onTap: _showCreditsDialog,
                         child: Image.asset(
                           _menuLogoAsset(context),
@@ -8037,6 +8909,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               InkWell(
+                key: const ValueKey<String>('analysis_bot_credits_trigger'),
                 onTap: _showCreditsDialog,
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
@@ -8095,6 +8968,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   InkWell(
+                    key: const ValueKey<String>('analysis_bot_credits_trigger'),
                     onTap: _showCreditsDialog,
                     borderRadius: BorderRadius.circular(8),
                     child: Padding(
@@ -10399,368 +11273,336 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<void> _showCreditsDialog() async {
+    final scrollController = ScrollController();
     setState(() {
       _creditsDialogOpen = true;
+      _resetCreditsVisualLoop();
       _initializeCreditsBackdrop();
     });
 
     try {
       await showDialog<void>(
         context: context,
-        builder: (context) {
+        builder: (dialogContext) {
           final openedFromAnalysis = _activeSection == AppSection.analysis;
-          final theme = Theme.of(context);
-          final scheme = theme.colorScheme;
-          final isDark = theme.brightness == Brightness.dark;
-          final useMonochrome =
-              context.watch<AppThemeProvider>().isMonochrome ||
-              _isCinematicThemeEnabled;
-          final dialogSurface = useMonochrome
-              ? scheme.surface
-              : Color.alphaBlend(
-                  scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
-                  scheme.surface,
-                );
-          final dialogAccent = useMonochrome
-              ? Color.alphaBlend(
-                  scheme.onSurface.withValues(alpha: 0.12),
-                  scheme.surface,
-                )
-              : Color.alphaBlend(
-                  scheme.secondary.withValues(alpha: isDark ? 0.10 : 0.05),
-                  scheme.surface,
-                );
-          final dialogHeadingAccent = useMonochrome
-              ? scheme.onSurface.withValues(alpha: 0.92)
-              : scheme.secondary;
-          final legalAccent = useMonochrome
-              ? scheme.onSurface.withValues(alpha: 0.92)
-              : scheme.secondary;
-          final thirdPartyAccent = useMonochrome
-              ? scheme.onSurface.withValues(alpha: 0.92)
-              : scheme.primary;
-          final licenseAccent = useMonochrome
-              ? scheme.onSurface.withValues(alpha: 0.92)
-              : const Color(0xFFD8B640);
-          final dialogHeight = min(
-            MediaQuery.of(context).size.height * 0.82,
-            700.0,
-          );
-          return Dialog(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: 560,
-                maxHeight: dialogHeight,
-              ),
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [dialogSurface, dialogAccent],
+          return AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              final visuals = _buildCreditsDialogVisuals(context);
+              final media = MediaQuery.of(context);
+              final isShortViewport = media.size.height < 480;
+              final motionDuration = puzzleAcademyMotionDuration(
+                reducedEffects: visuals.reducedEffects,
+                milliseconds: 220,
+                reducedMilliseconds: 0,
+              );
+              final motionCurve = puzzleAcademyMotionCurve(
+                reducedEffects: visuals.reducedEffects,
+              );
+              final dialogHeight = min(
+                media.size.height * (isShortViewport ? 0.96 : 0.84),
+                760.0,
+              );
+              return Dialog(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                insetPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: isShortViewport ? 8 : 24,
                 ),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: scheme.outline.withValues(alpha: 0.28),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
-                    blurRadius: 28,
-                    offset: const Offset(0, 12),
+                child: Container(
+                  key: const ValueKey<String>('credits_dialog_shell'),
+                  constraints: BoxConstraints(
+                    maxWidth: 580,
+                    maxHeight: dialogHeight,
                   ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned.fill(child: _buildCreditsDynamicBackdrop()),
-                  Column(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Row(
-                        children: [
-                          const Spacer(),
-                          IconButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon: Icon(
-                              Icons.close,
-                              color: scheme.onSurface.withValues(alpha: 0.72),
-                            ),
-                            tooltip: 'Close credits',
-                          ),
-                        ],
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[visuals.shellStart, visuals.shellEnd],
+                    ),
+                    borderRadius: visuals.shellRadius,
+                    border: Border.all(
+                      color: visuals.frame.withValues(
+                        alpha: visuals.isRetro ? 0.88 : 0.44,
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: scheme.outline.withValues(alpha: 0.22),
-                          ),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: useMonochrome
-                                ? [
-                                    scheme.surface.withAlpha(0xEE),
-                                    Color.alphaBlend(
-                                      scheme.onSurface.withValues(alpha: 0.06),
-                                      scheme.surface,
-                                    ),
-                                  ]
-                                : [
-                                    scheme.primary.withValues(alpha: 0.10),
-                                    scheme.secondary.withValues(alpha: 0.05),
-                                  ],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: useMonochrome
-                                  ? scheme.onSurface.withValues(alpha: 0.08)
-                                  : scheme.primary.withValues(alpha: 0.12),
-                              blurRadius: 18,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          'assets/QILAmodus.png',
-                          width: 260,
-                          fit: BoxFit.contain,
-                        ),
+                      width: visuals.isRetro ? 2.0 : 1.0,
+                    ),
+                    boxShadow: <BoxShadow>[
+                      ...puzzleAcademySurfaceGlow(
+                        visuals.edgeGlow,
+                        monochrome: visuals.palette.monochrome,
+                        strength: visuals.isRetro ? 0.28 : 0.18,
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Credits, Data & Legal',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: scheme.onSurface.withValues(alpha: 0.74),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              _buildCreditRow(
-                                'Product & Direction',
-                                'QILA modus',
-                              ),
-                              _buildCreditRow(
-                                'Engineering & Design',
-                                'QILA modus',
-                              ),
-                              _buildCreditRow(
-                                'Chess Engine',
-                                'Stockfish (GPL-3.0)',
-                              ),
-                              _buildCreditRow(
-                                'Puzzle Data',
-                                'Lichess puzzle database (CC0)',
-                              ),
-                              _buildCreditRow('Opening Data', 'ECO data (MIT)'),
-                              _buildCreditRow(
-                                'Audio',
-                                'Freesound and Floraphonic effects',
-                              ),
-                              _buildCreditRow('Platform', 'Flutter / Dart'),
-                              const SizedBox(height: 12),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.fromLTRB(
-                                  14,
-                                  12,
-                                  14,
-                                  12,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color.alphaBlend(
-                                        scheme.primary.withValues(alpha: 0.10),
-                                        scheme.surface,
-                                      ),
-                                      Color.alphaBlend(
-                                        scheme.secondary.withValues(
-                                          alpha: 0.06,
-                                        ),
-                                        scheme.surface,
-                                      ),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: scheme.outline.withValues(
-                                      alpha: 0.26,
-                                    ),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: isDark ? 0.18 : 0.06,
-                                      ),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.verified_outlined,
-                                          size: 16,
-                                          color: dialogHeadingAccent,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Ownership & Legal',
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.2,
-                                            color: dialogHeadingAccent,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'ChessIQ is developed by QILA modus (a division of Qila). Original code, design, and project-specific assets are owned by Qila (CVR no. 42666297).',
-                                      style: TextStyle(
-                                        fontSize: 12.2,
-                                        color: scheme.onSurface.withValues(
-                                          alpha: 0.86,
-                                        ),
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        _buildLegalNoticeLink(
-                                          label: 'Copyright Notice',
-                                          icon: Icons.copyright_rounded,
-                                          accent: legalAccent,
-                                          onTap: () => _showLegalNoticeDialog(
-                                            title: 'COPYRIGHT.md',
-                                            assetPath: 'COPYRIGHT.md',
-                                            accent: legalAccent,
-                                          ),
-                                        ),
-                                        _buildLegalNoticeLink(
-                                          label: 'Third-Party Notices',
-                                          icon: Icons.policy_outlined,
-                                          accent: thirdPartyAccent,
-                                          onTap: () => _showLegalNoticeDialog(
-                                            title: 'THIRD_PARTY_NOTICES.md',
-                                            assetPath: 'THIRD_PARTY_NOTICES.md',
-                                            accent: thirdPartyAccent,
-                                          ),
-                                        ),
-                                        _buildLegalNoticeLink(
-                                          label: 'License',
-                                          icon: Icons.gavel_rounded,
-                                          accent: licenseAccent,
-                                          onTap: () => _showLegalNoticeDialog(
-                                            title: 'LICENSE',
-                                            assetPath: 'LICENSE',
-                                            accent: licenseAccent,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: _showLogsDialog,
-                                  icon: const Icon(Icons.bug_report_outlined),
-                                  label: const Text('View Logs'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: dialogHeadingAccent,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            if (!openedFromAnalysis) {
-                              Future.microtask(() {
-                                if (mounted) {
-                                  _goToMenu();
-                                }
-                              });
-                            }
-                          },
-                          child: Text(
-                            openedFromAnalysis ? 'Close' : 'Back to Main Menu',
-                          ),
-                        ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 30,
+                        offset: const Offset(0, 14),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                  child: ClipRRect(
+                    borderRadius: visuals.shellRadius,
+                    child: Stack(
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: _buildCreditsDynamicBackdrop(visuals: visuals),
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: Container(
+                              margin: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(
+                                  visuals.isRetro ? 8 : 18,
+                                ),
+                                border: Border.all(
+                                  color: visuals.palette.text.withValues(
+                                    alpha: 0.06,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _buildCreditsGlitchShell(
+                          visuals: visuals,
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              isShortViewport ? 14 : 16,
+                              isShortViewport ? 12 : 14,
+                              isShortViewport ? 14 : 16,
+                              isShortViewport ? 14 : 16,
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    const Spacer(),
+                                    IconButton(
+                                      onPressed: () =>
+                                          Navigator.of(dialogContext).pop(),
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: visuals.panel
+                                            .withValues(alpha: 0.68),
+                                        foregroundColor: visuals.palette.text,
+                                        side: BorderSide(
+                                          color: visuals.frame.withValues(
+                                            alpha: 0.34,
+                                          ),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.close_rounded),
+                                      tooltip: 'Close credits',
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: isShortViewport ? 10 : 12),
+                                _buildCreditsHero(
+                                  visuals: visuals,
+                                  duration: motionDuration,
+                                  curve: motionCurve,
+                                  condensed: isShortViewport,
+                                ),
+                                SizedBox(height: isShortViewport ? 10 : 14),
+                                Expanded(
+                                  child: Stack(
+                                    children: <Widget>[
+                                      Positioned.fill(
+                                        child: Scrollbar(
+                                          controller: scrollController,
+                                          thumbVisibility: true,
+                                          child: SingleChildScrollView(
+                                            controller: scrollController,
+                                            padding: const EdgeInsets.only(
+                                              right: 4,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: <Widget>[
+                                                _buildCreditRow(
+                                                  'Product & Direction',
+                                                  'QILA modus',
+                                                  visuals: visuals,
+                                                ),
+                                                _buildCreditRow(
+                                                  'Engineering & Design',
+                                                  'QILA modus',
+                                                  visuals: visuals,
+                                                ),
+                                                _buildCreditRow(
+                                                  'Chess Engine',
+                                                  'Stockfish (GPL-3.0)',
+                                                  visuals: visuals,
+                                                ),
+                                                _buildCreditRow(
+                                                  'Puzzle Data',
+                                                  'Lichess puzzle database (CC0)',
+                                                  visuals: visuals,
+                                                ),
+                                                _buildCreditRow(
+                                                  'Opening Data',
+                                                  'ECO data (MIT)',
+                                                  visuals: visuals,
+                                                ),
+                                                _buildCreditRow(
+                                                  'Audio',
+                                                  'Freesound and Floraphonic effects',
+                                                  visuals: visuals,
+                                                ),
+                                                _buildCreditRow(
+                                                  'Platform',
+                                                  'Flutter / Dart',
+                                                  visuals: visuals,
+                                                ),
+                                                const SizedBox(height: 14),
+                                                Text(
+                                                  'NOTICE LAYER',
+                                                  style: _creditsLabelStyle(
+                                                    visuals,
+                                                    color:
+                                                        visuals.secondaryAccent,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                _buildCreditsOwnershipPanel(
+                                                  visuals: visuals,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: Alignment.topCenter,
+                                        child: IgnorePointer(
+                                          child: Container(
+                                            height: isShortViewport ? 12 : 18,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: <Color>[
+                                                  visuals.shellStart,
+                                                  visuals.shellStart.withValues(
+                                                    alpha: 0.0,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Align(
+                                        alignment: Alignment.bottomCenter,
+                                        child: IgnorePointer(
+                                          child: Container(
+                                            height: isShortViewport ? 18 : 26,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: <Color>[
+                                                  visuals.shellEnd.withValues(
+                                                    alpha: 0.0,
+                                                  ),
+                                                  visuals.shellEnd,
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(height: isShortViewport ? 10 : 12),
+                                _buildCreditsFooterActions(
+                                  context: dialogContext,
+                                  openedFromAnalysis: openedFromAnalysis,
+                                  visuals: visuals,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (visuals.glitchStrength > 0.01)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _CreditsGlitchOverlayPainter(
+                                  phase: _pulseController.value,
+                                  strength: visuals.glitchStrength,
+                                  primary: visuals.primaryAccent,
+                                  secondary: visuals.secondaryAccent,
+                                  reducedEffects: visuals.reducedEffects,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           );
         },
       );
     } finally {
+      scrollController.dispose();
       if (mounted) {
         setState(() {
           _creditsDialogOpen = false;
           _creditsBackdropDots.clear();
           _blueYellowContactTime = 0.0;
           _creditsBackdropLastUpdate = null;
+          _resetCreditsVisualLoop();
         });
       } else {
         _creditsDialogOpen = false;
         _creditsBackdropDots.clear();
         _blueYellowContactTime = 0.0;
         _creditsBackdropLastUpdate = null;
+        _resetCreditsVisualLoop();
       }
     }
   }
 
   Widget _buildLegalNoticeLink({
+    Key? key,
     required String label,
     required IconData icon,
     required Color accent,
+    required _CreditsDialogVisuals visuals,
     required VoidCallback onTap,
   }) {
     return OutlinedButton.icon(
+      key: key,
       onPressed: onTap,
       icon: Icon(icon, size: 16),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: accent,
-        side: BorderSide(color: accent.withValues(alpha: 0.38)),
-        backgroundColor: accent.withValues(alpha: 0.08),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        textStyle: const TextStyle(fontSize: 11.7, fontWeight: FontWeight.w700),
+      label: Text(label, style: _creditsActionStyle(visuals, color: accent)),
+      style: ButtonStyle(
+        foregroundColor: WidgetStatePropertyAll<Color>(accent),
+        backgroundColor: WidgetStatePropertyAll<Color>(
+          accent.withValues(alpha: visuals.isRetro ? 0.16 : 0.08),
+        ),
+        side: WidgetStatePropertyAll<BorderSide>(
+          BorderSide(
+            color: accent.withValues(alpha: visuals.isRetro ? 0.64 : 0.38),
+            width: visuals.isRetro ? 1.6 : 1.0,
+          ),
+        ),
+        padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        shape: WidgetStatePropertyAll<RoundedRectangleBorder>(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(visuals.isRetro ? 8 : 14),
+          ),
+        ),
       ),
     );
   }
@@ -11057,148 +11899,173 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
-  Widget _buildCreditsDynamicBackdrop() {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return AnimatedBuilder(
-      animation: _pulseController,
-      builder: (context, child) {
-        final t = _pulseController.value;
-        final coreNodes = <({double x, double y, Color color})>[
-          (x: 0.16 + 0.02 * sin(t * pi * 2), y: 0.22, color: scheme.primary),
-          (x: 0.34, y: 0.35 + 0.02 * cos(t * pi * 2), color: scheme.secondary),
-          (x: 0.58 + 0.015 * cos(t * pi * 2), y: 0.24, color: scheme.primary),
-          (x: 0.78, y: 0.38 + 0.02 * sin(t * pi * 2), color: scheme.tertiary),
-          (x: 0.28, y: 0.68, color: scheme.secondary),
-          (x: 0.56 + 0.02 * sin(t * pi * 2), y: 0.58, color: scheme.primary),
-          (x: 0.82, y: 0.70, color: scheme.tertiary),
-        ];
+  Widget _buildCreditsDynamicBackdrop({
+    required _CreditsDialogVisuals visuals,
+  }) {
+    final t = _pulseController.value;
+    final wave = t * pi * 2;
+    final lineColors = <Color>[
+      visuals.primaryAccent,
+      visuals.secondaryAccent,
+      visuals.tertiaryAccent,
+      visuals.primaryAccent,
+    ];
+    final lineAlignments = <Alignment>[
+      const Alignment(-0.18, -0.26),
+      const Alignment(0.22, -0.06),
+      const Alignment(-0.04, 0.28),
+      const Alignment(0.38, 0.34),
+    ];
+    final lineRotations = <double>[-0.18, 0.12, -0.42, 0.36];
+    final lineWidths = <double>[150, 170, 140, 128];
+    final coreNodes = <({double x, double y, Color color})>[
+      (x: 0.16 + 0.02 * sin(wave), y: 0.22, color: visuals.primaryAccent),
+      (x: 0.34, y: 0.35 + 0.02 * cos(wave), color: visuals.secondaryAccent),
+      (x: 0.58 + 0.015 * cos(wave), y: 0.24, color: visuals.primaryAccent),
+      (x: 0.78, y: 0.38 + 0.02 * sin(wave), color: visuals.tertiaryAccent),
+      (x: 0.28, y: 0.68, color: visuals.secondaryAccent),
+      (x: 0.56 + 0.02 * sin(wave), y: 0.58, color: visuals.primaryAccent),
+      (x: 0.82, y: 0.70, color: visuals.tertiaryAccent),
+    ];
 
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        scheme.primary.withValues(alpha: isDark ? 0.08 : 0.05),
-                        scheme.surface.withValues(alpha: 0.94),
-                        scheme.secondary.withValues(
-                          alpha: isDark ? 0.08 : 0.04,
+    Color dotColorForRole(_CreditsBackdropDotRole role) {
+      switch (role) {
+        case _CreditsBackdropDotRole.green:
+          return Color.lerp(
+                const Color(0xFF7EDC8A),
+                visuals.tertiaryAccent,
+                visuals.themeBlend,
+              ) ??
+              visuals.tertiaryAccent;
+        case _CreditsBackdropDotRole.blue:
+          return Color.lerp(
+                const Color(0xFF2A6CF0),
+                visuals.primaryAccent,
+                visuals.themeBlend,
+              ) ??
+              visuals.primaryAccent;
+        case _CreditsBackdropDotRole.yellow:
+          return Color.lerp(
+                const Color(0xFFD8B640),
+                visuals.secondaryAccent,
+                visuals.themeBlend,
+              ) ??
+              visuals.secondaryAccent;
+      }
+    }
+
+    return ClipRRect(
+      borderRadius: visuals.shellRadius,
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[
+                    visuals.shellStart,
+                    visuals.panel.withValues(alpha: 0.96),
+                    visuals.shellEnd,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (visuals.themeBlend > 0.08 || visuals.glitchStrength > 0.01)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _CreditsRetroBackdropPainter(
+                  phase: t,
+                  themeBlend: visuals.themeBlend,
+                  glitchStrength: visuals.glitchStrength,
+                  gridColor: visuals.primaryAccent,
+                  scanColor: visuals.palette.text,
+                  highlightColor: visuals.secondaryAccent,
+                  reducedEffects: visuals.reducedEffects,
+                ),
+              ),
+            ),
+          for (var index = 0; index < lineColors.length; index++)
+            Positioned.fill(
+              child: Align(
+                alignment: lineAlignments[index],
+                child: Transform.rotate(
+                  angle: lineRotations[index],
+                  child: Container(
+                    width: lineWidths[index],
+                    height: visuals.isRetro ? 1.8 : 1.2,
+                    decoration: BoxDecoration(
+                      color: lineColors[index].withValues(
+                        alpha: visuals.isRetro ? 0.18 : 0.10,
+                      ),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: lineColors[index].withValues(
+                            alpha: visuals.isRetro ? 0.14 : 0.06,
+                          ),
+                          blurRadius: visuals.isRetro ? 12 : 10,
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-              for (final line
-                  in <
-                    ({
-                      Alignment alignment,
-                      double width,
-                      double rotation,
-                      Color color,
-                    })
-                  >[
-                    (
-                      alignment: const Alignment(-0.18, -0.26),
-                      width: 150,
-                      rotation: -0.18,
-                      color: scheme.primary,
-                    ),
-                    (
-                      alignment: const Alignment(0.22, -0.06),
-                      width: 170,
-                      rotation: 0.12,
-                      color: scheme.secondary,
-                    ),
-                    (
-                      alignment: const Alignment(-0.04, 0.28),
-                      width: 140,
-                      rotation: -0.42,
-                      color: scheme.tertiary,
-                    ),
-                    (
-                      alignment: const Alignment(0.38, 0.34),
-                      width: 128,
-                      rotation: 0.36,
-                      color: scheme.primary,
-                    ),
-                  ])
-                Positioned.fill(
-                  child: Align(
-                    alignment: line.alignment,
-                    child: Transform.rotate(
-                      angle: line.rotation,
-                      child: Container(
-                        width: line.width,
-                        height: 1.2,
-                        decoration: BoxDecoration(
-                          color: line.color.withValues(
-                            alpha: isDark ? 0.18 : 0.10,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: line.color.withValues(
-                                alpha: isDark ? 0.12 : 0.06,
-                              ),
-                              blurRadius: 10,
-                            ),
-                          ],
+            ),
+          for (final node in coreNodes)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment(node.x * 2 - 1, node.y * 2 - 1),
+                child: Container(
+                  width: visuals.isRetro ? 18 : 16,
+                  height: visuals.isRetro ? 18 : 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: node.color.withValues(
+                          alpha: visuals.isRetro ? 0.24 : 0.12,
                         ),
+                        blurRadius: visuals.isRetro ? 18 : 16,
+                        spreadRadius: visuals.isRetro ? 5 : 4,
                       ),
-                    ),
+                    ],
                   ),
-                ),
-              for (final node in coreNodes)
-                Positioned.fill(
-                  child: Align(
-                    alignment: Alignment(node.x * 2 - 1, node.y * 2 - 1),
+                  child: Center(
                     child: Container(
-                      width: 16,
-                      height: 16,
+                      width: visuals.isRetro ? 6 : 5,
+                      height: visuals.isRetro ? 6 : 5,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: node.color.withValues(
-                              alpha: isDark ? 0.18 : 0.10,
-                            ),
-                            blurRadius: 16,
-                            spreadRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: node.color.withValues(alpha: 0.92),
-                          ),
-                        ),
+                        color: node.color.withValues(alpha: 0.92),
                       ),
                     ),
                   ),
                 ),
-              for (final dot in _creditsBackdropDots)
-                Positioned.fill(
-                  child: Align(
-                    alignment: Alignment(dot.position.dx, dot.position.dy),
-                    child: Container(
+              ),
+            ),
+          for (final dot in _creditsBackdropDots)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment(dot.position.dx, dot.position.dy),
+                child: Builder(
+                  builder: (context) {
+                    final displayColor = dotColorForRole(dot.role);
+                    return Container(
                       width: dot.radius * 2,
                       height: dot.radius * 2,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: dot.color.withValues(alpha: 0.16),
-                        boxShadow: [
+                        shape: visuals.isRetro
+                            ? BoxShape.rectangle
+                            : BoxShape.circle,
+                        borderRadius: visuals.isRetro
+                            ? BorderRadius.circular(2)
+                            : null,
+                        color: displayColor.withValues(alpha: 0.16),
+                        boxShadow: <BoxShadow>[
                           BoxShadow(
-                            color: dot.color.withValues(alpha: 0.28),
+                            color: displayColor.withValues(alpha: 0.28),
                             blurRadius: dot.radius * 3,
                             spreadRadius: dot.radius * 0.8,
                           ),
@@ -11210,68 +12077,113 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 width: dot.radius,
                                 height: dot.radius,
                                 decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: dot.color,
+                                  shape: visuals.isRetro
+                                      ? BoxShape.rectangle
+                                      : BoxShape.circle,
+                                  borderRadius: visuals.isRetro
+                                      ? BorderRadius.circular(1)
+                                      : null,
+                                  color: displayColor,
                                 ),
                               ),
                             )
                           : null,
-                    ),
-                  ),
+                    );
+                  },
                 ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        scheme.surface.withValues(alpha: 0.02),
-                        scheme.surface.withValues(alpha: isDark ? 0.14 : 0.08),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCreditRow(String role, String name) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text(
-              role,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                color: scheme.secondary,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
               ),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              name,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    visuals.panel.withValues(alpha: 0.01),
+                    visuals.panel.withValues(
+                      alpha: visuals.isRetro ? 0.16 : 0.08,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCreditRow(
+    String role,
+    String name, {
+    required _CreditsDialogVisuals visuals,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            visuals.panel.withValues(alpha: 0.94),
+            visuals.panelAlt.withValues(alpha: visuals.isRetro ? 0.82 : 0.90),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(visuals.isRetro ? 10 : 16),
+        border: Border.all(
+          color: visuals.frame.withValues(alpha: visuals.isRetro ? 0.72 : 0.28),
+          width: visuals.isRetro ? 1.8 : 1.0,
+        ),
+        boxShadow: puzzleAcademySurfaceGlow(
+          visuals.edgeGlow,
+          monochrome: visuals.palette.monochrome,
+          strength: visuals.isRetro ? 0.12 : 0.08,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 360;
+          final roleWidget = Text(
+            role.toUpperCase(),
+            textAlign: compact ? TextAlign.left : TextAlign.right,
+            style: _creditsLabelStyle(
+              visuals,
+              size: 11.4,
+              color: visuals.primaryAccent,
+            ),
+          );
+          final valueWidget = Text(
+            name,
+            style: _creditsBodyStyle(
+              visuals,
+              size: 13.2,
+              color: visuals.palette.text,
+              weight: FontWeight.w700,
+            ),
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                roleWidget,
+                const SizedBox(height: 6),
+                valueWidget,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(width: 166, child: roleWidget),
+              const SizedBox(width: 14),
+              Expanded(child: valueWidget),
+            ],
+          );
+        },
       ),
     );
   }

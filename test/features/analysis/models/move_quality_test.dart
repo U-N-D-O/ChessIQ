@@ -127,6 +127,7 @@ void main() {
           preMoveMoverWinProbability: 0.52,
           postMoveMoverWinProbability: 0.506,
           preMoveMoverEvalPawns: 0.1,
+          currentOpening: 'Italian Game',
           cpGapFromBest: 18,
           playedMoveRank: 2,
           insideOpeningExemption: true,
@@ -138,7 +139,7 @@ void main() {
         assessment.scoringSuppressedReason,
         MoveQualityScoringSuppressionReason.openingFeedbackOnly,
       );
-      expect(assessment.explanation, contains('registered opening theory'));
+      expect(assessment.explanation, 'Opening: Italian Game');
       expect(assessment.explanation, isNot(contains('first 6 plies')));
     });
 
@@ -365,6 +366,7 @@ void main() {
           preMoveMoverWinProbability: 0.58,
           postMoveMoverWinProbability: 0.31,
           preMoveMoverEvalPawns: 0.4,
+          currentOpening: 'Scotch Game',
           playedMoveRank: 1,
           cpGapFromBest: 0,
           insideOpeningExemption: true,
@@ -376,6 +378,30 @@ void main() {
         assessment.scoringSuppressedReason,
         MoveQualityScoringSuppressionReason.openingFeedbackOnly,
       );
+      expect(assessment.explanation, 'Opening: Scotch Game');
+    });
+
+    test('uses opening label for low-confidence book feedback', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.08,
+          preMoveMoverWinProbability: 0.54,
+          postMoveMoverWinProbability: 0.46,
+          preMoveMoverEvalPawns: 0.2,
+          currentOpening: 'Queen\'s Gambit Declined',
+          cpGapFromBest: 64,
+          playedMoveRank: 6,
+          insideOpeningExemption: true,
+          confidence: MoveQualityConfidence.low,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.book);
+      expect(
+        assessment.scoringSuppressedReason,
+        MoveQualityScoringSuppressionReason.openingFeedbackOnly,
+      );
+      expect(assessment.explanation, 'Opening: Queen\'s Gambit Declined');
     });
 
     test('suppresses special labels when confidence is low', () {

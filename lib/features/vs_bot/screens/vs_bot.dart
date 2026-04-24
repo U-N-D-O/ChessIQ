@@ -67,12 +67,17 @@ abstract class _VsBotState extends _StoreState {
       6.0,
       max(6.0, scene.height - ((isLandscape ? 92 : 82) * scale)),
     );
+    final pointerTargetDy = center.dy - top.toDouble();
 
     return Positioned(
       left: left.toDouble(),
       top: top.toDouble(),
       child: IgnorePointer(
-        child: _buildBotSpeechBubble(scale, maxWidth: bubbleMaxWidth),
+        child: _buildBotSpeechBubble(
+          scale,
+          maxWidth: bubbleMaxWidth,
+          pointerTargetDy: pointerTargetDy,
+        ),
       ),
     );
   }
@@ -685,7 +690,11 @@ abstract class _VsBotState extends _StoreState {
     });
   }
 
-  Widget _buildBotSpeechBubble(double scale, {double? maxWidth}) {
+  Widget _buildBotSpeechBubble(
+    double scale, {
+    double? maxWidth,
+    required double pointerTargetDy,
+  }) {
     final full = _botSpeechFullText;
     if (full == null || full.isEmpty) {
       return const SizedBox.shrink();
@@ -702,25 +711,43 @@ abstract class _VsBotState extends _StoreState {
     final difficultyAccent = _botDifficultyColor(_selectedBotDifficulty);
     final bubbleAccent = Color.lerp(profileAccent, difficultyAccent, 0.45)!;
     final text = _botSpeechVisibleText.isEmpty ? '...' : _botSpeechVisibleText;
+    final tailHeight = 20 * scale;
+    final tailTipYOffset = tailHeight * 0.58;
+    final tailTop = (pointerTargetDy - tailTipYOffset).clamp(
+      4.0 * scale,
+      34.0 * scale,
+    );
+    final tailAngle =
+        ((pointerTargetDy - (18 * scale)) / (24 * scale)).clamp(-0.34, 0.34);
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth ?? (214 * scale)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.only(bottom: 1 * scale),
-            child: CustomPaint(
-              size: Size(12 * scale, 16 * scale),
-              painter: _SpeechTailPainter(
-                fillColor: Color.alphaBlend(
-                  bubbleAccent.withValues(
-                    alpha: arcade.monochrome ? 0.08 : 0.14,
+            padding: EdgeInsets.only(top: tailTop),
+            child: Transform.translate(
+              offset: Offset(1.2 * scale, 0),
+              child: Transform.rotate(
+                angle: tailAngle,
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 1 * scale),
+                  child: CustomPaint(
+                    size: Size(18 * scale, tailHeight),
+                    painter: _SpeechTailPainter(
+                      fillColor: Color.alphaBlend(
+                        bubbleAccent.withValues(
+                          alpha: arcade.monochrome ? 0.08 : 0.14,
+                        ),
+                        arcade.panelAlt,
+                      ),
+                      strokeColor: bubbleAccent.withValues(alpha: 0.72),
+                    ),
                   ),
-                  arcade.panelAlt,
                 ),
-                strokeColor: bubbleAccent.withValues(alpha: 0.72),
               ),
             ),
           ),
@@ -816,15 +843,32 @@ class _SpeechTailPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final tip = Offset(size.width * 0.12, size.height * 0.62);
-    final top = Offset(size.width * 0.96, size.height * 0.22);
-    final bottom = Offset(size.width * 0.96, size.height * 0.90);
+    final tip = Offset(size.width * 0.08, size.height * 0.58);
+    final top = Offset(size.width * 0.98, size.height * 0.18);
+    final bottom = Offset(size.width * 0.98, size.height * 0.86);
     final path = Path()
       ..moveTo(top.dx, top.dy)
-      ..quadraticBezierTo(size.width * 0.50, size.height * 0.36, tip.dx, tip.dy)
       ..quadraticBezierTo(
-        size.width * 0.50,
-        size.height * 0.86,
+        size.width * 0.66,
+        size.height * 0.20,
+        size.width * 0.34,
+        size.height * 0.38,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.16,
+        size.height * 0.50,
+        tip.dx,
+        tip.dy,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.18,
+        size.height * 0.68,
+        size.width * 0.34,
+        size.height * 0.78,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.66,
+        size.height * 0.90,
         bottom.dx,
         bottom.dy,
       )
@@ -841,24 +885,7 @@ class _SpeechTailPainter extends CustomPainter {
       Paint()
         ..color = strokeColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
-
-    final dotRadius = size.width * 0.16;
-    canvas.drawCircle(
-      tip,
-      dotRadius,
-      Paint()
-        ..color = fillColor
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawCircle(
-      tip,
-      dotRadius,
-      Paint()
-        ..color = strokeColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
+        ..strokeWidth = size.width * 0.08,
     );
   }
 

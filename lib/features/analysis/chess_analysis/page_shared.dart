@@ -273,44 +273,215 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     }
   }
 
-  void _paintRasterBand(
+  void _paintPerspectiveGrid(
+    Canvas canvas,
+    Size size,
+    Offset center,
+    double outerRadius,
+  ) {
+    final horizonY = ui.lerpDouble(size.height * 0.30, center.dy * 0.88, 0.62)!;
+    final gridPaint = Paint()
+      ..color = lineColor.withValues(alpha: reducedEffects ? 0.08 : 0.14)
+      ..strokeWidth = reducedEffects ? 0.9 : 1.1
+      ..style = PaintingStyle.stroke;
+    final glowPaint = Paint()
+      ..shader = ui.Gradient.linear(
+        Offset(0, horizonY),
+        Offset(0, size.height),
+        <Color>[
+          cyan.withValues(alpha: reducedEffects ? 0.0 : 0.02),
+          lineColor.withValues(alpha: reducedEffects ? 0.04 : 0.10),
+          lineColor.withValues(alpha: 0.0),
+        ],
+      );
+
+    final laneCount = reducedEffects ? 7 : 11;
+    for (var lane = 0; lane < laneCount; lane++) {
+      final t = laneCount == 1 ? 0.5 : lane / (laneCount - 1);
+      final normalized = t - 0.5;
+      final topX = center.dx + normalized * outerRadius * 0.34;
+      final controlX = center.dx + normalized * outerRadius * 0.82;
+      final bottomX = center.dx + normalized * size.width * 1.22;
+      final controlY = ui.lerpDouble(horizonY, size.height, 0.54)!;
+      final path = Path()
+        ..moveTo(topX, horizonY)
+        ..quadraticBezierTo(controlX, controlY, bottomX, size.height);
+      canvas.drawPath(path, gridPaint);
+    }
+
+    final rowCount = reducedEffects ? 4 : 6;
+    for (var row = 0; row < rowCount; row++) {
+      final progress = (row + 1) / rowCount;
+      final eased = progress * progress;
+      final y = ui.lerpDouble(horizonY + 14, size.height * 0.98, eased)!;
+      final halfWidth = ui.lerpDouble(
+        outerRadius * 0.18,
+        size.width * 0.52,
+        eased,
+      )!;
+      canvas.drawLine(
+        Offset(center.dx - halfWidth, y),
+        Offset(center.dx + halfWidth, y),
+        gridPaint,
+      );
+    }
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+      glowPaint,
+    );
+
+    if (!reducedEffects) {
+      canvas.drawLine(
+        Offset(center.dx - outerRadius * 0.28, horizonY),
+        Offset(center.dx + outerRadius * 0.28, horizonY),
+        Paint()
+          ..color = cyan.withValues(alpha: 0.10)
+          ..strokeWidth = 1.6,
+      );
+    }
+  }
+
+  void _paintSignalHalo(
     Canvas canvas, {
-    required Offset from,
-    required Offset to,
-    required Color color,
-    required double thickness,
+    required Offset anchor,
+    required Color primaryColor,
+    required Color secondaryColor,
+    required double polarity,
+    required double innerRadius,
   }) {
-    final delta = to - from;
-    final distance = delta.distance;
-    if (distance <= 1.0) return;
+    final haloRadius = innerRadius * (0.22 + impact * 0.08);
+    final bloomPaint = Paint()
+      ..shader = ui.Gradient.radial(
+        anchor,
+        haloRadius * (reducedEffects ? 1.3 : 1.8),
+        <Color>[
+          primaryColor.withValues(alpha: reducedEffects ? 0.10 : 0.16),
+          secondaryColor.withValues(alpha: reducedEffects ? 0.04 : 0.08),
+          Colors.transparent,
+        ],
+      );
+    canvas.drawCircle(
+      anchor,
+      haloRadius * (reducedEffects ? 1.3 : 1.8),
+      bloomPaint,
+    );
 
-    final angle = atan2(delta.dy, delta.dx);
-    final steps = reducedEffects ? 8 : 12;
-    final segmentLength = distance / steps;
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = reducedEffects ? 1.4 : 1.8;
+    final ringCount = reducedEffects ? 1 : 2;
+    for (var ring = 0; ring < ringCount; ring++) {
+      final radius = haloRadius + ring * 12.0;
+      final startAngle = time * (0.75 + ring * 0.12) * polarity;
+      ringPaint.color = (ring.isEven ? primaryColor : secondaryColor)
+          .withValues(
+            alpha: _unit((reducedEffects ? 0.12 : 0.18) + impact * 0.06),
+          );
+      canvas.drawArc(
+        Rect.fromCircle(center: anchor, radius: radius),
+        startAngle,
+        pi * (reducedEffects ? 0.46 : 0.58),
+        false,
+        ringPaint,
+      );
+      canvas.drawArc(
+        Rect.fromCircle(center: anchor, radius: radius * 0.84),
+        startAngle + pi,
+        pi * 0.24,
+        false,
+        ringPaint,
+      );
+    }
 
-    for (var index = 0; index < steps; index++) {
-      final pulse = (sin(time * 2.4 + index * 0.8) + 1.0) * 0.5;
-      final center = from + delta * ((index + 0.5) / steps);
+    if (!reducedEffects) {
+      _paintSteppedSquareRing(
+        canvas,
+        anchor,
+        haloRadius * 0.62,
+        2.6,
+        secondaryColor.withValues(alpha: 0.12 + impact * 0.06),
+        ((time * 3).round()) % 3,
+      );
+    }
+
+    final satelliteCount = reducedEffects ? 3 : 5;
+    for (var index = 0; index < satelliteCount; index++) {
+      final orbitAngle =
+          time * (0.92 + index * 0.06) * polarity +
+          index * (2 * pi / satelliteCount);
+      final orbitRadius = haloRadius + 8 + (index.isEven ? 0 : 8);
+      final point =
+          anchor +
+          Offset(cos(orbitAngle), sin(orbitAngle) * 0.88) * orbitRadius;
+      final size = reducedEffects ? 3.0 : 4.4;
       final paint = Paint()
-        ..color = color.withValues(
-          alpha: _unit((reducedEffects ? 0.03 : 0.06) + pulse * 0.05),
+        ..color = (index.isEven ? primaryColor : secondaryColor).withValues(
+          alpha: 0.18 + impact * 0.08,
         );
-
       canvas.save();
-      canvas.translate(center.dx, center.dy);
-      canvas.rotate(angle);
+      canvas.translate(point.dx, point.dy);
+      canvas.rotate(orbitAngle + pi / 4);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
             center: Offset.zero,
-            width: segmentLength * (0.72 + pulse * 0.22),
-            height: thickness * (0.74 + (index % 3) * 0.18),
+            width: size,
+            height: size * (index.isEven ? 1.0 : 0.66),
           ),
           const Radius.circular(1.0),
         ),
         paint,
       );
       canvas.restore();
+    }
+  }
+
+  void _paintAmbientGlitchStrips(Canvas canvas, Size size) {
+    final stripCount = reducedEffects ? 3 : 6;
+    for (var index = 0; index < stripCount; index++) {
+      final progress = ((time * 0.05) + index * 0.17) % 1.0;
+      final y = ui.lerpDouble(
+        size.height * 0.14,
+        size.height * 0.84,
+        progress,
+      )!;
+      final width = size.width * (0.14 + ((index % 3) * 0.08));
+      final left = (size.width * ((sin(time * 0.8 + index * 1.4) + 1.0) * 0.34))
+          .clamp(0.0, size.width - width);
+      final rect = Rect.fromLTWH(left, y, width, reducedEffects ? 3.0 : 4.8);
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = ui.Gradient.linear(rect.topLeft, rect.topRight, <Color>[
+            (index.isEven ? cyan : amber).withValues(alpha: 0.0),
+            (index.isEven ? pink : crimson).withValues(
+              alpha: reducedEffects ? 0.06 : 0.12,
+            ),
+            (index.isEven ? cyan : amber).withValues(alpha: 0.0),
+          ]),
+      );
+    }
+
+    if (!reducedEffects) {
+      final blockCount = 7;
+      for (var index = 0; index < blockCount; index++) {
+        final x =
+            size.width *
+            (((cos(time * 0.9 + index * 1.2) + 1.0) * 0.4).clamp(0.0, 1.0));
+        final y =
+            size.height *
+            (((sin(time * 0.7 + index * 1.5) + 1.0) * 0.32).clamp(0.08, 0.92));
+        canvas.drawRect(
+          Rect.fromCenter(
+            center: Offset(x, y),
+            width: 6 + (index % 3) * 3,
+            height: 3 + (index % 2) * 2,
+          ),
+          Paint()
+            ..color = (index.isEven ? cyan : amber).withValues(alpha: 0.08),
+        );
+      }
     }
   }
 
@@ -321,6 +492,11 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     final innerRadius = shortest * 0.32;
     final outerRadius = shortest * 0.58;
     final impactStep = (impact * 6).round() / 6;
+    final blueOffset = _alignmentToOffset(size, blueAlignment);
+    final yellowOffset = _alignmentToOffset(size, yellowAlignment);
+
+    _paintPerspectiveGrid(canvas, size, center, outerRadius);
+    _paintAmbientGlitchStrips(canvas, size);
 
     _paintCheckerBurst(canvas, center, innerRadius, outerRadius);
 
@@ -343,22 +519,21 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     }
 
     _paintOrbitDebris(canvas, center, innerRadius, outerRadius);
-
-    final blueOffset = _alignmentToOffset(size, blueAlignment);
-    final yellowOffset = _alignmentToOffset(size, yellowAlignment);
-    _paintRasterBand(
+    _paintSignalHalo(
       canvas,
-      from: blueOffset,
-      to: center,
-      color: cyan,
-      thickness: reducedEffects ? 4.0 : 6.0,
+      anchor: blueOffset,
+      primaryColor: cyan,
+      secondaryColor: pink,
+      polarity: -1.0,
+      innerRadius: innerRadius,
     );
-    _paintRasterBand(
+    _paintSignalHalo(
       canvas,
-      from: yellowOffset,
-      to: center,
-      color: amber,
-      thickness: reducedEffects ? 4.0 : 6.0,
+      anchor: yellowOffset,
+      primaryColor: amber,
+      secondaryColor: crimson,
+      polarity: 1.0,
+      innerRadius: innerRadius,
     );
   }
 
@@ -379,6 +554,48 @@ class _MenuBlastBackdropPainter extends CustomPainter {
 
 enum _CreditsBackdropDotRole { green, blue, yellow }
 
+enum _CreditsVisualMode { modern, glitchToRetro, retro, glitchToModern }
+
+class _CreditsDialogVisuals {
+  const _CreditsDialogVisuals({
+    required this.palette,
+    required this.mode,
+    required this.themeBlend,
+    required this.glitchStrength,
+    required this.reducedEffects,
+    required this.shellStart,
+    required this.shellEnd,
+    required this.panel,
+    required this.panelAlt,
+    required this.frame,
+    required this.edgeGlow,
+    required this.primaryAccent,
+    required this.secondaryAccent,
+    required this.tertiaryAccent,
+    required this.titleColor,
+  });
+
+  final PuzzleAcademyPalette palette;
+  final _CreditsVisualMode mode;
+  final double themeBlend;
+  final double glitchStrength;
+  final bool reducedEffects;
+  final Color shellStart;
+  final Color shellEnd;
+  final Color panel;
+  final Color panelAlt;
+  final Color frame;
+  final Color edgeGlow;
+  final Color primaryAccent;
+  final Color secondaryAccent;
+  final Color tertiaryAccent;
+  final Color titleColor;
+
+  bool get isRetro => themeBlend >= 0.56;
+
+  BorderRadius get shellRadius => BorderRadius.circular(isRetro ? 12 : 24);
+}
+
 class _CreditsBackdropDot {
   Offset position;
   Offset velocity;
@@ -394,6 +611,226 @@ class _CreditsBackdropDot {
     required this.radius,
     required this.role,
   });
+}
+
+class _CreditsRetroBackdropPainter extends CustomPainter {
+  const _CreditsRetroBackdropPainter({
+    required this.phase,
+    required this.themeBlend,
+    required this.glitchStrength,
+    required this.gridColor,
+    required this.scanColor,
+    required this.highlightColor,
+    required this.reducedEffects,
+  });
+
+  final double phase;
+  final double themeBlend;
+  final double glitchStrength;
+  final Color gridColor;
+  final Color scanColor;
+  final Color highlightColor;
+  final bool reducedEffects;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final blend = max(themeBlend, glitchStrength * 0.85);
+    if (blend <= 0.0) {
+      return;
+    }
+
+    final gridPaint = Paint()
+      ..color = gridColor.withValues(alpha: 0.05 + blend * 0.16)
+      ..strokeWidth = reducedEffects ? 0.8 : 1.0;
+    const cellSize = 28.0;
+    final yShift = (phase * 12) % cellSize;
+
+    for (double x = 0; x <= size.width; x += cellSize) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = -cellSize + yShift; y <= size.height; y += cellSize) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final scanPaint = Paint()
+      ..color = scanColor.withValues(alpha: 0.018 + blend * 0.04);
+    for (double y = 0; y <= size.height; y += 10) {
+      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), scanPaint);
+    }
+
+    final sparklePaint = Paint()
+      ..color = highlightColor.withValues(alpha: 0.08 + blend * 0.14);
+    for (var index = 0; index < 18; index++) {
+      final progress = ((index * 0.13) + phase * 0.02) % 1.0;
+      final x = size.width * ((index * 29 % 100) / 100);
+      final y = size.height * (0.08 + progress * 0.68);
+      final sparkleSize = index.isEven ? 2.0 : 3.0;
+      canvas.drawRect(
+        Rect.fromLTWH(x, y, sparkleSize, sparkleSize),
+        sparklePaint,
+      );
+    }
+
+    if (glitchStrength > 0.01) {
+      final sweepY = (phase * 1.8 % 1.0) * size.height;
+      canvas.drawRect(
+        Rect.fromLTWH(0, sweepY, size.width, reducedEffects ? 4 : 7),
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset(0, sweepY),
+            Offset(size.width, sweepY),
+            <Color>[
+              highlightColor.withValues(alpha: 0.0),
+              highlightColor.withValues(alpha: 0.10 + glitchStrength * 0.16),
+              highlightColor.withValues(alpha: 0.0),
+            ],
+          ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CreditsRetroBackdropPainter oldDelegate) {
+    return oldDelegate.phase != phase ||
+        oldDelegate.themeBlend != themeBlend ||
+        oldDelegate.glitchStrength != glitchStrength ||
+        oldDelegate.gridColor != gridColor ||
+        oldDelegate.scanColor != scanColor ||
+        oldDelegate.highlightColor != highlightColor ||
+        oldDelegate.reducedEffects != reducedEffects;
+  }
+}
+
+class _CreditsGlitchOverlayPainter extends CustomPainter {
+  const _CreditsGlitchOverlayPainter({
+    required this.phase,
+    required this.strength,
+    required this.primary,
+    required this.secondary,
+    required this.reducedEffects,
+  });
+
+  final double phase;
+  final double strength;
+  final Color primary;
+  final Color secondary;
+  final bool reducedEffects;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (strength <= 0.0) {
+      return;
+    }
+
+    final bandCount = reducedEffects ? 3 : 6;
+    for (var index = 0; index < bandCount; index++) {
+      final progress = ((phase * 1.7) + index * 0.19) % 1.0;
+      final y = size.height * progress;
+      final height = (reducedEffects ? 6.0 : 10.0) + index * 2.0;
+      final offset =
+          sin((phase * 2 * pi) + index * 0.9) *
+          strength *
+          (reducedEffects ? 6.0 : 14.0);
+      final tint = index.isEven ? primary : secondary;
+      final widthFactor =
+          0.56 + ((sin(phase * 8.0 + index * 1.4) + 1.0) * 0.22);
+      final left = size.width * ((cos(phase * 6.0 + index * 0.7) + 1.0) * 0.18);
+      final bandRect = Rect.fromLTWH(left, y, size.width * widthFactor, height);
+
+      canvas.save();
+      canvas.translate(offset, 0);
+      canvas.drawRect(
+        bandRect,
+        Paint()..color = tint.withValues(alpha: 0.05 + strength * 0.09),
+      );
+      canvas.restore();
+
+      if (!reducedEffects) {
+        canvas.drawRect(
+          Rect.fromLTWH(
+            max(0, bandRect.left - 8),
+            bandRect.top + 1,
+            min(size.width, bandRect.width * 0.2),
+            max(1.0, bandRect.height - 2),
+          ),
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.02 + strength * 0.08),
+        );
+      }
+    }
+
+    if (!reducedEffects) {
+      final blockCount = 4;
+      for (var index = 0; index < blockCount; index++) {
+        final blockY = size.height * (((phase * 1.2) + index * 0.23) % 1.0);
+        final blockLeft =
+            size.width *
+            (((sin(phase * 9.0 + index) + 1.0) * 0.32).clamp(0.0, 0.64));
+        final blockWidth = size.width * (0.10 + ((index % 3) * 0.05));
+        canvas.drawRect(
+          Rect.fromLTWH(blockLeft, blockY, blockWidth, 8 + index * 2),
+          Paint()
+            ..color = (index.isEven ? primary : secondary).withValues(
+              alpha: 0.04 + strength * 0.10,
+            ),
+        );
+      }
+    }
+
+    final sweepY = ((phase * 2.4) + strength * 0.12) % 1.0 * size.height;
+    canvas.drawRect(
+      Rect.fromLTWH(0, sweepY, size.width, reducedEffects ? 1.5 : 2.5),
+      Paint()..color = Colors.white.withValues(alpha: 0.06 + strength * 0.10),
+    );
+
+    if (!reducedEffects && strength > 0.55) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..blendMode = BlendMode.difference
+          ..color = Colors.white.withValues(alpha: 0.018 + strength * 0.03),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CreditsGlitchOverlayPainter oldDelegate) {
+    return oldDelegate.phase != phase ||
+        oldDelegate.strength != strength ||
+        oldDelegate.primary != primary ||
+        oldDelegate.secondary != secondary ||
+        oldDelegate.reducedEffects != reducedEffects;
+  }
+}
+
+class _CreditsGlitchBandClipper extends CustomClipper<Rect> {
+  const _CreditsGlitchBandClipper({
+    required this.topFraction,
+    required this.heightFraction,
+    this.horizontalInsetFraction = 0.0,
+  });
+
+  final double topFraction;
+  final double heightFraction;
+  final double horizontalInsetFraction;
+
+  @override
+  Rect getClip(Size size) {
+    final inset = (size.width * horizontalInsetFraction).clamp(
+      0.0,
+      size.width * 0.45,
+    );
+    final top = (size.height * topFraction).clamp(0.0, size.height);
+    final height = (size.height * heightFraction).clamp(0.0, size.height - top);
+    return Rect.fromLTWH(inset, top, max(0.0, size.width - inset * 2), height);
+  }
+
+  @override
+  bool shouldReclip(covariant _CreditsGlitchBandClipper oldClipper) {
+    return oldClipper.topFraction != topFraction ||
+        oldClipper.heightFraction != heightFraction ||
+        oldClipper.horizontalInsetFraction != horizontalInsetFraction;
+  }
 }
 
 class _RegularPolygonPainter extends CustomPainter {
