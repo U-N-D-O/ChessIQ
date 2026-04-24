@@ -1,5 +1,25 @@
 part of '../screens/chess_analysis_page.dart';
 
+class _GameResultReveal {
+  const _GameResultReveal({
+    required this.outcome,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.icon,
+    required this.startedAt,
+    this.toSquare,
+  });
+
+  final GameOutcome outcome;
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final IconData icon;
+  final DateTime startedAt;
+  final String? toSquare;
+}
+
 class _PendingMoveQualityGrading {
   static const Object _sentinel = Object();
 
@@ -12,8 +32,12 @@ class _PendingMoveQualityGrading {
     required this.moverMaterialBefore,
     required this.moverMaterialAfter,
     required this.chargeBefore,
+    required this.chargeEpoch,
     this.playedMoveRank,
     this.cpGapFromBest,
+    this.cpGapFromNextBetter,
+    this.totalLegalMoveCount,
+    this.analyzedLegalMoveCount,
     this.preMoveMoverWinProbability,
     this.preMoveMoverEvalPawns,
     this.postMoveFen,
@@ -28,8 +52,12 @@ class _PendingMoveQualityGrading {
   final double moverMaterialBefore;
   final double moverMaterialAfter;
   final int chargeBefore;
+  final int chargeEpoch;
   final int? playedMoveRank;
   final int? cpGapFromBest;
+  final int? cpGapFromNextBetter;
+  final int? totalLegalMoveCount;
+  final int? analyzedLegalMoveCount;
   final double? preMoveMoverWinProbability;
   final double? preMoveMoverEvalPawns;
   final String? postMoveFen;
@@ -48,8 +76,12 @@ class _PendingMoveQualityGrading {
       moverMaterialBefore: moverMaterialBefore,
       moverMaterialAfter: moverMaterialAfter,
       chargeBefore: chargeBefore,
+      chargeEpoch: chargeEpoch,
       playedMoveRank: playedMoveRank,
       cpGapFromBest: cpGapFromBest,
+      cpGapFromNextBetter: cpGapFromNextBetter,
+      totalLegalMoveCount: totalLegalMoveCount,
+      analyzedLegalMoveCount: analyzedLegalMoveCount,
       preMoveMoverWinProbability: preMoveMoverWinProbability,
       preMoveMoverEvalPawns: preMoveMoverEvalPawns,
       postMoveFen: identical(postMoveFen, _sentinel)
@@ -92,7 +124,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _moveQualityGradingMultiPv = 4;
   static const int _moveQualityGradingDepth = 10;
-  static const int _openingFeedbackOnlyPlyCount = 6;
+  static const Duration _gameResultRevealDuration = Duration(
+    milliseconds: 1150,
+  );
+  static const Duration _gameResultRevealSkipDelay = Duration(
+    milliseconds: 250,
+  );
 
   late Map<String, String> boardState;
   CoordinatedEngineService? _engine;
@@ -269,9 +306,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   BoardPerspective _perspective = _defaultPerspective;
   BoardThemeMode _boardThemeMode = _defaultBoardTheme;
   PieceThemeMode _pieceThemeMode = _defaultPieceTheme;
-
   List<EngineLine> _topLines = [];
   List<EngineLine> _analysisLines = [];
+  String? _analysisLinesFen;
   final List<MoveRecord> _moveHistory = [];
   int _historyIndex = -1;
   late ScrollController _historyScrollController;
@@ -325,9 +362,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int _moveQualityGradingGeneration = 0;
   bool _analysisRefreshQueuedWhileGrading = false;
   _PendingMoveQualityGrading? _pendingMoveQualityGrading;
-  final PageController _botSetupPageController = PageController(
-    viewportFraction: 0.60,
+  static const double _botSetupDefaultViewportFraction = 0.60;
+  PageController _botSetupPageController = PageController(
+    viewportFraction: _botSetupDefaultViewportFraction,
   );
+  double _botSetupViewportFraction = _botSetupDefaultViewportFraction;
   int _botSetupSelectedIndex = 0;
   BotDifficulty _botSetupSelectedDifficulty = BotDifficulty.easy;
   final Set<String> _completedBotTierIds = <String>{};
@@ -340,6 +379,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _selectedBotAvatarAsset(BotCharacter bot);
 
   BotSideChoice _botSideChoice = BotSideChoice.random;
+
+  void _configureBotSetupPageController(double viewportFraction) {
+    final normalizedViewport = viewportFraction.clamp(0.32, 0.86).toDouble();
+    if ((_botSetupViewportFraction - normalizedViewport).abs() < 0.001) {
+      return;
+    }
+
+    final previousController = _botSetupPageController;
+    _botSetupViewportFraction = normalizedViewport;
+    _botSetupPageController = PageController(
+      initialPage: _botSetupSelectedIndex,
+      viewportFraction: normalizedViewport,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      previousController.dispose();
+      if (!mounted || !_botSetupPageController.hasClients) {
+        return;
+      }
+      _botSetupPageController.jumpToPage(_botSetupSelectedIndex);
+    });
+  }
 
   int _depthTier = 1; // 1=pro,2=expert,3=grandmaster,4=oracle
   int _extraSuggestionPurchases = 0; // each +1 up to max 10 suggestions
@@ -356,6 +417,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _vsBotEvalEnabled = false;
   bool _vsBotOptimalLineRevealActive = false;
   int _vsBotCharge = 0;
+  int _vsBotChargeEpoch = 0;
   bool _suggestionLaunchInProgress = false;
   bool _suggestionBurstActive = false;
   Offset? _launchStart;
@@ -363,6 +425,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _launchTargetsEvalBar = false;
   GameOutcome? _gameOutcome;
   bool _gameResultDialogVisible = false;
+  _GameResultReveal? _gameResultReveal;
+  int _gameResultRevealSequence = 0;
   bool _quizLaunchedFromAcademy = false;
 
   AppSection _activeSection = AppSection.menu;
@@ -1764,6 +1828,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       _topLines = [];
       _analysisLines = [];
+      _analysisLinesFen = null;
       _currentDepth = 0;
     });
     _send('stop');
@@ -1781,6 +1846,100 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _moveQualityOverlayMessage = null;
     _moveQualityOverlayChargeDelta = null;
     _moveQualityOverlayScoringSuppressedReason = null;
+  }
+
+  void _cancelGameResultReveal() {
+    _gameResultRevealSequence++;
+    _gameResultReveal = null;
+  }
+
+  _GameResultReveal _createGameResultReveal(GameOutcome outcome) {
+    final isDraw = outcome == GameOutcome.draw;
+    final isWin = !isDraw && _playVsBot && _isWinningOutcomeForPov;
+    final accent = isDraw
+        ? const Color(0xFFD8B640)
+        : isWin
+        ? const Color(0xFF58E09A)
+        : const Color(0xFFE45C5C);
+    final title = isDraw
+        ? 'DRAW'
+        : _playVsBot
+        ? (isWin ? 'VICTORY' : 'DEFEAT')
+        : 'CHECKMATE';
+    final subtitle = isDraw
+        ? 'No legal moves remain. The board settles here.'
+        : _playVsBot
+        ? (isWin
+              ? 'Checkmate lands. Take in the final position.'
+              : 'Checkmate lands. Watch the last strike finish.')
+        : 'The final move is locked on the board.';
+    final icon = isDraw
+        ? Icons.balance_rounded
+        : isWin
+        ? Icons.emoji_events_rounded
+        : Icons.crisis_alert_rounded;
+    final latestUci = _moveHistory.isNotEmpty ? _moveHistory.last.uci : null;
+    final toSquare = latestUci != null && latestUci.length >= 4
+        ? latestUci.substring(2, 4)
+        : null;
+
+    return _GameResultReveal(
+      outcome: outcome,
+      title: title,
+      subtitle: subtitle,
+      accent: accent,
+      icon: icon,
+      startedAt: DateTime.now(),
+      toSquare: toSquare,
+    );
+  }
+
+  Future<void> _startGameResultReveal(GameOutcome outcome) async {
+    final reveal = _createGameResultReveal(outcome);
+    final sequence = ++_gameResultRevealSequence;
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _clearMoveQualityOverlay();
+      _gameResultReveal = reveal;
+    });
+
+    await Future<void>.delayed(_gameResultRevealDuration);
+    if (!mounted ||
+        _gameResultRevealSequence != sequence ||
+        _gameResultReveal?.startedAt != reveal.startedAt) {
+      return;
+    }
+
+    await _completeGameResultReveal(sequence: sequence);
+  }
+
+  Future<void> _completeGameResultReveal({int? sequence}) async {
+    if (_gameResultReveal == null) {
+      return;
+    }
+    if (sequence != null && sequence != _gameResultRevealSequence) {
+      return;
+    }
+
+    _gameResultRevealSequence++;
+    setState(() {
+      _gameResultReveal = null;
+    });
+  }
+
+  Future<void> _skipGameResultReveal() async {
+    final reveal = _gameResultReveal;
+    if (reveal == null) {
+      return;
+    }
+    if (DateTime.now().difference(reveal.startedAt) <
+        _gameResultRevealSkipDelay) {
+      return;
+    }
+    await _completeGameResultReveal();
   }
 
   void _clearMoveQualityBadge() {
@@ -1869,7 +2028,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   double _whiteEvalPawnsFromLiveState() {
     final snapshot = _currentEvalSnapshot;
-    if (snapshot != null) {
+    if (snapshot != null && snapshot.matchesFen(_genFen())) {
       return snapshot.evalPawnsWhite;
     }
     return _evalWhiteTurn ? _currentEval : -_currentEval;
@@ -1938,20 +2097,79 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return null;
   }
 
+  int? _cpGapFromNextBetterFromLines(List<EngineLine> lines, String uciMove) {
+    if (lines.length < 2) {
+      return null;
+    }
+    for (var index = 0; index < lines.length; index++) {
+      if (lines[index].move != uciMove) {
+        continue;
+      }
+      if (index == 0) {
+        return 0;
+      }
+      return max(0, lines[index - 1].eval - lines[index].eval);
+    }
+    return null;
+  }
+
+  int _currentSideLegalMoveCount() {
+    var count = 0;
+    for (final entry in boardState.entries) {
+      if (!_isCurrentTurnPiece(entry.value)) {
+        continue;
+      }
+      count += _legalMovesFrom(entry.key).length;
+    }
+    return count;
+  }
+
+  List<String> _openingMoveTokensThrough(int moveIndex) {
+    if (_moveHistory.isEmpty || moveIndex < 0) {
+      return const <String>[];
+    }
+
+    final endExclusive = min(moveIndex + 1, _moveHistory.length);
+    final sequence = _moveHistory
+        .take(endExclusive)
+        .map((move) => move.notation)
+        .join(' ')
+        .trim();
+    if (sequence.isEmpty) {
+      return const <String>[];
+    }
+
+    return _moveSequenceTokens(_normalizeSan(sequence));
+  }
+
   bool _openingFeedbackOnlyApplies(int moveIndex) {
-    return moveIndex < _openingFeedbackOnlyPlyCount;
+    if (moveIndex < 0) {
+      return false;
+    }
+
+    return matchesRegisteredOpeningPrefix(
+      _ecoLines,
+      _openingMoveTokensThrough(moveIndex),
+    );
   }
 
   MoveQualityConfidence _moveQualityConfidence({
     required List<EngineLine> preMoveLines,
     required int? playedMoveRank,
     required int? cpGapFromBest,
+    required int? totalLegalMoveCount,
     required bool insideOpeningExemption,
     required bool usedPreMoveFallback,
   }) {
     final hasDirectComparison = playedMoveRank != null || cpGapFromBest != null;
     if (insideOpeningExemption && !hasDirectComparison) {
       return MoveQualityConfidence.low;
+    }
+    if (totalLegalMoveCount != null &&
+        totalLegalMoveCount > 0 &&
+        preMoveLines.length >= totalLegalMoveCount &&
+        hasDirectComparison) {
+      return MoveQualityConfidence.high;
     }
     if (preMoveLines.length >= _moveQualityGradingMultiPv &&
         hasDirectComparison) {
@@ -2349,6 +2567,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _send('ucinewgame');
     _clearBotGhostArrows();
     _clearVsBotOverlayState();
+    _cancelGameResultReveal();
     _cancelPendingMoveQualityGrading();
     _clearMoveQualityOverlay();
     _clearMoveQualityBadge();
@@ -2379,6 +2598,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _launchTargetsEvalBar = false;
     _topLines = [];
     _analysisLines = [];
+    _analysisLinesFen = null;
     _currentDepth = 0;
     _currentEval = 0.0;
     _evalWhiteTurn = true;
@@ -2544,6 +2764,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final analysisMultiPvCount = _analysisMultiPvCount;
     setState(() {
       _currentDepth = update.line.depth;
+      _analysisLinesFen = update.request.fen;
       if (update.isPrimaryVariation &&
           _shouldPublishEvalSnapshot(update.snapshot)) {
         _applyCanonicalEvalSnapshot(update.snapshot);
@@ -2648,6 +2869,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (engine == null) {
       return;
     }
+
     final shouldShowVisualSuggestions = _shouldShowVisualSuggestions;
     if (!_shouldKeepEvalActive && !shouldShowVisualSuggestions) {
       engine.cancelSearches(
@@ -2657,10 +2879,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       setState(() {
         _topLines = [];
         _analysisLines = [];
+        _analysisLinesFen = null;
         _currentDepth = 0;
       });
       return;
     }
+
     engine.cancelSearches(
       roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
       reason: 'analysis refresh',
@@ -2668,6 +2892,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     setState(() {
       _topLines = [];
       _analysisLines = [];
+      _analysisLinesFen = null;
       _currentDepth = 0;
     });
     engine.scheduleSearch(
@@ -2699,22 +2924,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return null;
     }
 
-    final preMoveWhiteEval = _currentDepth > 0
+    final currentFen = _genFen();
+    final preMoveSnapshot = _currentEvalSnapshot;
+    final preMoveWhiteEval =
+        _currentDepth > 0 &&
+            preMoveSnapshot != null &&
+            preMoveSnapshot.matchesFen(currentFen)
         ? _whiteEvalPawnsFromLiveState()
         : null;
-    final preMoveLines = List<EngineLine>.from(_analysisLines)
-      ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+    final preMoveLines = List<EngineLine>.from(
+      _analysisLinesFen == currentFen ? _analysisLines : const <EngineLine>[],
+    )..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+    final totalLegalMoveCount = _currentSideLegalMoveCount();
     return _PendingMoveQualityGrading(
       moveIndex: _historyIndex + 1,
       uci: uciMove,
       moverIsWhite: moverIsWhite,
-      preMoveFen: _genFen(),
+      preMoveFen: currentFen,
       preMoveLines: preMoveLines,
       moverMaterialBefore: _materialCountForSide(boardState, moverIsWhite),
       moverMaterialAfter: _materialCountForSide(nextBoardState, moverIsWhite),
       chargeBefore: _vsBotCharge,
+      chargeEpoch: _vsBotChargeEpoch,
       playedMoveRank: _moveRankFromLines(preMoveLines, uciMove),
       cpGapFromBest: _cpGapFromBestFromLines(preMoveLines, uciMove),
+      cpGapFromNextBetter: _cpGapFromNextBetterFromLines(preMoveLines, uciMove),
+      totalLegalMoveCount: totalLegalMoveCount,
+      analyzedLegalMoveCount: min(totalLegalMoveCount, preMoveLines.length),
       preMoveMoverEvalPawns: preMoveWhiteEval == null
           ? null
           : _moverEvalPawnsFromWhiteEval(preMoveWhiteEval, moverIsWhite),
@@ -2871,10 +3107,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final cpGapFromBest =
         pending.cpGapFromBest ??
         _cpGapFromBestFromLines(preMoveLines, pending.uci);
+    final cpGapFromNextBetter =
+        pending.cpGapFromNextBetter ??
+        _cpGapFromNextBetterFromLines(preMoveLines, pending.uci);
     final confidence = _moveQualityConfidence(
       preMoveLines: preMoveLines,
       playedMoveRank: playedMoveRank,
       cpGapFromBest: cpGapFromBest,
+      totalLegalMoveCount: pending.totalLegalMoveCount,
       insideOpeningExemption: insideOpeningExemption,
       usedPreMoveFallback: usedPreMoveFallback,
     );
@@ -2909,7 +3149,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         postMoveMoverWinProbability: postMoveMoverWinProbability,
         preMoveMoverEvalPawns: preMoveMoverEvalPawns ?? 0.0,
         cpGapFromBest: cpGapFromBest,
+        cpGapFromNextBetter: cpGapFromNextBetter,
         playedMoveRank: playedMoveRank,
+        totalLegalMoveCount: pending.totalLegalMoveCount,
+        analyzedLegalMoveCount: pending.analyzedLegalMoveCount,
         insideOpeningExemption: insideOpeningExemption,
         confidence: confidence,
         isSacrifice: pending.isSacrifice,
@@ -2959,7 +3202,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _moveHistory[pending.moveIndex].uci == pending.uci) {
         _moveHistory[pending.moveIndex] = updatedMove;
       }
-      if (isHumanVsBotMove) {
+      if (isHumanVsBotMove && pending.chargeEpoch == _vsBotChargeEpoch) {
         _vsBotCharge = chargeAfter;
       }
       if (!_playVsBot || isHumanVsBotMove) {
@@ -3021,6 +3264,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     setState(() {
+      _vsBotChargeEpoch++;
       _vsBotCharge = 0;
       _vsBotOptimalLineRevealActive = true;
       _topLines = [];
@@ -3509,23 +3753,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   String _findOpeningFromHistory() {
     if (_moveHistory.isEmpty) return '';
-    final moves = _moveHistory
-        .map((m) => m.notation.toLowerCase())
-        .join(' ')
-        .trim();
+    final moveTokens = _openingMoveTokensThrough(_moveHistory.length - 1);
+    final moves = moveTokens.join(' ');
 
     if (moves.isEmpty) return '';
 
     _addLog('Opening check: moves="$moves"');
 
-    final parts = moves.split(' ').where((part) => part.isNotEmpty).toList();
-    for (int len = parts.length; len >= 1; len--) {
-      final candidate = parts.sublist(0, len).join(' ');
-      final opening = _ecoOpenings[candidate];
-      if (opening != null && opening.isNotEmpty) {
-        _addLog('Found opening: "$opening" (len=$len)');
-        return opening;
-      }
+    final opening = resolveRegisteredOpeningName(
+      ecoOpenings: _ecoOpenings,
+      ecoLines: _ecoLines,
+      moveTokens: moveTokens,
+    );
+    if (opening.isNotEmpty) {
+      _addLog('Found opening: "$opening" (len=${moveTokens.length})');
+      return opening;
     }
 
     _addLog('Found opening: "" (len=0)');
@@ -3565,6 +3807,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return _isWhiteTurn ? piece.endsWith('_w') : piece.endsWith('_b');
   }
 
+  bool _canHumanInteractWithBoardPiece(String? piece) {
+    if (piece == null) return false;
+    if (_analysisEditMode && !_isOpeningSelectionMode) {
+      return true;
+    }
+    if (!_isCurrentTurnPiece(piece)) {
+      return false;
+    }
+    if (_playVsBot && !_isHumanTurnInBotGame) {
+      return false;
+    }
+    return true;
+  }
+
   bool get _isBlackPovActive {
     if (_playVsBot && _selectedBot != null) {
       return !_humanPlaysWhite;
@@ -3601,6 +3857,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool get _isLosingOutcomeForPov {
     return _gameOutcome == GameOutcome.whiteWin && _isBlackPovActive ||
         _gameOutcome == GameOutcome.blackWin && !_isBlackPovActive;
+  }
+
+  bool get _boardReversed {
+    return _playVsBot
+        ? !_humanPlaysWhite
+        : (_perspective == BoardPerspective.black) ||
+              (_perspective == BoardPerspective.auto && !_isWhiteTurn);
   }
 
   String _evalTextForUi(double displayedEval) {
@@ -4267,6 +4530,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_gameOutcome != null) return;
     final piece = boardState[from];
     if (piece == null) return;
+    if (!_canHumanInteractWithBoardPiece(piece)) return;
     if (!_analysisEditMode && !_legalMovesFrom(from).contains(to)) return;
 
     var promotion = forcedPromotion;
@@ -4693,6 +4957,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _suggestionsEnabled = false;
           _topLines = [];
           _analysisLines = [];
+          _analysisLinesFen = null;
           _currentDepth = 0;
           _botSearchCompleter = null;
           _botSearchLines.clear();
@@ -5500,6 +5765,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotOptimalLineRevealActive = false;
         _topLines = [];
         _analysisLines = [];
+        _analysisLinesFen = null;
         _currentDepth = 0;
         _currentEvalSnapshot = null;
       }
@@ -5534,7 +5800,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _botThinking = false;
       });
       _persistAnalysisSnapshotIfNeeded();
-      unawaited(_showGameResultDialog(gameOutcome));
+      unawaited(_startGameResultReveal(gameOutcome));
       return;
     }
 
@@ -5579,6 +5845,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _gambitPreviewLines = [];
       _topLines = [];
       _analysisLines = [];
+      _analysisLinesFen = null;
       _currentDepth = 0;
       _currentEval = 0.0;
     });
@@ -5798,6 +6065,373 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (obj is! RenderBox) return null;
     if (!obj.attached || !obj.hasSize) return null;
     return obj;
+  }
+
+  Rect? _boardRectInScene() {
+    final boardContext = _boardKey.currentContext;
+    final sceneContext = _sceneKey.currentContext;
+    if (boardContext == null || sceneContext == null) {
+      return null;
+    }
+    final boardBox = _renderBoxFromContext(boardContext);
+    final sceneBox = _renderBoxFromContext(sceneContext);
+    if (boardBox == null || sceneBox == null) {
+      return null;
+    }
+    final topLeft = sceneBox.globalToLocal(boardBox.localToGlobal(Offset.zero));
+    return topLeft & boardBox.size;
+  }
+
+  double _boardGridInsetForContext(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final compactBotFrame =
+        _playVsBot &&
+        (media.size.width <= 390 ||
+            (media.orientation == Orientation.landscape &&
+                media.size.height <= 430));
+    return _playVsBot ? (compactBotFrame ? 6.0 : 8.0) : 0.0;
+  }
+
+  Rect? _squareRectInScene(
+    String square, {
+    required bool reverse,
+    required double boardInset,
+  }) {
+    final boardRect = _boardRectInScene();
+    if (boardRect == null) {
+      return null;
+    }
+    final gridRect = boardRect.deflate(boardInset);
+    if (gridRect.width <= 0 || gridRect.height <= 0) {
+      return null;
+    }
+
+    var col = square.codeUnitAt(0) - 97;
+    var row = int.parse(square[1]) - 1;
+    if (reverse) {
+      col = 7 - col;
+    } else {
+      row = 7 - row;
+    }
+    final squareSize = gridRect.width / 8;
+    return Rect.fromLTWH(
+      gridRect.left + (col * squareSize),
+      gridRect.top + (row * squareSize),
+      squareSize,
+      squareSize,
+    );
+  }
+
+  Widget _buildGameResultRevealOverlay(Size scene, double scale) {
+    final reveal = _gameResultReveal;
+    if (reveal == null) {
+      return const SizedBox.shrink();
+    }
+
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final reducedEffects = puzzleAcademyShouldReduceEffects(context);
+    final boardRect = _boardRectInScene();
+    final boardInset = _boardGridInsetForContext(context);
+    final highlightRect = reveal.toSquare == null
+        ? null
+        : _squareRectInScene(
+            reveal.toSquare!,
+            reverse: _boardReversed,
+            boardInset: boardInset,
+          );
+
+    return Positioned.fill(
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(reveal.startedAt.microsecondsSinceEpoch),
+        tween: Tween(begin: 0, end: 1),
+        duration: _gameResultRevealDuration,
+        curve: Curves.easeOutCubic,
+        builder: (context, progress, child) {
+          final titleProgress = Curves.easeOutBack.transform(
+            ((progress - 0.06) / 0.34).clamp(0.0, 1.0),
+          );
+          final titleOpacity = titleProgress.clamp(0.0, 1.0).toDouble();
+          final subtitleProgress = Curves.easeOutCubic.transform(
+            ((progress - 0.26) / 0.32).clamp(0.0, 1.0),
+          );
+          final subtitleOpacity = subtitleProgress.clamp(0.0, 1.0).toDouble();
+          final flashProgress = Curves.easeOut.transform(
+            (progress / 0.22).clamp(0.0, 1.0),
+          );
+          final skipProgress = Curves.easeOut.transform(
+            ((progress - 0.72) / 0.18).clamp(0.0, 1.0),
+          );
+          final skipOpacity = skipProgress.clamp(0.0, 1.0).toDouble();
+          final sceneCenter =
+              boardRect?.center ?? Offset(scene.width / 2, scene.height * 0.42);
+          final titleTop = boardRect == null
+              ? 48.0 * scale
+              : max(24.0, boardRect.top - (58 * scale));
+          final subtitleTop = boardRect == null
+              ? scene.height * 0.74
+              : min(
+                  scene.height - (92 * scale),
+                  boardRect.bottom + (18 * scale),
+                );
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => unawaited(_skipGameResultReveal()),
+            child: Stack(
+              children: [
+                Container(
+                  color: Colors.black.withValues(
+                    alpha: reducedEffects ? 0.06 : 0.10,
+                  ),
+                ),
+                if (boardRect != null)
+                  Positioned(
+                    left: boardRect.left - 8,
+                    top: boardRect.top - 8,
+                    child: Transform.scale(
+                      scale: 0.992 + (flashProgress * 0.008),
+                      child: Container(
+                        width: boardRect.width + 16,
+                        height: boardRect.height + 16,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(
+                            _playVsBot ? 28 : 20,
+                          ),
+                          border: Border.all(
+                            color: reveal.accent.withValues(
+                              alpha: 0.32 + (flashProgress * 0.36),
+                            ),
+                            width: 3,
+                          ),
+                          boxShadow: puzzleAcademySurfaceGlow(
+                            reveal.accent,
+                            monochrome: arcade.monochrome,
+                            strength: reducedEffects
+                                ? (0.18 + (flashProgress * 0.10))
+                                : (0.28 + (flashProgress * 0.28)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (highlightRect != null)
+                  Positioned(
+                    left: highlightRect.left + (highlightRect.width * 0.08),
+                    top: highlightRect.top + (highlightRect.height * 0.08),
+                    child: Container(
+                      width: highlightRect.width * 0.84,
+                      height: highlightRect.height * 0.84,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: reveal.accent.withValues(
+                          alpha: 0.08 + ((1 - progress) * 0.14),
+                        ),
+                        border: Border.all(
+                          color: reveal.accent.withValues(
+                            alpha: 0.34 + ((1 - progress) * 0.42),
+                          ),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: reveal.accent.withValues(alpha: 0.26),
+                            blurRadius: 20,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                for (int index = 0; index < (reducedEffects ? 4 : 8); index++)
+                  Builder(
+                    builder: (context) {
+                      final burstProgress = Curves.easeOut.transform(
+                        (progress / 0.52).clamp(0.0, 1.0),
+                      );
+                      final fade =
+                          (1.0 - ((progress - 0.14) / 0.58).clamp(0.0, 1.0));
+                      final angle =
+                          (-pi / 2) +
+                          ((pi * 2 * index) / (reducedEffects ? 4 : 8));
+                      final radius =
+                          (18 + (burstProgress * (reducedEffects ? 46 : 62))) *
+                          scale;
+                      final size = ((index % 3 == 0 ? 8.0 : 5.0) * scale).clamp(
+                        4.0,
+                        10.0,
+                      );
+                      final offset = Offset(
+                        cos(angle) * radius,
+                        sin(angle) * radius,
+                      );
+                      return Positioned(
+                        left: sceneCenter.dx + offset.dx - (size / 2),
+                        top: sceneCenter.dy + offset.dy - (size / 2),
+                        child: Opacity(
+                          opacity: (fade * (reducedEffects ? 0.46 : 0.74))
+                              .clamp(0.0, 1.0)
+                              .toDouble(),
+                          child: Transform.rotate(
+                            angle: angle * 0.4,
+                            child: Container(
+                              width: size,
+                              height: size,
+                              decoration: BoxDecoration(
+                                color: reveal.accent.withValues(alpha: 0.9),
+                                borderRadius: BorderRadius.circular(1.4),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: titleTop,
+                  child: Center(
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - titleProgress) * -18),
+                      child: Opacity(
+                        opacity: titleOpacity,
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth: min(320.0, scene.width - 36),
+                          ),
+                          padding: EdgeInsets.fromLTRB(
+                            16 * scale,
+                            12 * scale,
+                            16 * scale,
+                            12 * scale,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(18),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color.alphaBlend(
+                                  reveal.accent.withValues(alpha: 0.20),
+                                  const Color(0xFF101722),
+                                ),
+                                const Color(0xFF0B1119).withValues(alpha: 0.96),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: reveal.accent.withValues(alpha: 0.64),
+                              width: 2,
+                            ),
+                            boxShadow: puzzleAcademySurfaceGlow(
+                              reveal.accent,
+                              monochrome: arcade.monochrome,
+                              strength: reducedEffects ? 0.16 : 0.32,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                reveal.icon,
+                                color: reveal.accent,
+                                size: 24 * scale,
+                                shadows: puzzleAcademyTextGlow(
+                                  reveal.accent,
+                                  monochrome: arcade.monochrome,
+                                  strength: 0.8,
+                                ),
+                              ),
+                              SizedBox(width: 10 * scale),
+                              Flexible(
+                                child: Text(
+                                  reveal.title,
+                                  textAlign: TextAlign.center,
+                                  style: puzzleAcademyDisplayStyle(
+                                    palette: arcade.base,
+                                    size: 24 * scale,
+                                    color: reveal.accent,
+                                    withGlow: true,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: subtitleTop,
+                  child: Center(
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - subtitleProgress) * 14),
+                      child: Opacity(
+                        opacity: subtitleOpacity,
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth: min(340.0, scene.width - 40),
+                          ),
+                          padding: EdgeInsets.fromLTRB(
+                            14 * scale,
+                            10 * scale,
+                            14 * scale,
+                            10 * scale,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: const Color(
+                              0xFF0A0F16,
+                            ).withValues(alpha: 0.88),
+                            border: Border.all(
+                              color: reveal.accent.withValues(alpha: 0.40),
+                            ),
+                          ),
+                          child: Text(
+                            reveal.subtitle,
+                            textAlign: TextAlign.center,
+                            style: puzzleAcademyHudStyle(
+                              palette: arcade.base,
+                              size: 12.2 * scale,
+                              color: arcade.base.text,
+                              withGlow: !reducedEffects,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 28 * scale,
+                  child: Center(
+                    child: Opacity(
+                      opacity: (skipOpacity * 0.92).clamp(0.0, 1.0).toDouble(),
+                      child: Text(
+                        'TAP TO CLEAR',
+                        style: puzzleAcademyIdentityStyle(
+                          palette: arcade.base,
+                          size: 11 * scale,
+                          color: reveal.accent.withValues(alpha: 0.88),
+                          withGlow: !reducedEffects,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Offset _sceneDotOffset({
@@ -6751,10 +7385,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
-    bool reverse = _playVsBot
-        ? !_humanPlaysWhite
-        : (_perspective == BoardPerspective.black) ||
-              (_perspective == BoardPerspective.auto && !_isWhiteTurn);
+    final reverse = _boardReversed;
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final pageBackground = scheme.surface;
@@ -6825,353 +7456,357 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     height: height,
                     child: Stack(
                       children: [
-                        SafeArea(
-                          child: isLandscape
-                              ? Column(
-                                  children: [
-                                    _buildHeader(scale),
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          10,
-                                          8,
-                                          10,
-                                          8,
-                                        ),
-                                        child: LayoutBuilder(
-                                          builder: (context, inner) {
-                                            final sideWidth =
-                                                (inner.maxWidth * 0.34).clamp(
-                                                  220.0,
-                                                  360.0,
-                                                );
-                                            return Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.stretch,
-                                              children: [
-                                                Expanded(
-                                                  flex: 7,
-                                                  child: LayoutBuilder(
-                                                    builder: (context, boardBox) {
-                                                      const double evalBarW =
-                                                          22.0;
-                                                      final boardSize = max(
-                                                        0.0,
-                                                        min(
-                                                          boardBox.maxWidth -
-                                                              evalBarW,
-                                                          boardBox.maxHeight,
-                                                        ),
-                                                      );
-                                                      return Row(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .center,
-                                                        children: [
-                                                          SizedBox(
-                                                            key:
-                                                                _evalBarVerticalKey,
-                                                            width: evalBarW,
-                                                            height: boardSize,
-                                                            child: Center(
-                                                              child:
-                                                                  _buildEvalBarVertical(
-                                                                    scale,
-                                                                  ),
-                                                            ),
+                        AbsorbPointer(
+                          absorbing: _gameResultReveal != null,
+                          child: SafeArea(
+                            child: isLandscape
+                                ? Column(
+                                    children: [
+                                      _buildHeader(scale),
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            10,
+                                            8,
+                                            10,
+                                            8,
+                                          ),
+                                          child: LayoutBuilder(
+                                            builder: (context, inner) {
+                                              final sideWidth =
+                                                  (inner.maxWidth * 0.34).clamp(
+                                                    220.0,
+                                                    360.0,
+                                                  );
+                                              return Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  Expanded(
+                                                    flex: 7,
+                                                    child: LayoutBuilder(
+                                                      builder: (context, boardBox) {
+                                                        const double evalBarW =
+                                                            22.0;
+                                                        final boardSize = max(
+                                                          0.0,
+                                                          min(
+                                                            boardBox.maxWidth -
+                                                                evalBarW,
+                                                            boardBox.maxHeight,
                                                           ),
-                                                          Expanded(
-                                                            child: Center(
-                                                              child: SizedBox(
-                                                                key: _boardKey,
-                                                                width:
-                                                                    boardSize,
-                                                                height:
-                                                                    boardSize,
-                                                                child: Stack(
-                                                                  children: [
-                                                                    Opacity(
-                                                                      opacity:
-                                                                          _boardIntroOpacity(),
-                                                                      child: _buildBoard(
-                                                                        reverse,
-                                                                      ),
+                                                        );
+                                                        return Row(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .center,
+                                                          children: [
+                                                            SizedBox(
+                                                              key:
+                                                                  _evalBarVerticalKey,
+                                                              width: evalBarW,
+                                                              height: boardSize,
+                                                              child: Center(
+                                                                child:
+                                                                    _buildEvalBarVertical(
+                                                                      scale,
                                                                     ),
-                                                                    Opacity(
-                                                                      opacity:
-                                                                          _boardIntroOpacity(),
-                                                                      child: _buildAnimatedArrows(
-                                                                        reverse,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
                                                               ),
                                                             ),
-                                                          ),
-                                                        ],
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                SizedBox(
-                                                  width: sideWidth,
-                                                  child: LayoutBuilder(
-                                                    builder: (context, sideConstraints) {
-                                                      final suggestionsHeight =
-                                                          (sideConstraints
-                                                                      .maxHeight *
-                                                                  0.46)
-                                                              .clamp(
-                                                                96.0,
-                                                                250.0,
-                                                              );
-                                                      final historyHeight =
-                                                          (sideConstraints
-                                                                      .maxHeight *
-                                                                  0.16)
-                                                              .clamp(
-                                                                46.0,
-                                                                72.0,
-                                                              );
-                                                      final hasLandscapeTitle =
-                                                          !_playVsBot &&
-                                                          (_selectedGambit !=
-                                                                  null ||
-                                                              _currentOpening
-                                                                  .isNotEmpty);
-                                                      final landscapeBannerTop =
-                                                          _playVsBot
-                                                          ? 10.0
-                                                          : hasLandscapeTitle
-                                                          ? 54.0
-                                                          : 30.0;
-                                                      return Stack(
-                                                        clipBehavior: Clip.none,
-                                                        children: [
-                                                          SizedBox.expand(
-                                                            child: Column(
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
-                                                                Padding(
-                                                                  padding:
-                                                                      const EdgeInsets.only(
-                                                                        bottom:
-                                                                            10,
-                                                                      ),
-                                                                  child: Align(
-                                                                    alignment:
-                                                                        Alignment
-                                                                            .center,
-                                                                    child:
-                                                                        _buildEditModeDepthCluster(
-                                                                          scale,
-                                                                          scheme,
-                                                                        ),
-                                                                  ),
-                                                                ),
-                                                                if (!_playVsBot &&
-                                                                    _selectedGambit !=
-                                                                        null)
-                                                                  Align(
-                                                                    alignment:
-                                                                        Alignment
-                                                                            .center,
-                                                                    child: Padding(
-                                                                      padding: const EdgeInsets.only(
-                                                                        bottom:
-                                                                            6,
-                                                                      ),
-                                                                      child: Text(
-                                                                        _selectedGambit!
-                                                                            .name,
-                                                                        style: TextStyle(
-                                                                          fontSize:
-                                                                              13,
-                                                                          fontWeight:
-                                                                              FontWeight.w700,
-                                                                          color:
-                                                                              useMonochrome
-                                                                              ? scheme.onSurface.withValues(
-                                                                                  alpha: 0.86,
-                                                                                )
-                                                                              : const Color(
-                                                                                  0xFFD8B640,
-                                                                                ),
-                                                                        ),
-                                                                        maxLines:
-                                                                            2,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
-                                                                      ),
-                                                                    ),
-                                                                  )
-                                                                else if (!_playVsBot &&
-                                                                    _currentOpening
-                                                                        .isNotEmpty)
-                                                                  Align(
-                                                                    alignment:
-                                                                        Alignment
-                                                                            .center,
-                                                                    child: Padding(
-                                                                      padding: const EdgeInsets.only(
-                                                                        bottom:
-                                                                            6,
-                                                                      ),
-                                                                      child: Text(
-                                                                        _currentOpening,
-                                                                        style: TextStyle(
-                                                                          fontSize:
-                                                                              13,
-                                                                          fontWeight:
-                                                                              FontWeight.w700,
-                                                                          color: scheme.onSurface.withValues(
-                                                                            alpha:
-                                                                                0.72,
-                                                                          ),
-                                                                        ),
-                                                                        maxLines:
-                                                                            2,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                _buildSuggestedMovesList(
+                                                            Expanded(
+                                                              child: Center(
+                                                                child: SizedBox(
+                                                                  key:
+                                                                      _boardKey,
+                                                                  width:
+                                                                      boardSize,
                                                                   height:
-                                                                      suggestionsHeight,
-                                                                  padding:
-                                                                      _playVsBot
-                                                                      ? const EdgeInsets.fromLTRB(
-                                                                          16,
-                                                                          2,
-                                                                          16,
-                                                                          8,
-                                                                        )
-                                                                      : const EdgeInsets.symmetric(
-                                                                          vertical:
-                                                                              10,
-                                                                          horizontal:
-                                                                              20,
+                                                                      boardSize,
+                                                                  child: Stack(
+                                                                    children: [
+                                                                      Opacity(
+                                                                        opacity:
+                                                                            _boardIntroOpacity(),
+                                                                        child: _buildBoard(
+                                                                          reverse,
                                                                         ),
-                                                                ),
-                                                                if (!_playVsBot)
-                                                                  _buildHistoryBar(
-                                                                    height:
-                                                                        historyHeight,
-                                                                    margin:
-                                                                        const EdgeInsets.symmetric(
-                                                                          vertical:
-                                                                              6,
+                                                                      ),
+                                                                      Opacity(
+                                                                        opacity:
+                                                                            _boardIntroOpacity(),
+                                                                        child: _buildAnimatedArrows(
+                                                                          reverse,
                                                                         ),
+                                                                      ),
+                                                                    ],
                                                                   ),
-                                                                const Spacer(),
-                                                                _buildActionArea(
-                                                                  compactBottom:
-                                                                      8,
-                                                                  horizontal: 0,
                                                                 ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          if (_hasMoveQualityBanner)
-                                                            Positioned(
-                                                              left: 0,
-                                                              right: 0,
-                                                              top:
-                                                                  landscapeBannerTop,
-                                                              child:
-                                                                  _buildMoveQualityBannerOverlay(
-                                                                    isLandscape:
-                                                                        true,
-                                                                  ),
-                                                            ),
-                                                        ],
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  children: [
-                                    _buildHeader(scale),
-                                    KeyedSubtree(
-                                      key: _evalBarHorizontalKey,
-                                      child: _buildEvalBarHorizontal(scale),
-                                    ),
-                                    Expanded(
-                                      child: Padding(
-                                        padding: EdgeInsets.fromLTRB(
-                                          8,
-                                          8,
-                                          8,
-                                          _playVsBot ? 2 : 8,
-                                        ),
-                                        child: LayoutBuilder(
-                                          builder: (context, inner) {
-                                            final boardSize = min(
-                                              inner.maxWidth,
-                                              inner.maxHeight,
-                                            );
-                                            return Stack(
-                                              children: [
-                                                Align(
-                                                  alignment:
-                                                      Alignment.topCenter,
-                                                  child: SizedBox(
-                                                    key: _boardKey,
-                                                    width: boardSize,
-                                                    height: boardSize,
-                                                    child: Stack(
-                                                      children: [
-                                                        Opacity(
-                                                          opacity:
-                                                              _boardIntroOpacity(),
-                                                          child: _buildBoard(
-                                                            reverse,
-                                                          ),
-                                                        ),
-                                                        Opacity(
-                                                          opacity:
-                                                              _boardIntroOpacity(),
-                                                          child:
-                                                              _buildAnimatedArrows(
-                                                                reverse,
                                                               ),
-                                                        ),
-                                                      ],
+                                                            ),
+                                                          ],
+                                                        );
+                                                      },
                                                     ),
                                                   ),
-                                                ),
-                                              ],
-                                            );
-                                          },
+                                                  const SizedBox(width: 12),
+                                                  SizedBox(
+                                                    width: sideWidth,
+                                                    child: LayoutBuilder(
+                                                      builder: (context, sideConstraints) {
+                                                        final suggestionsHeight =
+                                                            (sideConstraints
+                                                                        .maxHeight *
+                                                                    0.46)
+                                                                .clamp(
+                                                                  96.0,
+                                                                  250.0,
+                                                                );
+                                                        final historyHeight =
+                                                            (sideConstraints
+                                                                        .maxHeight *
+                                                                    0.16)
+                                                                .clamp(
+                                                                  46.0,
+                                                                  72.0,
+                                                                );
+                                                        final hasLandscapeTitle =
+                                                            !_playVsBot &&
+                                                            (_selectedGambit !=
+                                                                    null ||
+                                                                _currentOpening
+                                                                    .isNotEmpty);
+                                                        final landscapeBannerTop =
+                                                            _playVsBot
+                                                            ? 10.0
+                                                            : hasLandscapeTitle
+                                                            ? 54.0
+                                                            : 30.0;
+                                                        return Stack(
+                                                          clipBehavior:
+                                                              Clip.none,
+                                                          children: [
+                                                            SizedBox.expand(
+                                                              child: Column(
+                                                                crossAxisAlignment:
+                                                                    CrossAxisAlignment
+                                                                        .start,
+                                                                children: [
+                                                                  Padding(
+                                                                    padding:
+                                                                        const EdgeInsets.only(
+                                                                          bottom:
+                                                                              10,
+                                                                        ),
+                                                                    child: Align(
+                                                                      alignment:
+                                                                          Alignment
+                                                                              .center,
+                                                                      child: _buildEditModeDepthCluster(
+                                                                        scale,
+                                                                        scheme,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  if (!_playVsBot &&
+                                                                      _selectedGambit !=
+                                                                          null)
+                                                                    Align(
+                                                                      alignment:
+                                                                          Alignment
+                                                                              .center,
+                                                                      child: Padding(
+                                                                        padding: const EdgeInsets.only(
+                                                                          bottom:
+                                                                              6,
+                                                                        ),
+                                                                        child: Text(
+                                                                          _selectedGambit!
+                                                                              .name,
+                                                                          style: TextStyle(
+                                                                            fontSize:
+                                                                                13,
+                                                                            fontWeight:
+                                                                                FontWeight.w700,
+                                                                            color:
+                                                                                useMonochrome
+                                                                                ? scheme.onSurface.withValues(
+                                                                                    alpha: 0.86,
+                                                                                  )
+                                                                                : const Color(
+                                                                                    0xFFD8B640,
+                                                                                  ),
+                                                                          ),
+                                                                          maxLines:
+                                                                              2,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                        ),
+                                                                      ),
+                                                                    )
+                                                                  else if (!_playVsBot &&
+                                                                      _currentOpening
+                                                                          .isNotEmpty)
+                                                                    Align(
+                                                                      alignment:
+                                                                          Alignment
+                                                                              .center,
+                                                                      child: Padding(
+                                                                        padding: const EdgeInsets.only(
+                                                                          bottom:
+                                                                              6,
+                                                                        ),
+                                                                        child: Text(
+                                                                          _currentOpening,
+                                                                          style: TextStyle(
+                                                                            fontSize:
+                                                                                13,
+                                                                            fontWeight:
+                                                                                FontWeight.w700,
+                                                                            color: scheme.onSurface.withValues(
+                                                                              alpha: 0.72,
+                                                                            ),
+                                                                          ),
+                                                                          maxLines:
+                                                                              2,
+                                                                          overflow:
+                                                                              TextOverflow.ellipsis,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  _buildSuggestedMovesList(
+                                                                    height:
+                                                                        suggestionsHeight,
+                                                                    padding:
+                                                                        _playVsBot
+                                                                        ? const EdgeInsets.fromLTRB(
+                                                                            16,
+                                                                            2,
+                                                                            16,
+                                                                            8,
+                                                                          )
+                                                                        : const EdgeInsets.symmetric(
+                                                                            vertical:
+                                                                                10,
+                                                                            horizontal:
+                                                                                20,
+                                                                          ),
+                                                                  ),
+                                                                  if (!_playVsBot)
+                                                                    _buildHistoryBar(
+                                                                      height:
+                                                                          historyHeight,
+                                                                      margin: const EdgeInsets.symmetric(
+                                                                        vertical:
+                                                                            6,
+                                                                      ),
+                                                                    ),
+                                                                  const Spacer(),
+                                                                  _buildActionArea(
+                                                                    compactBottom:
+                                                                        8,
+                                                                    horizontal:
+                                                                        0,
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            if (_hasMoveQualityBanner)
+                                                              Positioned(
+                                                                left: 0,
+                                                                right: 0,
+                                                                top:
+                                                                    landscapeBannerTop,
+                                                                child:
+                                                                    _buildMoveQualityBannerOverlay(
+                                                                      isLandscape:
+                                                                          true,
+                                                                    ),
+                                                              ),
+                                                          ],
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    if (!_playVsBot) _buildOpeningLabel(scale),
-                                    if (!_playVsBot)
-                                      _buildSuggestedMovesList(
-                                        height: 130,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
-                                          horizontal: 20,
+                                    ],
+                                  )
+                                : Column(
+                                    children: [
+                                      _buildHeader(scale),
+                                      KeyedSubtree(
+                                        key: _evalBarHorizontalKey,
+                                        child: _buildEvalBarHorizontal(scale),
+                                      ),
+                                      Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsets.fromLTRB(
+                                            8,
+                                            8,
+                                            8,
+                                            _playVsBot ? 2 : 8,
+                                          ),
+                                          child: LayoutBuilder(
+                                            builder: (context, inner) {
+                                              final boardSize = min(
+                                                inner.maxWidth,
+                                                inner.maxHeight,
+                                              );
+                                              return Stack(
+                                                children: [
+                                                  Align(
+                                                    alignment:
+                                                        Alignment.topCenter,
+                                                    child: SizedBox(
+                                                      key: _boardKey,
+                                                      width: boardSize,
+                                                      height: boardSize,
+                                                      child: Stack(
+                                                        children: [
+                                                          Opacity(
+                                                            opacity:
+                                                                _boardIntroOpacity(),
+                                                            child: _buildBoard(
+                                                              reverse,
+                                                            ),
+                                                          ),
+                                                          Opacity(
+                                                            opacity:
+                                                                _boardIntroOpacity(),
+                                                            child:
+                                                                _buildAnimatedArrows(
+                                                                  reverse,
+                                                                ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          ),
                                         ),
                                       ),
-                                    if (!_playVsBot) _buildHistoryBar(),
-                                    _buildActionArea(),
-                                  ],
-                                ),
+                                      if (!_playVsBot)
+                                        _buildOpeningLabel(scale),
+                                      if (!_playVsBot)
+                                        _buildSuggestedMovesList(
+                                          height: 130,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 10,
+                                            horizontal: 20,
+                                          ),
+                                        ),
+                                      if (!_playVsBot) _buildHistoryBar(),
+                                      _buildActionArea(),
+                                    ],
+                                  ),
+                          ),
                         ),
                         if (!_introCompleted)
                           _buildSceneIntroOverlay(Size(width, height), scale),
@@ -7224,6 +7859,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         _buildSuggestionLaunchOverlay(),
                         _buildButtonRippleOverlay(),
                         _buildStoreCoinGainOverlay(),
+                        _buildGameResultRevealOverlay(
+                          Size(width, height),
+                          scale,
+                        ),
                         _buildTopMostOverlay(Size(width, height), scale),
                       ],
                     ),
@@ -7267,9 +7906,129 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             _botDifficultyColor(_selectedBotDifficulty),
             0.45,
           )!;
+    final portraitStatusAccent = _gameOutcome != null
+        ? (_gameOutcome == GameOutcome.draw
+              ? botArcade.amber
+              : _isWinningOutcomeForPov
+              ? botArcade.victory
+              : botArcade.crimson)
+        : _botThinking
+        ? botArcade.amber
+        : _isHumanTurnInBotGame
+        ? botArcade.cyan
+        : botArcade.crimson;
+    final portraitStatusLabel = _gameOutcome != null
+        ? 'MATCH END'
+        : _botThinking
+        ? 'BOT THINKING'
+        : _isHumanTurnInBotGame
+        ? 'PLAYER TURN'
+        : 'BOT TURN';
+    final portraitFilledTagForeground = botArcade.monochrome
+        ? botArcade.text
+        : const Color(0xFF0B0F16);
     if (isLandscape) {
       return SizedBox.shrink();
     }
+
+    Widget buildPortraitBotStatusTag({required bool compact}) {
+      if (!_playVsBot || selectedBot == null) {
+        return const SizedBox.shrink();
+      }
+
+      return PuzzleAcademyTag(
+        label: portraitStatusLabel,
+        accent: portraitStatusAccent,
+        compact: compact,
+        filled: _gameOutcome == null && _isHumanTurnInBotGame,
+        foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
+            ? portraitFilledTagForeground
+            : null,
+      );
+    }
+
+    Widget buildPortraitBotIdentityCluster({
+      required double avatarSize,
+      required double iconSize,
+      required double shadowBlurRadius,
+      required Offset shadowOffset,
+      bool includeOverlay = false,
+      bool includeStatusTag = true,
+    }) {
+      final avatar = _wrapBotAvatarInteractive(
+        scale,
+        InkWell(
+          onTap: _onBotAvatarTapped,
+          borderRadius: BorderRadius.circular(999),
+          child: Opacity(
+            opacity: _botAvatarIntroOpacity,
+            child: Container(
+              key: _botAvatarWidgetKey,
+              width: avatarSize,
+              height: avatarSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: botAccent.withValues(alpha: 0.58)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.10),
+                    blurRadius: shadowBlurRadius,
+                    offset: shadowOffset,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: selectedBotAvatarAsset != null
+                    ? Image.asset(selectedBotAvatarAsset, fit: BoxFit.cover)
+                    : Container(
+                        color: Color.alphaBlend(
+                          scheme.primary.withValues(alpha: 0.08),
+                          scheme.surface,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.smart_toy_outlined,
+                          color: botAccent,
+                          size: iconSize,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final avatarCluster = includeOverlay
+          ? Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.centerRight,
+              children: [
+                Positioned(
+                  left: _botAvatarOverlayOnRight
+                      ? avatarSize + (8 * scale)
+                      : null,
+                  right: _botAvatarOverlayOnRight
+                      ? null
+                      : avatarSize + (8 * scale),
+                  child: IgnorePointer(child: _buildBotAvatarOverlay(scale)),
+                ),
+                avatar,
+              ],
+            )
+          : avatar;
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          avatarCluster,
+          if (includeStatusTag) ...[
+            SizedBox(width: 8 * scale),
+            buildPortraitBotStatusTag(compact: true),
+          ],
+        ],
+      );
+    }
+
     Widget buildCompactBotHeaderIdentity() {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -7312,54 +8071,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           if (_playVsBot && selectedBot != null) ...[
             SizedBox(width: 8 * scale),
-            _wrapBotAvatarInteractive(
-              scale,
-              InkWell(
-                onTap: _onBotAvatarTapped,
-                borderRadius: BorderRadius.circular(999),
-                child: Opacity(
-                  opacity: _botAvatarIntroOpacity,
-                  child: Container(
-                    key: _botAvatarWidgetKey,
-                    width: 30 * scale,
-                    height: 30 * scale,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: botAccent.withValues(alpha: 0.58),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: isDark ? 0.24 : 0.10,
-                          ),
-                          blurRadius: 8 * scale,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: selectedBotAvatarAsset != null
-                          ? Image.asset(
-                              selectedBotAvatarAsset,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              color: Color.alphaBlend(
-                                scheme.primary.withValues(alpha: 0.08),
-                                scheme.surface,
-                              ),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.smart_toy_outlined,
-                                color: botAccent,
-                                size: 16 * scale,
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-              ),
+            buildPortraitBotIdentityCluster(
+              avatarSize: 34 * scale,
+              iconSize: 18 * scale,
+              shadowBlurRadius: 9 * scale,
+              shadowOffset: const Offset(0, 2),
+              includeStatusTag: false,
             ),
           ],
         ],
@@ -7367,13 +8084,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     Widget buildHeaderIdentity() {
-      return Stack(
-        alignment: Alignment.centerLeft,
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Padding(
-            padding: EdgeInsets.only(
-              right: (_playVsBot && selectedBot != null) ? (46 * scale) : 0,
-            ),
+          Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: Column(
@@ -7426,67 +8140,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
           ),
           if (_playVsBot && selectedBot != null)
-            Align(
+            FittedBox(
+              fit: BoxFit.scaleDown,
               alignment: Alignment.centerRight,
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.centerRight,
-                children: [
-                  Positioned(
-                    left: _botAvatarOverlayOnRight ? 42 * scale : null,
-                    right: _botAvatarOverlayOnRight ? null : 42 * scale,
-                    child: IgnorePointer(child: _buildBotAvatarOverlay(scale)),
-                  ),
-                  _wrapBotAvatarInteractive(
-                    scale,
-                    InkWell(
-                      onTap: _onBotAvatarTapped,
-                      borderRadius: BorderRadius.circular(999),
-                      child: Opacity(
-                        opacity: _botAvatarIntroOpacity,
-                        child: Container(
-                          key: _botAvatarWidgetKey,
-                          width: 34 * scale,
-                          height: 34 * scale,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: botAccent.withValues(alpha: 0.58),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(
-                                  alpha: isDark ? 0.24 : 0.10,
-                                ),
-                                blurRadius: 10 * scale,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child: selectedBotAvatarAsset != null
-                                ? Image.asset(
-                                    selectedBotAvatarAsset,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(
-                                    color: Color.alphaBlend(
-                                      scheme.primary.withValues(alpha: 0.08),
-                                      scheme.surface,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Icon(
-                                      Icons.smart_toy_outlined,
-                                      color: botAccent,
-                                      size: 18 * scale,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: buildPortraitBotIdentityCluster(
+                avatarSize: 38 * scale,
+                iconSize: 20 * scale,
+                shadowBlurRadius: 11 * scale,
+                shadowOffset: const Offset(0, 3),
+                includeOverlay: true,
+                includeStatusTag: false,
               ),
             ),
         ],
@@ -7540,82 +8203,96 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final headerIdentity = buildHeaderIdentity();
     final centerEvalCounter = buildCenterEvalCounter();
     final depthCluster = _buildEditModeDepthCluster(scale, scheme);
+    final rightAccessoryAlignment = _playVsBot && selectedBot != null
+        ? Alignment.centerRight
+        : Alignment.center;
+    final rightAccessory = _playVsBot && selectedBot != null
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildPortraitBotStatusTag(compact: true),
+              if (_shouldShowDepthCounter) SizedBox(width: 10 * scale),
+              if (_shouldShowDepthCounter) depthCluster,
+            ],
+          )
+        : depthCluster;
+    final portraitHeaderBody = compactBotHeader
+        ? LayoutBuilder(
+            builder: (context, constraints) {
+              final compactGap = 8 * scale;
+              final centerReservedWidth = _shouldShowCenterEvalCounter
+                  ? min(100 * scale, constraints.maxWidth * 0.30)
+                  : 0.0;
+              final sideMaxWidth = _shouldShowCenterEvalCounter
+                  ? max(
+                      0.0,
+                      (constraints.maxWidth -
+                              centerReservedWidth -
+                              (compactGap * 2)) /
+                          2,
+                    )
+                  : max(0.0, (constraints.maxWidth - compactGap) / 2);
+
+              return SizedBox(
+                height: 48 * scale,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (_shouldShowCenterEvalCounter)
+                      Align(
+                        alignment: Alignment.center,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: centerEvalCounter,
+                        ),
+                      ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: sideMaxWidth),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: buildCompactBotHeaderIdentity(),
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: sideMaxWidth),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: rightAccessory,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: headerIdentity),
+              Expanded(child: Center(child: centerEvalCounter)),
+              Expanded(
+                child: Align(
+                  alignment: rightAccessoryAlignment,
+                  child: rightAccessory,
+                ),
+              ),
+            ],
+          );
 
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: 14 * scale,
         vertical: 8 * scale,
       ),
-      child: compactBotHeader
-          ? LayoutBuilder(
-              builder: (context, constraints) {
-                final compactGap = 8 * scale;
-                final centerReservedWidth = _shouldShowCenterEvalCounter
-                    ? min(100 * scale, constraints.maxWidth * 0.30)
-                    : 0.0;
-                final sideMaxWidth = _shouldShowCenterEvalCounter
-                    ? max(
-                        0.0,
-                        (constraints.maxWidth -
-                                centerReservedWidth -
-                                (compactGap * 2)) /
-                            2,
-                      )
-                    : max(0.0, (constraints.maxWidth - compactGap) / 2);
-
-                return SizedBox(
-                  height: 44 * scale,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (_shouldShowCenterEvalCounter)
-                        Align(
-                          alignment: Alignment.center,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: centerEvalCounter,
-                          ),
-                        ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: sideMaxWidth),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: buildCompactBotHeaderIdentity(),
-                          ),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: sideMaxWidth),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: depthCluster,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(child: headerIdentity),
-                Expanded(child: Center(child: centerEvalCounter)),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: depthCluster,
-                  ),
-                ),
-              ],
-            ),
+      child: portraitHeaderBody,
     );
   }
 
@@ -8018,6 +8695,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             final isCaptureTarget = isLegalTarget && p != null;
             final showMoveQualityBadge =
                 activeMoveQuality != null && activeMoveQualitySquare == sq;
+            final canHumanDragPiece = _canHumanInteractWithBoardPiece(p);
             const legalDotBase = Color(0xFF9EA8BA);
 
             return DragTarget<String>(
@@ -8043,7 +8721,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       : _handleHoldTap(sq),
                   onLongPress: () {
                     if (_openingMode != OpeningMode.off) return;
-                    if (!_analysisEditMode && !_isCurrentTurnPiece(p)) return;
+                    if (!canHumanDragPiece) return;
                     setState(() {
                       _holdSelectedFrom = sq;
                       _gambitSelectedFrom = null;
@@ -8165,16 +8843,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       if (p != null)
                         Center(
                           child: Draggable<String>(
+                            maxSimultaneousDrags: canHumanDragPiece ? 1 : 0,
                             data: sq,
                             feedback: _buildPieceGlow(p),
                             onDragStarted: () {
-                              if (_isOpeningSelectionMode &&
-                                  !_isCurrentTurnPiece(p)) {
-                                return;
-                              }
-                              if (!_isOpeningSelectionMode &&
-                                  !_analysisEditMode &&
-                                  !_isCurrentTurnPiece(p)) {
+                              if (!canHumanDragPiece) {
                                 return;
                               }
                               setState(() {
@@ -8371,6 +9044,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? _gambitPreviewLines
         : _topLines;
     final showSequenceNumbers = _gambitPreviewLines.isNotEmpty;
+    final media = MediaQuery.of(context);
+    final compactBotFrame =
+        _playVsBot &&
+        (media.size.width <= 390 ||
+            (media.orientation == Orientation.landscape &&
+                media.size.height <= 430));
+    final boardInset = _playVsBot ? (compactBotFrame ? 6.0 : 8.0) : 0.0;
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) => IgnorePointer(
@@ -8385,6 +9065,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 progress: _pulseController.value,
                 reverse: reverse,
                 showSequenceNumbers: showSequenceNumbers,
+                boardInset: boardInset,
               ),
             ),
             ..._botGhostArrows.map(
@@ -8401,6 +9082,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     reverse: reverse,
                     overrideColor: const Color(0xFF6D7482),
                     staticArrowStyle: true,
+                    boardInset: boardInset,
                   ),
                 ),
               ),
@@ -8417,110 +9099,120 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       vertical: 10,
       horizontal: 20,
     ),
+    int? maxVisibleMoves,
+    AlignmentGeometry alignment = Alignment.topCenter,
   }) {
+    final suggestedLines = List<EngineLine>.from(_topLines)
+      ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+    final visibleLines = maxVisibleMoves == null
+        ? suggestedLines
+        : suggestedLines.take(maxVisibleMoves).toList(growable: false);
     final showSuggestions =
-        _shouldShowVisualSuggestions && _topLines.isNotEmpty;
+        _shouldShowVisualSuggestions && visibleLines.isNotEmpty;
 
     return SizedBox(
       height: height,
       child: showSuggestions
-          ? SingleChildScrollView(
-              padding: padding,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: _topLines.map((l) {
-                  String from = l.move.substring(0, 2);
-                  String to = l.move.substring(2, 4);
-                  String? movingPiece = boardState[from];
-                  if (movingPiece == null) return const SizedBox.shrink();
-                  String? capturedPiece = boardState[to];
-                  bool isCapture = capturedPiece != null;
-                  String pieceLetter = movingPiece.startsWith('p')
-                      ? ''
-                      : movingPiece[0].toUpperCase();
-                  String notation = pieceLetter + (isCapture ? 'x' : '') + to;
-                  Color color = _getRelativeColorForWidget(l.eval, l.multiPv);
-                  double eval = l.eval / 100.0;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _pieceImage(movingPiece, width: 24, height: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          notation,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 16,
-                            fontWeight: l.multiPv == 1
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            shadows: const [
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(0.5, 0.5),
-                                blurRadius: 0.8,
-                              ),
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(-0.5, 0.5),
-                                blurRadius: 0.8,
-                              ),
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(0.5, -0.5),
-                                blurRadius: 0.8,
-                              ),
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(-0.5, -0.5),
-                                blurRadius: 0.8,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (isCapture) ...[
+          ? Align(
+              alignment: alignment,
+              child: SingleChildScrollView(
+                padding: padding,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: visibleLines.map((l) {
+                    String from = l.move.substring(0, 2);
+                    String to = l.move.substring(2, 4);
+                    String? movingPiece = boardState[from];
+                    if (movingPiece == null) return const SizedBox.shrink();
+                    String? capturedPiece = boardState[to];
+                    bool isCapture = capturedPiece != null;
+                    String pieceLetter = movingPiece.startsWith('p')
+                        ? ''
+                        : movingPiece[0].toUpperCase();
+                    String notation = pieceLetter + (isCapture ? 'x' : '') + to;
+                    Color color = _getRelativeColorForWidget(l.eval, l.multiPv);
+                    double eval = l.eval / 100.0;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _pieceImage(movingPiece, width: 24, height: 24),
                           const SizedBox(width: 8),
-                          _pieceImage(capturedPiece, width: 20, height: 20),
-                        ],
-                        const SizedBox(width: 8),
-                        Text(
-                          eval >= 0
-                              ? '+${eval.toStringAsFixed(2)}'
-                              : eval.toStringAsFixed(2),
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            shadows: const [
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(0.5, 0.5),
-                                blurRadius: 0.8,
-                              ),
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(-0.5, 0.5),
-                                blurRadius: 0.8,
-                              ),
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(0.5, -0.5),
-                                blurRadius: 0.8,
-                              ),
-                              Shadow(
-                                color: Color(0xFF757575),
-                                offset: Offset(-0.5, -0.5),
-                                blurRadius: 0.8,
-                              ),
-                            ],
+                          Text(
+                            notation,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 16,
+                              fontWeight: l.multiPv == 1
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              shadows: const [
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(0.5, 0.5),
+                                  blurRadius: 0.8,
+                                ),
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(-0.5, 0.5),
+                                  blurRadius: 0.8,
+                                ),
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(0.5, -0.5),
+                                  blurRadius: 0.8,
+                                ),
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(-0.5, -0.5),
+                                  blurRadius: 0.8,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+                          if (isCapture) ...[
+                            const SizedBox(width: 8),
+                            _pieceImage(capturedPiece, width: 20, height: 20),
+                          ],
+                          const SizedBox(width: 8),
+                          Text(
+                            eval >= 0
+                                ? '+${eval.toStringAsFixed(2)}'
+                                : eval.toStringAsFixed(2),
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              shadows: const [
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(0.5, 0.5),
+                                  blurRadius: 0.8,
+                                ),
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(-0.5, 0.5),
+                                  blurRadius: 0.8,
+                                ),
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(0.5, -0.5),
+                                  blurRadius: 0.8,
+                                ),
+                                Shadow(
+                                  color: Color(0xFF757575),
+                                  offset: Offset(-0.5, -0.5),
+                                  blurRadius: 0.8,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
             )
           : const SizedBox.shrink(),
@@ -8606,6 +9298,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _openingMode = OpeningMode.off;
       _topLines = [];
       _analysisLines = [];
+      _analysisLinesFen = null;
       _currentDepth = 0;
       _currentEval = 0.0;
       _vsBotCharge =
@@ -8736,6 +9429,80 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final isLight = theme.brightness == Brightness.light;
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+    final endedOutcome = _gameOutcome;
+
+    Widget buildEndMatchButton({
+      required Color accent,
+      required Color background,
+      required Color foreground,
+      required Color borderColor,
+      required TextStyle titleStyle,
+      required TextStyle subtitleStyle,
+      required IconData icon,
+    }) {
+      return SizedBox(
+        width: double.infinity,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: _gameResultDialogVisible || endedOutcome == null
+                ? null
+                : () => unawaited(_showGameResultDialog(endedOutcome)),
+            child: Ink(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: borderColor, width: 2.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.18),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accent.withValues(alpha: 0.14),
+                      border: Border.all(color: accent.withValues(alpha: 0.45)),
+                    ),
+                    child: Icon(icon, color: accent, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('END MATCH', style: titleStyle),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Study the final board as long as you want, then open the result screen.',
+                          style: subtitleStyle,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: foreground.withValues(alpha: 0.86),
+                    size: 28,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     if (_playVsBot) {
       final useMonochrome =
@@ -8770,9 +9537,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final filledTagForeground = arcade.monochrome
           ? arcade.text
           : const Color(0xFF0B0F16);
+      final showStatusTagInDeck = isLandscape;
       final showPortraitFeedbackOverlay =
           !isLandscape && (_hasVisibleSuggestedMoves || _hasMoveQualityBanner);
       final portraitFeedbackHeight = _hasVisibleSuggestedMoves ? 168.0 : 120.0;
+      final portraitSuggestionPadding = _hasMoveQualityBanner
+          ? const EdgeInsets.fromLTRB(20, 34, 20, 8)
+          : const EdgeInsets.fromLTRB(20, 0, 20, 12);
+      final portraitSuggestionAlignment = _hasMoveQualityBanner
+          ? Alignment.topCenter
+          : Alignment.bottomCenter;
+      final showEndMatchButton = endedOutcome != null;
 
       final deck = Container(
         decoration: _vsBotArcadePanelDecoration(
@@ -8798,84 +9573,115 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Align(alignment: Alignment.centerLeft, child: statusTag),
-                const SizedBox(height: 6),
-                Builder(
-                  builder: (context) {
-                    final actionSpacing = inner.maxWidth <= 280
-                        ? 4.0
-                        : inner.maxWidth <= 360
-                        ? 6.0
-                        : 8.0;
-                    final powerPod = _buildVsBotActionPod(
-                      label: 'Charge',
-                      accent: difficultyAccent,
-                      control: _buildSuggestionTriggerButton(),
-                    );
-                    final actionPods = <Widget>[
-                      _buildVsBotActionPod(
-                        label: 'Return',
-                        accent: arcade.crimson,
-                        control: _buildVsBotControlButton(
-                          icon: Icons.exit_to_app_rounded,
-                          onTap: _openBotSetupFromMenu,
+                if (showStatusTagInDeck) ...[
+                  Align(alignment: Alignment.centerLeft, child: statusTag),
+                  const SizedBox(height: 6),
+                ],
+                if (showEndMatchButton)
+                  buildEndMatchButton(
+                    accent: statusAccent,
+                    background: Color.alphaBlend(
+                      statusAccent.withValues(
+                        alpha: arcade.monochrome ? 0.12 : 0.16,
+                      ),
+                      arcade.panelAlt,
+                    ),
+                    foreground: arcade.text,
+                    borderColor: statusAccent.withValues(alpha: 0.62),
+                    titleStyle: puzzleAcademyDisplayStyle(
+                      palette: arcade.base,
+                      size: 16,
+                      color: statusAccent,
+                      withGlow: true,
+                    ),
+                    subtitleStyle: puzzleAcademyHudStyle(
+                      palette: arcade.base,
+                      size: 10.8,
+                      color: arcade.textMuted,
+                    ),
+                    icon: endedOutcome == GameOutcome.draw
+                        ? Icons.balance_rounded
+                        : _isWinningOutcomeForPov
+                        ? Icons.emoji_events_rounded
+                        : Icons.flag_rounded,
+                  )
+                else
+                  Builder(
+                    builder: (context) {
+                      final actionSpacing = inner.maxWidth <= 280
+                          ? 4.0
+                          : inner.maxWidth <= 360
+                          ? 6.0
+                          : 8.0;
+                      final powerPod = _buildVsBotActionPod(
+                        label: 'Charge',
+                        accent: difficultyAccent,
+                        control: _buildSuggestionTriggerButton(),
+                      );
+                      final actionPods = <Widget>[
+                        _buildVsBotActionPod(
+                          label: 'Return',
                           accent: arcade.crimson,
+                          control: _buildVsBotControlButton(
+                            icon: Icons.exit_to_app_rounded,
+                            onTap: _openBotSetupFromMenu,
+                            accent: arcade.crimson,
+                          ),
                         ),
-                      ),
-                      _buildVsBotActionPod(
-                        label: 'Store',
-                        accent: arcade.amber,
-                        control: _buildVsBotControlButton(
-                          controlKey: _storeButtonKey,
-                          icon: Icons.storefront_outlined,
-                          onTap: _openStore,
+                        _buildVsBotActionPod(
+                          label: 'Store',
                           accent: arcade.amber,
+                          control: _buildVsBotControlButton(
+                            controlKey: _storeButtonKey,
+                            icon: Icons.storefront_outlined,
+                            onTap: _openStore,
+                            accent: arcade.amber,
+                          ),
                         ),
-                      ),
-                      _buildVsBotActionPod(
-                        label: 'Undo',
-                        accent: profileAccent,
-                        control: _buildBotUndoButton(),
-                      ),
-                      _buildVsBotActionPod(
-                        label: 'Config',
-                        accent: arcade.cyan,
-                        control: _buildVsBotControlButton(
-                          icon: Icons.tune_rounded,
-                          onTap: () => _openSettings(fromAnalysisMode: false),
+                        _buildVsBotActionPod(
+                          label: 'Undo',
+                          accent: profileAccent,
+                          control: _buildBotUndoButton(),
+                        ),
+                        _buildVsBotActionPod(
+                          label: 'Config',
                           accent: arcade.cyan,
+                          control: _buildVsBotControlButton(
+                            icon: Icons.tune_rounded,
+                            onTap: () => _openSettings(fromAnalysisMode: false),
+                            accent: arcade.cyan,
+                          ),
                         ),
-                      ),
-                    ];
+                      ];
 
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Align(alignment: Alignment.center, child: powerPod),
-                        const SizedBox(height: 6),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (
-                              int index = 0;
-                              index < actionPods.length;
-                              index++
-                            ) ...[
-                              Expanded(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: actionPods[index],
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Align(alignment: Alignment.center, child: powerPod),
+                          const SizedBox(height: 6),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (
+                                int index = 0;
+                                index < actionPods.length;
+                                index++
+                              ) ...[
+                                Expanded(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: actionPods[index],
+                                  ),
                                 ),
-                              ),
-                              if (index < actionPods.length - 1)
-                                SizedBox(width: actionSpacing),
+                                if (index < actionPods.length - 1)
+                                  SizedBox(width: actionSpacing),
+                              ],
                             ],
-                          ],
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
               ],
             );
           },
@@ -8904,7 +9710,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       if (_hasVisibleSuggestedMoves)
                         _buildSuggestedMovesList(
                           height: portraitFeedbackHeight,
-                          padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+                          padding: portraitSuggestionPadding,
+                          maxVisibleMoves: 2,
+                          alignment: portraitSuggestionAlignment,
                         ),
                       if (_hasMoveQualityBanner)
                         _buildMoveQualityBannerOverlay(isLandscape: false),
@@ -8913,6 +9721,43 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 ),
               ),
           ],
+        ),
+      );
+    }
+
+    if (endedOutcome != null) {
+      final accent = endedOutcome == GameOutcome.draw
+          ? const Color(0xFFD8B640)
+          : const Color(0xFFE45C5C);
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: compactBottom,
+          left: horizontal,
+          right: horizontal,
+        ),
+        child: buildEndMatchButton(
+          accent: accent,
+          background: Color.alphaBlend(
+            accent.withValues(alpha: isLight ? 0.12 : 0.18),
+            scheme.surface,
+          ),
+          foreground: scheme.onSurface,
+          borderColor: accent.withValues(alpha: isLight ? 0.54 : 0.66),
+          titleStyle: TextStyle(
+            color: accent,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+          subtitleStyle: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.72),
+            fontSize: 12.5,
+            height: 1.28,
+            fontWeight: FontWeight.w600,
+          ),
+          icon: endedOutcome == GameOutcome.draw
+              ? Icons.balance_rounded
+              : Icons.flag_rounded,
         ),
       );
     }
@@ -12635,6 +13480,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   @override
   void dispose() {
+    _cancelGameResultReveal();
     _cancelIdleInterstitialTimer();
     WidgetsBinding.instance.removeObserver(this);
     _editModeHintTimer?.cancel();

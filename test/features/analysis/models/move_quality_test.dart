@@ -138,7 +138,8 @@ void main() {
         assessment.scoringSuppressedReason,
         MoveQualityScoringSuppressionReason.openingFeedbackOnly,
       );
-      expect(assessment.explanation, contains('feedback-only'));
+      expect(assessment.explanation, contains('registered opening theory'));
+      expect(assessment.explanation, isNot(contains('first 6 plies')));
     });
 
     test(
@@ -155,8 +156,8 @@ void main() {
           ),
         );
 
-        expect(assessment.quality, MoveQuality.solid);
-        expect(assessment.explanation, contains('equal position'));
+        expect(assessment.quality, MoveQuality.strong);
+        expect(assessment.explanation, MoveQuality.strong.explanation);
       },
     );
 
@@ -172,12 +173,209 @@ void main() {
         ),
       );
 
-      expect(assessment.quality, MoveQuality.solid);
+      expect(assessment.quality, MoveQuality.optimal);
       expect(
         assessment.scoringSuppressedReason,
         MoveQualityScoringSuppressionReason.obviousMove,
       );
       expect(assessment.explanation, contains('do not build charge'));
+    });
+
+    test('keeps the engine best move optimal despite post-move drift', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.31,
+          preMoveMoverWinProbability: 0.78,
+          postMoveMoverWinProbability: 0.47,
+          preMoveMoverEvalPawns: 1.9,
+          playedMoveRank: 1,
+          cpGapFromBest: 0,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.optimal);
+      expect(assessment.explanation, MoveQuality.optimal.explanation);
+    });
+
+    test('maps the engine second line to strong directly', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.18,
+          preMoveMoverWinProbability: 0.71,
+          postMoveMoverWinProbability: 0.53,
+          preMoveMoverEvalPawns: 1.6,
+          playedMoveRank: 2,
+          cpGapFromBest: 14,
+        ),
+      );
+      expect(assessment.quality, MoveQuality.strong);
+      expect(assessment.explanation, MoveQuality.strong.explanation);
+    });
+
+    test('keeps close third-line alternatives as solid', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.08,
+          preMoveMoverWinProbability: 0.54,
+          postMoveMoverWinProbability: 0.46,
+          preMoveMoverEvalPawns: 0.3,
+          playedMoveRank: 3,
+          cpGapFromBest: 32,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.solid);
+    });
+
+    test('does not keep catastrophic third-line losses as solid', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.34,
+          preMoveMoverWinProbability: 0.52,
+          postMoveMoverWinProbability: 0.18,
+          preMoveMoverEvalPawns: 0.2,
+          playedMoveRank: 3,
+          cpGapFromBest: 30,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.criticalFailure);
+    });
+
+    test('downgrades the worst fully covered third move to slip', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.03,
+          preMoveMoverWinProbability: 0.52,
+          postMoveMoverWinProbability: 0.49,
+          preMoveMoverEvalPawns: 0.1,
+          playedMoveRank: 3,
+          cpGapFromBest: 28,
+          cpGapFromNextBetter: 18,
+          totalLegalMoveCount: 3,
+          analyzedLegalMoveCount: 3,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.slip);
+      expect(assessment.explanation, contains('weakest move'));
+    });
+
+    test('keeps a tied fully covered third move as solid', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.03,
+          preMoveMoverWinProbability: 0.52,
+          postMoveMoverWinProbability: 0.49,
+          preMoveMoverEvalPawns: 0.1,
+          playedMoveRank: 3,
+          cpGapFromBest: 18,
+          cpGapFromNextBetter: 8,
+          totalLegalMoveCount: 3,
+          analyzedLegalMoveCount: 3,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.solid);
+    });
+
+    test('does not keep the worse of two legal moves as strong', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.015,
+          preMoveMoverWinProbability: 0.51,
+          postMoveMoverWinProbability: 0.495,
+          preMoveMoverEvalPawns: 0.0,
+          playedMoveRank: 2,
+          cpGapFromBest: 30,
+          cpGapFromNextBetter: 30,
+          totalLegalMoveCount: 2,
+          analyzedLegalMoveCount: 2,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.slip);
+    });
+
+    test('keeps a near-equal second move strong when fully covered', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.015,
+          preMoveMoverWinProbability: 0.51,
+          postMoveMoverWinProbability: 0.495,
+          preMoveMoverEvalPawns: 0.0,
+          playedMoveRank: 2,
+          cpGapFromBest: 12,
+          cpGapFromNextBetter: 12,
+          totalLegalMoveCount: 2,
+          analyzedLegalMoveCount: 2,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.strong);
+    });
+
+    test('does not promote catastrophic cp-gap alternatives to strong', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.36,
+          preMoveMoverWinProbability: 0.53,
+          postMoveMoverWinProbability: 0.17,
+          preMoveMoverEvalPawns: 0.25,
+          cpGapFromBest: 22,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.criticalFailure);
+    });
+
+    test('does not keep fourth-line alternatives in solid by default', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.08,
+          preMoveMoverWinProbability: 0.54,
+          postMoveMoverWinProbability: 0.46,
+          preMoveMoverEvalPawns: 0.3,
+          playedMoveRank: 4,
+          cpGapFromBest: 48,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.slip);
+    });
+
+    test('does not upgrade wider cp-gap slips back to solid', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.09,
+          preMoveMoverWinProbability: 0.52,
+          postMoveMoverWinProbability: 0.43,
+          preMoveMoverEvalPawns: 0.2,
+          cpGapFromBest: 44,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.slip);
+    });
+
+    test('keeps opening top-line moves as book even with harsh drift', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.27,
+          preMoveMoverWinProbability: 0.58,
+          postMoveMoverWinProbability: 0.31,
+          preMoveMoverEvalPawns: 0.4,
+          playedMoveRank: 1,
+          cpGapFromBest: 0,
+          insideOpeningExemption: true,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.book);
+      expect(
+        assessment.scoringSuppressedReason,
+        MoveQualityScoringSuppressionReason.openingFeedbackOnly,
+      );
     });
 
     test('suppresses special labels when confidence is low', () {
@@ -212,6 +410,20 @@ void main() {
 
       expect(assessment.quality, MoveQuality.solid);
       expect(assessment.explanation, MoveQuality.solid.explanation);
+    });
+
+    test('does not hide catastrophic low-confidence losses behind solid', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.41,
+          preMoveMoverWinProbability: 0.51,
+          postMoveMoverWinProbability: 0.10,
+          preMoveMoverEvalPawns: 0.1,
+          confidence: MoveQualityConfidence.low,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.criticalFailure);
     });
   });
 
@@ -259,7 +471,7 @@ void main() {
         ),
       );
 
-      expect(hardStrongMove.quality, MoveQuality.strong);
+      expect(hardStrongMove.quality, MoveQuality.optimal);
       expect(
         updatedMoveQualityCharge(current: 40, assessment: hardStrongMove),
         55,
@@ -275,6 +487,11 @@ void main() {
       );
       expect(MoveQuality.solid.displaySymbol, isNot('?!'));
       expect(MoveQuality.book.displaySymbol, 'Bk');
+    });
+
+    test('describes book moves as staying in registered theory', () {
+      expect(MoveQuality.book.explanation, contains('registered opening move'));
+      expect(MoveQuality.book.explanation, isNot(contains('6 plies')));
     });
   });
 }

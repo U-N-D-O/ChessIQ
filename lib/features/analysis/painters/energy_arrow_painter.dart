@@ -12,6 +12,7 @@ class EnergyArrowPainter extends CustomPainter {
   final bool showSequenceNumbers;
   final Color? overrideColor;
   final bool staticArrowStyle;
+  final double boardInset;
 
   EnergyArrowPainter({
     required this.lines,
@@ -21,6 +22,7 @@ class EnergyArrowPainter extends CustomPainter {
     this.showSequenceNumbers = false,
     this.overrideColor,
     this.staticArrowStyle = false,
+    this.boardInset = 0.0,
   });
 
   Color _getRelativeColor(int currentEval, int multiPv) {
@@ -44,8 +46,11 @@ class EnergyArrowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const double boardInset = 2.0;
-    final sq = (size.width - (boardInset * 2)) / 8;
+    final usableBoardExtent = max(0.0, size.width - (boardInset * 2));
+    if (usableBoardExtent <= 0) {
+      return;
+    }
+    final sq = usableBoardExtent / 8;
 
     // Pre-compute badge positions with greedy collision avoidance.
     // The best line (multiPv == 1) picks its preferred spot first; subsequent

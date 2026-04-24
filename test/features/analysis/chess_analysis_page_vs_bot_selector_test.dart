@@ -1,0 +1,183 @@
+import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/theme/app_theme_provider.dart';
+import 'package:chessiq/features/analysis/screens/chess_analysis_page.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+Future<void> _pumpVsBotSelector(
+  WidgetTester tester, {
+  required Size size,
+}) async {
+  SharedPreferences.setMockInitialValues(const <String, Object>{
+    'mute_sounds_v1': true,
+    'haptics_enabled_v1': false,
+  });
+
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = size;
+
+  final economy = EconomyProvider();
+  await economy.refresh(notify: false);
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppThemeProvider>(
+          create: (_) => AppThemeProvider(),
+        ),
+        ChangeNotifierProvider<EconomyProvider>.value(value: economy),
+      ],
+      child: const MaterialApp(home: ChessAnalysisPage()),
+    ),
+  );
+
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 1400));
+
+  final playChess = find.text('PLAY CHESS');
+  expect(playChess, findsOneWidget);
+
+  await tester.tap(playChess);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 900));
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  tearDown(() {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+  });
+
+  testWidgets(
+    'vs bot selector keeps avatar square on compact iPhone portrait',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(390, 844),
+      );
+
+      expect(find.text('YOU OPEN'), findsOneWidget);
+      expect(find.text('MIXED START'), findsOneWidget);
+      expect(find.text('100 ELO'), findsWidgets);
+
+      final avatarFinder = find.byKey(
+        const ValueKey<String>('bot_setup_avatar_frame_mochi-gearheart'),
+      );
+      expect(avatarFinder, findsOneWidget);
+
+      final avatarSize = tester.getSize(avatarFinder);
+      expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'vs bot selector keeps avatar square on compact iPhone landscape',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(844, 390),
+      );
+
+      expect(find.text('YOU OPEN'), findsOneWidget);
+      expect(find.text('MIXED START'), findsOneWidget);
+      expect(find.text('BOT OPENS'), findsOneWidget);
+      expect(find.text('100\nELO'), findsOneWidget);
+      expect(find.textContaining('/3 TIERS'), findsOneWidget);
+      expect(find.text('Easy'), findsOneWidget);
+      expect(find.text('Medium'), findsOneWidget);
+      expect(find.text('Hard'), findsOneWidget);
+
+      final easyRect = tester.getRect(find.text('Easy'));
+      final mediumRect = tester.getRect(find.text('Medium'));
+      final hardRect = tester.getRect(find.text('Hard'));
+      expect(easyRect.bottom, lessThanOrEqualTo(390));
+      expect(mediumRect.bottom, lessThanOrEqualTo(390));
+      expect(hardRect.bottom, lessThanOrEqualTo(390));
+
+      final avatarFinder = find.byKey(
+        const ValueKey<String>('bot_setup_avatar_frame_mochi-gearheart'),
+      );
+      expect(avatarFinder, findsOneWidget);
+
+      final selectorPanel = find.byKey(
+        const ValueKey<String>('bot_setup_selector_panel'),
+      );
+      final difficultyPanel = find.byKey(
+        const ValueKey<String>('bot_setup_difficulty_panel'),
+      );
+      final sidePanel = find.byKey(
+        const ValueKey<String>('bot_setup_side_panel'),
+      );
+      expect(selectorPanel, findsOneWidget);
+      expect(difficultyPanel, findsOneWidget);
+      expect(sidePanel, findsOneWidget);
+
+      final selectorRect = tester.getRect(selectorPanel);
+      final difficultyRect = tester.getRect(difficultyPanel);
+      final sideRect = tester.getRect(sidePanel);
+      expect(selectorRect.left, lessThan(difficultyRect.left));
+      expect((selectorRect.top - difficultyRect.top).abs(), lessThan(0.5));
+      expect(
+        (selectorRect.height - (sideRect.bottom - difficultyRect.top)).abs(),
+        lessThan(0.5),
+      );
+
+      final avatarSize = tester.getSize(avatarFinder);
+      expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'vs bot selector switches to right-side controls on smaller landscape phones',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(667, 375),
+      );
+
+      final selectorPanel = find.byKey(
+        const ValueKey<String>('bot_setup_selector_panel'),
+      );
+      final difficultyPanel = find.byKey(
+        const ValueKey<String>('bot_setup_difficulty_panel'),
+      );
+      final sidePanel = find.byKey(
+        const ValueKey<String>('bot_setup_side_panel'),
+      );
+
+      expect(selectorPanel, findsOneWidget);
+      expect(difficultyPanel, findsOneWidget);
+      expect(sidePanel, findsOneWidget);
+      expect(find.textContaining('/3 TIERS'), findsOneWidget);
+
+      final selectorRect = tester.getRect(selectorPanel);
+      final difficultyRect = tester.getRect(difficultyPanel);
+      expect(selectorRect.left, lessThan(difficultyRect.left));
+      expect((selectorRect.top - difficultyRect.top).abs(), lessThan(0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+}

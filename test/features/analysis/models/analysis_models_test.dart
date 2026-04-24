@@ -82,4 +82,100 @@ void main() {
       expect(updated.scoringSuppressedReason, isNull);
     });
   });
+
+  group('Opening prefix helpers', () {
+    final ecoLines = <EcoLine>[
+      EcoLine(
+        name: 'King Pawn Opening',
+        normalizedMoves: 'e4',
+        moveTokens: const <String>['e4'],
+        isGambit: false,
+      ),
+      EcoLine(
+        name: 'Open Game',
+        normalizedMoves: 'e4 e5',
+        moveTokens: const <String>['e4', 'e5'],
+        isGambit: false,
+      ),
+      EcoLine(
+        name: 'Italian Game',
+        normalizedMoves: 'e4 e5 nf3 nc6 bc4',
+        moveTokens: const <String>['e4', 'e5', 'nf3', 'nc6', 'bc4'],
+        isGambit: false,
+      ),
+      EcoLine(
+        name: 'Ruy Lopez Berlin Defense',
+        normalizedMoves: 'e4 e5 nf3 nc6 bb5 nf6 o-o nxe4',
+        moveTokens: const <String>[
+          'e4',
+          'e5',
+          'nf3',
+          'nc6',
+          'bb5',
+          'nf6',
+          'o-o',
+          'nxe4',
+        ],
+        isGambit: false,
+      ),
+    ];
+    final ecoOpenings = <String, String>{
+      'e4': 'King Pawn Opening',
+      'e4 e5': 'Open Game',
+      'e4 e5 nf3': 'King Knight Opening',
+      'e4 e5 nf3 nc6': 'Three Knights Game',
+    };
+
+    test('matches only full registered opening prefixes', () {
+      expect(
+        matchesRegisteredOpeningPrefix(ecoLines, const <String>[
+          'e4',
+          'e5',
+          'nf3',
+        ]),
+        isTrue,
+      );
+      expect(
+        matchesRegisteredOpeningPrefix(ecoLines, const <String>['e4', 'a5']),
+        isFalse,
+      );
+    });
+
+    test('matches registered opening prefixes beyond six plies', () {
+      expect(
+        matchesRegisteredOpeningPrefix(ecoLines, const <String>[
+          'e4',
+          'e5',
+          'nf3',
+          'nc6',
+          'bb5',
+          'nf6',
+          'o-o',
+        ]),
+        isTrue,
+      );
+    });
+
+    test('does not fall back to shorter opening names after a deviation', () {
+      expect(
+        resolveRegisteredOpeningName(
+          ecoOpenings: ecoOpenings,
+          ecoLines: ecoLines,
+          moveTokens: const <String>['e4', 'e5', 'h4'],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('keeps the deepest exact registered name while still on-book', () {
+      expect(
+        resolveRegisteredOpeningName(
+          ecoOpenings: ecoOpenings,
+          ecoLines: ecoLines,
+          moveTokens: const <String>['e4', 'e5', 'nf3', 'nc6', 'bc4'],
+        ),
+        'Three Knights Game',
+      );
+    });
+  });
 }

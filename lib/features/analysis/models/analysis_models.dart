@@ -383,3 +383,52 @@ class EcoLine {
     required this.isGambit,
   });
 }
+
+bool matchesRegisteredOpeningPrefix(
+  List<EcoLine> ecoLines,
+  List<String> moveTokens,
+) {
+  if (moveTokens.isEmpty) {
+    return false;
+  }
+
+  for (final line in ecoLines) {
+    if (line.moveTokens.length < moveTokens.length) {
+      continue;
+    }
+
+    var matches = true;
+    for (var index = 0; index < moveTokens.length; index++) {
+      if (line.moveTokens[index] != moveTokens[index]) {
+        matches = false;
+        break;
+      }
+    }
+
+    if (matches) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+String resolveRegisteredOpeningName({
+  required Map<String, String> ecoOpenings,
+  required List<EcoLine> ecoLines,
+  required List<String> moveTokens,
+}) {
+  if (!matchesRegisteredOpeningPrefix(ecoLines, moveTokens)) {
+    return '';
+  }
+
+  for (var len = moveTokens.length; len >= 1; len--) {
+    final candidate = moveTokens.sublist(0, len).join(' ');
+    final opening = ecoOpenings[candidate];
+    if (opening != null && opening.isNotEmpty) {
+      return opening;
+    }
+  }
+
+  return '';
+}

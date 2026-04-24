@@ -48,6 +48,7 @@ class _NullEngineBackend extends EngineTransport {
 class _DesktopEngineBackend extends EngineTransport {
   Process? _process;
   StreamSubscription<String>? _sub;
+  StreamSubscription<String>? _stderrSub;
   VoidCallback? _onExit;
 
   @override
@@ -58,16 +59,24 @@ class _DesktopEngineBackend extends EngineTransport {
     EngineOutputCallback onOutput, {
     VoidCallback? onExit,
   }) async {
-    _process = await Process.start('./engine/stockfish.exe', []);
+    final process = await Process.start('./engine/stockfish.exe', []);
+    _process = process;
     _onExit = onExit;
-    _sub = _process!.stdout
+    _sub = process.stdout
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen(onOutput);
+    _stderrSub = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((_) {});
+    unawaited(process.stdin.done.catchError((_) {}));
     unawaited(
-      _process!.exitCode
+      process.exitCode
           .then((_) {
-            _process = null;
+            if (identical(_process, process)) {
+              _process = null;
+            }
             _onExit?.call();
           })
           .catchError((_) {}),
@@ -95,26 +104,36 @@ class _DesktopEngineBackend extends EngineTransport {
   @override
   Future<void> stop() async {
     final process = _process;
+    _process = null;
     if (process == null) {
       await _sub?.cancel();
       _sub = null;
+      await _stderrSub?.cancel();
+      _stderrSub = null;
       _onExit = null;
       return;
     }
 
     try {
-      send('quit');
+      process.stdin.writeln('quit');
+    } on ProcessException {
+      // Best-effort shutdown. The process may already be exiting.
+    } on SocketException {
+      // Best-effort shutdown. The pipe may already be closing.
+    } on StateError {
+      // Sink already closed.
     } on Object {
       // Best-effort shutdown. The process may already be exiting.
     }
     await _sub?.cancel();
+    await _stderrSub?.cancel();
     try {
       process.kill();
     } on ProcessException {
       // Process already gone.
     }
-    _process = null;
     _sub = null;
+    _stderrSub = null;
     _onExit = null;
   }
 }

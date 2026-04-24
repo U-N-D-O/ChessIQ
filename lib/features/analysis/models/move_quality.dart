@@ -10,7 +10,8 @@ const double moveQualityMasterstrokeEvalCapPawns = 4.0;
 const int moveQualityOpeningEquivalentCpGap = 35;
 const int moveQualityEqualPositionEquivalentCpGap = 25;
 const int moveQualityObviousBestMoveCpGap = 10;
-const int moveQualityReasonableAlternativeCpGap = 60;
+const int moveQualityReasonableAlternativeCpGap = 35;
+const int moveQualityRelativeTieCpGap = 15;
 const double moveQualityNearEqualEvalBandPawns = 0.9;
 const double moveQualityMaterialImbalanceBandPawns = 1.5;
 
@@ -104,7 +105,10 @@ class MoveQualityClassificationContext {
     required this.postMoveMoverWinProbability,
     required this.preMoveMoverEvalPawns,
     this.cpGapFromBest,
+    this.cpGapFromNextBetter,
     this.playedMoveRank,
+    this.totalLegalMoveCount,
+    this.analyzedLegalMoveCount,
     this.insideOpeningExemption = false,
     this.confidence = MoveQualityConfidence.high,
     this.playerStrengthEstimate,
@@ -121,7 +125,10 @@ class MoveQualityClassificationContext {
   final double postMoveMoverWinProbability;
   final double preMoveMoverEvalPawns;
   final int? cpGapFromBest;
+  final int? cpGapFromNextBetter;
   final int? playedMoveRank;
+  final int? totalLegalMoveCount;
+  final int? analyzedLegalMoveCount;
   final bool insideOpeningExemption;
   final MoveQualityConfidence confidence;
   final int? playerStrengthEstimate;
@@ -133,6 +140,25 @@ class MoveQualityClassificationContext {
   final double? capturedReplySwing;
 
   bool get isLowConfidence => confidence == MoveQualityConfidence.low;
+
+  bool get hasFullLegalMoveCoverage =>
+      totalLegalMoveCount != null &&
+      analyzedLegalMoveCount != null &&
+      totalLegalMoveCount! > 0 &&
+      analyzedLegalMoveCount! >= totalLegalMoveCount!;
+
+  bool get isBottomRankedCoveredMove =>
+      hasFullLegalMoveCoverage &&
+      playedMoveRank != null &&
+      totalLegalMoveCount != null &&
+      playedMoveRank! >= totalLegalMoveCount!;
+
+  bool get isEffectivelyTiedToNextBetterMove =>
+      cpGapFromNextBetter != null &&
+      cpGapFromNextBetter! <= moveQualityRelativeTieCpGap;
+
+  bool get isInferiorBottomRankedCoveredMove =>
+      isBottomRankedCoveredMove && !isEffectivelyTiedToNextBetterMove;
 
   bool get isNearEqualPosition =>
       preMoveMoverEvalPawns.abs() <= moveQualityNearEqualEvalBandPawns &&
@@ -156,7 +182,7 @@ class MoveQualityClassificationContext {
               : moveQualityEqualPositionEquivalentCpGap);
 
   bool get isReasonableAlternative =>
-      (playedMoveRank != null && playedMoveRank! <= 4) ||
+      (playedMoveRank != null && playedMoveRank! <= 3) ||
       (cpGapFromBest != null &&
           cpGapFromBest! <= moveQualityReasonableAlternativeCpGap);
 
@@ -251,7 +277,7 @@ _moveQualityPresentations = <MoveQuality, MoveQualityPresentation>{
   MoveQuality.book: MoveQualityPresentation(
     label: 'Book',
     explanation:
-        'A theory-quality opening move that keeps the position on track.',
+        'A registered opening move that keeps the game inside known theory.',
     displaySymbol: 'Bk',
     icon: Icons.menu_book_rounded,
     color: Color(0xFF4C8BFF),
@@ -451,7 +477,7 @@ MoveQualityAssessment _assessment(
 
 String _equivalenceExplanation(MoveQualityClassificationContext context) {
   if (context.insideOpeningExemption) {
-    return 'Book move. The first 6 plies are feedback-only, so no points are awarded.';
+    return 'Book move. This line still follows registered opening theory, so it is shown as opening feedback only and does not change charge.';
   }
   if (context.isObviousBestMove) {
     return 'Obvious equal-position move. It keeps the game on track, but simple top-line moves do not build charge.';
@@ -463,6 +489,87 @@ String _equivalenceExplanation(MoveQualityClassificationContext context) {
     return 'Acceptable top-line alternative in an equal position.';
   }
   return 'Acceptable move in an equal position.';
+}
+
+String _coveredBottomMoveExplanation(MoveQualityClassificationContext context) {
+  final totalMoves = context.totalLegalMoveCount;
+  if (totalMoves != null && totalMoves > 1) {
+    return 'This was the weakest move among the $totalMoves fully evaluated legal options.';
+  }
+  return 'This was the weakest move among the fully evaluated legal options.';
+}
+
+bool _allowsStrongPromotion(MoveQuality baseline) {
+  return baseline != MoveQuality.criticalFailure;
+}
+
+bool _allowsSolidPromotion(MoveQuality baseline) {
+  return baseline != MoveQuality.error &&
+      baseline != MoveQuality.criticalFailure;
+}
+
+MoveQualityAssessment? _engineLineAssessment(
+  MoveQualityClassificationContext context,
+  MoveQuality baseline,
+) {
+  final playedMoveRank = context.playedMoveRank;
+  final cpGapFromBest = context.cpGapFromBest;
+
+  if (playedMoveRank == 1) {
+    return _assessment(
+      context.insideOpeningExemption ? MoveQuality.book : MoveQuality.optimal,
+      context,
+      explanation: context.insideOpeningExemption || context.isObviousBestMove
+          ? _equivalenceExplanation(context)
+          : null,
+      scoringSuppressedReason: context.isObviousBestMove
+          ? MoveQualityScoringSuppressionReason.obviousMove
+          : null,
+    );
+  }
+
+  if (context.insideOpeningExemption &&
+      playedMoveRank != null &&
+      playedMoveRank <= 3) {
+    return _assessment(
+      MoveQuality.book,
+      context,
+      explanation: _equivalenceExplanation(context),
+    );
+  }
+
+  if (context.isInferiorBottomRankedCoveredMove) {
+    return null;
+  }
+
+  if (playedMoveRank == 2 &&
+      _allowsStrongPromotion(baseline) &&
+      (cpGapFromBest == null ||
+          cpGapFromBest <= moveQualityEqualPositionEquivalentCpGap)) {
+    return _assessment(MoveQuality.strong, context);
+  }
+
+  if (playedMoveRank != null &&
+      playedMoveRank <= 3 &&
+      _allowsSolidPromotion(baseline) &&
+      (cpGapFromBest == null ||
+          cpGapFromBest <= moveQualityReasonableAlternativeCpGap)) {
+    return _assessment(MoveQuality.solid, context);
+  }
+
+  if (cpGapFromBest != null &&
+      _allowsStrongPromotion(baseline) &&
+      cpGapFromBest <= moveQualityEqualPositionEquivalentCpGap) {
+    return _assessment(MoveQuality.strong, context);
+  }
+
+  if (cpGapFromBest != null &&
+      _allowsSolidPromotion(baseline) &&
+      cpGapFromBest <= moveQualityReasonableAlternativeCpGap) {
+    return _assessment(MoveQuality.solid, context);
+  }
+
+  return null;
 }
 
 MoveQualityAssessment classifyMoveQuality(
@@ -483,7 +590,30 @@ MoveQualityAssessment classifyMoveQuality(
     playerStrengthEstimate: context.playerStrengthEstimate,
   );
 
-  if (context.isEquivalentBandPosition) {
+  final engineLineAssessment = _engineLineAssessment(context, baseline);
+  if (engineLineAssessment != null) {
+    return engineLineAssessment;
+  }
+
+  if (context.isInferiorBottomRankedCoveredMove) {
+    final downgradedQuality = switch (baseline) {
+      MoveQuality.optimal ||
+      MoveQuality.strong ||
+      MoveQuality.solid => MoveQuality.slip,
+      _ => baseline,
+    };
+    return _assessment(
+      context.insideOpeningExemption ? MoveQuality.book : downgradedQuality,
+      context,
+      explanation: context.insideOpeningExemption
+          ? _equivalenceExplanation(context)
+          : downgradedQuality == MoveQuality.slip
+          ? _coveredBottomMoveExplanation(context)
+          : null,
+    );
+  }
+
+  if (context.isEquivalentBandPosition && _allowsSolidPromotion(baseline)) {
     return _assessment(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.solid,
       context,
@@ -504,7 +634,9 @@ MoveQualityAssessment classifyMoveQuality(
     );
   }
 
-  if (context.isLowConfidence && !context.isMateriallyUnbalanced) {
+  if (context.isLowConfidence &&
+      !context.isMateriallyUnbalanced &&
+      _allowsSolidPromotion(baseline)) {
     return _assessment(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.solid,
       context,
@@ -513,7 +645,8 @@ MoveQualityAssessment classifyMoveQuality(
 
   if (!context.isMateriallyUnbalanced &&
       context.isReasonableAlternative &&
-      (baseline == MoveQuality.slip || baseline == MoveQuality.error)) {
+      !context.isInferiorBottomRankedCoveredMove &&
+      baseline == MoveQuality.slip) {
     return _assessment(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.solid,
       context,
