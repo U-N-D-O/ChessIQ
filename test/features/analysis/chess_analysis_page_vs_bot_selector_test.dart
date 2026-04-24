@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> _pumpVsBotSelector(
   WidgetTester tester, {
   required Size size,
+  bool monochrome = false,
 }) async {
   SharedPreferences.setMockInitialValues(const <String, Object>{
     'mute_sounds_v1': true,
@@ -20,13 +21,15 @@ Future<void> _pumpVsBotSelector(
 
   final economy = EconomyProvider();
   await economy.refresh(notify: false);
+  final theme = AppThemeProvider();
+  if (monochrome) {
+    await theme.setThemeStyle(AppThemeStyle.monochrome);
+  }
 
   await tester.pumpWidget(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider<AppThemeProvider>(
-          create: (_) => AppThemeProvider(),
-        ),
+        ChangeNotifierProvider<AppThemeProvider>.value(value: theme),
         ChangeNotifierProvider<EconomyProvider>.value(value: economy),
       ],
       child: const MaterialApp(home: ChessAnalysisPage()),
@@ -174,6 +177,47 @@ void main() {
       final difficultyRect = tester.getRect(difficultyPanel);
       expect(selectorRect.left, lessThan(difficultyRect.left));
       expect((selectorRect.top - difficultyRect.top).abs(), lessThan(0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'vs bot selector start button keeps contrast in monochrome theme',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(844, 390),
+        monochrome: true,
+      );
+
+      final startButtonFinder = find.byKey(
+        const ValueKey<String>('bot_setup_start_button'),
+      );
+      expect(startButtonFinder, findsOneWidget);
+
+      final startButton = tester.widget<ButtonStyleButton>(startButtonFinder);
+      final backgroundColor = startButton.style?.backgroundColor?.resolve(
+        <WidgetState>{},
+      );
+      final foregroundColor = startButton.style?.foregroundColor?.resolve(
+        <WidgetState>{},
+      );
+
+      expect(backgroundColor, isNotNull);
+      expect(foregroundColor, isNotNull);
+      expect(backgroundColor, isNot(equals(foregroundColor)));
+      expect(
+        (backgroundColor!.computeLuminance() -
+                foregroundColor!.computeLuminance())
+            .abs(),
+        greaterThan(0.25),
+      );
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

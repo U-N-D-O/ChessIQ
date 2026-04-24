@@ -279,6 +279,19 @@ Color _vsBotReadableAccentColor(Color accent, _VsBotArcadePalette palette) {
   return accent;
 }
 
+Color _vsBotFilledButtonForegroundColor(
+  Color background,
+  _VsBotArcadePalette palette,
+) {
+  if (!palette.monochrome) {
+    return const Color(0xFF0B0F16);
+  }
+
+  return background.computeLuminance() >= 0.52
+      ? const Color(0xFF0B0F16)
+      : Colors.white.withValues(alpha: 0.96);
+}
+
 ButtonStyle _vsBotArcadeFilledButtonStyle({
   required _VsBotArcadePalette palette,
   required Color backgroundColor,
@@ -2711,9 +2724,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       selectedDifficultyColor,
       0.45,
     )!;
-    final filledTagForeground = arcade.monochrome
-        ? arcade.text
-        : const Color(0xFF0B0F16);
+    final filledButtonForeground = _vsBotFilledButtonForegroundColor(
+      selectedDifficultyColor,
+      arcade,
+    );
 
     _configureBotSetupPageController(layout.viewportFraction);
 
@@ -2967,6 +2981,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               SizedBox(
                 height: selectorActionHeight,
                 child: FilledButton.icon(
+                  key: const ValueKey<String>('bot_setup_start_button'),
                   onPressed: selectedTierUnlocked
                       ? () {
                           unawaited(
@@ -2983,7 +2998,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         ? selectedDifficultyColor
                         : arcade.line,
                     foregroundColor: selectedTierUnlocked
-                        ? filledTagForeground
+                        ? filledButtonForeground
                         : arcade.textMuted,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 18,
@@ -3028,6 +3043,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         child: SizedBox(
           height: selectorActionHeight,
           child: FilledButton.icon(
+            key: const ValueKey<String>('bot_setup_start_button'),
             onPressed: selectedTierUnlocked
                 ? () {
                     unawaited(
@@ -3044,7 +3060,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   ? selectedDifficultyColor
                   : arcade.line,
               foregroundColor: selectedTierUnlocked
-                  ? filledTagForeground
+                  ? filledButtonForeground
                   : arcade.textMuted,
               padding: const EdgeInsets.symmetric(
                 horizontal: 18,
