@@ -604,37 +604,49 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     _botSearchLines.clear();
     _botSearchMultiPv = settings.multiPv;
 
-    final completer = Completer<List<EngineLine>>();
-    _botSearchCompleter = completer;
+    final botSearchRequest = EngineRequestSpec(
+      requestId: _nextEngineRequestId(EngineRequestRole.botSearch),
+      role: EngineRequestRole.botSearch,
+      fen: _genFen(),
+      whiteToMove: _isWhiteTurn,
+      multiPv: settings.multiPv,
+      depth: settings.moveTimeMs == null ? _botSearchDepth(settings) : null,
+      moveTime: settings.moveTimeMs == null
+          ? null
+          : Duration(milliseconds: settings.moveTimeMs!),
+      timeout: Duration(milliseconds: _botRequestTimeoutMs(settings)),
+      preCommands: <String>[
+        'setoption name UCI_LimitStrength value ${settings.limitStrength}',
+        if (settings.limitStrength)
+          'setoption name UCI_Elo value ${settings.elo}',
+        if (settings.skillLevel != null)
+          'setoption name Skill Level value ${settings.skillLevel}',
+        'setoption name Threads value ${settings.threads}',
+        'setoption name Contempt value ${settings.contempt ?? 0}',
+      ],
+      cleanupCommands:
+          _ChessAnalysisPageStateBase._analysisEngineRequestCommands,
+    );
+    final handle = _engine!.scheduleSearch(
+      botSearchRequest,
+      onUpdate: _handleBotSearchUpdate,
+    );
+    _botSearchHandle = handle;
 
-    _send('stop');
-    _send('setoption name UCI_LimitStrength value ${settings.limitStrength}');
-    if (settings.limitStrength) {
-      _send('setoption name UCI_Elo value ${settings.elo}');
-    }
-    if (settings.skillLevel != null) {
-      _send('setoption name Skill Level value ${settings.skillLevel}');
-    }
-    _send('setoption name Threads value ${settings.threads}');
-    _send('setoption name Contempt value ${settings.contempt ?? 0}');
-    _send('setoption name MultiPV value ${settings.multiPv}');
-    _send('position fen ${_genFen()}');
-    if (settings.moveTimeMs != null) {
-      _send('go movetime ${settings.moveTimeMs}');
-    } else {
-      _send('go depth ${_botSearchDepth(settings)}');
-    }
-
-    late final List<EngineLine> lines;
+    late final EngineSearchResult result;
     try {
-      lines = await completer.future.timeout(
-        Duration(milliseconds: _botRequestTimeoutMs(settings)),
-        onTimeout: _sortedBotSearchLines,
-      );
+      result = await handle.result;
     } finally {
-      _botSearchCompleter = null;
-      _send('setoption name MultiPV value $_effectiveMultiPvCount');
+      if (identical(_botSearchHandle, handle)) {
+        _botSearchHandle = null;
+      }
     }
+
+    final lines = result.lines.isNotEmpty
+        ? result.lines
+        : result.bestMove == null
+        ? const <EngineLine>[]
+        : <EngineLine>[EngineLine(result.bestMove!, 0, 0, 1)];
 
     final legal = <EngineLine>[];
     for (final line in lines) {
@@ -1283,6 +1295,15 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         }
 
         Widget buildActionColumn() {
+          final chooseOpponentForeground = _vsBotReadableAccentColor(
+            arcade.cyan,
+            arcade,
+          );
+          final chooseOpponentBackground = Color.alphaBlend(
+            arcade.cyan.withValues(alpha: arcade.monochrome ? 0.22 : 0.34),
+            arcade.panelAlt,
+          );
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1308,7 +1329,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 resultValue: 'opponent',
                 label: 'Choose Opponent',
                 icon: Icons.groups_rounded,
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+                backgroundColor: chooseOpponentBackground,
+                foregroundColor: chooseOpponentForeground,
               ),
               SizedBox(height: isLandscape ? 8 : 10),
               buildActionButton(

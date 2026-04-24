@@ -12,16 +12,369 @@ class _RenderedMoveToken {
   });
 }
 
+enum _MenuAccentSlot { cyan, amber, pink, emerald }
+
+enum _MenuSparkVisual { pixel, shard, sprite }
+
+enum _MenuBackdropSpriteRole { king, queen, rook, bishop, knight, pawn }
+
 class _MenuSparkParticle {
   Offset position;
-  final Offset velocity;
-  final Color color;
+  Offset velocity;
+  double age = 0.0;
+  double rotation;
+  final double angularVelocity;
+  final double life;
+  final double size;
+  final _MenuSparkVisual visual;
+  final _MenuAccentSlot accent;
+  final _MenuBackdropSpriteRole? spriteRole;
+  final bool useDarkSprite;
+  final bool mirrorX;
 
   _MenuSparkParticle({
     required this.position,
     required this.velocity,
-    required this.color,
+    required this.life,
+    required this.size,
+    required this.visual,
+    required this.accent,
+    required this.rotation,
+    required this.angularVelocity,
+    this.spriteRole,
+    this.useDarkSprite = false,
+    this.mirrorX = false,
+  }) : assert(
+         visual != _MenuSparkVisual.sprite || spriteRole != null,
+         'Sprite particles require a sprite role.',
+       );
+
+  double get progress {
+    final value = life <= 0 ? 1.0 : age / life;
+    if (value <= 0.0) return 0.0;
+    if (value >= 1.0) return 1.0;
+    return value;
+  }
+}
+
+class _MenuBackdropSpritePlacement {
+  const _MenuBackdropSpritePlacement({
+    required this.alignment,
+    required this.role,
+    required this.accent,
+    required this.sizeFactor,
+    required this.opacity,
+    required this.driftPhase,
+    required this.driftRadius,
+    required this.driftSpeed,
+    required this.rotation,
+    this.useDarkSprite = false,
+    this.mirrorX = false,
   });
+
+  final Alignment alignment;
+  final _MenuBackdropSpriteRole role;
+  final _MenuAccentSlot accent;
+  final double sizeFactor;
+  final double opacity;
+  final double driftPhase;
+  final double driftRadius;
+  final double driftSpeed;
+  final double rotation;
+  final bool useDarkSprite;
+  final bool mirrorX;
+}
+
+class _MenuBlastBackdropPainter extends CustomPainter {
+  const _MenuBlastBackdropPainter({
+    required this.time,
+    required this.impact,
+    required this.blueAlignment,
+    required this.yellowAlignment,
+    required this.cyan,
+    required this.amber,
+    required this.pink,
+    required this.crimson,
+    required this.lineColor,
+    required this.reducedEffects,
+  });
+
+  final double time;
+  final double impact;
+  final Offset blueAlignment;
+  final Offset yellowAlignment;
+  final Color cyan;
+  final Color amber;
+  final Color pink;
+  final Color crimson;
+  final Color lineColor;
+  final bool reducedEffects;
+
+  double _unit(double value) {
+    if (value <= 0.0) return 0.0;
+    if (value >= 1.0) return 1.0;
+    return value;
+  }
+
+  Offset _alignmentToOffset(Size size, Offset alignment) {
+    return Offset(
+      (alignment.dx + 1.0) * size.width * 0.5,
+      (alignment.dy + 1.0) * size.height * 0.5,
+    );
+  }
+
+  void _paintCheckerBurst(
+    Canvas canvas,
+    Offset center,
+    double innerRadius,
+    double outerRadius,
+  ) {
+    final rayCount = reducedEffects ? 12 : 18;
+    final delta = (2 * pi) / rayCount;
+    final rotation = time * 0.18;
+    final colors = <Color>[cyan, amber, pink, crimson];
+
+    for (var index = 0; index < rayCount; index++) {
+      final startAngle = rotation + index * delta;
+      final endAngle = startAngle + delta * 0.58;
+      final sweepPulse = (sin(time * 0.9 + index * 0.6) + 1.0) * 0.5;
+      final burstOuter =
+          outerRadius * (0.90 + sweepPulse * 0.10 + impact * 0.12);
+      final color = colors[index % colors.length].withValues(
+        alpha: _unit((reducedEffects ? 0.04 : 0.08) + impact * 0.05),
+      );
+      final path = Path()
+        ..moveTo(
+          center.dx + cos(startAngle) * innerRadius,
+          center.dy + sin(startAngle) * innerRadius,
+        )
+        ..lineTo(
+          center.dx + cos(startAngle) * burstOuter,
+          center.dy + sin(startAngle) * burstOuter,
+        )
+        ..lineTo(
+          center.dx + cos(endAngle) * burstOuter,
+          center.dy + sin(endAngle) * burstOuter,
+        )
+        ..lineTo(
+          center.dx + cos(endAngle) * (innerRadius * 1.06),
+          center.dy + sin(endAngle) * (innerRadius * 1.06),
+        )
+        ..close();
+      canvas.drawPath(path, Paint()..color = color);
+    }
+  }
+
+  void _paintSteppedSquareRing(
+    Canvas canvas,
+    Offset center,
+    double halfExtent,
+    double thickness,
+    Color color,
+    int phase,
+  ) {
+    final segments = reducedEffects ? 10 : 14;
+    final segmentSize = (halfExtent * 2) / segments;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    for (var index = 0; index < segments; index++) {
+      if ((index + phase) % 3 == 1) continue;
+      final offset = -halfExtent + segmentSize * (index + 0.5);
+      final longSide = segmentSize * 0.74;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(center.dx + offset, center.dy - halfExtent),
+            width: longSide,
+            height: thickness,
+          ),
+          const Radius.circular(1.2),
+        ),
+        paint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(center.dx + halfExtent, center.dy + offset),
+            width: thickness,
+            height: longSide,
+          ),
+          const Radius.circular(1.2),
+        ),
+        paint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(center.dx - offset, center.dy + halfExtent),
+            width: longSide,
+            height: thickness,
+          ),
+          const Radius.circular(1.2),
+        ),
+        paint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(center.dx - halfExtent, center.dy - offset),
+            width: thickness,
+            height: longSide,
+          ),
+          const Radius.circular(1.2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  void _paintOrbitDebris(
+    Canvas canvas,
+    Offset center,
+    double innerRadius,
+    double outerRadius,
+  ) {
+    final debrisCount = reducedEffects ? 12 : 22;
+    final colors = <Color>[cyan, amber, pink, crimson, lineColor];
+
+    for (var index = 0; index < debrisCount; index++) {
+      final radiusPulse = (sin(time * 1.1 + index * 0.7) + 1.0) * 0.5;
+      final radius = ui.lerpDouble(
+        innerRadius * 1.06,
+        outerRadius * 0.96,
+        radiusPulse,
+      )!;
+      final angle = index * 0.62 + time * (0.36 + (index % 4) * 0.04);
+      final position = center + Offset(cos(angle), sin(angle)) * radius;
+      final size = (reducedEffects ? 4.0 : 6.0) + (index % 3).toDouble();
+      final paint = Paint()
+        ..color = colors[index % colors.length].withValues(
+          alpha: _unit((reducedEffects ? 0.05 : 0.09) + impact * 0.04),
+        );
+
+      canvas.save();
+      canvas.translate(position.dx, position.dy);
+      canvas.rotate(angle + pi / 4);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: size,
+            height: size * (index.isEven ? 1.0 : 0.62),
+          ),
+          const Radius.circular(1.0),
+        ),
+        paint,
+      );
+      canvas.restore();
+    }
+  }
+
+  void _paintRasterBand(
+    Canvas canvas, {
+    required Offset from,
+    required Offset to,
+    required Color color,
+    required double thickness,
+  }) {
+    final delta = to - from;
+    final distance = delta.distance;
+    if (distance <= 1.0) return;
+
+    final angle = atan2(delta.dy, delta.dx);
+    final steps = reducedEffects ? 8 : 12;
+    final segmentLength = distance / steps;
+
+    for (var index = 0; index < steps; index++) {
+      final pulse = (sin(time * 2.4 + index * 0.8) + 1.0) * 0.5;
+      final center = from + delta * ((index + 0.5) / steps);
+      final paint = Paint()
+        ..color = color.withValues(
+          alpha: _unit((reducedEffects ? 0.03 : 0.06) + pulse * 0.05),
+        );
+
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(angle);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: segmentLength * (0.72 + pulse * 0.22),
+            height: thickness * (0.74 + (index % 3) * 0.18),
+          ),
+          const Radius.circular(1.0),
+        ),
+        paint,
+      );
+      canvas.restore();
+    }
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final shortest = size.shortestSide;
+    final innerRadius = shortest * 0.32;
+    final outerRadius = shortest * 0.58;
+    final impactStep = (impact * 6).round() / 6;
+
+    _paintCheckerBurst(canvas, center, innerRadius, outerRadius);
+
+    for (var ring = 0; ring < (reducedEffects ? 1 : 2); ring++) {
+      final progress = ((time * (0.16 + ring * 0.05)) + ring * 0.33) % 1.0;
+      final extent = ui.lerpDouble(
+        innerRadius * 0.92,
+        outerRadius * (0.98 + impactStep * 0.08),
+        progress,
+      )!;
+      final alpha = (1.0 - progress) * (reducedEffects ? 0.08 : 0.13);
+      _paintSteppedSquareRing(
+        canvas,
+        center,
+        extent,
+        reducedEffects ? 4.0 : 6.0,
+        lineColor.withValues(alpha: _unit(alpha + impactStep * 0.05)),
+        ring,
+      );
+    }
+
+    _paintOrbitDebris(canvas, center, innerRadius, outerRadius);
+
+    final blueOffset = _alignmentToOffset(size, blueAlignment);
+    final yellowOffset = _alignmentToOffset(size, yellowAlignment);
+    _paintRasterBand(
+      canvas,
+      from: blueOffset,
+      to: center,
+      color: cyan,
+      thickness: reducedEffects ? 4.0 : 6.0,
+    );
+    _paintRasterBand(
+      canvas,
+      from: yellowOffset,
+      to: center,
+      color: amber,
+      thickness: reducedEffects ? 4.0 : 6.0,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MenuBlastBackdropPainter old) {
+    return old.time != time ||
+        old.impact != impact ||
+        old.blueAlignment != blueAlignment ||
+        old.yellowAlignment != yellowAlignment ||
+        old.cyan != cyan ||
+        old.amber != amber ||
+        old.pink != pink ||
+        old.crimson != crimson ||
+        old.lineColor != lineColor ||
+        old.reducedEffects != reducedEffects;
+  }
 }
 
 enum _CreditsBackdropDotRole { green, blue, yellow }

@@ -1,4 +1,4 @@
-﻿part of '../screens/chess_analysis_page.dart';
+part of '../screens/chess_analysis_page.dart';
 
 class _PendingMoveQualityGrading {
   static const Object _sentinel = Object();
@@ -91,10 +91,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _moveQualityGradingMultiPv = 4;
+  static const int _moveQualityGradingDepth = 10;
   static const int _openingFeedbackOnlyPlyCount = 6;
 
   late Map<String, String> boardState;
-  EngineService? _engine;
+  CoordinatedEngineService? _engine;
   String? _engineOwner;
   late AnimationController _pulseController;
   late AnimationController _introController;
@@ -150,6 +151,79 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const double _menuCenterMaxSpinSpeed = 6.0;
   static const double _menuCenterSpinDecayRate = 0.9;
   static const double _menuCenterCollisionStreakWindow = 1.2;
+  static const List<_MenuBackdropSpritePlacement> _menuBackdropMotifs =
+      <_MenuBackdropSpritePlacement>[
+        _MenuBackdropSpritePlacement(
+          alignment: Alignment(-0.88, -0.74),
+          role: _MenuBackdropSpriteRole.knight,
+          accent: _MenuAccentSlot.cyan,
+          sizeFactor: 0.18,
+          opacity: 0.18,
+          driftPhase: 0.35,
+          driftRadius: 14,
+          driftSpeed: 0.18,
+          rotation: -0.18,
+          useDarkSprite: true,
+        ),
+        _MenuBackdropSpritePlacement(
+          alignment: Alignment(0.84, -0.68),
+          role: _MenuBackdropSpriteRole.queen,
+          accent: _MenuAccentSlot.amber,
+          sizeFactor: 0.20,
+          opacity: 0.16,
+          driftPhase: 1.1,
+          driftRadius: 16,
+          driftSpeed: 0.16,
+          rotation: 0.14,
+          mirrorX: true,
+        ),
+        _MenuBackdropSpritePlacement(
+          alignment: Alignment(-0.78, 0.70),
+          role: _MenuBackdropSpriteRole.rook,
+          accent: _MenuAccentSlot.emerald,
+          sizeFactor: 0.17,
+          opacity: 0.14,
+          driftPhase: 2.0,
+          driftRadius: 12,
+          driftSpeed: 0.14,
+          rotation: 0.10,
+          useDarkSprite: true,
+        ),
+        _MenuBackdropSpritePlacement(
+          alignment: Alignment(0.88, 0.76),
+          role: _MenuBackdropSpriteRole.bishop,
+          accent: _MenuAccentSlot.pink,
+          sizeFactor: 0.16,
+          opacity: 0.15,
+          driftPhase: 2.7,
+          driftRadius: 15,
+          driftSpeed: 0.17,
+          rotation: -0.12,
+        ),
+        _MenuBackdropSpritePlacement(
+          alignment: Alignment(-0.96, 0.02),
+          role: _MenuBackdropSpriteRole.pawn,
+          accent: _MenuAccentSlot.amber,
+          sizeFactor: 0.14,
+          opacity: 0.12,
+          driftPhase: 3.4,
+          driftRadius: 10,
+          driftSpeed: 0.19,
+          rotation: 0.0,
+          useDarkSprite: true,
+        ),
+        _MenuBackdropSpritePlacement(
+          alignment: Alignment(0.96, -0.02),
+          role: _MenuBackdropSpriteRole.king,
+          accent: _MenuAccentSlot.cyan,
+          sizeFactor: 0.15,
+          opacity: 0.13,
+          driftPhase: 4.0,
+          driftRadius: 11,
+          driftSpeed: 0.15,
+          rotation: 0.04,
+        ),
+      ];
 
   double _menuCenterRotationA = 0.0;
   double _menuCenterRotationB = 0.0;
@@ -158,6 +232,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   double _menuCenterShapeChangeTimerA = 1.6;
   double _menuCenterShapeChangeTimerB = 1.2;
   double _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
+  double _menuCenterImpact = 0.0;
   DateTime? _menuCenterLastUpdate;
   DateTime? _menuCenterLastCollision;
   int _menuCenterCollisionStreakCount = 0;
@@ -234,6 +309,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int _vsBotSessionWins = 0;
   int _vsBotSessionLosses = 0;
   int _vsBotSessionDraws = 0;
+  EngineSearchHandle? _botSearchHandle;
+  int _engineRequestSequence = 0;
+  EvalSnapshot? _currentEvalSnapshot;
+  final Map<String, EngineSearchUpdate> _primaryEngineUpdateByFen =
+      <String, EngineSearchUpdate>{};
   Completer<List<EngineLine>>? _botSearchCompleter;
   final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
   int _botSearchMultiPv = 1;
@@ -241,6 +321,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   final Map<int, EngineLine> _gradingSearchLines = <int, EngineLine>{};
   int _gradingSearchMultiPv = 1;
   bool _gradingSearchWhiteToMove = true;
+  Future<void> _moveQualityGradingOperation = Future<void>.value();
+  int _moveQualityGradingGeneration = 0;
+  bool _analysisRefreshQueuedWhileGrading = false;
   _PendingMoveQualityGrading? _pendingMoveQualityGrading;
   final PageController _botSetupPageController = PageController(
     viewportFraction: 0.60,
@@ -588,6 +671,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? 0.0
         : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
     _menuCenterLastUpdate = now;
+    _menuCenterImpact = max(0.0, _menuCenterImpact - centerTime * 1.5);
     _menuCenterSpinSpeed = max(
       _menuCenterBaseSpinSpeed,
       _menuCenterSpinSpeed - _menuCenterSpinDecayRate * centerTime,
@@ -647,6 +731,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final separation = _blueMenuDotPosition - _yellowMenuDotPosition;
     final collisionDistance = separation.distance;
     final currentlyColliding = collisionDistance < 0.045;
+    final reducedEffects =
+        WidgetsBinding
+            .instance
+            .platformDispatcher
+            .accessibilityFeatures
+            .disableAnimations ||
+        _useReducedMenuWindowsVisualEffects;
 
     if (currentlyColliding && !_menuDotsPreviouslyColliding) {
       final collisionAge = _menuCenterLastCollision == null
@@ -664,30 +755,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _menuCenterSpinSpeed + collisionBonus,
         _menuCenterMaxSpinSpeed,
       );
+      _menuCenterImpact = min(
+        1.0,
+        _menuCenterImpact + 0.42 + _menuCenterCollisionStreakCount * 0.10,
+      );
 
       final origin = Offset(
         (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
         (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
       );
-      final particleCount = Random().nextInt(2) + 1;
-      for (var i = 0; i < particleCount; i++) {
-        final angle = Random().nextDouble() * 2 * pi;
-        final velocity = Offset(
-          cos(angle) * (0.8 + Random().nextDouble() * 0.6),
-          sin(angle) * (0.8 + Random().nextDouble() * 0.6),
-        );
-        _menuSparkParticles.add(
-          _MenuSparkParticle(
-            position: origin,
-            velocity: velocity,
-            color: Colors.green.withValues(alpha: 0.90),
-          ),
-        );
-      }
+      _spawnMenuCollisionParticles(origin, reducedEffects: reducedEffects);
 
       unawaited(_lightHaptic());
 
-      final direction = separation / collisionDistance;
+      final safeDistance = max(collisionDistance, 0.0001);
+      final direction = separation / safeDistance;
       const repulsionStrength = 14.7;
       final impulse =
           direction * repulsionStrength +
@@ -758,8 +840,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _menuSparkParticles.removeWhere((particle) {
       particle.position += particle.velocity * dt;
-      return particle.position.dx.abs() > 1.2 ||
-          particle.position.dy.abs() > 1.2;
+      particle.velocity *= max(0.78, 1.0 - dt * 2.2);
+      particle.rotation += particle.angularVelocity * dt;
+      particle.age += dt;
+      return particle.age >= particle.life ||
+          particle.position.dx.abs() > 1.24 ||
+          particle.position.dy.abs() > 1.24;
     });
 
     if (_creditsDialogOpen) {
@@ -875,27 +961,426 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  bool get _useReducedMenuWindowsVisualEffects =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+  double _menuUnit(double value) {
+    if (value <= 0.0) return 0.0;
+    if (value >= 1.0) return 1.0;
+    return value;
+  }
+
+  void _spawnMenuCollisionParticles(
+    Offset origin, {
+    required bool reducedEffects,
+  }) {
+    final random = _creditsBackdropRandom;
+    final particleCount = reducedEffects
+        ? 4 + random.nextInt(2)
+        : 7 + random.nextInt(4);
+
+    for (var index = 0; index < particleCount; index++) {
+      final angle = random.nextDouble() * 2 * pi;
+      final speed = reducedEffects
+          ? 0.52 + random.nextDouble() * 0.42
+          : 0.72 + random.nextDouble() * 0.86;
+      final tangent = Offset(-sin(angle), cos(angle));
+      final visualRoll = random.nextDouble();
+      final visual = visualRoll < 0.42
+          ? _MenuSparkVisual.pixel
+          : visualRoll < 0.78
+          ? _MenuSparkVisual.shard
+          : _MenuSparkVisual.sprite;
+      final accentRoll = random.nextDouble();
+      final accent = accentRoll < 0.32
+          ? _MenuAccentSlot.cyan
+          : accentRoll < 0.62
+          ? _MenuAccentSlot.amber
+          : accentRoll < 0.84
+          ? _MenuAccentSlot.pink
+          : _MenuAccentSlot.emerald;
+      final spriteRole = visual == _MenuSparkVisual.sprite
+          ? _MenuBackdropSpriteRole.values[random.nextInt(
+              _MenuBackdropSpriteRole.values.length,
+            )]
+          : null;
+      final size = switch (visual) {
+        _MenuSparkVisual.pixel =>
+          (reducedEffects ? 4.0 : 5.0) + random.nextDouble() * 2.0,
+        _MenuSparkVisual.shard =>
+          (reducedEffects ? 5.0 : 6.0) + random.nextDouble() * 2.2,
+        _MenuSparkVisual.sprite =>
+          (reducedEffects ? 8.0 : 10.0) + random.nextDouble() * 3.0,
+      };
+      _menuSparkParticles.add(
+        _MenuSparkParticle(
+          position: origin,
+          velocity:
+              Offset(cos(angle), sin(angle)) * speed +
+              tangent * ((random.nextDouble() - 0.5) * 0.18),
+          life: reducedEffects
+              ? 0.48 + random.nextDouble() * 0.28
+              : 0.74 + random.nextDouble() * 0.42,
+          size: size,
+          visual: visual,
+          accent: accent,
+          rotation: random.nextDouble() * 2 * pi,
+          angularVelocity:
+              (random.nextDouble() - 0.5) *
+              (visual == _MenuSparkVisual.sprite ? 2.2 : 6.0),
+          spriteRole: spriteRole,
+          useDarkSprite: random.nextBool(),
+          mirrorX: random.nextBool(),
+        ),
+      );
+    }
+
+    final particleLimit = reducedEffects ? 18 : 34;
+    if (_menuSparkParticles.length > particleLimit) {
+      _menuSparkParticles.removeRange(
+        0,
+        _menuSparkParticles.length - particleLimit,
+      );
+    }
+  }
+
   Widget _buildMenuCenterShape({
     required double size,
     required Color strokeColor,
     required double strokeWidth,
     required double rotation,
     required int sides,
+    required double impact,
+    required Color accentColor,
   }) {
+    final pulse = _menuUnit(impact);
     return Transform.rotate(
       angle: rotation,
       child: SizedBox(
         width: size,
         height: size,
-        child: CustomPaint(
-          painter: _RegularPolygonPainter(
-            sides: sides,
-            strokeColor: strokeColor,
-            strokeWidth: strokeWidth,
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.center,
+          children: [
+            if (pulse > 0.0)
+              Transform.scale(
+                scale: 1.0 + pulse * 0.08,
+                child: CustomPaint(
+                  painter: _RegularPolygonPainter(
+                    sides: sides,
+                    strokeColor: accentColor.withValues(
+                      alpha: _menuUnit(0.12 + pulse * 0.12),
+                    ),
+                    strokeWidth: strokeWidth + 1.2 + pulse * 1.1,
+                  ),
+                ),
+              ),
+            if (pulse > 0.0)
+              Center(
+                child: Container(
+                  width: size * (1.0 + pulse * 0.14),
+                  height: size * (1.0 + pulse * 0.14),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: accentColor.withValues(
+                        alpha: _menuUnit(0.08 + pulse * 0.10),
+                      ),
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+            CustomPaint(
+              painter: _RegularPolygonPainter(
+                sides: sides,
+                strokeColor: strokeColor,
+                strokeWidth: strokeWidth,
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Color _menuAccentColor(
+    _MenuAccentSlot slot, {
+    required _VsBotArcadePalette arcade,
+  }) {
+    return switch (slot) {
+      _MenuAccentSlot.cyan => arcade.cyan,
+      _MenuAccentSlot.amber => arcade.amber,
+      _MenuAccentSlot.pink => arcade.pink,
+      _MenuAccentSlot.emerald => arcade.victory,
+    };
+  }
+
+  String _menuBackdropSpriteAsset(
+    _MenuBackdropSpriteRole role, {
+    bool useDarkSprite = false,
+  }) {
+    final tone = useDarkSprite ? 'b' : 'w';
+    return switch (role) {
+      _MenuBackdropSpriteRole.king => 'assets/pieces/k_$tone.png',
+      _MenuBackdropSpriteRole.queen => 'assets/pieces/q_$tone.png',
+      _MenuBackdropSpriteRole.rook => 'assets/pieces/t_$tone.png',
+      _MenuBackdropSpriteRole.bishop => 'assets/pieces/b_$tone.png',
+      _MenuBackdropSpriteRole.knight => 'assets/pieces/n_$tone.png',
+      _MenuBackdropSpriteRole.pawn => 'assets/pieces/p_$tone.png',
+    };
+  }
+
+  Widget _buildMenuBackdropSprite({
+    required _MenuBackdropSpriteRole role,
+    required Color tint,
+    required double size,
+    required bool reducedEffects,
+    bool useDarkSprite = false,
+    bool mirrorX = false,
+    double rotation = 0.0,
+    double glow = 0.0,
+  }) {
+    final asset = _menuBackdropSpriteAsset(role, useDarkSprite: useDarkSprite);
+    Widget sprite = Stack(
+      alignment: Alignment.center,
+      children: [
+        if (!reducedEffects && glow > 0.0)
+          Image.asset(
+            asset,
+            width: size * 1.08,
+            height: size * 1.08,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.none,
+            color: tint.withValues(alpha: _menuUnit(glow)),
+            colorBlendMode: BlendMode.srcIn,
+          ),
+        Image.asset(
+          asset,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.none,
+          color: tint,
+          colorBlendMode: BlendMode.srcIn,
+        ),
+      ],
+    );
+
+    if (mirrorX) {
+      sprite = Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.diagonal3Values(-1.0, 1.0, 1.0),
+        child: sprite,
+      );
+    }
+    if (rotation != 0.0) {
+      sprite = Transform.rotate(angle: rotation, child: sprite);
+    }
+    return sprite;
+  }
+
+  Widget _buildMenuBackgroundLayer({
+    required Alignment blueDotAlignment,
+    required Alignment yellowDotAlignment,
+    required _VsBotArcadePalette arcade,
+    required bool reducedEffects,
+    required bool isMono,
+    required double shortestSide,
+  }) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: _MenuBlastBackdropPainter(
+                time: _menuDotTime,
+                impact: _menuCenterImpact,
+                blueAlignment: Offset(blueDotAlignment.x, blueDotAlignment.y),
+                yellowAlignment: Offset(
+                  yellowDotAlignment.x,
+                  yellowDotAlignment.y,
+                ),
+                cyan: arcade.cyan,
+                amber: arcade.amber,
+                pink: arcade.pink,
+                crimson: arcade.crimson,
+                lineColor: arcade.line,
+                reducedEffects: reducedEffects,
+              ),
+            ),
+            ..._menuBackdropMotifs.map((motif) {
+              final driftAngle =
+                  _menuDotTime * motif.driftSpeed + motif.driftPhase;
+              final drift =
+                  Offset(cos(driftAngle), sin(driftAngle * 1.18)) *
+                  (motif.driftRadius * (reducedEffects ? 0.55 : 1.0));
+              final tint = _menuAccentColor(
+                motif.accent,
+                arcade: arcade,
+              ).withValues(alpha: motif.opacity * (isMono ? 0.60 : 0.82));
+              return Align(
+                alignment: motif.alignment,
+                child: Transform.translate(
+                  offset: drift,
+                  child: _buildMenuBackdropSprite(
+                    role: motif.role,
+                    tint: tint,
+                    size: max(48.0, shortestSide * motif.sizeFactor),
+                    reducedEffects: reducedEffects,
+                    useDarkSprite: motif.useDarkSprite,
+                    mirrorX: motif.mirrorX,
+                    rotation: motif.rotation + sin(driftAngle) * 0.05,
+                    glow: reducedEffects ? 0.0 : 0.10,
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuCollisionLayer({
+    required _VsBotArcadePalette arcade,
+    required bool reducedEffects,
+  }) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Stack(
+          children: [
+            ..._menuSparkParticles.map((particle) {
+              return Align(
+                alignment: Alignment(
+                  particle.position.dx,
+                  particle.position.dy,
+                ),
+                child: _buildMenuSparkWidget(
+                  particle: particle,
+                  arcade: arcade,
+                  reducedEffects: reducedEffects,
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuAccentLayer({
+    required Alignment blueDotAlignment,
+    required Alignment yellowDotAlignment,
+    required Color blueDotColor,
+    required Color yellowDotColor,
+    required bool reducedEffects,
+  }) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Stack(
+          children: [
+            _buildMenuDot(
+              alignment: blueDotAlignment,
+              color: blueDotColor,
+              reducedEffects: reducedEffects,
+            ),
+            _buildMenuDot(
+              alignment: yellowDotAlignment,
+              color: yellowDotColor,
+              reducedEffects: reducedEffects,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuDot({
+    required Alignment alignment,
+    required Color color,
+    required bool reducedEffects,
+  }) {
+    final size = 10.0 + _menuCenterImpact * 1.4;
+    final blurRadius = reducedEffects ? 10.0 : 18.0 + _menuCenterImpact * 8.0;
+    final spreadRadius = reducedEffects ? 1.0 : 3.0 + _menuCenterImpact * 1.6;
+
+    return Align(
+      alignment: alignment,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: reducedEffects ? 0.32 : 0.48),
+              blurRadius: blurRadius,
+              spreadRadius: spreadRadius,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuSparkWidget({
+    required _MenuSparkParticle particle,
+    required _VsBotArcadePalette arcade,
+    required bool reducedEffects,
+  }) {
+    final opacity = _menuUnit((1.0 - particle.progress) * 0.96);
+    final tint = _menuAccentColor(
+      particle.accent,
+      arcade: arcade,
+    ).withValues(alpha: opacity);
+
+    return switch (particle.visual) {
+      _MenuSparkVisual.pixel => Transform.rotate(
+        angle: particle.rotation,
+        child: Container(
+          width: particle.size,
+          height: particle.size,
+          decoration: BoxDecoration(
+            color: tint,
+            borderRadius: BorderRadius.circular(0.8),
+            boxShadow: reducedEffects
+                ? const <BoxShadow>[]
+                : <BoxShadow>[
+                    BoxShadow(
+                      color: tint.withValues(alpha: 0.30),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ],
+          ),
+        ),
+      ),
+      _MenuSparkVisual.shard => Transform.rotate(
+        angle: particle.rotation + pi / 4,
+        child: Container(
+          width: particle.size * 1.22,
+          height: particle.size * 0.72,
+          decoration: BoxDecoration(
+            color: tint,
+            borderRadius: BorderRadius.circular(0.9),
+          ),
+        ),
+      ),
+      _MenuSparkVisual.sprite => _buildMenuBackdropSprite(
+        role: particle.spriteRole!,
+        tint: tint,
+        size: particle.size * (reducedEffects ? 1.8 : 2.1),
+        reducedEffects: reducedEffects,
+        useDarkSprite: particle.useDarkSprite,
+        mirrorX: particle.mirrorX,
+        rotation: particle.rotation,
+        glow: reducedEffects ? 0.0 : 0.10,
+      ),
+    };
   }
 
   void _initializeCreditsBackdrop() {
@@ -1303,14 +1788,56 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _lastMoveQualityBadgeSquare = null;
   }
 
-  void _cancelPendingMoveQualityGrading() {
+  void _invalidateMoveQualityGradingPipeline({bool clearPendingMove = false}) {
+    _moveQualityGradingGeneration++;
+    _engine?.cancelSearches(
+      roles: <EngineRequestRole>{EngineRequestRole.backgroundConfirmation},
+      reason: 'move-quality pipeline invalidated',
+    );
     final active = _gradingSearchCompleter;
     if (active != null && !active.isCompleted) {
       active.complete(null);
     }
     _gradingSearchCompleter = null;
     _gradingSearchLines.clear();
-    _pendingMoveQualityGrading = null;
+    _analysisRefreshQueuedWhileGrading = false;
+    _moveQualityGradingOperation = Future<void>.value();
+    if (clearPendingMove) {
+      _pendingMoveQualityGrading = null;
+    }
+  }
+
+  void _cancelPendingMoveQualityGrading() {
+    _invalidateMoveQualityGradingPipeline(clearPendingMove: true);
+  }
+
+  // ignore: unused_element
+  bool get _hasActiveGradingSearch {
+    final active = _gradingSearchCompleter;
+    return active != null && !active.isCompleted;
+  }
+
+  void _scheduleMoveQualityGrading(
+    _PendingMoveQualityGrading pending, {
+    EngineLine? livePostMoveLine,
+    bool? livePostMoveWhiteToMove,
+    EngineRequestRole? livePostMoveRole,
+  }) {
+    _invalidateMoveQualityGradingPipeline();
+    final generation = _moveQualityGradingGeneration;
+    _moveQualityGradingOperation = Future<void>(() async {
+      if (!mounted || generation != _moveQualityGradingGeneration) {
+        return;
+      }
+      await _finalizePendingMoveQualityGrading(
+        pending,
+        livePostMoveLine: livePostMoveLine,
+        livePostMoveWhiteToMove: livePostMoveWhiteToMove,
+        livePostMoveRole: livePostMoveRole,
+        gradingGeneration: generation,
+      );
+    });
+    unawaited(_moveQualityGradingOperation.catchError((_) {}));
   }
 
   double _pieceMaterialValue(String piece) {
@@ -1341,6 +1868,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   double _whiteEvalPawnsFromLiveState() {
+    final snapshot = _currentEvalSnapshot;
+    if (snapshot != null) {
+      return snapshot.evalPawnsWhite;
+    }
     return _evalWhiteTurn ? _currentEval : -_currentEval;
   }
 
@@ -1756,6 +2287,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final engine = _engine;
     _engine = null;
     _engineOwner = null;
+    _botSearchHandle = null;
+    _currentEvalSnapshot = null;
+    _primaryEngineUpdateByFen.clear();
     if (engine == null) return;
     try {
       await engine.stop();
@@ -1879,20 +2413,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     final desiredOwner = _playVsBot ? _vsBotEngineOwner : _analysisEngineOwner;
-    if (_engine != null && _engineOwner == desiredOwner) return;
 
     if (_engine != null && _engineOwner != desiredOwner) {
       await _releaseEngineSession();
     }
 
-    final nextEngine = createEngineService(owner: desiredOwner);
+    final nextEngine = _engine != null && _engineOwner == desiredOwner
+        ? _engine!
+        : createEngineService(owner: desiredOwner);
     _engine = nextEngine;
     _engineOwner = desiredOwner;
 
     try {
-      await nextEngine.start(_parseOutput);
-      nextEngine.send('uci');
-      nextEngine.send('setoption name MultiPV value $_effectiveMultiPvCount');
+      await nextEngine.startScheduler(
+        onTimelineEvent: _handleEngineTimelineEvent,
+      );
       if (_shouldKeepEvalActive || _shouldShowVisualSuggestions) {
         _analyze();
       }
@@ -1907,7 +2442,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<void> _ensureEngineStarted() async {
-    if (kIsWeb || _engine != null) return;
+    if (kIsWeb) return;
     _engineStartFuture ??= _startEngine();
     try {
       await _engineStartFuture;
@@ -1918,15 +2453,207 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _send(String cmd) => _engine?.send(cmd);
 
+  static const List<String> _analysisEngineRequestCommands = <String>[
+    'setoption name UCI_LimitStrength value false',
+    'setoption name Skill Level value 20',
+    'setoption name Threads value 1',
+    'setoption name Contempt value 0',
+  ];
+
+  String _nextEngineRequestId(EngineRequestRole role) {
+    _engineRequestSequence++;
+    return '${role.name}-$_engineRequestSequence';
+  }
+
+  void _handleEngineTimelineEvent(EngineTimelineEvent event) {
+    final request = event.request;
+    final detail = event.detail == null ? '' : ' detail=${event.detail}';
+    if (request == null) {
+      _addLog('[engine] ${event.type.name}$detail');
+      return;
+    }
+    final budget = request.moveTime != null
+        ? '${request.moveTime!.inMilliseconds}ms'
+        : 'depth${request.depth ?? 0}';
+    _addLog(
+      '[engine] ${event.type.name} id=${request.requestId} role=${request.role.name} fen=${request.fenHash} mpv=${request.multiPv} budget=$budget$detail',
+    );
+  }
+
+  void _recordPrimaryEngineUpdate(EngineSearchUpdate update) {
+    if (!update.isPrimaryVariation) {
+      return;
+    }
+    _primaryEngineUpdateByFen[update.request.fen] = update;
+    while (_primaryEngineUpdateByFen.length > 24) {
+      _primaryEngineUpdateByFen.remove(_primaryEngineUpdateByFen.keys.first);
+    }
+  }
+
+  bool _shouldPublishEvalSnapshot(EvalSnapshot snapshot) {
+    if (!_shouldKeepEvalActive || !snapshot.matchesFen(_genFen())) {
+      return false;
+    }
+    switch (snapshot.role) {
+      case EngineRequestRole.liveAnalysis:
+        return true;
+      case EngineRequestRole.botSearch:
+        return _playVsBot && !_isHumanTurnInBotGame;
+      case EngineRequestRole.moveGrading:
+      case EngineRequestRole.backgroundConfirmation:
+        return false;
+    }
+  }
+
+  void _applyCanonicalEvalSnapshot(EvalSnapshot snapshot) {
+    _currentEvalSnapshot = snapshot;
+    _currentEval = snapshot.pawnsForPov(snapshot.whiteToMove);
+    _evalWhiteTurn = snapshot.whiteToMove;
+    _currentDepth = snapshot.depth;
+  }
+
+  void _maybeResolvePendingMoveQualityFromUpdate(EngineSearchUpdate update) {
+    if (!update.isPrimaryVariation) {
+      return;
+    }
+    final pending = _pendingMoveQualityGrading;
+    if (pending == null || pending.postMoveFen != update.request.fen) {
+      return;
+    }
+    _pendingMoveQualityGrading = null;
+    _scheduleMoveQualityGrading(
+      pending,
+      livePostMoveLine: update.line,
+      livePostMoveWhiteToMove: update.request.whiteToMove,
+      livePostMoveRole: update.request.role,
+    );
+  }
+
+  void _handleLiveAnalysisUpdate(EngineSearchUpdate update) {
+    _recordPrimaryEngineUpdate(update);
+    _maybeResolvePendingMoveQualityFromUpdate(update);
+    if (!mounted || !update.request.matchesFen(_genFen())) {
+      return;
+    }
+    if (!_isLegalUciMove(update.line.move)) {
+      return;
+    }
+
+    final shouldShowVisualSuggestions =
+        _shouldShowVisualSuggestions && (!_playVsBot || _isHumanTurnInBotGame);
+    final analysisMultiPvCount = _analysisMultiPvCount;
+    setState(() {
+      _currentDepth = update.line.depth;
+      if (update.isPrimaryVariation &&
+          _shouldPublishEvalSnapshot(update.snapshot)) {
+        _applyCanonicalEvalSnapshot(update.snapshot);
+      }
+      _analysisLines.removeWhere(
+        (line) =>
+            line.multiPv == update.line.multiPv ||
+            line.multiPv > analysisMultiPvCount,
+      );
+      _analysisLines.add(update.line);
+      _analysisLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      if (shouldShowVisualSuggestions) {
+        _topLines.removeWhere(
+          (line) =>
+              line.multiPv == update.line.multiPv ||
+              line.multiPv > _visualSuggestionLineCount,
+        );
+        _topLines.add(update.line);
+        _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      } else if (_topLines.isNotEmpty && update.isPrimaryVariation) {
+        _topLines = [];
+      }
+    });
+  }
+
+  void _handleBotSearchUpdate(EngineSearchUpdate update) {
+    _recordPrimaryEngineUpdate(update);
+    _maybeResolvePendingMoveQualityFromUpdate(update);
+    if (!mounted || !_playVsBot || !update.request.matchesFen(_genFen())) {
+      return;
+    }
+    if (!_isLegalUciMove(update.line.move)) {
+      return;
+    }
+
+    _botSearchLines[update.line.multiPv] = update.line;
+    if (update.isPrimaryVariation &&
+        _shouldPublishEvalSnapshot(update.snapshot)) {
+      setState(() {
+        _applyCanonicalEvalSnapshot(update.snapshot);
+      });
+    }
+  }
+
+  bool _shouldQueueBackgroundConfirmation(MoveQualityAssessment assessment) {
+    return assessment.confidence != MoveQualityConfidence.high ||
+        assessment.quality == MoveQuality.crucial ||
+        assessment.quality == MoveQuality.masterstroke;
+  }
+
+  void _queueBackgroundMoveQualityConfirmation(
+    _PendingMoveQualityGrading pending,
+  ) {
+    final engine = _engine;
+    final postMoveFen = pending.postMoveFen;
+    if (engine == null || postMoveFen == null) {
+      return;
+    }
+
+    final whiteToMove = pending.postMoveWhiteToMove ?? !pending.moverIsWhite;
+    var consumedPrimaryLine = false;
+    engine.scheduleSearch(
+      EngineRequestSpec(
+        requestId: _nextEngineRequestId(
+          EngineRequestRole.backgroundConfirmation,
+        ),
+        role: EngineRequestRole.backgroundConfirmation,
+        fen: postMoveFen,
+        whiteToMove: whiteToMove,
+        multiPv: 1,
+        depth: _moveQualityGradingDepth,
+        timeout: Duration(milliseconds: _playVsBot ? 900 : 1400),
+        preCommands: _analysisEngineRequestCommands,
+      ),
+      onUpdate: (update) {
+        _recordPrimaryEngineUpdate(update);
+        if (!update.isPrimaryVariation || consumedPrimaryLine) {
+          return;
+        }
+        consumedPrimaryLine = true;
+        _scheduleMoveQualityGrading(
+          pending,
+          livePostMoveLine: update.line,
+          livePostMoveWhiteToMove: update.request.whiteToMove,
+          livePostMoveRole: update.request.role,
+        );
+        _engine?.cancelSearches(
+          roles: <EngineRequestRole>{EngineRequestRole.backgroundConfirmation},
+          reason: 'background confirmation satisfied',
+        );
+      },
+    );
+  }
+
   bool get _isHumanTurnInBotGame {
     if (!_playVsBot || _selectedBot == null) return true;
     return _isWhiteTurn == _humanPlaysWhite;
   }
 
   void _analyze() {
+    final engine = _engine;
+    if (engine == null) {
+      return;
+    }
     final shouldShowVisualSuggestions = _shouldShowVisualSuggestions;
     if (!_shouldKeepEvalActive && !shouldShowVisualSuggestions) {
-      _send('stop');
+      engine.cancelSearches(
+        roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
+        reason: 'analysis inactive',
+      );
       setState(() {
         _topLines = [];
         _analysisLines = [];
@@ -1934,15 +2661,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       });
       return;
     }
-    _send('stop');
+    engine.cancelSearches(
+      roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
+      reason: 'analysis refresh',
+    );
     setState(() {
       _topLines = [];
       _analysisLines = [];
       _currentDepth = 0;
     });
-    _send('setoption name MultiPV value $_analysisMultiPvCount');
-    _send('position fen ${_genFen()}');
-    _send('go depth $_engineDepth');
+    engine.scheduleSearch(
+      EngineRequestSpec(
+        requestId: _nextEngineRequestId(EngineRequestRole.liveAnalysis),
+        role: EngineRequestRole.liveAnalysis,
+        fen: _genFen(),
+        whiteToMove: _isWhiteTurn,
+        multiPv: _analysisMultiPvCount,
+        depth: _engineDepth,
+        timeout: Duration(milliseconds: _playVsBot ? 1800 : 2600),
+        preCommands: _analysisEngineRequestCommands,
+      ),
+      onUpdate: _handleLiveAnalysisUpdate,
+    );
   }
 
   _PendingMoveQualityGrading? _capturePendingMoveQualityGrading({
@@ -1996,6 +2736,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  // ignore: unused_element
   Future<_GradingSearchSnapshot?> _requestGradingSearch({
     required String fen,
     required bool whiteToMove,
@@ -2015,7 +2756,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _send('stop');
     _send('setoption name MultiPV value $multiPv');
     _send('position fen $fen');
-    _send('go depth $_engineDepth');
+    _send('go depth $_moveQualityGradingDepth');
 
     try {
       final gradingTimeout = Duration(milliseconds: _playVsBot ? 700 : 1200);
@@ -2028,10 +2769,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _gradingSearchCompleter = null;
       }
       _gradingSearchLines.clear();
+      final shouldResumeAnalysis =
+          _analysisRefreshQueuedWhileGrading ||
+          _shouldKeepEvalActive ||
+          _shouldShowVisualSuggestions;
+      _analysisRefreshQueuedWhileGrading = false;
       _send(
         'setoption name MultiPV value ${_shouldShowVisualSuggestions ? _visualSuggestionLineCount : 1}',
       );
-      if (_shouldKeepEvalActive || _shouldShowVisualSuggestions) {
+      if (shouldResumeAnalysis) {
         _analyze();
       }
     }
@@ -2041,37 +2787,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _PendingMoveQualityGrading pending, {
     EngineLine? livePostMoveLine,
     bool? livePostMoveWhiteToMove,
+    EngineRequestRole? livePostMoveRole,
+    int? gradingGeneration,
   }) async {
+    if (gradingGeneration != null &&
+        gradingGeneration != _moveQualityGradingGeneration) {
+      return;
+    }
     var preMoveLines = pending.preMoveLines;
     var preMoveMoverWinProbability = pending.preMoveMoverWinProbability;
     var preMoveMoverEvalPawns = pending.preMoveMoverEvalPawns;
-    var usedPreMoveFallback = false;
-
-    if (preMoveMoverWinProbability == null ||
-        preMoveLines.length < _moveQualityGradingMultiPv) {
-      final fallback = await _requestGradingSearch(
-        fen: pending.preMoveFen,
+    var usedPreMoveFallback =
+        preMoveMoverWinProbability == null || preMoveLines.isEmpty;
+    if (preMoveLines.isNotEmpty && preMoveMoverWinProbability == null) {
+      final preMoveLine = preMoveLines.first;
+      final preMoveWhiteEvalPawns = pending.moverIsWhite
+          ? preMoveLine.eval / 100.0
+          : -preMoveLine.eval / 100.0;
+      preMoveMoverWinProbability = _moverWinProbabilityFromEngineLine(
+        preMoveLine,
         whiteToMove: pending.moverIsWhite,
+        moverIsWhite: pending.moverIsWhite,
       );
-      if (fallback != null) {
-        usedPreMoveFallback = true;
-        preMoveLines = fallback.lines;
-        if (preMoveLines.isNotEmpty) {
-          final preMoveLine = preMoveLines.first;
-          final preMoveWhiteEvalPawns = fallback.whiteToMove
-              ? preMoveLine.eval / 100.0
-              : -preMoveLine.eval / 100.0;
-          preMoveMoverWinProbability = _moverWinProbabilityFromEngineLine(
-            preMoveLine,
-            whiteToMove: fallback.whiteToMove,
-            moverIsWhite: pending.moverIsWhite,
-          );
-          preMoveMoverEvalPawns = _moverEvalPawnsFromWhiteEval(
-            preMoveWhiteEvalPawns,
-            pending.moverIsWhite,
-          );
-        }
-      }
+      preMoveMoverEvalPawns = _moverEvalPawnsFromWhiteEval(
+        preMoveWhiteEvalPawns,
+        pending.moverIsWhite,
+      );
+      usedPreMoveFallback = false;
+    }
+
+    if (gradingGeneration != null &&
+        gradingGeneration != _moveQualityGradingGeneration) {
+      return;
     }
 
     EngineLine? postMoveLine = livePostMoveLine;
@@ -2082,15 +2829,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (postMoveFen == null) {
         return;
       }
-      final fallback = await _requestGradingSearch(
-        fen: postMoveFen,
-        whiteToMove: postMoveWhiteToMove,
-      );
-      if (fallback == null || fallback.lines.isEmpty) {
+      final cachedUpdate = _primaryEngineUpdateByFen[postMoveFen];
+      if (cachedUpdate == null) {
+        _queueBackgroundMoveQualityConfirmation(pending);
         return;
       }
-      postMoveLine = fallback.lines.first;
-      postMoveWhiteToMove = fallback.whiteToMove;
+      postMoveLine = cachedUpdate.line;
+      postMoveWhiteToMove = cachedUpdate.request.whiteToMove;
+      livePostMoveRole = cachedUpdate.request.role;
+    }
+
+    if (gradingGeneration != null &&
+        gradingGeneration != _moveQualityGradingGeneration) {
+      return;
     }
 
     if (!mounted || pending.moveIndex >= _moveHistory.length) {
@@ -2221,6 +2972,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     });
 
+    if (livePostMoveRole != EngineRequestRole.backgroundConfirmation &&
+        !_openingFeedbackOnlyApplies(pending.moveIndex) &&
+        _shouldQueueBackgroundConfirmation(assessment)) {
+      _queueBackgroundMoveQualityConfirmation(pending);
+    }
+
     if (_playVsBot &&
         !_isHumanTurnInBotGame &&
         !_botThinking &&
@@ -2310,102 +3067,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       };
 
       return IgnorePointer(
-        child: Center(
-          child: Padding(
-            padding: contentPadding,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: isLandscape ? 280 : 320),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                decoration: _vsBotArcadePanelDecoration(
-                  palette: arcade,
-                  accent: accent,
-                  radius: 18,
-                  borderWidth: 2.2,
-                  inset: true,
-                  elevated: false,
-                  fillColor: arcade.panelAlt,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          quality.displaySymbol,
-                          style: puzzleAcademyIdentityStyle(
-                            palette: arcade.base,
-                            size: quality == MoveQuality.masterstroke ? 12 : 10,
-                            color: accent,
-                            withGlow: true,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: puzzleAcademyIdentityStyle(
-                              palette: arcade.base,
-                              size: 7.8,
-                              color: accent,
-                              withGlow: true,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      message,
-                      style: GoogleFonts.pixelifySans(
-                        color: arcade.text,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        height: 1.14,
-                      ),
-                    ),
-                    if (chargeText != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        chargeText.toUpperCase(),
-                        style: puzzleAcademyIdentityStyle(
-                          palette: arcade.base,
-                          size: 6.4,
-                          color: accent,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return IgnorePointer(
-      child: Center(
         child: Padding(
           padding: contentPadding,
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: isLandscape ? 300 : 340),
+            constraints: BoxConstraints(maxWidth: isLandscape ? 280 : 320),
             child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0E1420).withValues(alpha: 0.94),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: quality.color.withValues(alpha: 0.42),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: quality.color.withValues(alpha: 0.20),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: _vsBotArcadePanelDecoration(
+                palette: arcade,
+                accent: accent,
+                radius: 18,
+                borderWidth: 2.2,
+                inset: true,
+                elevated: false,
+                fillColor: arcade.panelAlt,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2415,23 +3090,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     children: [
                       Text(
                         quality.displaySymbol,
-                        style: TextStyle(
-                          color: quality.color,
-                          fontSize: quality == MoveQuality.masterstroke
-                              ? 22
-                              : 18,
-                          fontWeight: FontWeight.w900,
+                        style: puzzleAcademyIdentityStyle(
+                          palette: arcade.base,
+                          size: quality == MoveQuality.masterstroke ? 12 : 10,
+                          color: accent,
+                          withGlow: true,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
+                          style: puzzleAcademyIdentityStyle(
+                            palette: arcade.base,
+                            size: 7.8,
+                            color: accent,
+                            withGlow: true,
                           ),
                         ),
                       ),
@@ -2440,15 +3114,90 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   const SizedBox(height: 8),
                   Text(
                     message,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
+                    style: GoogleFonts.pixelifySans(
+                      color: arcade.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      height: 1.14,
                     ),
                   ),
+                  if (chargeText != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      chargeText.toUpperCase(),
+                      style: puzzleAcademyIdentityStyle(
+                        palette: arcade.base,
+                        size: 6.4,
+                        color: accent,
+                      ),
+                    ),
+                  ],
                 ],
               ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return IgnorePointer(
+      child: Padding(
+        padding: contentPadding,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: isLandscape ? 300 : 340),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E1420).withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: quality.color.withValues(alpha: 0.42)),
+              boxShadow: [
+                BoxShadow(
+                  color: quality.color.withValues(alpha: 0.20),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      quality.displaySymbol,
+                      style: TextStyle(
+                        color: quality.color,
+                        fontSize: quality == MoveQuality.masterstroke ? 22 : 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -2456,6 +3205,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  bool get _hasMoveQualityBanner =>
+      _moveQualityOverlayQuality != null &&
+      _moveQualityOverlayTitle != null &&
+      _moveQualityOverlayMessage != null;
+
+  bool get _hasVisibleSuggestedMoves =>
+      _shouldShowVisualSuggestions && _topLines.isNotEmpty;
+
+  Widget _buildMoveQualityBannerOverlay({required bool isLandscape}) {
+    if (!_hasMoveQualityBanner) {
+      return const SizedBox.shrink();
+    }
+
+    return Align(
+      alignment: isLandscape ? Alignment.topCenter : Alignment.bottomCenter,
+      child: _buildMoveQualityBanner(isLandscape: isLandscape),
+    );
+  }
+
+  // ignore: unused_element
   void _parseOutput(String line) {
     final activeGradingSearch = _gradingSearchCompleter;
     final gradingSearchActive =
@@ -2510,9 +3279,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final sCp = RegExp(r'score cp (-?\d+)').firstMatch(line);
     final sMate = RegExp(r'score mate (-?\d+)').firstMatch(line);
 
-    if (d != null && pv != null && m != null) {
+    if (d != null && m != null) {
       final depth = int.parse(d.group(1)!);
-      final multiPv = int.parse(pv.group(1)!);
+      final multiPv = int.tryParse(pv?.group(1) ?? '1') ?? 1;
       final maxMultiPvAllowed = gradingSearchActive
           ? _gradingSearchMultiPv
           : botSearchActive
@@ -2522,9 +3291,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return;
       }
       final move = m.group(1)!;
-      if (!_isLegalUciMove(move)) {
-        return;
-      }
 
       int cp;
       double normalizedEval;
@@ -2555,6 +3321,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return;
       }
 
+      if (!_isLegalUciMove(move)) {
+        return;
+      }
+
       if (botSearchActive) {
         if (!_playVsBot || !_botThinking) {
           _botSearchCompleter = null;
@@ -2574,12 +3344,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           final pending = _pendingMoveQualityGrading;
           if (pending != null) {
             _pendingMoveQualityGrading = null;
-            unawaited(
-              _finalizePendingMoveQualityGrading(
-                pending,
-                livePostMoveLine: parsedLine,
-                livePostMoveWhiteToMove: _isWhiteTurn,
-              ),
+            _scheduleMoveQualityGrading(
+              pending,
+              livePostMoveLine: parsedLine,
+              livePostMoveWhiteToMove: _isWhiteTurn,
             );
           }
         }
@@ -2617,12 +3385,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final pending = _pendingMoveQualityGrading;
         if (pending != null) {
           _pendingMoveQualityGrading = null;
-          unawaited(
-            _finalizePendingMoveQualityGrading(
-              pending,
-              livePostMoveLine: EngineLine(move, cp, depth, multiPv),
-              livePostMoveWhiteToMove: _isWhiteTurn,
-            ),
+          _scheduleMoveQualityGrading(
+            pending,
+            livePostMoveLine: EngineLine(move, cp, depth, multiPv),
+            livePostMoveWhiteToMove: _isWhiteTurn,
           );
         }
       }
@@ -2820,7 +3586,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     // In bot games the gauge stays anchored to the human player's side.
     // In analysis it follows the active viewing perspective.
-    final whiteEval = _evalWhiteTurn ? _currentEval : -_currentEval;
+    final snapshot = _currentEvalSnapshot;
+    final whiteEval = snapshot != null && snapshot.matchesFen(_genFen())
+        ? snapshot.evalPawnsWhite
+        : (_evalWhiteTurn ? _currentEval : -_currentEval);
     return _isBlackPovActive ? -whiteEval : whiteEval;
   }
 
@@ -4615,7 +5384,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final previousPendingGrading = _pendingMoveQualityGrading;
     if (previousPendingGrading != null) {
       _pendingMoveQualityGrading = null;
-      unawaited(_finalizePendingMoveQualityGrading(previousPendingGrading));
+      final cachedPostMoveUpdate = previousPendingGrading.postMoveFen == null
+          ? null
+          : _primaryEngineUpdateByFen[previousPendingGrading.postMoveFen!];
+      _scheduleMoveQualityGrading(
+        previousPendingGrading,
+        livePostMoveLine: cachedPostMoveUpdate?.line,
+        livePostMoveWhiteToMove: cachedPostMoveUpdate?.request.whiteToMove,
+        livePostMoveRole: cachedPostMoveUpdate?.request.role,
+      );
     }
     final moverIsWhite = _isWhiteTurn;
     String piece = boardState[from]!;
@@ -4724,6 +5501,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _topLines = [];
         _analysisLines = [];
         _currentDepth = 0;
+        _currentEvalSnapshot = null;
       }
       _isWhiteTurn = !_isWhiteTurn;
       _updateCurrentOpening();
@@ -4779,6 +5557,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _cancelPendingMoveQualityGrading();
       _clearMoveQualityOverlay();
       _clearMoveQualityBadge();
+      _currentEvalSnapshot = null;
+      _primaryEngineUpdateByFen.clear();
       _historyIndex = index;
       // Truncate any future moves so they don't interfere with opening/gambit lookups
       if (index < _moveHistory.length - 1) {
@@ -5638,15 +6418,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
         final isMono = appTheme.isMonochrome || _isCinematicThemeEnabled;
-        final controlSurface = scheme.surfaceContainerHighest;
-        final menuBackground = scheme.surface;
-        final menuWindowSurface = scheme.surfaceContainerHighest;
+        final arcade = _vsBotArcadePaletteFor(context, monochrome: isMono);
+        final reducedEffects =
+            puzzleAcademyShouldReduceEffects(context) ||
+            _useReducedMenuWindowsVisualEffects;
+        final controlSurface = Color.alphaBlend(
+          arcade.panel.withValues(alpha: isMono ? 0.03 : 0.08),
+          scheme.surfaceContainerHighest,
+        );
+        final menuBackground = Color.alphaBlend(
+          arcade.backdrop.withValues(alpha: isMono ? 0.02 : 0.12),
+          scheme.surface,
+        );
+        final menuWindowSurface = Color.alphaBlend(
+          arcade.panelAlt.withValues(alpha: isMono ? 0.04 : 0.18),
+          scheme.surfaceContainerHighest,
+        );
         final blueDotColor = isMono
             ? scheme.onSurface.withValues(alpha: 0.52)
-            : const Color(0xFF5AAEE8);
+            : Color.alphaBlend(
+                arcade.cyan.withValues(alpha: 0.34),
+                const Color(0xFF5AAEE8),
+              );
         final yellowDotColor = isMono
             ? scheme.onSurface.withValues(alpha: 0.50)
-            : const Color(0xFFD8B640);
+            : Color.alphaBlend(
+                arcade.amber.withValues(alpha: 0.28),
+                const Color(0xFFD8B640),
+              );
 
         final blueDotAlignment = Alignment(
           _blueMenuDotPosition.dx.clamp(-1.0, 1.0),
@@ -5656,6 +6455,86 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _yellowMenuDotPosition.dx.clamp(-1.0, 1.0),
           _yellowMenuDotPosition.dy.clamp(-1.0, 1.0),
         );
+        final menuCardShell = Container(
+          width: 220,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+          decoration: BoxDecoration(
+            color: menuWindowSurface.withValues(alpha: isMono ? 0.10 : 0.14),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.white.withValues(alpha: isMono ? 0.38 : 0.44),
+                menuWindowSurface.withValues(alpha: isMono ? 0.14 : 0.10),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: isMono ? 0.50 : 0.60),
+              width: 1.2,
+            ),
+            boxShadow: [
+              if (!reducedEffects)
+                BoxShadow(
+                  color: arcade.cyan.withValues(alpha: isMono ? 0.06 : 0.12),
+                  blurRadius: 30,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 12),
+                ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: reducedEffects ? 18 : 26,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _menuGlyphButton(
+                label: 'PLAY CHESS',
+                icon: Icons.smart_toy_outlined,
+                accent: isMono
+                    ? scheme.onSurface.withValues(alpha: 0.88)
+                    : const Color(0xFF5AAEE8),
+                onTap: _openBotSetupFromMenu,
+              ),
+              _menuGlyphButton(
+                label: 'ANALYSIS',
+                icon: Icons.analytics_outlined,
+                accent: isMono
+                    ? scheme.onSurface.withValues(alpha: 0.82)
+                    : coreGold,
+                onTap: () => unawaited(_enterAnalysisBoard()),
+              ),
+              _menuGlyphButton(
+                label: 'ACADEMY',
+                icon: Icons.auto_stories_outlined,
+                accent: isMono
+                    ? scheme.onSurface.withValues(alpha: 0.76)
+                    : const Color(0xFF6FE7FF),
+                onTap: _openPuzzleAcademyFromMenu,
+              ),
+              _menuGlyphButton(
+                label: 'STORE',
+                icon: Icons.storefront_outlined,
+                accent: isMono
+                    ? scheme.onSurface.withValues(alpha: 0.74)
+                    : fusionGreen,
+                onTap: _openStore,
+              ),
+            ],
+          ),
+        );
+        final menuCard = ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: reducedEffects
+              ? menuCardShell
+              : BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+                  child: menuCardShell,
+                ),
+        );
 
         return Stack(
           children: [
@@ -5664,72 +6543,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 decoration: BoxDecoration(color: menuBackground),
               ),
             ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Stack(
-                  children: [
-                    Align(
-                      alignment: blueDotAlignment,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: blueDotColor,
-                          boxShadow: [
-                            BoxShadow(
-                              color: blueDotColor.withValues(alpha: 0.48),
-                              blurRadius: 18,
-                              spreadRadius: 3,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Align(
-                      alignment: yellowDotAlignment,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: yellowDotColor,
-                          boxShadow: [
-                            BoxShadow(
-                              color: yellowDotColor.withValues(alpha: 0.48),
-                              blurRadius: 18,
-                              spreadRadius: 3,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    ..._menuSparkParticles.map((particle) {
-                      return Align(
-                        alignment: Alignment(
-                          particle.position.dx,
-                          particle.position.dy,
-                        ),
-                        child: Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: particle.color,
-                            boxShadow: [
-                              BoxShadow(
-                                color: particle.color.withValues(alpha: 0.85),
-                                blurRadius: 8,
-                                spreadRadius: 1.5,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
+            _buildMenuBackgroundLayer(
+              blueDotAlignment: blueDotAlignment,
+              yellowDotAlignment: yellowDotAlignment,
+              arcade: arcade,
+              reducedEffects: reducedEffects,
+              isMono: isMono,
+              shortestSide: media.size.shortestSide,
+            ),
+            _buildMenuCollisionLayer(
+              arcade: arcade,
+              reducedEffects: reducedEffects,
+            ),
+            _buildMenuAccentLayer(
+              blueDotAlignment: blueDotAlignment,
+              yellowDotAlignment: yellowDotAlignment,
+              blueDotColor: blueDotColor,
+              yellowDotColor: yellowDotColor,
+              reducedEffects: reducedEffects,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -5759,125 +6590,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           children: [
                             _buildMenuCenterShape(
                               size: 360 * 1.10,
-                              strokeColor: scheme.outline.withValues(
-                                alpha: 0.38,
+                              strokeColor: Color.alphaBlend(
+                                arcade.cyan.withValues(
+                                  alpha: isMono ? 0.04 : 0.14,
+                                ),
+                                scheme.outline.withValues(alpha: 0.38),
                               ),
                               strokeWidth: 2,
                               rotation: _menuCenterRotationA,
                               sides: _menuCenterShapeSidesA,
+                              impact: _menuCenterImpact,
+                              accentColor: blueDotColor,
                             ),
                             _buildMenuCenterShape(
                               size: 285 * 1.10,
-                              strokeColor: scheme.outline.withValues(
-                                alpha: 0.30,
+                              strokeColor: Color.alphaBlend(
+                                arcade.amber.withValues(
+                                  alpha: isMono ? 0.04 : 0.14,
+                                ),
+                                scheme.outline.withValues(alpha: 0.30),
                               ),
                               strokeWidth: 1.5,
                               rotation: _menuCenterRotationB,
                               sides: _menuCenterShapeSidesB,
+                              impact: _menuCenterImpact * 0.86,
+                              accentColor: yellowDotColor,
                             ),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
-                              child: BackdropFilter(
-                                filter: ui.ImageFilter.blur(
-                                  sigmaX: 3,
-                                  sigmaY: 3,
-                                ),
-                                child: Container(
-                                  width: 220,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: menuWindowSurface.withValues(
-                                      alpha: isMono ? 0.10 : 0.14,
-                                    ),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.white.withValues(
-                                          alpha: isMono ? 0.38 : 0.44,
-                                        ),
-                                        menuWindowSurface.withValues(
-                                          alpha: isMono ? 0.14 : 0.10,
-                                        ),
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: isMono ? 0.50 : 0.60,
-                                      ),
-                                      width: 1.2,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: scheme.primary.withValues(
-                                          alpha: isMono ? 0.08 : 0.12,
-                                        ),
-                                        blurRadius: 30,
-                                        spreadRadius: 2,
-                                        offset: const Offset(0, 12),
-                                      ),
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                        blurRadius: 26,
-                                        offset: const Offset(0, 10),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _menuGlyphButton(
-                                        label: 'PLAY CHESS',
-                                        icon: Icons.smart_toy_outlined,
-                                        accent: isMono
-                                            ? scheme.onSurface.withValues(
-                                                alpha: 0.88,
-                                              )
-                                            : const Color(0xFF5AAEE8),
-                                        onTap: _openBotSetupFromMenu,
-                                      ),
-                                      _menuGlyphButton(
-                                        label: 'ANALYSIS',
-                                        icon: Icons.analytics_outlined,
-                                        accent: isMono
-                                            ? scheme.onSurface.withValues(
-                                                alpha: 0.82,
-                                              )
-                                            : coreGold,
-                                        onTap: () =>
-                                            unawaited(_enterAnalysisBoard()),
-                                      ),
-                                      _menuGlyphButton(
-                                        label: 'ACADEMY',
-                                        icon: Icons.auto_stories_outlined,
-                                        accent: isMono
-                                            ? scheme.onSurface.withValues(
-                                                alpha: 0.76,
-                                              )
-                                            : const Color(0xFF6FE7FF),
-                                        onTap: _openPuzzleAcademyFromMenu,
-                                      ),
-                                      _menuGlyphButton(
-                                        label: 'STORE',
-                                        icon: Icons.storefront_outlined,
-                                        accent: isMono
-                                            ? scheme.onSurface.withValues(
-                                                alpha: 0.74,
-                                              )
-                                            : fusionGreen,
-                                        onTap: _openStore,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
+                            menuCard,
                           ],
                         ),
                       ),
@@ -6073,23 +6812,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             Center(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const double modelRatio = 393.0 / 852.0;
                   double maxWidth = constraints.maxWidth;
                   double maxHeight = constraints.maxHeight;
-                  double width;
-                  double height;
-
-                  if (isLandscape) {
-                    width = maxWidth;
-                    height = maxHeight;
-                  } else {
-                    width = maxWidth <= 430 ? maxWidth : 430;
-                    height = width / modelRatio;
-                    if (height > maxHeight) {
-                      height = maxHeight;
-                      width = height * modelRatio;
-                    }
-                  }
+                  final double width = maxWidth;
+                  final double height = maxHeight;
 
                   final double scale = (width / 430.0).clamp(0.8, 1.4);
 
@@ -6209,133 +6935,167 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                 46.0,
                                                                 72.0,
                                                               );
-                                                      return Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets.only(
-                                                                  bottom: 10,
-                                                                ),
-                                                            child: Align(
-                                                              alignment:
-                                                                  Alignment
-                                                                      .center,
-                                                              child:
-                                                                  _buildEditModeDepthCluster(
-                                                                    scale,
-                                                                    scheme,
-                                                                  ),
-                                                            ),
-                                                          ),
-                                                          if (!_playVsBot &&
-                                                              _selectedGambit !=
-                                                                  null)
-                                                            Align(
-                                                              alignment:
-                                                                  Alignment
-                                                                      .center,
-                                                              child: Padding(
-                                                                padding:
-                                                                    const EdgeInsets.only(
-                                                                      bottom: 6,
-                                                                    ),
-                                                                child: Text(
-                                                                  _selectedGambit!
-                                                                      .name,
-                                                                  style: TextStyle(
-                                                                    fontSize:
-                                                                        13,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w700,
-                                                                    color:
-                                                                        useMonochrome
-                                                                        ? scheme.onSurface.withValues(
-                                                                            alpha:
-                                                                                0.86,
-                                                                          )
-                                                                        : const Color(
-                                                                            0xFFD8B640,
-                                                                          ),
-                                                                  ),
-                                                                  maxLines: 2,
-                                                                  overflow:
-                                                                      TextOverflow
-                                                                          .ellipsis,
-                                                                ),
-                                                              ),
-                                                            )
-                                                          else if (!_playVsBot &&
+                                                      final hasLandscapeTitle =
+                                                          !_playVsBot &&
+                                                          (_selectedGambit != null ||
                                                               _currentOpening
-                                                                  .isNotEmpty)
-                                                            Align(
-                                                              alignment:
-                                                                  Alignment
-                                                                      .center,
-                                                              child: Padding(
-                                                                padding:
-                                                                    const EdgeInsets.only(
-                                                                      bottom: 6,
-                                                                    ),
-                                                                child: Text(
-                                                                  _currentOpening,
-                                                                  style: TextStyle(
-                                                                    fontSize:
-                                                                        13,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w700,
-                                                                    color: scheme
-                                                                        .onSurface
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.72,
+                                                                  .isNotEmpty);
+                                                      final landscapeBannerTop =
+                                                          _playVsBot
+                                                          ? 10.0
+                                                          : hasLandscapeTitle
+                                                          ? 54.0
+                                                          : 30.0;
+                                                      return Stack(
+                                                        clipBehavior:
+                                                            Clip.none,
+                                                        children: [
+                                                          SizedBox.expand(
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Padding(
+                                                                  padding:
+                                                                      const EdgeInsets.only(
+                                                                        bottom:
+                                                                            10,
+                                                                      ),
+                                                                  child: Align(
+                                                                    alignment:
+                                                                        Alignment
+                                                                            .center,
+                                                                    child:
+                                                                        _buildEditModeDepthCluster(
+                                                                          scale,
+                                                                          scheme,
                                                                         ),
                                                                   ),
-                                                                  maxLines: 2,
-                                                                  overflow:
-                                                                      TextOverflow
-                                                                          .ellipsis,
                                                                 ),
-                                                              ),
-                                                            ),
-                                                          _buildSuggestedMovesList(
-                                                            height:
-                                                                suggestionsHeight,
-                                                            padding: _playVsBot
-                                                                ? const EdgeInsets.fromLTRB(
-                                                                    16,
-                                                                    2,
-                                                                    16,
-                                                                    8,
+                                                                if (!_playVsBot &&
+                                                                    _selectedGambit !=
+                                                                        null)
+                                                                  Align(
+                                                                    alignment:
+                                                                        Alignment
+                                                                            .center,
+                                                                    child:
+                                                                        Padding(
+                                                                          padding:
+                                                                              const EdgeInsets.only(
+                                                                                bottom:
+                                                                                    6,
+                                                                              ),
+                                                                          child:
+                                                                              Text(
+                                                                                _selectedGambit!
+                                                                                    .name,
+                                                                                style: TextStyle(
+                                                                                  fontSize:
+                                                                                      13,
+                                                                                  fontWeight:
+                                                                                      FontWeight.w700,
+                                                                                  color:
+                                                                                      useMonochrome
+                                                                                      ? scheme.onSurface.withValues(
+                                                                                          alpha: 0.86,
+                                                                                        )
+                                                                                      : const Color(
+                                                                                          0xFFD8B640,
+                                                                                        ),
+                                                                                ),
+                                                                                maxLines:
+                                                                                    2,
+                                                                                overflow:
+                                                                                    TextOverflow.ellipsis,
+                                                                              ),
+                                                                        ),
                                                                   )
-                                                                : const EdgeInsets.symmetric(
-                                                                    vertical:
-                                                                        10,
-                                                                    horizontal:
-                                                                        20,
+                                                                else if (!_playVsBot &&
+                                                                    _currentOpening
+                                                                        .isNotEmpty)
+                                                                  Align(
+                                                                    alignment:
+                                                                        Alignment
+                                                                            .center,
+                                                                    child:
+                                                                        Padding(
+                                                                          padding:
+                                                                              const EdgeInsets.only(
+                                                                                bottom:
+                                                                                    6,
+                                                                              ),
+                                                                          child:
+                                                                              Text(
+                                                                                _currentOpening,
+                                                                                style: TextStyle(
+                                                                                  fontSize:
+                                                                                      13,
+                                                                                  fontWeight:
+                                                                                      FontWeight.w700,
+                                                                                  color: scheme.onSurface.withValues(
+                                                                                    alpha:
+                                                                                        0.72,
+                                                                                  ),
+                                                                                ),
+                                                                                maxLines:
+                                                                                    2,
+                                                                                overflow:
+                                                                                    TextOverflow.ellipsis,
+                                                                              ),
+                                                                        ),
                                                                   ),
+                                                                _buildSuggestedMovesList(
+                                                                  height:
+                                                                      suggestionsHeight,
+                                                                  padding:
+                                                                      _playVsBot
+                                                                      ? const EdgeInsets.fromLTRB(
+                                                                          16,
+                                                                          2,
+                                                                          16,
+                                                                          8,
+                                                                        )
+                                                                      : const EdgeInsets.symmetric(
+                                                                          vertical:
+                                                                              10,
+                                                                          horizontal:
+                                                                              20,
+                                                                        ),
+                                                                ),
+                                                                if (!_playVsBot)
+                                                                  _buildHistoryBar(
+                                                                    height:
+                                                                        historyHeight,
+                                                                    margin:
+                                                                        const EdgeInsets.symmetric(
+                                                                          vertical:
+                                                                              6,
+                                                                        ),
+                                                                  ),
+                                                                const Spacer(),
+                                                                _buildActionArea(
+                                                                  compactBottom:
+                                                                      8,
+                                                                  horizontal:
+                                                                      0,
+                                                                ),
+                                                              ],
+                                                            ),
                                                           ),
-                                                          if (!_playVsBot)
-                                                            _buildHistoryBar(
-                                                              height:
-                                                                  historyHeight,
-                                                              margin:
-                                                                  const EdgeInsets.symmetric(
-                                                                    vertical: 6,
+                                                          if (_hasMoveQualityBanner)
+                                                            Positioned(
+                                                              left: 0,
+                                                              right: 0,
+                                                              top:
+                                                                  landscapeBannerTop,
+                                                              child:
+                                                                  _buildMoveQualityBannerOverlay(
+                                                                    isLandscape:
+                                                                        true,
                                                                   ),
                                                             ),
-                                                          _buildMoveQualityBanner(
-                                                            isLandscape: true,
-                                                          ),
-                                                          const Spacer(),
-                                                          _buildActionArea(
-                                                            compactBottom: 8,
-                                                            horizontal: 0,
-                                                          ),
                                                         ],
                                                       );
                                                     },
@@ -6370,53 +7130,51 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                               inner.maxWidth,
                                               inner.maxHeight,
                                             );
-                                            return Align(
-                                              alignment: Alignment.topCenter,
-                                              child: SizedBox(
-                                                key: _boardKey,
-                                                width: boardSize,
-                                                height: boardSize,
-                                                child: Stack(
-                                                  children: [
-                                                    Opacity(
-                                                      opacity:
-                                                          _boardIntroOpacity(),
-                                                      child: _buildBoard(
-                                                        reverse,
-                                                      ),
-                                                    ),
-                                                    Opacity(
-                                                      opacity:
-                                                          _boardIntroOpacity(),
-                                                      child:
-                                                          _buildAnimatedArrows(
+                                            return Stack(
+                                              children: [
+                                                Align(
+                                                  alignment:
+                                                      Alignment.topCenter,
+                                                  child: SizedBox(
+                                                    key: _boardKey,
+                                                    width: boardSize,
+                                                    height: boardSize,
+                                                    child: Stack(
+                                                      children: [
+                                                        Opacity(
+                                                          opacity:
+                                                              _boardIntroOpacity(),
+                                                          child: _buildBoard(
                                                             reverse,
                                                           ),
+                                                        ),
+                                                        Opacity(
+                                                          opacity:
+                                                              _boardIntroOpacity(),
+                                                          child:
+                                                              _buildAnimatedArrows(
+                                                                reverse,
+                                                              ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
+                                                  ),
                                                 ),
-                                              ),
+                                              ],
                                             );
                                           },
                                         ),
                                       ),
                                     ),
-                                    _buildMoveQualityBanner(isLandscape: false),
                                     if (!_playVsBot) _buildOpeningLabel(scale),
-                                    _buildSuggestedMovesList(
-                                      height: _playVsBot ? 168 : 130,
-                                      padding: _playVsBot
-                                          ? const EdgeInsets.fromLTRB(
-                                              20,
-                                              2,
-                                              20,
-                                              8,
-                                            )
-                                          : const EdgeInsets.symmetric(
-                                              vertical: 10,
-                                              horizontal: 20,
-                                            ),
-                                    ),
+                                    if (!_playVsBot)
+                                      _buildSuggestedMovesList(
+                                        height: 130,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 10,
+                                          horizontal: 20,
+                                        ),
+                                      ),
                                     if (!_playVsBot) _buildHistoryBar(),
                                     _buildActionArea(),
                                   ],
@@ -7816,9 +8574,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     int? restoredCharge;
     setState(() {
       _botThinking = false;
+      _botSearchHandle = null;
       _botSearchCompleter = null;
       _pendingMoveQualityGrading = null;
       _vsBotOptimalLineRevealActive = false;
+      _currentEvalSnapshot = null;
+      _primaryEngineUpdateByFen.clear();
       _clearMoveQualityOverlay();
       _clearMoveQualityBadge();
 
@@ -7980,6 +8741,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     if (_playVsBot) {
       final useMonochrome =
@@ -8014,6 +8777,117 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final filledTagForeground = arcade.monochrome
           ? arcade.text
           : const Color(0xFF0B0F16);
+      final showPortraitFeedbackOverlay =
+          !isLandscape && (_hasVisibleSuggestedMoves || _hasMoveQualityBanner);
+      final portraitFeedbackHeight = _hasVisibleSuggestedMoves ? 168.0 : 120.0;
+
+      final deck = Container(
+        decoration: _vsBotArcadePanelDecoration(
+          palette: arcade,
+          accent: profileAccent,
+          radius: 22,
+          borderWidth: 2.8,
+          fillColor: arcade.panel,
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: LayoutBuilder(
+          builder: (context, inner) {
+            final statusTag = PuzzleAcademyTag(
+              label: statusLabel,
+              accent: statusAccent,
+              compact: true,
+              filled: _gameOutcome == null && _isHumanTurnInBotGame,
+              foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
+                  ? filledTagForeground
+                  : null,
+            );
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(alignment: Alignment.centerLeft, child: statusTag),
+                const SizedBox(height: 6),
+                Builder(
+                  builder: (context) {
+                    final actionSpacing = inner.maxWidth <= 280
+                        ? 4.0
+                        : inner.maxWidth <= 360
+                        ? 6.0
+                        : 8.0;
+                    final powerPod = _buildVsBotActionPod(
+                      label: 'Charge',
+                      accent: difficultyAccent,
+                      control: _buildSuggestionTriggerButton(),
+                    );
+                    final actionPods = <Widget>[
+                      _buildVsBotActionPod(
+                        label: 'Return',
+                        accent: arcade.crimson,
+                        control: _buildVsBotControlButton(
+                          icon: Icons.exit_to_app_rounded,
+                          onTap: _openBotSetupFromMenu,
+                          accent: arcade.crimson,
+                        ),
+                      ),
+                      _buildVsBotActionPod(
+                        label: 'Store',
+                        accent: arcade.amber,
+                        control: _buildVsBotControlButton(
+                          controlKey: _storeButtonKey,
+                          icon: Icons.storefront_outlined,
+                          onTap: _openStore,
+                          accent: arcade.amber,
+                        ),
+                      ),
+                      _buildVsBotActionPod(
+                        label: 'Undo',
+                        accent: profileAccent,
+                        control: _buildBotUndoButton(),
+                      ),
+                      _buildVsBotActionPod(
+                        label: 'Config',
+                        accent: arcade.cyan,
+                        control: _buildVsBotControlButton(
+                          icon: Icons.tune_rounded,
+                          onTap: () => _openSettings(fromAnalysisMode: false),
+                          accent: arcade.cyan,
+                        ),
+                      ),
+                    ];
+
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Align(alignment: Alignment.center, child: powerPod),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (
+                              int index = 0;
+                              index < actionPods.length;
+                              index++
+                            ) ...[
+                              Expanded(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: actionPods[index],
+                                ),
+                              ),
+                              if (index < actionPods.length - 1)
+                                SizedBox(width: actionSpacing),
+                            ],
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        ),
+      );
 
       return Padding(
         padding: EdgeInsets.only(
@@ -8021,160 +8895,31 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           left: horizontal,
           right: horizontal,
         ),
-        child: Container(
-          decoration: _vsBotArcadePanelDecoration(
-            palette: arcade,
-            accent: profileAccent,
-            radius: 22,
-            borderWidth: 2.8,
-            fillColor: arcade.panel,
-          ),
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-          child: LayoutBuilder(
-            builder: (context, inner) {
-              final compactDeck = inner.maxWidth <= 320;
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  compactDeck
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'COMMAND DECK',
-                              style: puzzleAcademyIdentityStyle(
-                                palette: arcade.base,
-                                size: 8.0,
-                                color: profileAccent,
-                                withGlow: true,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: PuzzleAcademyTag(
-                                label: statusLabel,
-                                accent: statusAccent,
-                                compact: true,
-                                filled:
-                                    _gameOutcome == null &&
-                                    _isHumanTurnInBotGame,
-                                foregroundColor:
-                                    _gameOutcome == null &&
-                                        _isHumanTurnInBotGame
-                                    ? filledTagForeground
-                                    : null,
-                              ),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'COMMAND DECK',
-                                style: puzzleAcademyIdentityStyle(
-                                  palette: arcade.base,
-                                  size: 8.0,
-                                  color: profileAccent,
-                                  withGlow: true,
-                                ),
-                              ),
-                            ),
-                            PuzzleAcademyTag(
-                              label: statusLabel,
-                              accent: statusAccent,
-                              compact: true,
-                              filled:
-                                  _gameOutcome == null && _isHumanTurnInBotGame,
-                              foregroundColor:
-                                  _gameOutcome == null && _isHumanTurnInBotGame
-                                  ? filledTagForeground
-                                  : null,
-                            ),
-                          ],
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            deck,
+            if (showPortraitFeedbackOverlay)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: -portraitFeedbackHeight,
+                child: SizedBox(
+                  height: portraitFeedbackHeight,
+                  child: Stack(
+                    children: [
+                      if (_hasVisibleSuggestedMoves)
+                        _buildSuggestedMovesList(
+                          height: portraitFeedbackHeight,
+                          padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
                         ),
-                  const SizedBox(height: 10),
-                  Builder(
-                    builder: (context) {
-                      final actionSpacing = inner.maxWidth <= 280
-                          ? 4.0
-                          : inner.maxWidth <= 360
-                          ? 6.0
-                          : 8.0;
-                      final powerPod = _buildVsBotActionPod(
-                        label: 'Charge',
-                        accent: difficultyAccent,
-                        control: _buildSuggestionTriggerButton(),
-                      );
-                      final actionPods = <Widget>[
-                        _buildVsBotActionPod(
-                          label: 'Return',
-                          accent: arcade.crimson,
-                          control: _buildVsBotControlButton(
-                            icon: Icons.exit_to_app_rounded,
-                            onTap: _openBotSetupFromMenu,
-                            accent: arcade.crimson,
-                          ),
-                        ),
-                        _buildVsBotActionPod(
-                          label: 'Store',
-                          accent: arcade.amber,
-                          control: _buildVsBotControlButton(
-                            controlKey: _storeButtonKey,
-                            icon: Icons.storefront_outlined,
-                            onTap: _openStore,
-                            accent: arcade.amber,
-                          ),
-                        ),
-                        _buildVsBotActionPod(
-                          label: 'Undo',
-                          accent: profileAccent,
-                          control: _buildBotUndoButton(),
-                        ),
-                        _buildVsBotActionPod(
-                          label: 'Config',
-                          accent: arcade.cyan,
-                          control: _buildVsBotControlButton(
-                            icon: Icons.tune_rounded,
-                            onTap: () => _openSettings(fromAnalysisMode: false),
-                            accent: arcade.cyan,
-                          ),
-                        ),
-                      ];
-
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Align(alignment: Alignment.center, child: powerPod),
-                          const SizedBox(height: 8),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              for (
-                                int index = 0;
-                                index < actionPods.length;
-                                index++
-                              ) ...[
-                                Expanded(
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: actionPods[index],
-                                  ),
-                                ),
-                                if (index < actionPods.length - 1)
-                                  SizedBox(width: actionSpacing),
-                              ],
-                            ],
-                          ),
-                        ],
-                      );
-                    },
+                      if (_hasMoveQualityBanner)
+                        _buildMoveQualityBannerOverlay(isLandscape: false),
+                    ],
                   ),
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+          ],
         ),
       );
     }
@@ -9727,6 +10472,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final buttonBackground = useMonochrome
             ? scheme.surfaceContainerHighest.withValues(alpha: 0.85)
             : scheme.surfaceContainerHighest;
+        final buttonSecondaryForeground = useMonochrome
+            ? scheme.onSurface
+            : ThemeData.estimateBrightnessForColor(buttonSecondary) ==
+                  Brightness.light
+            ? const Color(0xFF111418)
+            : Colors.white;
+        final buttonSecondaryBackground = Color.alphaBlend(
+          buttonSecondary.withValues(alpha: useMonochrome ? 0.22 : 0.34),
+          buttonBackground,
+        );
         return Dialog(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -9821,10 +10576,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       child: FilledButton.icon(
                         onPressed: () => Navigator.of(context).pop('opponent'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: buttonSecondary.withValues(
-                            alpha: 0.18,
+                          backgroundColor: buttonSecondaryBackground,
+                          foregroundColor: buttonSecondaryForeground,
+                          side: BorderSide(
+                            color: buttonSecondary.withValues(
+                              alpha: useMonochrome ? 0.28 : 0.38,
+                            ),
+                            width: 1.6,
                           ),
-                          foregroundColor: buttonSecondary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -9833,7 +10592,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         icon: Icon(
                           Icons.smart_toy_outlined,
                           size: 18,
-                          color: buttonSecondary,
+                          color: buttonSecondaryForeground,
                         ),
                         label: Text('New Opponent'),
                       ),

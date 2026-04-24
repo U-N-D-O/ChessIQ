@@ -211,7 +211,7 @@ void main() {
       );
 
       expect(assessment.quality, MoveQuality.solid);
-      expect(assessment.explanation, contains('Low-confidence'));
+      expect(assessment.explanation, MoveQuality.solid.explanation);
     });
   });
 

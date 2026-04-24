@@ -10,6 +10,197 @@ enum AppSection { menu, analysis, gambitQuiz, botSetup, puzzleAcademy }
 
 enum OpeningMode { off, yellowGlow, blueGlow, violetGlow }
 
+enum EngineRequestRole {
+  liveAnalysis,
+  botSearch,
+  moveGrading,
+  backgroundConfirmation;
+
+  int get priority {
+    switch (this) {
+      case EngineRequestRole.botSearch:
+        return 300;
+      case EngineRequestRole.moveGrading:
+        return 200;
+      case EngineRequestRole.liveAnalysis:
+        return 100;
+      case EngineRequestRole.backgroundConfirmation:
+        return 0;
+    }
+  }
+}
+
+class EngineRequestSpec {
+  const EngineRequestSpec({
+    required this.requestId,
+    required this.role,
+    required this.fen,
+    required this.whiteToMove,
+    required this.multiPv,
+    required this.timeout,
+    this.depth,
+    this.moveTime,
+    this.preCommands = const <String>[],
+    this.cleanupCommands = const <String>[],
+    this.searchMoves = const <String>[],
+  }) : assert(depth != null || moveTime != null);
+
+  final String requestId;
+  final EngineRequestRole role;
+  final String fen;
+  final bool whiteToMove;
+  final int multiPv;
+  final Duration timeout;
+  final int? depth;
+  final Duration? moveTime;
+  final List<String> preCommands;
+  final List<String> cleanupCommands;
+  final List<String> searchMoves;
+
+  String get fenHash => fen.hashCode.toUnsigned(32).toRadixString(16);
+
+  String get goCommand {
+    final parts = <String>['go'];
+    if (moveTime != null) {
+      parts.addAll(<String>['movetime', '${moveTime!.inMilliseconds}']);
+    } else {
+      parts.addAll(<String>['depth', '${depth ?? 1}']);
+    }
+    if (searchMoves.isNotEmpty) {
+      parts.add('searchmoves');
+      parts.addAll(searchMoves);
+    }
+    return parts.join(' ');
+  }
+
+  bool matchesFen(String candidateFen) => fen == candidateFen;
+}
+
+class EvalSnapshot {
+  const EvalSnapshot({
+    required this.requestId,
+    required this.role,
+    required this.fen,
+    required this.whiteToMove,
+    required this.depth,
+    required this.multiPv,
+    required this.evalCpWhite,
+    required this.timestamp,
+  });
+
+  factory EvalSnapshot.fromRelativeScore({
+    required String requestId,
+    required EngineRequestRole role,
+    required String fen,
+    required bool whiteToMove,
+    required int depth,
+    required int multiPv,
+    required int relativeEvalCp,
+    required DateTime timestamp,
+  }) {
+    return EvalSnapshot(
+      requestId: requestId,
+      role: role,
+      fen: fen,
+      whiteToMove: whiteToMove,
+      depth: depth,
+      multiPv: multiPv,
+      evalCpWhite: whiteToMove ? relativeEvalCp : -relativeEvalCp,
+      timestamp: timestamp,
+    );
+  }
+
+  final String requestId;
+  final EngineRequestRole role;
+  final String fen;
+  final bool whiteToMove;
+  final int depth;
+  final int multiPv;
+  final int evalCpWhite;
+  final DateTime timestamp;
+
+  double get evalPawnsWhite => evalCpWhite / 100.0;
+
+  int centipawnsForPov(bool whitePov) => whitePov ? evalCpWhite : -evalCpWhite;
+
+  double pawnsForPov(bool whitePov) => centipawnsForPov(whitePov) / 100.0;
+
+  bool matchesFen(String candidateFen) => fen == candidateFen;
+}
+
+class EngineSearchUpdate {
+  const EngineSearchUpdate({
+    required this.request,
+    required this.line,
+    required this.snapshot,
+    required this.timestamp,
+  });
+
+  final EngineRequestSpec request;
+  final EngineLine line;
+  final EvalSnapshot snapshot;
+  final DateTime timestamp;
+
+  bool get isPrimaryVariation => line.multiPv == 1;
+}
+
+class EngineSearchResult {
+  const EngineSearchResult({
+    required this.request,
+    required this.lines,
+    required this.bestMove,
+    required this.queuedAt,
+    required this.completedAt,
+    this.startedAt,
+    this.firstInfoAt,
+    this.timedOut = false,
+    this.cancelled = false,
+    this.cancelReason,
+    this.failureReason,
+  });
+
+  final EngineRequestSpec request;
+  final List<EngineLine> lines;
+  final String? bestMove;
+  final DateTime queuedAt;
+  final DateTime? startedAt;
+  final DateTime? firstInfoAt;
+  final DateTime completedAt;
+  final bool timedOut;
+  final bool cancelled;
+  final String? cancelReason;
+  final String? failureReason;
+
+  bool get succeeded => !timedOut && !cancelled && failureReason == null;
+}
+
+enum EngineTimelineEventType {
+  queued,
+  started,
+  firstInfo,
+  completed,
+  cancelled,
+  timedOut,
+  staleOutputRejected,
+  failed,
+  backendExited,
+  backendRestarted,
+}
+
+class EngineTimelineEvent {
+  const EngineTimelineEvent({
+    required this.type,
+    required this.timestamp,
+    this.request,
+    this.detail,
+  });
+
+  final EngineTimelineEventType type;
+  final DateTime timestamp;
+  final EngineRequestSpec? request;
+  final String? detail;
+}
+
 class MoveRecord {
   static const Object _sentinel = Object();
 

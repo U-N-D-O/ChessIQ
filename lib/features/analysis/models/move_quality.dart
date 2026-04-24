@@ -465,13 +465,6 @@ String _equivalenceExplanation(MoveQualityClassificationContext context) {
   return 'Acceptable move in an equal position.';
 }
 
-String _lowConfidenceExplanation(MoveQualityClassificationContext context) {
-  if (context.insideOpeningExemption) {
-    return 'Low-confidence opening assessment. The engine did not gather enough alternatives, so this move is treated as feedback-only.';
-  }
-  return 'Low-confidence assessment. The engine did not gather enough alternatives to justify a harsher label.';
-}
-
 MoveQualityAssessment classifyMoveQuality(
   MoveQualityClassificationContext context,
 ) {
@@ -515,7 +508,6 @@ MoveQualityAssessment classifyMoveQuality(
     return _assessment(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.solid,
       context,
-      explanation: _lowConfidenceExplanation(context),
     );
   }
 

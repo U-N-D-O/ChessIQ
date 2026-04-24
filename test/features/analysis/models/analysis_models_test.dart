@@ -3,6 +3,41 @@ import 'package:chessiq/features/analysis/models/move_quality.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('Engine request models', () {
+    test('normalizes snapshot scores to white-side centipawns', () {
+      final snapshot = EvalSnapshot.fromRelativeScore(
+        requestId: 'analysis-1',
+        role: EngineRequestRole.liveAnalysis,
+        fen: 'fen white',
+        whiteToMove: false,
+        depth: 18,
+        multiPv: 1,
+        relativeEvalCp: 63,
+        timestamp: DateTime.utc(2026, 4, 23),
+      );
+
+      expect(snapshot.evalCpWhite, -63);
+      expect(snapshot.evalPawnsWhite, closeTo(-0.63, 1e-9));
+      expect(snapshot.centipawnsForPov(false), 63);
+      expect(snapshot.pawnsForPov(false), closeTo(0.63, 1e-9));
+    });
+
+    test('builds go command with searchmoves for explicit requests', () {
+      const request = EngineRequestSpec(
+        requestId: 'confirm-1',
+        role: EngineRequestRole.backgroundConfirmation,
+        fen: 'fen black',
+        whiteToMove: true,
+        multiPv: 2,
+        depth: 12,
+        timeout: Duration(milliseconds: 900),
+        searchMoves: <String>['e2e4', 'd2d4'],
+      );
+
+      expect(request.goCommand, 'go depth 12 searchmoves e2e4 d2d4');
+    });
+  });
+
   group('MoveRecord session grading metadata', () {
     test('copyWith preserves and updates runtime-only grading fields', () {
       final baseline = MoveRecord(
