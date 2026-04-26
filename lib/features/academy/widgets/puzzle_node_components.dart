@@ -5,11 +5,13 @@ class _PerspectiveEvalBar extends StatelessWidget {
     required this.evalFromPlayerPerspective,
     required this.playerIsBlack,
     required this.monochrome,
+    this.axis = Axis.vertical,
   });
 
   final double evalFromPlayerPerspective;
   final bool playerIsBlack;
   final bool monochrome;
+  final Axis axis;
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +37,19 @@ class _PerspectiveEvalBar extends StatelessWidget {
     final topFlex = max(1, (opponentShare * 100).round());
     final bottomFlex = max(1, (playerShare * 100).round());
 
+    final segments = axis == Axis.vertical
+        ? <Widget>[
+            Expanded(flex: topFlex, child: Container(color: opponentFill)),
+            Expanded(flex: bottomFlex, child: Container(color: playerFill)),
+          ]
+        : <Widget>[
+            Expanded(flex: bottomFlex, child: Container(color: playerFill)),
+            Expanded(flex: topFlex, child: Container(color: opponentFill)),
+          ];
+
     return Container(
-      width: 18,
+      width: axis == Axis.vertical ? 18 : null,
+      height: axis == Axis.horizontal ? 14 : null,
       decoration: puzzleAcademyPanelDecoration(
         palette: palette,
         accent: monochrome ? palette.text : palette.cyan,
@@ -47,17 +60,9 @@ class _PerspectiveEvalBar extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(999),
-        child: Column(
-          children: [
-            Expanded(
-              flex: topFlex,
-              child: Container(color: opponentFill),
-            ),
-            Expanded(
-              flex: bottomFlex,
-              child: Container(color: playerFill),
-            ),
-          ],
+        child: Flex(
+          direction: axis,
+          children: segments,
         ),
       ),
     );
@@ -144,11 +149,13 @@ class _InfoLine extends StatelessWidget {
     required this.label,
     required this.value,
     required this.monochrome,
+    this.compact = false,
   });
 
   final String label;
   final String value;
   final bool monochrome;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -158,16 +165,16 @@ class _InfoLine extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(bottom: compact ? 6 : 8),
       child: Row(
         children: [
           SizedBox(
-            width: 96,
+            width: compact ? 74 : 96,
             child: Text(
               label,
               style: puzzleAcademyHudStyle(
                 palette: palette,
-                size: 10.6,
+                size: compact ? 9.8 : 10.6,
                 weight: FontWeight.w700,
                 letterSpacing: 0.85,
                 height: 1.0,
@@ -180,7 +187,7 @@ class _InfoLine extends StatelessWidget {
               value,
               style: puzzleAcademyHudStyle(
                 palette: palette,
-                size: 11.2,
+                size: compact ? 10.4 : 11.2,
                 weight: FontWeight.w700,
                 color: palette.text,
               ),

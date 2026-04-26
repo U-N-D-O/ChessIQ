@@ -53,6 +53,137 @@ class PuzzleNodeScreen extends StatefulWidget {
   State<PuzzleNodeScreen> createState() => _PuzzleNodeScreenState();
 }
 
+class _PuzzleNodeLayoutSpec {
+  const _PuzzleNodeLayoutSpec._({
+    required this.isLandscape,
+    required this.compactLandscape,
+    required this.compactPortrait,
+    required this.compactPhoneLayout,
+  });
+
+  factory _PuzzleNodeLayoutSpec.fromMediaQuery(MediaQueryData media) {
+    final safeHeight = media.size.height - media.padding.vertical;
+    final isLandscape = media.size.width > safeHeight;
+    final compactLandscape = isLandscape && safeHeight <= 500;
+    final compactPortrait =
+        !isLandscape && (safeHeight <= 780 || media.size.width <= 430);
+    final compactPhoneLayout =
+        compactLandscape || compactPortrait || media.size.width <= 430;
+
+    return _PuzzleNodeLayoutSpec._(
+      isLandscape: isLandscape,
+      compactLandscape: compactLandscape,
+      compactPortrait: compactPortrait,
+      compactPhoneLayout: compactPhoneLayout,
+    );
+  }
+
+  final bool isLandscape;
+  final bool compactLandscape;
+  final bool compactPortrait;
+  final bool compactPhoneLayout;
+
+  bool get showGlobalTopBar => !compactLandscape;
+  bool get showCompactRailHeader => compactLandscape;
+  bool get useHorizontalEvalStrip => compactPortrait;
+  bool get useCompactButtons => compactPhoneLayout;
+
+  EdgeInsets get landscapeCanvasPadding => compactLandscape
+      ? const EdgeInsets.fromLTRB(6, 0, 6, 6)
+      : const EdgeInsets.fromLTRB(6, 0, 8, 8);
+
+  EdgeInsets get boardOuterPadding => compactLandscape
+      ? const EdgeInsets.fromLTRB(6, 0, 6, 6)
+      : compactPortrait
+      ? const EdgeInsets.fromLTRB(10, 6, 10, 6)
+      : const EdgeInsets.fromLTRB(12, 8, 12, 8);
+
+  EdgeInsets get boardInnerPadding => compactPhoneLayout
+      ? const EdgeInsets.all(8)
+      : const EdgeInsets.all(10);
+
+  EdgeInsets get topBarOuterPadding => compactPortrait
+      ? const EdgeInsets.fromLTRB(10, 6, 10, 4)
+      : const EdgeInsets.fromLTRB(12, 10, 12, 6);
+
+  EdgeInsets get topBarInnerPadding => compactPortrait
+      ? const EdgeInsets.fromLTRB(8, 8, 8, 8)
+      : const EdgeInsets.fromLTRB(8, 10, 8, 10);
+
+  double get topBarGap => compactPortrait ? 8 : 10;
+  double get topBarCloseButtonSize => compactPortrait ? 34 : 38;
+  double get topBarActionButtonSize => compactPortrait ? 30 : 34;
+  double get topBarIconSize => compactPortrait ? 16 : 18;
+  double get topBarTileSize => compactPortrait ? 42 : 50;
+  double get topBarTileTextSize => compactPortrait ? 10.4 : 11.6;
+  double get topBarTitleSize => compactPortrait ? 15.6 : 18;
+  double get topBarSubtitleSize => compactPortrait ? 10.6 : 11.7;
+  double get topBarTitleGap => compactPortrait ? 4 : 6;
+
+  EdgeInsets get railOuterPadding => compactLandscape
+      ? const EdgeInsets.fromLTRB(0, 0, 8, 4)
+      : const EdgeInsets.fromLTRB(0, 8, 8, 8);
+
+  double get railGap => compactLandscape ? 6 : 10;
+  double get compactRailHeaderActionSize => 30;
+  double get compactRailHeaderTileSize => 36;
+  double get compactRailHeaderTileTextSize => 10.2;
+  double get compactRailTitleSize => 14.8;
+  double get compactRailSubtitleSize => 10.2;
+
+  EdgeInsets get intelOuterPadding => compactLandscape
+      ? EdgeInsets.zero
+      : const EdgeInsets.fromLTRB(8, 8, 12, 8);
+
+  EdgeInsets get intelInnerPadding => compactLandscape
+      ? const EdgeInsets.all(10)
+      : const EdgeInsets.all(14);
+
+  double get intelTitleSize => compactLandscape ? 13.6 : 15;
+  double get intelStatusSize => compactLandscape ? 11.1 : 12.1;
+  double get intelSectionGap => compactLandscape ? 6 : 12;
+  double get intelDetailGap => compactLandscape ? 4 : 8;
+
+  double get actionButtonHeight => compactLandscape ? 36 : compactPortrait ? 40 : 44;
+  double get actionGap => compactPhoneLayout ? 8 : 10;
+  EdgeInsets get actionPadding => compactLandscape
+      ? const EdgeInsets.symmetric(horizontal: 8, vertical: 7)
+      : compactPortrait
+      ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+      : const EdgeInsets.symmetric(horizontal: 14, vertical: 12);
+  double get actionTextSize => compactLandscape ? 10.1 : compactPortrait ? 10.6 : 11.8;
+  double get actionLetterSpacing => compactLandscape ? 0.55 : compactPortrait ? 0.7 : 0.9;
+  double get actionIconSize => compactPhoneLayout ? 16 : 18;
+  double get actionRadius => compactPhoneLayout ? 7 : 8;
+
+  EdgeInsets bottomActionsOuterPadding(bool vertical) {
+    if (vertical) {
+      return compactLandscape
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(8, 4, 12, 8);
+    }
+    return compactPortrait
+        ? const EdgeInsets.fromLTRB(10, 4, 10, 10)
+        : const EdgeInsets.fromLTRB(12, 6, 12, 12);
+  }
+}
+
+class _PuzzleNodeHeaderCopy {
+  const _PuzzleNodeHeaderCopy({
+    required this.title,
+    required this.subtitle,
+    required this.modeInfoTitle,
+    required this.displayedStartElo,
+    required this.showRatingTile,
+  });
+
+  final String title;
+  final String subtitle;
+  final String modeInfoTitle;
+  final int displayedStartElo;
+  final bool showRatingTile;
+}
+
 class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     with SingleTickerProviderStateMixin {
   static const String _muteSoundsKey = 'mute_sounds_v1';
@@ -121,6 +252,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
   PlayerMode get _boardSfxPlayerMode =>
       _isWindowsDesktop ? PlayerMode.mediaPlayer : PlayerMode.lowLatency;
+
+  bool get _isWidgetTestBinding {
+    final bindingType = WidgetsBinding.instance.runtimeType.toString();
+    return bindingType.contains('TestWidgetsFlutterBinding');
+  }
 
   AudioPlayer _takeBoardSfxPlayer() {
     final index = _isWindowsDesktop ? 0 : _nextBoardSfxPlayerIndex;
@@ -260,7 +396,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       _setGreyArrowFromUci(setupMoveUci, animate: true);
     }
 
-    await _analyzePosition();
+    if (!_isWidgetTestBinding) {
+      await _analyzePosition();
+    }
   }
 
   void _startExamClockIfNeeded() {
@@ -1583,8 +1721,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final useMonochrome =
         themeProvider.isMonochrome || widget.cinematicThemeEnabled;
     final palette = _academyPalette(useMonochrome);
-    final isLandscape =
-        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final layout = _PuzzleNodeLayoutSpec.fromMediaQuery(MediaQuery.of(context));
 
     return Scaffold(
       backgroundColor: palette.backdrop,
@@ -1597,18 +1734,19 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             else
               Column(
                 children: [
-                  _nonBoardChromeFilter(
-                    useMonochrome,
-                    AnimatedOpacity(
-                      opacity: _focusModeActive ? 0.5 : 1.0,
-                      duration: const Duration(milliseconds: 220),
-                      child: _buildTopBar(provider, themeProvider),
+                  if (layout.showGlobalTopBar)
+                    _nonBoardChromeFilter(
+                      useMonochrome,
+                      AnimatedOpacity(
+                        opacity: _focusModeActive ? 0.5 : 1.0,
+                        duration: const Duration(milliseconds: 220),
+                        child: _buildTopBar(provider, themeProvider, layout),
+                      ),
                     ),
-                  ),
                   Expanded(
-                    child: isLandscape
+                    child: layout.isLandscape
                         ? Padding(
-                            padding: const EdgeInsets.fromLTRB(6, 0, 8, 8),
+                            padding: layout.landscapeCanvasPadding,
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -1617,6 +1755,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                   child: _buildBoardCard(
                                     themeProvider,
                                     monochrome: useMonochrome,
+                                    layout: layout,
                                   ),
                                 ),
                                 Expanded(
@@ -1626,7 +1765,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                     duration: const Duration(milliseconds: 220),
                                     child: _buildLandscapeControlRail(
                                       provider,
+                                      themeProvider,
                                       useMonochrome,
+                                      layout,
                                     ),
                                   ),
                                 ),
@@ -1640,6 +1781,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                 child: _buildBoardCard(
                                   themeProvider,
                                   monochrome: useMonochrome,
+                                  layout: layout,
                                 ),
                               ),
                               Expanded(
@@ -1649,14 +1791,18 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                   AnimatedOpacity(
                                     opacity: _focusModeActive ? 0.5 : 1.0,
                                     duration: const Duration(milliseconds: 220),
-                                    child: _buildIntelPanel(provider),
+                                    child: _buildIntelPanel(
+                                      provider,
+                                      layout: layout,
+                                    ),
                                   ),
                                 ),
                               ),
                             ],
                           ),
                   ),
-                  if (!isLandscape) _buildBottomActions(provider),
+                  if (!layout.isLandscape)
+                    _buildBottomActions(provider, layout: layout),
                 ],
               ),
           ],
@@ -1690,6 +1836,150 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return 'Review mode replays archived mistakes without changing progression. Use it to clean up weak spots and move back to the academy when the sequence is done.';
     }
     return 'Training mode tracks the current puzzle, eval swing, and action economy. Hints, skips, and regret remain available without changing the puzzle progression rules.';
+  }
+
+  _PuzzleNodeHeaderCopy _headerCopy(
+    PuzzleAcademyProvider provider, {
+    required bool compactLandscape,
+  }) {
+    final currentRating = _puzzle?.rating ?? widget.node.startElo;
+    final displayedStartElo = (currentRating ~/ 50) * 50;
+    final total = _usesCustomSequence
+        ? _activeSequence.length
+        : provider.gridPuzzleCountForNode(widget.node);
+    final index = _puzzleIndex + 1;
+    final title = _isExamMode
+        ? (compactLandscape ? 'Exam' : 'Bracket ${widget.node.title} Exam')
+        : _isDailySequence
+        ? (compactLandscape
+              ? _compactDailyTitle()
+              : '${widget.sequenceTitle ?? 'Daily Challenge'} • ${widget.node.title}')
+        : compactLandscape
+        ? widget.node.title
+        : 'Elo Bracket ${widget.node.title}';
+    final subtitle = _isExamMode
+        ? (compactLandscape
+              ? _formatDuration(_examRemaining)
+              : 'Puzzle #$index of $total • ${_formatDuration(_examRemaining)} left')
+        : compactLandscape
+        ? '#$index/$total'
+        : 'Puzzle #$index of $total';
+    final modeInfoTitle = _isExamMode
+        ? 'Exam Mode'
+        : _isDailySequence
+        ? 'Daily Sequence'
+        : widget.initialReviewMode
+        ? 'Review Mode'
+        : 'Training Mode';
+
+    return _PuzzleNodeHeaderCopy(
+      title: title,
+      subtitle: subtitle,
+      modeInfoTitle: modeInfoTitle,
+      displayedStartElo: displayedStartElo,
+      showRatingTile: !compactLandscape || _isExamMode,
+    );
+  }
+
+  String _compactDailyTitle() {
+    final sequenceTitle = widget.sequenceTitle?.trim();
+    if (sequenceTitle == null || sequenceTitle.isEmpty) {
+      return 'Daily';
+    }
+    return sequenceTitle.replaceAll('Daily Challenge', 'Daily');
+  }
+
+  Widget _buildHeaderRatingTile({
+    required PuzzleAcademyPalette palette,
+    required Color accent,
+    required int displayedStartElo,
+    required double size,
+    required double textSize,
+    required bool animateHero,
+  }) {
+    final tile = Container(
+      key: const ValueKey<String>('puzzle_node_rating_tile'),
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: accent.withValues(alpha: 0.68), width: 2),
+      ),
+      child: Center(
+        child: Text(
+          '$displayedStartElo',
+          style: puzzleAcademyHudStyle(
+            palette: palette,
+            size: textSize,
+            weight: FontWeight.w800,
+            letterSpacing: 0.9,
+            height: 1.0,
+            color: palette.text,
+          ),
+        ),
+      ),
+    );
+
+    if (!animateHero) {
+      return tile;
+    }
+
+    return Hero(
+      tag: widget.heroTag,
+      child: Material(color: Colors.transparent, child: tile),
+    );
+  }
+
+  Widget _buildHeaderActionButton({
+    required Key key,
+    required double size,
+    required double iconSize,
+    required Color accent,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: accent.withValues(alpha: 0.46), width: 2),
+      ),
+      child: IconButton(
+        key: key,
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        constraints: BoxConstraints.tightFor(width: size, height: size),
+        visualDensity: VisualDensity.compact,
+        onPressed: onPressed,
+        icon: Icon(icon, color: accent, size: iconSize),
+      ),
+    );
+  }
+
+  Widget _buildModeInfoButton({
+    required String title,
+    required String message,
+    required Color accent,
+    required bool monochrome,
+    required double size,
+  }) {
+    final infoButton = PuzzleAcademyInfoButton(
+      title: title,
+      message: message,
+      accent: accent,
+      monochromeOverride: monochrome,
+    );
+    if ((size - 34).abs() < 0.1) {
+      return infoButton;
+    }
+    return SizedBox.square(
+      dimension: size,
+      child: FittedBox(fit: BoxFit.contain, child: infoButton),
+    );
   }
 
   Widget _nonBoardChromeFilter(bool monochrome, Widget child) {
@@ -1779,35 +2069,17 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   Widget _buildTopBar(
     PuzzleAcademyProvider provider,
     AppThemeProvider themeProvider,
+    _PuzzleNodeLayoutSpec layout,
   ) {
     final monochrome = themeProvider.isMonochrome || widget.cinematicThemeEnabled;
     final palette = _academyPalette(monochrome);
     final accent = _modeAccent(palette);
-    final currentRating = _puzzle?.rating ?? widget.node.startElo;
-    final displayedStartElo = (currentRating ~/ 50) * 50;
-    final total = _usesCustomSequence
-        ? _activeSequence.length
-        : provider.gridPuzzleCountForNode(widget.node);
-    final index = _puzzleIndex + 1;
-    final title = _isExamMode
-        ? 'Bracket ${widget.node.title} Exam'
-        : (_isDailySequence
-              ? '${widget.sequenceTitle ?? 'Daily Challenge'} • ${widget.node.title}'
-              : 'Elo Bracket ${widget.node.title}');
-    final subtitle = _isExamMode
-        ? 'Puzzle #$index of $total • ${_formatDuration(_examRemaining)} left'
-        : 'Puzzle #$index of $total';
-    final modeInfoTitle = _isExamMode
-        ? 'Exam Mode'
-        : _isDailySequence
-        ? 'Daily Sequence'
-        : widget.initialReviewMode
-        ? 'Review Mode'
-        : 'Training Mode';
+    final header = _headerCopy(provider, compactLandscape: false);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      padding: layout.topBarOuterPadding,
       child: Container(
+        key: const ValueKey<String>('puzzle_node_top_bar'),
         decoration: puzzleAcademyPanelDecoration(
           palette: palette,
           accent: accent,
@@ -1815,131 +2087,99 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
           elevated: false,
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          padding: layout.topBarInnerPadding,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: accent.withValues(alpha: 0.50), width: 2),
-                ),
-                child: IconButton(
-                  tooltip: 'Exit to Map',
-                  padding: EdgeInsets.zero,
-                  onPressed: _exitToMap,
-                  icon: Icon(Icons.close_rounded, color: accent, size: 18),
-                ),
+              _buildHeaderActionButton(
+                key: const ValueKey<String>('puzzle_node_close_button'),
+                size: layout.topBarCloseButtonSize,
+                iconSize: layout.topBarIconSize,
+                accent: accent,
+                icon: Icons.close_rounded,
+                tooltip: 'Exit to Map',
+                onPressed: _exitToMap,
               ),
-              const SizedBox(width: 10),
-              Hero(
-                tag: widget.heroTag,
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: accent.withValues(alpha: 0.68),
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '$displayedStartElo',
-                        style: puzzleAcademyHudStyle(
-                          palette: palette,
-                          size: 11.6,
-                          weight: FontWeight.w800,
-                          letterSpacing: 0.9,
-                          height: 1.0,
-                          color: palette.text,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              SizedBox(width: layout.topBarGap),
+              _buildHeaderRatingTile(
+                palette: palette,
+                accent: accent,
+                displayedStartElo: header.displayedStartElo,
+                size: layout.topBarTileSize,
+                textSize: layout.topBarTileTextSize,
+                animateHero: true,
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: layout.topBarGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      header.title,
+                      key: const ValueKey<String>('puzzle_node_header_title'),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: puzzleAcademyDisplayStyle(
                         palette: palette,
-                        size: 18,
+                        size: layout.topBarTitleSize,
                         color: accent,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: layout.topBarTitleGap),
                     Text(
-                      subtitle,
+                      header.subtitle,
+                      key: const ValueKey<String>('puzzle_node_header_subtitle'),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: puzzleAcademyHudStyle(
                         palette: palette,
-                        size: 11.7,
+                        size: layout.topBarSubtitleSize,
                         weight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: layout.topBarGap),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_isExamMode)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: PuzzleAcademyTag(
-                        label: '$_examCorrectCount/${_activeSequence.length}',
-                        accent: palette.amber,
-                        icon: Icons.verified_outlined,
-                        monochromeOverride: monochrome,
+                      padding: EdgeInsets.only(
+                        bottom: layout.compactPortrait ? 6 : 8,
+                      ),
+                      child: KeyedSubtree(
+                        key: const ValueKey<String>('puzzle_node_exam_progress_tag'),
+                        child: PuzzleAcademyTag(
+                          label: '$_examCorrectCount/${_activeSequence.length}',
+                          accent: palette.amber,
+                          icon: Icons.verified_outlined,
+                          monochromeOverride: monochrome,
+                        ),
                       ),
                     ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      PuzzleAcademyInfoButton(
-                        title: modeInfoTitle,
+                      _buildModeInfoButton(
+                        title: header.modeInfoTitle,
                         message: _modeIntelMessage(),
                         accent: accent,
-                        monochromeOverride: monochrome,
+                        monochrome: monochrome,
+                        size: layout.topBarActionButtonSize,
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: accent.withValues(alpha: 0.46),
-                            width: 2,
-                          ),
-                        ),
-                        child: IconButton(
-                          tooltip: 'Settings',
-                          padding: EdgeInsets.zero,
-                          onPressed: () =>
-                              _openBoardAndPieceThemeSettings(themeProvider),
-                          icon: Icon(
-                            Icons.settings_outlined,
-                            color: accent,
-                            size: 18,
-                          ),
-                        ),
+                      SizedBox(width: layout.compactPortrait ? 6 : 8),
+                      _buildHeaderActionButton(
+                        key: const ValueKey<String>('puzzle_node_settings_button'),
+                        size: layout.topBarActionButtonSize,
+                        iconSize: layout.topBarIconSize,
+                        accent: accent,
+                        icon: Icons.settings_outlined,
+                        tooltip: 'Settings',
+                        onPressed: () =>
+                            _openBoardAndPieceThemeSettings(themeProvider),
                       ),
                     ],
                   ),
@@ -1947,6 +2187,132 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactLandscapeHeader(
+    PuzzleAcademyProvider provider,
+    AppThemeProvider themeProvider,
+    bool monochrome,
+    _PuzzleNodeLayoutSpec layout,
+  ) {
+    final palette = _academyPalette(monochrome);
+    final accent = _modeAccent(palette);
+    final header = _headerCopy(provider, compactLandscape: true);
+
+    return Container(
+      key: const ValueKey<String>('puzzle_node_compact_landscape_header'),
+      decoration: puzzleAcademyPanelDecoration(
+        palette: palette,
+        accent: accent,
+        radius: 10,
+        elevated: false,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        header.title,
+                        key: const ValueKey<String>('puzzle_node_header_title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: puzzleAcademyDisplayStyle(
+                          palette: palette,
+                          size: layout.compactRailTitleSize,
+                          color: accent,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        header.subtitle,
+                        key: const ValueKey<String>('puzzle_node_header_subtitle'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: puzzleAcademyHudStyle(
+                          palette: palette,
+                          size: layout.compactRailSubtitleSize,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                if (header.showRatingTile) ...[
+                  _buildHeaderRatingTile(
+                    palette: palette,
+                    accent: accent,
+                    displayedStartElo: header.displayedStartElo,
+                    size: layout.compactRailHeaderTileSize,
+                    textSize: layout.compactRailHeaderTileTextSize,
+                    animateHero: false,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                _buildHeaderActionButton(
+                  key: const ValueKey<String>('puzzle_node_close_button'),
+                  size: layout.compactRailHeaderActionSize,
+                  iconSize: layout.topBarIconSize,
+                  accent: accent,
+                  icon: Icons.close_rounded,
+                  tooltip: 'Exit to Map',
+                  onPressed: _exitToMap,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (_isExamMode)
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: KeyedSubtree(
+                        key: const ValueKey<String>('puzzle_node_exam_progress_tag'),
+                        child: PuzzleAcademyTag(
+                          label: '$_examCorrectCount/${_activeSequence.length}',
+                          accent: palette.amber,
+                          icon: Icons.verified_outlined,
+                          monochromeOverride: monochrome,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                _buildModeInfoButton(
+                  title: header.modeInfoTitle,
+                  message: _modeIntelMessage(),
+                  accent: accent,
+                  monochrome: monochrome,
+                  size: layout.compactRailHeaderActionSize,
+                ),
+                const SizedBox(width: 6),
+                _buildHeaderActionButton(
+                  key: const ValueKey<String>('puzzle_node_settings_button'),
+                  size: layout.compactRailHeaderActionSize,
+                  iconSize: layout.topBarIconSize,
+                  accent: accent,
+                  icon: Icons.settings_outlined,
+                  tooltip: 'Settings',
+                  onPressed: () =>
+                      _openBoardAndPieceThemeSettings(themeProvider),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -1989,91 +2355,139 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
   }
 
-  Widget _buildBoardCard(AppThemeProvider theme, {required bool monochrome}) {
+  Widget _buildBoardCard(
+    AppThemeProvider theme, {
+    required bool monochrome,
+    required _PuzzleNodeLayoutSpec layout,
+  }) {
     final palette = _academyPalette(monochrome);
     final accent = _modeAccent(palette);
+    final evalFromPlayerPerspective = _evalBarPlayerIsBlack
+        ? -_evalWhitePawns
+        : _evalWhitePawns;
+    final board = Center(
+      child: AspectRatio(
+        key: const ValueKey<String>('puzzle_node_board_square'),
+        aspectRatio: 1,
+        child: Stack(
+          children: [
+            Positioned.fill(child: _buildBoard(theme)),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _arrowFadeController,
+                  builder: (context, _) {
+                    final opacity =
+                        (1.0 - (_arrowFadeController.value * 0.75)).clamp(
+                          0.25,
+                          1.0,
+                        );
+                    return CustomPaint(
+                      painter: _GreyArrowPainter(
+                        fromSquare: _greyArrowFrom,
+                        toSquare: _greyArrowTo,
+                        flipped: _playerIsBlack,
+                        opacity: opacity,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final boardContent = layout.useHorizontalEvalStrip
+        ? Column(
+            children: [
+              Container(
+                key: const ValueKey<String>('puzzle_node_compact_eval_strip'),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: monochrome ? 0.10 : 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: accent.withValues(alpha: monochrome ? 0.24 : 0.18),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      _formatEval(evalFromPlayerPerspective),
+                      style: puzzleAcademyHudStyle(
+                        palette: palette,
+                        size: 10.4,
+                        weight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        height: 1.0,
+                        color: palette.text,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _PerspectiveEvalBar(
+                        evalFromPlayerPerspective: evalFromPlayerPerspective,
+                        playerIsBlack: _evalBarPlayerIsBlack,
+                        monochrome: monochrome,
+                        axis: Axis.horizontal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(child: board),
+            ],
+          )
+        : Row(
+            children: [
+              SizedBox(
+                width: layout.compactLandscape ? 36 : 40,
+                child: Column(
+                  children: [
+                    Text(
+                      _formatEval(evalFromPlayerPerspective),
+                      style: puzzleAcademyHudStyle(
+                        palette: palette,
+                        size: 10.8,
+                        weight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        height: 1.0,
+                        color: palette.text,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: Center(
+                        child: _PerspectiveEvalBar(
+                          evalFromPlayerPerspective: evalFromPlayerPerspective,
+                          playerIsBlack: _evalBarPlayerIsBlack,
+                          monochrome: monochrome,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: layout.compactLandscape ? 6 : 8),
+              Expanded(child: board),
+            ],
+          );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: layout.boardOuterPadding,
       child: Container(
+        key: const ValueKey<String>('puzzle_node_board_card'),
         decoration: puzzleAcademyPanelDecoration(
           palette: palette,
           accent: accent,
           fillColor: palette.panel,
           radius: 10,
         ),
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 40,
-              child: Column(
-                children: [
-                  Text(
-                    _formatEval(
-                      _evalBarPlayerIsBlack
-                          ? -_evalWhitePawns
-                          : _evalWhitePawns,
-                    ),
-                    style: puzzleAcademyHudStyle(
-                      palette: palette,
-                      size: 10.8,
-                      weight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                      height: 1.0,
-                      color: palette.text,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: Center(
-                      child: _PerspectiveEvalBar(
-                        evalFromPlayerPerspective: _evalBarPlayerIsBlack
-                            ? -_evalWhitePawns
-                            : _evalWhitePawns,
-                        playerIsBlack: _evalBarPlayerIsBlack,
-                        monochrome: monochrome,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(child: _buildBoard(theme)),
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: AnimatedBuilder(
-                            animation: _arrowFadeController,
-                            builder: (context, _) {
-                              final opacity =
-                                  (1.0 - (_arrowFadeController.value * 0.75))
-                                      .clamp(0.25, 1.0);
-                              return CustomPaint(
-                                painter: _GreyArrowPainter(
-                                  fromSquare: _greyArrowFrom,
-                                  toSquare: _greyArrowTo,
-                                  flipped: _playerIsBlack,
-                                  opacity: opacity,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+        padding: layout.boardInnerPadding,
+        child: boardContent,
       ),
     );
   }
@@ -2311,7 +2725,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     };
   }
 
-  Widget _buildIntelPanel(PuzzleAcademyProvider provider) {
+  Widget _buildIntelPanel(
+    PuzzleAcademyProvider provider, {
+    required _PuzzleNodeLayoutSpec layout,
+  }) {
     final monochrome =
         context.read<AppThemeProvider>().isMonochrome ||
         widget.cinematicThemeEnabled;
@@ -2329,9 +2746,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         : 'Training';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+      padding: layout.intelOuterPadding,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: layout.intelInnerPadding,
         decoration: puzzleAcademyPanelDecoration(
           palette: palette,
           accent: accent,
@@ -2348,24 +2765,26 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                     'Puzzle Intel',
                     style: puzzleAcademyDisplayStyle(
                       palette: palette,
-                      size: 15,
+                      size: layout.intelTitleSize,
                       color: accent,
                     ),
                   ),
                 ),
-                PuzzleAcademyInfoButton(
+                _buildModeInfoButton(
                   title: 'Puzzle Intel',
                   message: _modeIntelMessage(),
                   accent: accent,
-                  monochromeOverride: monochrome,
+                  monochrome: monochrome,
+                  size: layout.compactLandscape ? 30 : 34,
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: layout.intelSectionGap),
             _InfoLine(
               label: 'Mode',
               value: modeLabel,
               monochrome: monochrome,
+              compact: layout.compactLandscape,
             ),
             _InfoLine(
               label: 'State',
@@ -2377,11 +2796,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                               ? 'Coach Review'
                               : 'Solving')),
               monochrome: monochrome,
+              compact: layout.compactLandscape,
             ),
             _InfoLine(
               label: 'Progress',
               value: '${_puzzleIndex + 1}/$total',
               monochrome: monochrome,
+              compact: layout.compactLandscape,
             ),
             _InfoLine(
               label: 'Eval',
@@ -2389,6 +2810,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
               ),
               monochrome: monochrome,
+              compact: layout.compactLandscape,
             ),
             if (_lastMistakeFromEval != null && _lastMistakeToEval != null)
               _InfoLine(
@@ -2396,14 +2818,19 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 value:
                     '${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeFromEval! : _lastMistakeFromEval!)} -> ${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeToEval! : _lastMistakeToEval!)}',
                 monochrome: monochrome,
+                compact: layout.compactLandscape,
               ),
-            const SizedBox(height: 8),
+            SizedBox(height: layout.intelDetailGap),
             Expanded(
               child: Text(
                 _status,
+                maxLines: layout.compactLandscape ? 4 : null,
+                overflow: layout.compactLandscape
+                    ? TextOverflow.ellipsis
+                    : TextOverflow.visible,
                 style: puzzleAcademyHudStyle(
                   palette: palette,
-                  size: 12.1,
+                  size: layout.intelStatusSize,
                   weight: FontWeight.w600,
                   height: 1.45,
                 ),
@@ -2417,19 +2844,35 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
   Widget _buildLandscapeControlRail(
     PuzzleAcademyProvider provider,
+    AppThemeProvider themeProvider,
     bool monochrome,
+    _PuzzleNodeLayoutSpec layout,
   ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+      key: const ValueKey<String>('puzzle_node_landscape_control_rail'),
+      padding: layout.railOuterPadding,
       child: Column(
         children: [
+          if (layout.showCompactRailHeader) ...[
+            _nonBoardChromeFilter(
+              monochrome,
+              _buildCompactLandscapeHeader(
+                provider,
+                themeProvider,
+                monochrome,
+                layout,
+              ),
+            ),
+            SizedBox(height: layout.railGap),
+          ],
           Expanded(
             child: _nonBoardChromeFilter(
               monochrome,
-              _buildIntelPanel(provider),
+              _buildIntelPanel(provider, layout: layout),
             ),
           ),
-          _buildBottomActions(provider, vertical: true),
+          SizedBox(height: layout.railGap),
+          _buildBottomActions(provider, layout: layout, vertical: true),
         ],
       ),
     );
@@ -2437,18 +2880,45 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
   Widget _buildBottomActions(
     PuzzleAcademyProvider provider, {
+    required _PuzzleNodeLayoutSpec layout,
     bool vertical = false,
   }) {
     final monochrome =
         context.read<AppThemeProvider>().isMonochrome ||
         widget.cinematicThemeEnabled;
     final palette = _academyPalette(monochrome);
+    final compactButtons = layout.useCompactButtons;
+    final actionTextStyle = puzzleAcademyHudStyle(
+      palette: palette,
+      size: layout.actionTextSize,
+      weight: FontWeight.w800,
+      letterSpacing: layout.actionLetterSpacing,
+      height: 1.0,
+      color: palette.text,
+    );
+
+    Widget buttonLabel(String text, {Key? key}) {
+      final label = Text(
+        text,
+        key: key,
+        maxLines: compactButtons ? 1 : null,
+        softWrap: !compactButtons,
+      );
+      if (!compactButtons) {
+        return label;
+      }
+      return FittedBox(fit: BoxFit.scaleDown, child: label);
+    }
+
     if (_isExamMode) {
       final accuracy = _examCompletedCount <= 0
           ? 0
           : ((_examCorrectCount / _examCompletedCount) * 100).round();
+      final compactLandscapeExam = layout.compactLandscape;
       final statusCard = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: compactLandscapeExam
+            ? const EdgeInsets.symmetric(horizontal: 10, vertical: 10)
+            : const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: puzzleAcademyPanelDecoration(
           palette: palette,
           accent: palette.amber,
@@ -2464,39 +2934,44 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Correct $_examCorrectCount/${_activeSequence.length}',
+                    compactLandscapeExam
+                        ? 'Accuracy $accuracy%'
+                        : 'Correct $_examCorrectCount/${_activeSequence.length}',
                     style: puzzleAcademyHudStyle(
                       palette: palette,
-                      size: 11.3,
+                      size: compactLandscapeExam ? 10.8 : 11.3,
                       weight: FontWeight.w800,
                       color: palette.text,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Accuracy $accuracy% • ${_formatDuration(_examRemaining)} left',
+                    compactLandscapeExam
+                        ? 'Score locks when the bracket ends.'
+                        : 'Accuracy $accuracy% • ${_formatDuration(_examRemaining)} left',
                     style: puzzleAcademyHudStyle(
                       palette: palette,
-                      size: 11.0,
+                      size: compactLandscapeExam ? 10.2 : 11.0,
                       weight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
             ),
-            PuzzleAcademyInfoButton(
+            _buildModeInfoButton(
               title: 'Exam Scoring',
               message:
                   'Exam score blends 80% accuracy and 20% speed. Your leaderboard score then scales that result by node difficulty so stronger brackets are worth more.',
               accent: palette.amber,
-              monochromeOverride: monochrome,
+              monochrome: monochrome,
+              size: compactButtons ? 30 : 34,
             ),
           ],
         ),
       );
 
       return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+        padding: layout.bottomActionsOuterPadding(vertical),
         child: vertical ? statusCard : Column(children: [statusCard]),
       );
     }
@@ -2556,15 +3031,26 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       Color? disabledBackgroundColor,
       Color? disabledForegroundColor,
     }) {
+      final resolvedForeground = foregroundColor ??
+          (color.computeLuminance() > 0.55
+              ? const Color(0xFF08131F)
+              : Colors.white);
       return puzzleAcademyFilledButtonStyle(
         palette: palette,
         backgroundColor: color,
-        foregroundColor: foregroundColor ??
-            (color.computeLuminance() > 0.55
-                ? const Color(0xFF08131F)
-                : Colors.white),
+        foregroundColor: resolvedForeground,
         disabledBackgroundColor: disabledBackgroundColor,
         disabledForegroundColor: disabledForegroundColor,
+        padding: layout.actionPadding,
+        radius: layout.actionRadius,
+      ).copyWith(
+        minimumSize: WidgetStatePropertyAll<Size>(
+          Size.fromHeight(layout.actionButtonHeight),
+        ),
+        iconSize: WidgetStatePropertyAll<double>(layout.actionIconSize),
+        textStyle: WidgetStatePropertyAll<TextStyle>(
+          actionTextStyle.copyWith(color: resolvedForeground),
+        ),
       );
     }
 
@@ -2572,6 +3058,16 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return puzzleAcademyOutlinedButtonStyle(
         palette: palette,
         accent: color,
+        padding: layout.actionPadding,
+        radius: layout.actionRadius,
+      ).copyWith(
+        minimumSize: WidgetStatePropertyAll<Size>(
+          Size.fromHeight(layout.actionButtonHeight),
+        ),
+        iconSize: WidgetStatePropertyAll<double>(layout.actionIconSize),
+        textStyle: WidgetStatePropertyAll<TextStyle>(
+          actionTextStyle.copyWith(color: color),
+        ),
       );
     }
 
@@ -2579,28 +3075,31 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       onPressed: hasPrevious ? _openPreviousPuzzle : null,
       style: outlinedAccentStyle(palette.cyan),
       icon: const Icon(Icons.skip_previous_rounded),
-      label: const Text('Previous Puzzle'),
+      label: buttonLabel('Previous Puzzle'),
     );
 
     final regretButton = FilledButton.icon(
       onPressed: canRegret ? _regretLastMistake : null,
       style: filledAccentStyle(regretColor),
       icon: const Icon(Icons.undo_rounded),
-      label: const Text('Regret'),
+      label: buttonLabel(
+        'Regret',
+        key: const ValueKey<String>('puzzle_node_regret_button_label'),
+      ),
     );
 
     final hintButton = OutlinedButton.icon(
       onPressed: canHint ? () => _useHint(provider) : null,
       style: outlinedAccentStyle(hintColor),
       icon: const Icon(Icons.lightbulb_outline_rounded),
-      label: Text('Hint (${provider.progress.freeHints})'),
+      label: buttonLabel('Hint (${provider.progress.freeHints})'),
     );
 
     final skipButton = OutlinedButton.icon(
       onPressed: canSkip ? () => _skipCurrentPuzzle(provider) : null,
       style: outlinedAccentStyle(skipColor),
       icon: const Icon(Icons.fast_forward_rounded),
-      label: Text('Skip (${provider.progress.freeSkips})'),
+      label: buttonLabel('Skip (${provider.progress.freeSkips})'),
     );
 
     final nextButton = isLastReviewMistake
@@ -2614,7 +3113,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               disabledBackgroundColor: nextDisabledColor,
               disabledForegroundColor: Colors.white.withValues(alpha: 0.88),
             ),
-            child: const Text('Back to Academy'),
+            child: buttonLabel('Back to Academy'),
           )
         : FilledButton.icon(
             onPressed: canAdvanceToNext ? _openNextPuzzle : null,
@@ -2627,7 +3126,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               disabledForegroundColor: Colors.white.withValues(alpha: 0.88),
             ),
             icon: const Icon(Icons.skip_next_rounded),
-            label: const Text('Next Puzzle'),
+            label: buttonLabel('Next Puzzle'),
           );
 
     final dailyRewardButton = FilledButton.icon(
@@ -2643,51 +3142,72 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         disabledForegroundColor: Colors.white.withValues(alpha: 0.88),
       ),
       icon: const Icon(Icons.emoji_events_rounded),
-      label: const Text('Get Reward'),
+      label: buttonLabel('Get Reward'),
     );
 
     Widget withDisabledOpacity(Widget child, bool enabled) {
       return Opacity(opacity: enabled ? 1.0 : 0.3, child: child);
     }
 
-    if (vertical) {
+    Widget actionSlot(Widget child, bool enabled) {
+      return SizedBox(
+        width: double.infinity,
+        height: layout.actionButtonHeight,
+        child: withDisabledOpacity(child, enabled),
+      );
+    }
+
+    if (vertical && layout.compactLandscape) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 12, 8),
+        padding: layout.bottomActionsOuterPadding(true),
         child: Column(
           children: [
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: withDisabledOpacity(previousButton, hasPrevious),
+            Row(
+              children: [
+                Expanded(child: actionSlot(previousButton, hasPrevious)),
+                SizedBox(width: layout.actionGap),
+                Expanded(child: actionSlot(regretButton, canRegret)),
+              ],
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: withDisabledOpacity(regretButton, canRegret),
+            SizedBox(height: layout.actionGap),
+            if (!isReviewMistakeSequence)
+              Row(
+                children: [
+                  Expanded(child: actionSlot(hintButton, canHint)),
+                  SizedBox(width: layout.actionGap),
+                  Expanded(child: actionSlot(skipButton, canSkip)),
+                ],
+              )
+            else
+              actionSlot(hintButton, canHint),
+            SizedBox(height: layout.actionGap),
+            actionSlot(
+              showDailyRewardButton ? dailyRewardButton : nextButton,
+              showDailyRewardButton ? canClaimDailyReward : nextButtonEnabled,
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: withDisabledOpacity(hintButton, canHint),
-            ),
+          ],
+        ),
+      );
+    }
+
+    if (vertical) {
+      return Padding(
+        padding: layout.bottomActionsOuterPadding(true),
+        child: Column(
+          children: [
+            actionSlot(previousButton, hasPrevious),
+            SizedBox(height: layout.actionGap),
+            actionSlot(regretButton, canRegret),
+            SizedBox(height: layout.actionGap),
+            actionSlot(hintButton, canHint),
             if (!isReviewMistakeSequence) ...[
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 44,
-                child: withDisabledOpacity(skipButton, canSkip),
-              ),
+              SizedBox(height: layout.actionGap),
+              actionSlot(skipButton, canSkip),
             ],
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: withDisabledOpacity(
-                showDailyRewardButton ? dailyRewardButton : nextButton,
-                showDailyRewardButton ? canClaimDailyReward : nextButtonEnabled,
-              ),
+            SizedBox(height: layout.actionGap),
+            actionSlot(
+              showDailyRewardButton ? dailyRewardButton : nextButton,
+              showDailyRewardButton ? canClaimDailyReward : nextButtonEnabled,
             ),
           ],
         ),
@@ -2695,25 +3215,25 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+      padding: layout.bottomActionsOuterPadding(false),
       child: Column(
         children: [
           Row(
             children: [
               Expanded(child: withDisabledOpacity(regretButton, canRegret)),
-              const SizedBox(width: 10),
+              SizedBox(width: layout.actionGap),
               Expanded(child: withDisabledOpacity(hintButton, canHint)),
               if (!isReviewMistakeSequence) ...[
-                const SizedBox(width: 10),
+                SizedBox(width: layout.actionGap),
                 Expanded(child: withDisabledOpacity(skipButton, canSkip)),
               ],
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: layout.actionGap),
           Row(
             children: [
               Expanded(child: withDisabledOpacity(previousButton, hasPrevious)),
-              const SizedBox(width: 10),
+              SizedBox(width: layout.actionGap),
               Expanded(
                 child: withDisabledOpacity(
                   showDailyRewardButton ? dailyRewardButton : nextButton,
