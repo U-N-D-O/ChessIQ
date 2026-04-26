@@ -260,6 +260,16 @@ Future<void> _pumpOpeningsQuizSession(
   await tester.pump(const Duration(milliseconds: 1400));
 }
 
+Finder _assetImageFinder(String assetPath) {
+  return find.byWidgetPredicate((widget) {
+    if (widget is! Image) {
+      return false;
+    }
+    final provider = widget.image;
+    return provider is AssetImage && provider.assetName == assetPath;
+  });
+}
+
 Finder _liveQuizOptionFinder() {
   return find.byWidgetPredicate((widget) {
     final key = widget.key;
@@ -294,7 +304,10 @@ void _expectAllOptionsWithinViewport(
   }
 }
 
-void _expectCompactLineModeStatusLabelsHidden() {
+void _expectCompactPhoneOptionStatusLabelsHidden() {
+  expect(find.text('Tap to select'), findsNothing);
+  expect(find.text('Selected'), findsNothing);
+  expect(find.text('Tap to preview'), findsNothing);
   expect(find.text('Previewing'), findsNothing);
   expect(find.text('Correct answer'), findsNothing);
   expect(find.text('Your answer'), findsNothing);
@@ -414,6 +427,12 @@ void main() {
       await _pumpOpeningsQuizSelector(tester, size: const Size(390, 844));
 
       expect(find.text('OPENINGS QUIZ ROUTES'), findsNothing);
+      expect(find.text('OPENINGS QUIZ'), findsNothing);
+      expect(find.text('MODE / LEVEL / START'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('quiz_academy_header_title_block')),
+        findsNothing,
+      );
       expect(
         find.byKey(const ValueKey<String>('quiz_setup_mode_panel')),
         findsOneWidget,
@@ -452,6 +471,9 @@ void main() {
         find.textContaining('choose the correct opening name'),
         findsNothing,
       );
+      expect(find.text('Choose how this quiz asks the opening.'), findsNothing);
+      expect(_assetImageFinder('assets/academy/quiz_name.png'), findsOneWidget);
+      expect(_assetImageFinder('assets/academy/quiz_line.png'), findsOneWidget);
 
       await tester.dragUntilVisible(
         identifyCard,
@@ -540,6 +562,7 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(find.text('Choose how this quiz asks the opening.'), findsNothing);
 
       final modeRect = tester.getRect(
         find.byKey(const ValueKey<String>('quiz_setup_mode_panel')),
@@ -630,8 +653,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(find.textContaining('SELECTED '), findsNothing);
-      expect(find.text('Selected'), findsNothing);
+      _expectCompactPhoneOptionStatusLabelsHidden();
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
       expect(tester.takeException(), isNull);
@@ -675,6 +697,7 @@ void main() {
       expect(feedbackOverlayRect.left, closeTo(topPanelRect.left, 0.01));
       expect(feedbackOverlayRect.width, closeTo(topPanelRect.width, 0.01));
       expect(feedbackOverlayRect.height, closeTo(topPanelRect.height, 0.01));
+      _expectCompactPhoneOptionStatusLabelsHidden();
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
       expect(find.text('REVIEW LOG'), findsNothing);
@@ -756,6 +779,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
+      _expectCompactPhoneOptionStatusLabelsHidden();
+
       await tester.tap(
         find.byKey(const ValueKey<String>('quiz_session_primary_action')),
       );
@@ -774,6 +799,7 @@ void main() {
       expect(feedbackOverlayRect.left, closeTo(topPanelRect.left, 0.01));
       expect(feedbackOverlayRect.width, closeTo(topPanelRect.width, 0.01));
       expect(feedbackOverlayRect.height, closeTo(topPanelRect.height, 0.01));
+      _expectCompactPhoneOptionStatusLabelsHidden();
 
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
@@ -820,7 +846,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      _expectCompactLineModeStatusLabelsHidden();
+      _expectCompactPhoneOptionStatusLabelsHidden();
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
 
@@ -828,7 +854,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 180));
 
-      _expectCompactLineModeStatusLabelsHidden();
+      _expectCompactPhoneOptionStatusLabelsHidden();
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
       await tester.pump(const Duration(seconds: 3));
@@ -868,7 +894,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      _expectCompactLineModeStatusLabelsHidden();
+      _expectCompactPhoneOptionStatusLabelsHidden();
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
 
@@ -876,7 +902,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 180));
 
-      _expectCompactLineModeStatusLabelsHidden();
+      _expectCompactPhoneOptionStatusLabelsHidden();
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
       await tester.pump(const Duration(seconds: 3));

@@ -150,12 +150,6 @@ extension _QuizAcademySurface on _QuizScreen {
         : 'See the position, then choose the correct next move to continue the opening line. This mode keeps the standard 10-question quiz flow and uses the selected level rules.';
   }
 
-  String _academyQuizModeAnswerLabel(GambitQuizMode mode) {
-    return mode == GambitQuizMode.guessName
-        ? 'ANSWER WITH OPENING NAME'
-        : 'ANSWER WITH NEXT MOVE';
-  }
-
   String _academyQuizModeStartLabel(GambitQuizMode mode) {
     return mode == GambitQuizMode.guessName
         ? 'START NAME QUIZ'

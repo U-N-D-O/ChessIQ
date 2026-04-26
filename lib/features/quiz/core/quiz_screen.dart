@@ -198,6 +198,71 @@ class _QuizAcademyBackdropPainter extends CustomPainter {
   }
 }
 
+class _QuizAcademySetupGlowPainter extends CustomPainter {
+  const _QuizAcademySetupGlowPainter({
+    required this.palette,
+    required this.phase,
+  });
+
+  final _QuizAcademyPalette palette;
+  final double phase;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final beamPaint = Paint()
+      ..shader = ui.Gradient.linear(
+        Offset.zero,
+        Offset(size.width, size.height),
+        <Color>[
+          palette.boardLight.withValues(alpha: 0.0),
+          palette.boardLight.withValues(alpha: 0.08),
+          palette.boardLight.withValues(alpha: 0.0),
+        ],
+        <double>[0.0, 0.5, 1.0],
+      );
+    for (var index = 0; index < 4; index++) {
+      final shift =
+          ((phase * (size.width + 200)) + (index * size.width * 0.32)) %
+          (size.width + 220);
+      final path = Path()
+        ..moveTo(shift - 150, 0)
+        ..lineTo(shift - 60, 0)
+        ..lineTo(shift + 40, size.height)
+        ..lineTo(shift - 50, size.height)
+        ..close();
+      canvas.drawPath(path, beamPaint);
+    }
+
+    final orbColors = <Color>[
+      palette.cyan.withValues(alpha: 0.16),
+      palette.amber.withValues(alpha: 0.14),
+      palette.emerald.withValues(alpha: 0.11),
+    ];
+    for (var index = 0; index < orbColors.length; index++) {
+      final drift = (((phase + (index * 0.24)) % 1.0) - 0.5) * 90;
+      final center = Offset(
+        (size.width * (0.22 + (index * 0.26))) + drift,
+        size.height * (0.2 + (index * 0.18)),
+      );
+      final radius = size.shortestSide * (index == 1 ? 0.22 : 0.18);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = ui.Gradient.radial(center, radius, <Color>[
+            orbColors[index],
+            orbColors[index].withValues(alpha: 0.0),
+          ]),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _QuizAcademySetupGlowPainter oldDelegate) {
+    return oldDelegate.phase != phase || oldDelegate.palette != palette;
+  }
+}
+
 abstract class _QuizScreen extends _AnalysisPageShared {
   final GlobalKey _quizAcademyModePanelFocusKey = GlobalKey();
   final GlobalKey _quizStudyBoardKey = GlobalKey();
@@ -3810,6 +3875,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         ? 'MODE / LEVEL / START'
         : 'QUIZ OR STUDY';
     final compactLandscapeHeader = layout.compactLandscape;
+    final compactPortraitSetupHeader =
+        _quizOpeningsRoutePage && layout.compactPortrait;
     final currentPoolCount = _quizEligiblePool(
       mode: _quizMode,
       difficulty: _quizDifficulty,
@@ -3833,6 +3900,22 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           ),
         ),
         Positioned.fill(child: _buildQuizAcademyAtmosphere(useMonochrome)),
+        if (_quizOpeningsRoutePage)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: _QuizAcademySetupGlowPainter(
+                      palette: palette,
+                      phase: _pulseController.value,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         ListView(
           padding: quizPadding,
           children: [
@@ -3925,7 +4008,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       ? _academyQuizModeAccent(palette, _quizMode)
                       : palette.cyan,
                   fillColor: palette.shell,
-                  child: compactLandscapeHeader
+                  child: compactPortraitSetupHeader
+                      ? Row(
+                          children: <Widget>[
+                            backButton,
+                            const Spacer(),
+                            styleButton,
+                          ],
+                        )
+                      : compactLandscapeHeader
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: <Widget>[
@@ -4270,7 +4361,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 _academyPanelHeader(
                   palette: palette,
                   title: 'QUIZ MODE',
-                  subtitle: 'Choose how this quiz asks the opening.',
+                  subtitle: '',
                   infoTitle: 'Quiz Modes',
                   infoMessage:
                       'Identify Opening Name asks you to choose the opening name from the shown position. Complete Opening Line asks you to choose the next move in the opening line. Every session uses 10 questions.',
@@ -4294,10 +4385,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           'quiz_setup_mode_info_identify_opening_name',
                         ),
                         palette: palette,
+                        dense: layout.compactLandscape,
+                        assetPath: 'assets/academy/quiz_name.png',
                         title: _academyQuizModeTitle(GambitQuizMode.guessName),
-                        answerLabel: _academyQuizModeAnswerLabel(
-                          GambitQuizMode.guessName,
-                        ),
                         infoMessage: _academyQuizModeInfoMessage(
                           GambitQuizMode.guessName,
                         ),
@@ -4320,10 +4410,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           'quiz_setup_mode_info_complete_opening_line',
                         ),
                         palette: palette,
+                        dense: layout.compactLandscape,
+                        assetPath: 'assets/academy/quiz_line.png',
                         title: _academyQuizModeTitle(GambitQuizMode.guessLine),
-                        answerLabel: _academyQuizModeAnswerLabel(
-                          GambitQuizMode.guessLine,
-                        ),
                         infoMessage: _academyQuizModeInfoMessage(
                           GambitQuizMode.guessLine,
                         ),
@@ -4412,8 +4501,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required Key cardKey,
     required Key infoButtonKey,
     required _QuizAcademyPalette palette,
+    required bool dense,
+    required String assetPath,
     required String title,
-    required String answerLabel,
     required String infoMessage,
     required IconData icon,
     required Color accent,
@@ -4421,13 +4511,46 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required bool compact,
     required VoidCallback onTap,
   }) {
-    final contentPadding = compact ? 12.0 : 16.0;
-    final iconBoxSize = compact ? 40.0 : 46.0;
-    final iconSize = compact ? 20.0 : 22.0;
-    final titleGap = compact ? 10.0 : 12.0;
-    final sectionGap = compact ? 10.0 : 12.0;
-    final footerGap = compact ? 12.0 : 16.0;
-    final helperMinHeight = compact ? 18.0 : 24.0;
+    final contentPadding = dense
+        ? 10.0
+        : compact
+        ? 12.0
+        : 16.0;
+    final iconBoxSize = dense
+        ? 36.0
+        : compact
+        ? 40.0
+        : 46.0;
+    final iconSize = dense
+        ? 18.0
+        : compact
+        ? 20.0
+        : 22.0;
+    final titleGap = dense
+        ? 8.0
+        : compact
+        ? 10.0
+        : 12.0;
+    final sectionGap = dense
+        ? 8.0
+        : compact
+        ? 10.0
+        : 12.0;
+    final footerGap = dense
+        ? 10.0
+        : compact
+        ? 12.0
+        : 16.0;
+    final helperMinHeight = dense
+        ? 16.0
+        : compact
+        ? 18.0
+        : 24.0;
+    final previewHeight = dense
+        ? 78.0
+        : compact
+        ? 118.0
+        : 178.0;
     final cardColor = selected
         ? Color.alphaBlend(accent.withValues(alpha: 0.18), palette.panelAlt)
         : palette.panelAlt;
@@ -4495,9 +4618,17 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       title,
                       style: _academyDisplayStyle(
                         palette: palette,
-                        size: compact ? 15.5 : 18,
+                        size: dense
+                            ? 14.0
+                            : compact
+                            ? 15.5
+                            : 18,
                         weight: FontWeight.w700,
-                        letterSpacing: compact ? 0.45 : 0.8,
+                        letterSpacing: dense
+                            ? 0.3
+                            : compact
+                            ? 0.45
+                            : 0.8,
                       ),
                     ),
                   ),
@@ -4510,15 +4641,79 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 ],
               ),
               SizedBox(height: sectionGap),
+              Container(
+                height: previewHeight,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: accent.withValues(alpha: 0.58),
+                    width: 2,
+                  ),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: palette.shadow.withValues(alpha: 0.18),
+                      offset: const Offset(4, 4),
+                      blurRadius: 0,
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      Image.asset(
+                        assetPath,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                      ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              Colors.transparent,
+                              palette.shell.withValues(alpha: 0.12),
+                              palette.shell.withValues(alpha: 0.5),
+                            ],
+                            stops: const <double>[0.0, 0.58, 1.0],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: palette.shell.withValues(alpha: 0.72),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: accent.withValues(alpha: 0.82),
+                              width: 2,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(
+                              selected
+                                  ? Icons.check_circle_outline
+                                  : Icons.play_circle_outline_rounded,
+                              color: accent,
+                              size: dense ? 17 : 19,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: sectionGap),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: <Widget>[
-                  _academyTag(
-                    palette: palette,
-                    label: answerLabel,
-                    accent: accent,
-                  ),
                   _academyTag(
                     palette: palette,
                     label: selected ? 'SELECTED' : 'SELECT',
@@ -5947,10 +6142,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                           : 1.25,
                                     ),
                                   ),
-                            if (!compactPlayLayout ||
-                                (answersLocked &&
-                                    displayedQuizMode !=
-                                        GambitQuizMode.guessLine)) ...<Widget>[
+                            if (!compactPlayLayout) ...<Widget>[
                               SizedBox(height: compactPlayLayout ? 4 : 5),
                               Text(
                                 answersLocked
