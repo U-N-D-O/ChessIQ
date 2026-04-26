@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> _pumpCreditsDialog(
+Future<EconomyProvider> _pumpCreditsDialog(
   WidgetTester tester, {
   required Size size,
 }) async {
@@ -43,6 +43,8 @@ Future<void> _pumpCreditsDialog(
   await tester.tap(triggers.first);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 450));
+
+  return economy;
 }
 
 ScrollController _creditsDialogScrollController(WidgetTester tester) {
@@ -110,6 +112,31 @@ void main() {
       await tester.pump();
     },
   );
+
+  testWidgets('credits dialog coin button grants 50000 coins', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final economy = await _pumpCreditsDialog(
+      tester,
+      size: const Size(390, 844),
+    );
+
+    expect(economy.coins, 120);
+
+    final grantButton = find.byKey(
+      const ValueKey<String>('credits_add_coins_button'),
+    );
+    expect(grantButton, findsOneWidget);
+
+    await tester.tap(grantButton);
+    await tester.pump();
+
+    expect(economy.coins, 50120);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
 
   testWidgets(
     'credits dialog keeps scroll position through the glitch style swap',

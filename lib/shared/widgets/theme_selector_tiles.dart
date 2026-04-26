@@ -134,8 +134,12 @@ class _ThemePreviewPiece extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final assetPiece = AppThemeProvider.pieceAssetForIndex(
+      pieceThemeIndex,
+      piece,
+    );
     final baseImage = Image.asset(
-      'assets/pieces/$piece.png',
+      'assets/pieces/$assetPiece.png',
       width: size,
       height: size,
     );
@@ -173,7 +177,7 @@ class _ThemePreviewPiece extends StatelessWidget {
             child: Opacity(
               opacity: 0.18,
               child: Image.asset(
-                'assets/pieces/$piece.png',
+                'assets/pieces/$assetPiece.png',
                 width: size,
                 height: size,
                 color: const Color(0xFFF7FBFF),

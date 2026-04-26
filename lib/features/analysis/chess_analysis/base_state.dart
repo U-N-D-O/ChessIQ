@@ -425,6 +425,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _tropicalBoardOwned = false;
   bool _tuttiFruttiOwned = false;
   bool _spectralOwned = false;
+  bool _monochromePiecesOwned = false;
   bool _piecePackOwned = false;
   bool _adFreeOwned = false;
   bool _academyTuitionPassOwned = false;
@@ -3132,6 +3133,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       piecePackOwned: _piecePackOwned,
       tuttiFruttiOwned: _tuttiFruttiOwned,
       spectralOwned: _spectralOwned,
+      monochromePiecesOwned: _monochromePiecesOwned,
     );
   }
 
@@ -3175,6 +3177,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final piecePack = decoded['piecePackOwned'];
       final tuttiFrutti = decoded['tuttiFruttiOwned'];
       final spectral = decoded['spectralOwned'];
+      final monochromePieces = decoded['monochromePiecesOwned'];
       final adFree = decoded['adFreeOwned'];
       final academyTuitionPass = decoded['academyTuitionPassOwned'];
 
@@ -3188,6 +3191,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (piecePack is bool) _piecePackOwned = piecePack;
       if (tuttiFrutti is bool) _tuttiFruttiOwned = tuttiFrutti;
       if (spectral is bool) _spectralOwned = spectral;
+      if (monochromePieces is bool) {
+        _monochromePiecesOwned = monochromePieces;
+      }
       if (adFree is bool) _adFreeOwned = adFree;
       if (academyTuitionPass is bool) {
         _academyTuitionPassOwned = academyTuitionPass;
@@ -3221,6 +3227,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'tropicalBoardOwned': _tropicalBoardOwned,
       'tuttiFruttiOwned': _tuttiFruttiOwned,
       'spectralOwned': _spectralOwned,
+      'monochromePiecesOwned': _monochromePiecesOwned,
       'piecePackOwned': _piecePackOwned,
       'adFreeOwned': _adFreeOwned,
       'academyTuitionPassOwned': _academyTuitionPassOwned,
@@ -11723,6 +11730,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   children: <Widget>[
                                     const Spacer(),
                                     IconButton(
+                                      key: const ValueKey<String>(
+                                        'credits_add_coins_button',
+                                      ),
+                                      onPressed: () async {
+                                        await dialogContext
+                                            .read<EconomyProvider>()
+                                            .addCoins(50000);
+                                      },
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: visuals.primaryAccent
+                                            .withValues(
+                                              alpha: visuals.isRetro
+                                                  ? 0.34
+                                                  : 0.24,
+                                            ),
+                                        foregroundColor: visuals.palette.text,
+                                        side: BorderSide(
+                                          color: visuals.primaryAccent
+                                              .withValues(alpha: 0.42),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.add_card_rounded),
+                                      tooltip: 'Add 50,000 coins',
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
                                       onPressed: () =>
                                           Navigator.of(dialogContext).pop(),
                                       style: IconButton.styleFrom(
@@ -13087,6 +13120,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _addLog('Tutti Frutti pieces unlocked');
   }
 
+  Future<void> _purchaseMonochromePieces() async {
+    const price = 850;
+    if (_monochromePiecesOwned) return;
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(price)) {
+      _addLog('Not enough coins for Monochrome pieces');
+      return;
+    }
+    setState(() {
+      _monochromePiecesOwned = true;
+    });
+    await _saveStoreState();
+    _addLog('Monochrome pieces unlocked');
+  }
+
   Future<void> _purchaseSakuraBoard() async {
     const price = 700;
     if (_sakuraBoardOwned) return;
@@ -13248,6 +13296,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _tropicalBoardOwned = false;
       _tuttiFruttiOwned = false;
       _spectralOwned = false;
+      _monochromePiecesOwned = false;
       _piecePackOwned = false;
       _adFreeOwned = false;
       _academyTuitionPassOwned = false;
@@ -13643,6 +13692,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                       onTap: () async {
                         await _purchaseTuttiFrutti();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      icon: Icons.contrast,
+                      title: 'Monochrome Pieces',
+                      subtitle: _monochromePiecesOwned
+                          ? 'Owned'
+                          : 'Unlock the Monochrome piece theme',
+                      priceLabel: '850 c',
+                      enabled: !_monochromePiecesOwned,
+                      actionLabel: _monochromePiecesOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: _pieceThemePreview(
+                        PieceThemeMode.monochrome,
+                        pieceSize: 24.0,
+                      ),
+                      onTap: () async {
+                        await _purchaseMonochromePieces();
                         setL(() {});
                       },
                     ),
@@ -14482,8 +14550,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     double blackOutlineOverflowPx = 0,
   }) {
     final activeTheme = theme ?? _pieceThemeMode;
+    final assetPiece = AppThemeProvider.pieceAssetForIndex(
+      activeTheme.index,
+      piece,
+    );
     final baseImage = Image.asset(
-      'assets/pieces/$piece.png',
+      'assets/pieces/$assetPiece.png',
       width: width,
       height: height,
     );
@@ -14587,7 +14659,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               child: Opacity(
                 opacity: 0.18,
                 child: Image.asset(
-                  'assets/pieces/$piece.png',
+                  'assets/pieces/$assetPiece.png',
                   width: outlineWidth,
                   height: outlineHeight,
                   color: const Color(0xFFF7FBFF),
@@ -14725,6 +14797,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return 'Tutti Frutti';
       case PieceThemeMode.spectral:
         return 'Spectral';
+      case PieceThemeMode.monochrome:
+        return 'Monochrome';
     }
   }
 

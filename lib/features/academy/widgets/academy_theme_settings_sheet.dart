@@ -35,6 +35,7 @@ Future<void> showAcademyThemeSettingsSheet({
         piecePackOwned: unlockState.piecePackOwned,
         tuttiFruttiOwned: unlockState.tuttiFruttiOwned,
         spectralOwned: unlockState.spectralOwned,
+        monochromePiecesOwned: unlockState.monochromePiecesOwned,
       );
 
   if (!context.mounted) return;

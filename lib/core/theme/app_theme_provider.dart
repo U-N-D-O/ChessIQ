@@ -20,6 +20,7 @@ class AppThemeUnlockState {
   final bool tropicalBoardOwned;
   final bool tuttiFruttiOwned;
   final bool spectralOwned;
+  final bool monochromePiecesOwned;
 
   const AppThemeUnlockState({
     this.themePackOwned = false,
@@ -28,6 +29,7 @@ class AppThemeUnlockState {
     this.tropicalBoardOwned = false,
     this.tuttiFruttiOwned = false,
     this.spectralOwned = false,
+    this.monochromePiecesOwned = false,
   });
 }
 
@@ -82,6 +84,7 @@ class AppThemeProvider extends ChangeNotifier {
     'Frost',
     'Tutti Frutti',
     'Spectral',
+    'Monochrome',
   ];
 
   ThemeMode _themeMode = ThemeMode.dark;
@@ -141,12 +144,14 @@ class AppThemeProvider extends ChangeNotifier {
     required bool piecePackOwned,
     required bool tuttiFruttiOwned,
     required bool spectralOwned,
+    required bool monochromePiecesOwned,
   }) {
     return switch (index) {
       0 => true,
       1 || 2 => piecePackOwned,
       3 => tuttiFruttiOwned,
       4 => spectralOwned,
+      5 => monochromePiecesOwned,
       _ => false,
     };
   }
@@ -172,6 +177,7 @@ class AppThemeProvider extends ChangeNotifier {
     required bool piecePackOwned,
     required bool tuttiFruttiOwned,
     required bool spectralOwned,
+    required bool monochromePiecesOwned,
   }) {
     return List<int>.generate(pieceThemeCount, (index) => index)
         .where(
@@ -180,6 +186,7 @@ class AppThemeProvider extends ChangeNotifier {
             piecePackOwned: piecePackOwned,
             tuttiFruttiOwned: tuttiFruttiOwned,
             spectralOwned: spectralOwned,
+            monochromePiecesOwned: monochromePiecesOwned,
           ),
         )
         .toList(growable: false);
@@ -191,12 +198,48 @@ class AppThemeProvider extends ChangeNotifier {
       1 =>
         isWhitePiece
             ? const Color(0xFFFFD38A)
-            : _brighten(const Color(0xFF9F4E2A), 0.20),
-      2 => isWhitePiece ? const Color(0xFFDDF7FF) : const Color(0xFF4D6F94),
-      3 => isWhitePiece ? const Color(0xFFFFC8E8) : const Color(0xFF85E6C7),
+            : _darken(
+                _darken(_brighten(const Color(0xFF9F4E2A), 0.20), 0.35),
+                0.15,
+              ),
+      2 =>
+        isWhitePiece
+            ? const Color(0xFFDDF7FF)
+            : _darken(const Color(0xFF4D6F94), 0.10),
+      3 => isWhitePiece ? const Color(0xFFFFC8E8) : const Color(0xFF36926C),
       4 => isWhitePiece ? const Color(0xFFB9B6FF) : const Color(0xFF95F0FF),
+      5 =>
+        isWhitePiece
+            ? Color.lerp(
+                Color.lerp(
+                  Color.lerp(
+                    const Color(0xFFF3F3F3),
+                    Colors.white,
+                    0.15,
+                  )!,
+                  Colors.white,
+                  0.05,
+                )!,
+                Colors.white,
+                0.10,
+              )!
+            : _darken(
+                _darken(_darken(const Color(0xFF5A5A5A), 0.15), 0.05),
+                0.25,
+              ),
       _ => Colors.white,
     };
+  }
+
+  static String pieceAssetForIndex(int pieceThemeIndex, String piece) {
+    if ((pieceThemeIndex == 1 ||
+            pieceThemeIndex == 2 ||
+            pieceThemeIndex == 3 ||
+            pieceThemeIndex == 5) &&
+        piece.endsWith('_b')) {
+      return piece.replaceFirst(RegExp(r'_b$'), '_w');
+    }
+    return piece;
   }
 
   static Color _brighten(Color color, double amount) {
@@ -204,6 +247,10 @@ class AppThemeProvider extends ChangeNotifier {
     return hsl
         .withLightness((hsl.lightness + amount).clamp(0.0, 1.0))
         .toColor();
+  }
+
+  static Color _darken(Color color, double amount) {
+    return Color.lerp(color, Colors.black, amount)!;
   }
 
   static bool useClassicPiecesForIndex(int pieceThemeIndex) {
@@ -305,6 +352,7 @@ class AppThemeProvider extends ChangeNotifier {
         tropicalBoardOwned: decoded['tropicalBoardOwned'] == true,
         tuttiFruttiOwned: decoded['tuttiFruttiOwned'] == true,
         spectralOwned: decoded['spectralOwned'] == true,
+        monochromePiecesOwned: decoded['monochromePiecesOwned'] == true,
       );
     } catch (_) {
       return const AppThemeUnlockState();
