@@ -289,40 +289,37 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Academy exams image opens the exams dashboard',
-    (tester) async {
-      final provider = _TestPuzzleAcademyProvider();
+  testWidgets('Academy exams image opens the exams dashboard', (tester) async {
+    final provider = _TestPuzzleAcademyProvider();
 
-      await _pumpPuzzleMapScreen(
-        tester,
-        provider: provider,
-        size: const Size(520, 320),
-      );
+    await _pumpPuzzleMapScreen(
+      tester,
+      provider: provider,
+      size: const Size(520, 320),
+    );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('academy_hub_card_exams')),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 700));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('academy_hub_card_exams')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
 
-      expect(tester.takeException(), isNull);
-      expect(find.text('Puzzle Academy Exams'), findsOneWidget);
-      expect(find.text('NEXT EXAM GATE'), findsOneWidget);
-      expect(find.text('Puzzle Academy'), findsOneWidget);
-      expect(find.text('Mastery Dashboard'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Puzzle Academy Exams'), findsOneWidget);
+    expect(find.text('NEXT EXAM GATE'), findsOneWidget);
+    expect(find.text('Puzzle Academy'), findsOneWidget);
+    expect(find.text('Mastery Dashboard'), findsOneWidget);
 
-      final firstLevel = find.text('Level 450-500');
-      final secondLevel = find.text('Level 500-550');
-      expect(firstLevel, findsOneWidget);
-      expect(secondLevel, findsOneWidget);
+    final firstLevel = find.text('Level 450-500');
+    final secondLevel = find.text('Level 500-550');
+    expect(firstLevel, findsOneWidget);
+    expect(secondLevel, findsOneWidget);
 
-      final firstOffset = tester.getTopLeft(firstLevel);
-      final secondOffset = tester.getTopLeft(secondLevel);
-      expect((firstOffset.dy - secondOffset.dy).abs(), lessThan(20));
-      expect((firstOffset.dx - secondOffset.dx).abs(), greaterThan(40));
-    },
-  );
+    final firstOffset = tester.getTopLeft(firstLevel);
+    final secondOffset = tester.getTopLeft(secondLevel);
+    expect((firstOffset.dy - secondOffset.dy).abs(), lessThan(20));
+    expect((firstOffset.dx - secondOffset.dx).abs(), greaterThan(40));
+  });
 
   testWidgets(
     'Academy exams dashboard shows loading states while remote data is syncing',

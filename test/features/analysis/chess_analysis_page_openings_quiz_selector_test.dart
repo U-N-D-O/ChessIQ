@@ -250,10 +250,7 @@ void main() {
     expect(find.text('CHOOSE MODE'), findsOneWidget);
     expect(find.text('SET UP QUIZ'), findsOneWidget);
     expect(find.text('OPEN STUDY'), findsOneWidget);
-    expect(
-      find.textContaining('Quiz opens the setup screen'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Quiz opens the setup screen'), findsOneWidget);
   });
 
   testWidgets(

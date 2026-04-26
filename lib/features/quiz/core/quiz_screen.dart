@@ -3741,15 +3741,13 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final backAction = _quizOpeningsRoutePage
         ? _returnToQuizSelector
         : _goToMenu;
-    final backTooltip = _quizOpeningsRoutePage
-        ? 'Back to mode selector'
-      : '';
+    final backTooltip = _quizOpeningsRoutePage ? 'Back to mode selector' : '';
     final pageTitle = _quizOpeningsRoutePage
         ? 'OPENINGS QUIZ'
         : 'OPENING ACADEMY';
     final pageSubtitle = _quizOpeningsRoutePage
         ? 'MODE / LEVEL / START'
-      : 'QUIZ OR STUDY';
+        : 'QUIZ OR STUDY';
     final currentPoolCount = _quizEligiblePool(
       mode: _quizMode,
       difficulty: _quizDifficulty,
@@ -3831,7 +3829,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                         letterSpacing: 0.85,
                       ),
                     ),
-                    if (!_quizOpeningsRoutePage && backTooltip.isNotEmpty) ...<Widget>[
+                    if (!_quizOpeningsRoutePage &&
+                        backTooltip.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 4),
                       Text(
                         backTooltip,
@@ -3996,8 +3995,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           title: 'Openings Study',
           subtitle:
               'Open the library, browse families, and replay saved lines.',
-            cartridgeLabel: 'STUDY',
-            ctaLabel: 'OPEN STUDY',
+          cartridgeLabel: 'STUDY',
+          ctaLabel: 'OPEN STUDY',
           accent: palette.amber,
           onTap: () => _selectQuizAcademyMode(studyMode: true),
         );

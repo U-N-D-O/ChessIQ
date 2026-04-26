@@ -26,6 +26,7 @@ import '../data/country_names.dart';
 import '../data/profanity_filter.dart';
 
 part 'package:chessiq/features/academy/widgets/puzzle_map_components.dart';
+
 enum _LeaderboardScope { international, national }
 
 enum _AcademyEntryView { hub, exams }
@@ -101,7 +102,8 @@ class _AcademyHubQuizSnapshot {
   bool get hasProgress =>
       studiedOpenings > 0 || studyReps > 0 || totalAnswered > 0;
 
-  double get accuracy => totalAnswered <= 0 ? 0 : correctAnswers / totalAnswered;
+  double get accuracy =>
+      totalAnswered <= 0 ? 0 : correctAnswers / totalAnswered;
 }
 
 class _AcademyHubCardBadge {
@@ -1472,9 +1474,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  Widget _buildAcademyHubOverview({
-    required bool monochrome,
-  }) {
+  Widget _buildAcademyHubOverview({required bool monochrome}) {
     final palette = puzzleAcademyPalette(
       context,
       monochromeOverride: monochrome,
@@ -1686,12 +1686,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         ? min(1.0, snapshot.studyReps / 18)
         : 0.0;
     final summary = usesAccuracy
-      ? '$accuracyPercent% accuracy on ${snapshot.totalAnswered} quiz answers.'
-      : snapshot.studyReps > 0
-      ? snapshot.studiedOpenings > 0
-          ? '${snapshot.studyReps} reps across ${snapshot.studiedOpenings} openings.'
-          : '${snapshot.studyReps} study reps banked.'
-      : 'Review opening families before the next exam block.';
+        ? '$accuracyPercent% accuracy on ${snapshot.totalAnswered} quiz answers.'
+        : snapshot.studyReps > 0
+        ? snapshot.studiedOpenings > 0
+              ? '${snapshot.studyReps} reps across ${snapshot.studiedOpenings} openings.'
+              : '${snapshot.studyReps} study reps banked.'
+        : 'Review opening families before the next exam block.';
 
     final description = snapshot.hasProgress
         ? snapshot.studiedOpenings > 0
@@ -1700,13 +1700,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         : 'Study opening families, replay lines, and build recognition before the next exam block.';
     final inlineDetails = <String>[
       snapshot.studiedOpenings > 0
-        ? '${snapshot.studiedOpenings} openings reviewed'
-        : 'Study library ready to explore',
+          ? '${snapshot.studiedOpenings} openings reviewed'
+          : 'Study library ready to explore',
       snapshot.bestStreak > 0
-        ? 'Best streak: ${snapshot.bestStreak}'
-        : usesAccuracy
-        ? 'Quiz accuracy: $accuracyPercent%'
-        : '${snapshot.studyReps} warmup reps logged',
+          ? 'Best streak: ${snapshot.bestStreak}'
+          : usesAccuracy
+          ? 'Quiz accuracy: $accuracyPercent%'
+          : '${snapshot.studyReps} warmup reps logged',
     ];
 
     return _AcademyHubCardModel(
@@ -1802,42 +1802,30 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     return KeyedSubtree(
       key: ValueKey<String>(layout.testKey),
       child: switch (layout.mode) {
-      _AcademyHubSelectorLayoutMode.phonePortrait => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: buildCard(examsModel),
-          ),
-          SizedBox(height: layout.selectorGap),
-          Expanded(
-            child: buildCard(quizModel),
-          ),
-        ],
-      ),
-      _AcademyHubSelectorLayoutMode.tabletTwoUp => Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: buildCard(examsModel),
-          ),
-          SizedBox(width: layout.selectorGap),
-          Expanded(
-            child: buildCard(quizModel),
-          ),
-        ],
-      ),
-      _AcademyHubSelectorLayoutMode.phoneLandscapeRail => Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: buildCard(examsModel),
-          ),
-          SizedBox(width: layout.selectorGap),
-          Expanded(
-            child: buildCard(quizModel),
-          ),
-        ],
-      ),
+        _AcademyHubSelectorLayoutMode.phonePortrait => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: buildCard(examsModel)),
+            SizedBox(height: layout.selectorGap),
+            Expanded(child: buildCard(quizModel)),
+          ],
+        ),
+        _AcademyHubSelectorLayoutMode.tabletTwoUp => Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: buildCard(examsModel)),
+            SizedBox(width: layout.selectorGap),
+            Expanded(child: buildCard(quizModel)),
+          ],
+        ),
+        _AcademyHubSelectorLayoutMode.phoneLandscapeRail => Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: buildCard(examsModel)),
+            SizedBox(width: layout.selectorGap),
+            Expanded(child: buildCard(quizModel)),
+          ],
+        ),
       },
     );
   }
@@ -2020,7 +2008,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: _academyHubLaunchInFlight ? null : model.onTap,
-                        onTapDown: (_) => _setAcademyHubPressedCard(model.cardId),
+                        onTapDown: (_) =>
+                            _setAcademyHubPressedCard(model.cardId),
                         onTapUp: (_) => _setAcademyHubPressedCard(null),
                         onTapCancel: () => _setAcademyHubPressedCard(null),
                         child: _buildAcademyHubCardBody(
