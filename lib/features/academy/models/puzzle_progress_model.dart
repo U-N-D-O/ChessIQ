@@ -9,6 +9,7 @@ class PuzzleProgressModel {
   final bool depth33To35Unlocked;
   final bool grandmasterOracleTriggered;
   final Map<String, EloNodeProgress> nodes;
+  final Set<String> purchasedSemesterTuitions;
   final Set<String> seenSemesters;
   final Set<String> completedDailyPuzzleIds;
   final Set<String> skippedPuzzleIds;
@@ -30,6 +31,7 @@ class PuzzleProgressModel {
     required this.depth33To35Unlocked,
     required this.grandmasterOracleTriggered,
     required this.nodes,
+    required this.purchasedSemesterTuitions,
     required this.seenSemesters,
     required this.completedDailyPuzzleIds,
     required this.skippedPuzzleIds,
@@ -55,6 +57,7 @@ class PuzzleProgressModel {
       depth33To35Unlocked: false,
       grandmasterOracleTriggered: false,
       nodes: nodes,
+      purchasedSemesterTuitions: <String>{},
       seenSemesters: <String>{},
       completedDailyPuzzleIds: <String>{},
       skippedPuzzleIds: <String>{},
@@ -78,6 +81,7 @@ class PuzzleProgressModel {
     bool? depth33To35Unlocked,
     bool? grandmasterOracleTriggered,
     Map<String, EloNodeProgress>? nodes,
+    Set<String>? purchasedSemesterTuitions,
     Set<String>? seenSemesters,
     Set<String>? completedDailyPuzzleIds,
     Set<String>? skippedPuzzleIds,
@@ -100,6 +104,8 @@ class PuzzleProgressModel {
       grandmasterOracleTriggered:
           grandmasterOracleTriggered ?? this.grandmasterOracleTriggered,
       nodes: nodes ?? this.nodes,
+      purchasedSemesterTuitions:
+          purchasedSemesterTuitions ?? this.purchasedSemesterTuitions,
       seenSemesters: seenSemesters ?? this.seenSemesters,
       completedDailyPuzzleIds:
           completedDailyPuzzleIds ?? this.completedDailyPuzzleIds,
@@ -128,6 +134,9 @@ class PuzzleProgressModel {
       'depth33To35Unlocked': depth33To35Unlocked,
       'grandmasterOracleTriggered': grandmasterOracleTriggered,
       'nodes': nodes.map((k, v) => MapEntry<String, dynamic>(k, v.toMap())),
+      'purchasedSemesterTuitions': purchasedSemesterTuitions.toList(
+        growable: false,
+      ),
       'seenSemesters': seenSemesters.toList(growable: false),
       'completedDailyPuzzleIds': completedDailyPuzzleIds.toList(
         growable: false,
@@ -182,6 +191,10 @@ class PuzzleProgressModel {
       depth33To35Unlocked: map['depth33To35Unlocked'] == true,
       grandmasterOracleTriggered: map['grandmasterOracleTriggered'] == true,
       nodes: mergedNodes,
+      purchasedSemesterTuitions:
+          ((map['purchasedSemesterTuitions'] as List?) ?? const <dynamic>[])
+              .map((e) => e.toString())
+              .toSet(),
       seenSemesters: ((map['seenSemesters'] as List?) ?? const <dynamic>[])
           .map((e) => e.toString())
           .toSet(),

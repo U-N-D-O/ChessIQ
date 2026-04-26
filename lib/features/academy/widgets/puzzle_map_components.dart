@@ -1401,6 +1401,8 @@ class _StoreRow extends StatelessWidget {
     required this.subtitle,
     required this.price,
     required this.onBuy,
+    this.actionLabel = 'Buy',
+    this.enabled = true,
     this.monochrome = false,
   });
 
@@ -1409,6 +1411,8 @@ class _StoreRow extends StatelessWidget {
   final String subtitle;
   final String price;
   final VoidCallback onBuy;
+  final String actionLabel;
+  final bool enabled;
   final bool monochrome;
 
   @override
@@ -1454,17 +1458,21 @@ class _StoreRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           FilledButton(
-            onPressed: onBuy,
+            onPressed: enabled ? onBuy : null,
             style: _academyFilledButtonStyle(
-              backgroundColor: _accentBlue(context),
-              foregroundColor: theme.brightness == Brightness.dark
-                  ? const Color(0xFF07131F)
-                  : Colors.white,
+              backgroundColor: enabled
+                  ? _accentBlue(context)
+                  : scheme.outline.withValues(alpha: 0.22),
+              foregroundColor: enabled
+                  ? theme.brightness == Brightness.dark
+                        ? const Color(0xFF07131F)
+                        : Colors.white
+                  : scheme.onSurface.withValues(alpha: 0.62),
               monochrome: monochrome,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               radius: 8,
             ),
-            child: const Text('Buy'),
+            child: Text(actionLabel),
           ),
         ],
       ),

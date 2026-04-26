@@ -138,6 +138,12 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   static const int _gridPuzzleCount = 500;
   static const int _examUnlockSolveCount = 150;
   static const int _examPuzzleCount = 50;
+  static const Map<String, int> _semesterTuitionCosts = <String, int>{
+    'tactician': 1200,
+    'strategist': 2400,
+    'master': 3600,
+    'grandmaster': 4800,
+  };
   static const Duration _examDuration = Duration(hours: 1);
   static const Map<String, int> _examUnlockRequirementsByNodeKey =
       <String, int>{
@@ -547,6 +553,9 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
   int get totalSolved => progress.solvedPuzzleIds.length;
   int get masteredNodeCount => orderedNodes.where((n) => n.goldCrown).length;
+  List<SemesterRange> get purchasableSemesterTuitions => semesters
+      .where((semester) => _semesterTuitionCosts.containsKey(semester.id))
+      .toList(growable: false);
 
   double get overallMasteryProgress {
     final nodes = orderedNodes;
@@ -910,11 +919,73 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     return _completedExamCountInSemester(progress, semester);
   }
 
+  int? semesterTuitionCost(String semesterId) =>
+      _semesterTuitionCosts[semesterId];
+
+  bool ownsSemesterTuition(String semesterId) {
+    return progress.purchasedSemesterTuitions.contains(semesterId);
+  }
+
+  EloNodeProgress? semesterEntryNode(String semesterId) {
+    final semester = _semesterById(semesterId);
+    if (semester == null) {
+      return null;
+    }
+    return progress.nodes[_nodeKeyForRating(semester.minElo)];
+  }
+
+  bool isSemesterAlreadyUnlocked(String semesterId) {
+    return semesterEntryNode(semesterId)?.unlocked == true;
+  }
+
+  Future<bool> buySemesterTuition(String semesterId) async {
+    final cost = semesterTuitionCost(semesterId);
+    final semester = _semesterById(semesterId);
+    if (cost == null || semester == null || ownsSemesterTuition(semesterId)) {
+      return false;
+    }
+
+    final entryNodeKey = _nodeKeyForRating(semester.minElo);
+    final entryNode = progress.nodes[entryNodeKey];
+    if (entryNode == null || entryNode.unlocked) {
+      return false;
+    }
+
+    final currentCoins = _economyProvider?.coins ?? progress.coins;
+    if (currentCoins < cost) {
+      return false;
+    }
+
+    final updatedPurchasedTuitions = Set<String>.from(
+      progress.purchasedSemesterTuitions,
+    )..add(semesterId);
+    final updatedNodes = Map<String, EloNodeProgress>.from(progress.nodes)
+      ..[entryNodeKey] = entryNode.copyWith(unlocked: true);
+
+    var updated = progress.copyWith(
+      coins: currentCoins - cost,
+      purchasedSemesterTuitions: updatedPurchasedTuitions,
+      nodes: updatedNodes,
+    );
+    updated = _applyUnlockingAndRewards(updated);
+
+    await _saveUpdatedProgress(updated, syncCoins: true);
+    if (_basePuzzleCountsByNode.isNotEmpty) {
+      await _ensureNodePuzzlesLoaded(<String>{entryNodeKey});
+    }
+    notifyListeners();
+    return true;
+  }
+
   int examUnlockRequirementForNode(EloNodeProgress node) {
     return _examUnlockRequirementsByNodeKey[node.key] ?? 0;
   }
 
   String? unlockRequirementText(EloNodeProgress node) {
+    if (!requiresPreviousSemesterExamGate(node)) {
+      return null;
+    }
+
     final required = examUnlockRequirementForNode(node);
     if (required <= 0) {
       return null;
@@ -953,13 +1024,17 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   }
 
   bool requiresPreviousSemesterExamGate(EloNodeProgress node) {
-    return examUnlockRequirementForNode(node) > 0;
+    return _requiresPreviousSemesterExamGateFor(progress, node);
   }
 
   bool _hasRequiredPreviousSemesterExams(
     PuzzleProgressModel snapshot,
     EloNodeProgress node,
   ) {
+    if (_hasSemesterTuitionBypass(snapshot, node)) {
+      return true;
+    }
+
     final required = examUnlockRequirementForNode(node);
     if (required <= 0) {
       return true;
@@ -1002,7 +1077,9 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
       if (index == 0) {
         unlocked = true;
-      } else if (requiresPreviousSemesterExamGate(node)) {
+      } else if (_hasSemesterTuitionBypass(snapshot, node)) {
+        unlocked = true;
+      } else if (_requiresPreviousSemesterExamGateFor(snapshot, node)) {
         unlocked = _hasRequiredPreviousSemesterExams(snapshot, node);
       } else {
         final previous = updated[nodes[index - 1].key] ?? nodes[index - 1];
@@ -1020,6 +1097,34 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     }
 
     return updated;
+  }
+
+  SemesterRange? _semesterById(String semesterId) {
+    for (final semester in semesters) {
+      if (semester.id == semesterId) {
+        return semester;
+      }
+    }
+    return null;
+  }
+
+  bool _hasSemesterTuitionBypass(
+    PuzzleProgressModel snapshot,
+    EloNodeProgress node,
+  ) {
+    final semester = semesterForNode(node);
+    if (!_semesterTuitionCosts.containsKey(semester.id)) {
+      return false;
+    }
+    return snapshot.purchasedSemesterTuitions.contains(semester.id);
+  }
+
+  bool _requiresPreviousSemesterExamGateFor(
+    PuzzleProgressModel snapshot,
+    EloNodeProgress node,
+  ) {
+    return examUnlockRequirementForNode(node) > 0 &&
+        !_hasSemesterTuitionBypass(snapshot, node);
   }
 
   String heroTagForNode(EloNodeProgress node) =>
@@ -1378,6 +1483,13 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
   void _normalizeUnlockState() {
     _progress = progress.copyWith(nodes: _normalizedNodesFor(progress));
+  }
+
+  @visibleForTesting
+  void debugHydrateProgress(PuzzleProgressModel value) {
+    _progress = value.copyWith(nodes: _normalizedNodesFor(value));
+    _initialized = true;
+    _isLoading = false;
   }
 
   PuzzleProgressModel _applyUnlockingAndRewards(PuzzleProgressModel current) {

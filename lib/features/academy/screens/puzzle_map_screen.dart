@@ -968,6 +968,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             ),
             child: Consumer<PuzzleAcademyProvider>(
               builder: (context, liveProvider, _) {
+                final academyStoreMonochrome =
+                    context.read<AppThemeProvider>().isMonochrome ||
+                    widget.cinematicThemeEnabled;
                 return SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
                     16,
@@ -999,9 +1002,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         title: 'Hint Pack',
                         subtitle: '+3 Smart Hints',
                         price: '25 coins',
-                        monochrome:
-                            context.read<AppThemeProvider>().isMonochrome ||
-                            widget.cinematicThemeEnabled,
+                        monochrome: academyStoreMonochrome,
                         onBuy: () async {
                           final ok = await liveProvider.buyHintPack();
                           if (!mounted || !ok) return;
@@ -1014,15 +1015,62 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         title: 'Skip Pack',
                         subtitle: '+2 Tactical Skips',
                         price: '35 coins',
-                        monochrome:
-                            context.read<AppThemeProvider>().isMonochrome ||
-                            widget.cinematicThemeEnabled,
+                        monochrome: academyStoreMonochrome,
                         onBuy: () async {
                           final ok = await liveProvider.buySkipPack();
                           if (!mounted || !ok) return;
                           unawaited(_playAcademyBuySound());
                         },
                       ),
+                      for (final semester
+                          in liveProvider.purchasableSemesterTuitions) ...[
+                        const SizedBox(height: 10),
+                        _StoreRow(
+                          icon: Icons.school_outlined,
+                          title: '${semester.title} Tuition',
+                          subtitle:
+                              liveProvider.ownsSemesterTuition(semester.id)
+                              ? 'Owned. First level unlocked without the previous semester exam.'
+                              : liveProvider.isSemesterAlreadyUnlocked(
+                                  semester.id,
+                                )
+                              ? 'Already unlocked through academy progression.'
+                              : 'Unlock the first level immediately without clearing the previous semester exam gate.',
+                          price:
+                              '${liveProvider.semesterTuitionCost(semester.id)} coins',
+                          actionLabel:
+                              liveProvider.ownsSemesterTuition(semester.id)
+                              ? 'Owned'
+                              : liveProvider.isSemesterAlreadyUnlocked(
+                                  semester.id,
+                                )
+                              ? 'Unlocked'
+                              : 'Buy',
+                          enabled:
+                              !liveProvider.ownsSemesterTuition(semester.id) &&
+                              !liveProvider.isSemesterAlreadyUnlocked(
+                                semester.id,
+                              ),
+                          monochrome: academyStoreMonochrome,
+                          onBuy: () async {
+                            final ok = await liveProvider.buySemesterTuition(
+                              semester.id,
+                            );
+                            if (!mounted) {
+                              return;
+                            }
+                            if (!ok) {
+                              await _showStatusDialog(
+                                title: 'Not Enough Coins',
+                                message:
+                                    'Not enough coins to unlock ${semester.title}.',
+                              );
+                              return;
+                            }
+                            unawaited(_playAcademyBuySound());
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       _StoreRow(
                         icon: Icons.person_outline,
@@ -1030,9 +1078,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         subtitle:
                             'Ready for a new identity? Change your nickname.',
                         price: '500 coins',
-                        monochrome:
-                            context.read<AppThemeProvider>().isMonochrome ||
-                            widget.cinematicThemeEnabled,
+                        monochrome: academyStoreMonochrome,
                         onBuy: () async {
                           final ok = await liveProvider.buyNicknameReset();
                           if (!mounted) return;
@@ -1063,9 +1109,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         subtitle:
                             'Moved to a new place? Update your country/region.',
                         price: '500 coins',
-                        monochrome:
-                            context.read<AppThemeProvider>().isMonochrome ||
-                            widget.cinematicThemeEnabled,
+                        monochrome: academyStoreMonochrome,
                         onBuy: () async {
                           final ok = await liveProvider.buyCountryReset();
                           if (!mounted) return;
@@ -1097,9 +1141,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         style: _academyFilledButtonStyle(
                           backgroundColor: scheme.surface,
                           foregroundColor: scheme.onSurface,
-                          monochrome:
-                              context.read<AppThemeProvider>().isMonochrome ||
-                              widget.cinematicThemeEnabled,
+                          monochrome: academyStoreMonochrome,
                           side: BorderSide(
                             color: scheme.outline.withValues(alpha: 0.30),
                           ),
