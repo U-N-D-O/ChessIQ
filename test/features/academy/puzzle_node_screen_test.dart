@@ -2,6 +2,7 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
+import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -374,4 +375,25 @@ void main() {
       expect(find.text('Puzzle #1 of 50'), findsNothing);
     },
   );
+
+  testWidgets('training screen shows a single mode info trigger', (
+    tester,
+  ) async {
+    final provider = _TestPuzzleAcademyProvider();
+
+    await _pumpPuzzleNodeScreen(
+      tester,
+      size: const Size(390, 844),
+      provider: provider,
+      screen: PuzzleNodeScreen(
+        node: _TestPuzzleAcademyProvider.testNode,
+        heroTag: 'training-single-info',
+        initialPuzzle: _TestPuzzleAcademyProvider.trainingPuzzles.first,
+        initialPuzzleIndex: 0,
+      ),
+    );
+
+    expect(find.text('Puzzle Intel'), findsOneWidget);
+    expect(find.byType(PuzzleAcademyInfoButton), findsOneWidget);
+  });
 }

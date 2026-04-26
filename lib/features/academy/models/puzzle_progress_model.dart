@@ -504,11 +504,13 @@ class LeaderboardEntry {
   final String handle;
   final int score;
   final String title;
+  final String? country;
 
   const LeaderboardEntry({
     required this.rank,
     required this.handle,
     required this.score,
     required this.title,
+    this.country,
   });
 }

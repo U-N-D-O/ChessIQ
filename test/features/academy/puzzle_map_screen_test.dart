@@ -772,6 +772,33 @@ void main() {
   );
 
   testWidgets(
+    'Academy exams dashboard shows country flags on the international leaderboard',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider(
+        scoreboardEntriesValue: const <LeaderboardEntry>[
+          LeaderboardEntry(
+            rank: 1,
+            handle: 'KalaallitHero',
+            score: 9800,
+            title: 'Oracle',
+            country: 'Greenland',
+          ),
+        ],
+      );
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(1200, 900),
+      );
+      await _openExamsDashboard(tester);
+
+      expect(find.text('KalaallitHero'), findsOneWidget);
+      expect(find.text('🇬🇱'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'Academy exams dashboard shows retry actions when daily and leaderboard refresh fail',
     (tester) async {
       final provider = _TestPuzzleAcademyProvider(

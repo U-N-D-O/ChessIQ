@@ -421,6 +421,7 @@ class ScoreboardService {
         final h = (raw['handle'] as String?)?.trim() ?? 'Unknown Player';
         final s = (raw['score'] as num?)?.toInt() ?? 0;
         final t = (raw['title'] as String?) ?? '';
+        final c = (raw['country'] as String?)?.trim();
         final key = h.toLowerCase();
         final existing = dedupedByHandle[key];
         if (existing == null || s > existing.score) {
@@ -429,6 +430,7 @@ class ScoreboardService {
             handle: h,
             score: s,
             title: t,
+            country: c != null && c.isNotEmpty ? c : null,
           );
         }
       }
@@ -442,6 +444,7 @@ class ScoreboardService {
           handle: entries[i].handle,
           score: entries[i].score,
           title: entries[i].title,
+          country: entries[i].country,
         );
       }
       return entries;

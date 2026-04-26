@@ -701,6 +701,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         _LeaderboardCard(
           entries: entries,
           title: title,
+          showFlags: selectedInternational,
           monochrome: monochrome,
           isLoading: scoreboardLoading,
           errorMessage: scoreboardError,

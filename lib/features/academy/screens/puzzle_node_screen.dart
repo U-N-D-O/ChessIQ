@@ -2773,26 +2773,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Puzzle Intel',
-                    style: puzzleAcademyDisplayStyle(
-                      palette: palette,
-                      size: layout.intelTitleSize,
-                      color: accent,
-                    ),
-                  ),
-                ),
-                _buildModeInfoButton(
-                  title: 'Puzzle Intel',
-                  message: _modeIntelMessage(),
-                  accent: accent,
-                  monochrome: monochrome,
-                  size: layout.compactLandscape ? 30 : 34,
-                ),
-              ],
+            Text(
+              'Puzzle Intel',
+              style: puzzleAcademyDisplayStyle(
+                palette: palette,
+                size: layout.intelTitleSize,
+                color: accent,
+              ),
             ),
             SizedBox(height: layout.intelSectionGap),
             _InfoLine(
