@@ -556,10 +556,9 @@ void main() {
       );
       expect(find.text('CLOSE'), findsOneWidget);
 
-      final closeButton = find.ancestor(
-        of: find.text('CLOSE'),
-        matching: find.byType(Material),
-      ).last;
+      final closeButton = find
+          .ancestor(of: find.text('CLOSE'), matching: find.byType(Material))
+          .last;
       await tester.ensureVisible(closeButton);
       await tester.tap(closeButton);
       await tester.pump();
@@ -607,10 +606,9 @@ void main() {
       expect(find.textContaining('(4 choices per question).'), findsOneWidget);
       expect(find.textContaining('(5 choices per question).'), findsNothing);
 
-      final closeButton = find.ancestor(
-        of: find.text('CLOSE'),
-        matching: find.byType(Material),
-      ).last;
+      final closeButton = find
+          .ancestor(of: find.text('CLOSE'), matching: find.byType(Material))
+          .last;
       await tester.ensureVisible(closeButton);
       await tester.tap(closeButton);
       await tester.pump();

@@ -62,10 +62,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await _pumpVsBotSelector(
-        tester,
-        size: const Size(390, 844),
-      );
+      await _pumpVsBotSelector(tester, size: const Size(390, 844));
 
       expect(find.text('YOU OPEN'), findsOneWidget);
       expect(find.text('MIXED START'), findsOneWidget);
@@ -87,7 +84,9 @@ void main() {
       );
       expect(startButtonFinder, findsOneWidget);
 
-      final backButtonRect = tester.getRect(find.byIcon(Icons.arrow_back_rounded));
+      final backButtonRect = tester.getRect(
+        find.byIcon(Icons.arrow_back_rounded),
+      );
       final startButtonRect = tester.getRect(startButtonFinder);
 
       final avatarSize = tester.getSize(avatarFinder);
@@ -119,7 +118,9 @@ void main() {
       await tester.pump();
 
       expect(
-        find.textContaining('is already cleared. Replay it or push to the next tier.'),
+        find.textContaining(
+          'is already cleared. Replay it or push to the next tier.',
+        ),
         findsNothing,
       );
       expect(
@@ -149,10 +150,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await _pumpVsBotSelector(
-        tester,
-        size: const Size(844, 390),
-      );
+      await _pumpVsBotSelector(tester, size: const Size(844, 390));
 
       expect(find.text('YOU OPEN'), findsOneWidget);
       expect(find.text('MIXED START'), findsOneWidget);
@@ -229,7 +227,9 @@ void main() {
       await tester.pump();
 
       expect(
-        find.textContaining('is already cleared. Replay it or push to the next tier.'),
+        find.textContaining(
+          'is already cleared. Replay it or push to the next tier.',
+        ),
         findsOneWidget,
       );
 
@@ -251,10 +251,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await _pumpVsBotSelector(
-        tester,
-        size: const Size(667, 375),
-      );
+      await _pumpVsBotSelector(tester, size: const Size(667, 375));
 
       final selectorPanel = find.byKey(
         const ValueKey<String>('bot_setup_selector_panel'),

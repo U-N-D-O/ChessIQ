@@ -71,9 +71,9 @@ class _VsBotSetupLayoutSpec {
         : isLandscape
         ? 308.0
         : tightPortrait
-      ? 304.0
+        ? 304.0
         : compactPortrait
-      ? 332.0
+        ? 332.0
         : 426.0;
 
     final viewportFraction = tightPortrait
@@ -2287,7 +2287,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       (layout.isLandscape
                           ? (compactLandscape ? 84.0 : 74.0)
                           : compact
-                        ? 92.0
+                          ? 92.0
                           : 116.0) +
                       (showCardStatus ? 36.0 : 0.0) +
                       (showCardDescription
@@ -2866,25 +2866,25 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         ),
         padding: EdgeInsets.fromLTRB(
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 12
-            : 16,
+              ? 14
+              : compactPhoneLayout
+              ? 12
+              : 16,
           splitLandscapeControls
-            ? 8
-            : compactPhoneLayout
-            ? 12
-            : 14,
+              ? 8
+              : compactPhoneLayout
+              ? 12
+              : 14,
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 12
-            : 16,
+              ? 14
+              : compactPhoneLayout
+              ? 12
+              : 16,
           splitLandscapeControls
-            ? 8
-            : compactPhoneLayout
-            ? 12
-            : 16,
+              ? 8
+              : compactPhoneLayout
+              ? 12
+              : 16,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2933,7 +2933,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               const Spacer()
             else
               SizedBox(
-                height: showTierStatusText ||
+                height:
+                    showTierStatusText ||
                         (!layout.compactPhoneLayout && !splitLandscapeControls)
                     ? 14
                     : 8,
@@ -2985,7 +2986,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                             : compactSelectorTiles
                             ? 'Locked'
                             : (_botTierLockReason(selectedBot, difficulty) ??
-                              'Locked');
+                                  'Locked');
 
                         return SizedBox(
                           width: tileWidth,
@@ -3037,25 +3038,25 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         ),
         padding: EdgeInsets.fromLTRB(
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 12
-            : 16,
+              ? 14
+              : compactPhoneLayout
+              ? 12
+              : 16,
           splitLandscapeControls
-            ? 8
-            : compactPhoneLayout
-            ? 12
-            : 14,
+              ? 8
+              : compactPhoneLayout
+              ? 12
+              : 14,
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 12
-            : 16,
+              ? 14
+              : compactPhoneLayout
+              ? 12
+              : 16,
           splitLandscapeControls
-            ? 8
-            : compactPhoneLayout
-            ? 12
-            : 16,
+              ? 8
+              : compactPhoneLayout
+              ? 12
+              : 16,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3207,25 +3208,25 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         ),
         padding: EdgeInsets.fromLTRB(
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 14
-            : 18,
+              ? 14
+              : compactPhoneLayout
+              ? 14
+              : 18,
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 14
-            : 18,
+              ? 14
+              : compactPhoneLayout
+              ? 14
+              : 18,
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 14
-            : 18,
+              ? 14
+              : compactPhoneLayout
+              ? 14
+              : 18,
           splitLandscapeControls
-            ? 14
-            : compactPhoneLayout
-            ? 14
-            : 18,
+              ? 14
+              : compactPhoneLayout
+              ? 14
+              : 18,
         ),
         child: SizedBox(
           height: selectorActionHeight,
@@ -3612,44 +3613,43 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         child: Wrap(
                           spacing: 6,
                           runSpacing: 6,
-                          children: List.generate(
-                            _botCharacters.length,
-                            (index) {
-                              final bot = _botCharacters[index];
-                              final active = index == _botSetupSelectedIndex;
-                              final unlocked = _isBotUnlocked(bot);
-                              final cleared = _isBotFullyCleared(bot);
-                              final dotColor = active
-                                  ? marqueeAccent
-                                  : cleared
-                                  ? arcade.victory
-                                  : unlocked
-                                  ? arcade.text.withValues(alpha: 0.44)
-                                  : arcade.text.withValues(alpha: 0.18);
-                              return AnimatedContainer(
-                                duration: puzzleAcademyMotionDuration(
-                                  reducedEffects: arcade.reducedEffects,
-                                  milliseconds: 220,
-                                ),
-                                curve: puzzleAcademyMotionCurve(
-                                  reducedEffects: arcade.reducedEffects,
-                                ),
-                                width: active ? 22 : 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(999),
-                                  color: dotColor,
-                                  boxShadow: active
-                                      ? puzzleAcademySurfaceGlow(
-                                          dotColor,
-                                          monochrome: arcade.monochrome,
-                                          strength: 0.26,
-                                        )
-                                      : null,
-                                ),
-                              );
-                            },
-                          ),
+                          children: List.generate(_botCharacters.length, (
+                            index,
+                          ) {
+                            final bot = _botCharacters[index];
+                            final active = index == _botSetupSelectedIndex;
+                            final unlocked = _isBotUnlocked(bot);
+                            final cleared = _isBotFullyCleared(bot);
+                            final dotColor = active
+                                ? marqueeAccent
+                                : cleared
+                                ? arcade.victory
+                                : unlocked
+                                ? arcade.text.withValues(alpha: 0.44)
+                                : arcade.text.withValues(alpha: 0.18);
+                            return AnimatedContainer(
+                              duration: puzzleAcademyMotionDuration(
+                                reducedEffects: arcade.reducedEffects,
+                                milliseconds: 220,
+                              ),
+                              curve: puzzleAcademyMotionCurve(
+                                reducedEffects: arcade.reducedEffects,
+                              ),
+                              width: active ? 22 : 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                color: dotColor,
+                                boxShadow: active
+                                    ? puzzleAcademySurfaceGlow(
+                                        dotColor,
+                                        monochrome: arcade.monochrome,
+                                        strength: 0.26,
+                                      )
+                                    : null,
+                              ),
+                            );
+                          }),
                         ),
                       ),
                     ],

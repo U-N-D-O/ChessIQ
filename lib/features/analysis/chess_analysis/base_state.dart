@@ -361,13 +361,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   EngineSearchHandle? _botSearchHandle;
   int _engineRequestSequence = 0;
   EvalSnapshot? _currentEvalSnapshot;
-    final Map<String, PositionAnalysisCacheEntry> _positionAnalysisCacheByFen =
+  final Map<String, PositionAnalysisCacheEntry> _positionAnalysisCacheByFen =
       <String, PositionAnalysisCacheEntry>{};
   final Map<String, EngineSearchUpdate> _primaryEngineUpdateByFen =
       <String, EngineSearchUpdate>{};
-    final Map<String, EngineSearchHandle>
-      _backgroundMoveQualityConfirmationsByFen =
-      <String, EngineSearchHandle>{};
+  final Map<String, EngineSearchHandle>
+  _backgroundMoveQualityConfirmationsByFen = <String, EngineSearchHandle>{};
   Completer<List<EngineLine>>? _botSearchCompleter;
   final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
   int _botSearchMultiPv = 1;
@@ -2799,7 +2798,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _cancelBackgroundMoveQualityConfirmations({
     String reason = 'move-quality pipeline invalidated',
   }) {
-    for (final handle in _backgroundMoveQualityConfirmationsByFen.values.toList()) {
+    for (final handle
+        in _backgroundMoveQualityConfirmationsByFen.values.toList()) {
       handle.cancel(reason: reason);
     }
     _backgroundMoveQualityConfirmationsByFen.clear();
@@ -3385,7 +3385,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _engineOwner = null;
     _botSearchHandle = null;
     _currentEvalSnapshot = null;
-    _cancelBackgroundMoveQualityConfirmations(reason: 'engine session released');
+    _cancelBackgroundMoveQualityConfirmations(
+      reason: 'engine session released',
+    );
     _clearPositionAnalysisCache();
     if (engine == null) return;
     try {
@@ -3594,14 +3596,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  void _rememberPositionAnalysis(
-    String fen,
-    PositionAnalysisCacheEntry entry,
-  ) {
+  void _rememberPositionAnalysis(String fen, PositionAnalysisCacheEntry entry) {
     _positionAnalysisCacheByFen.remove(fen);
     _positionAnalysisCacheByFen[fen] = entry;
     while (_positionAnalysisCacheByFen.length > _positionAnalysisCacheLimit) {
-      _positionAnalysisCacheByFen.remove(_positionAnalysisCacheByFen.keys.first);
+      _positionAnalysisCacheByFen.remove(
+        _positionAnalysisCacheByFen.keys.first,
+      );
     }
   }
 
@@ -3620,7 +3621,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     final cached =
-        _positionAnalysisCacheByFen[fen] ?? PositionAnalysisCacheEntry(fen: fen);
+        _positionAnalysisCacheByFen[fen] ??
+        PositionAnalysisCacheEntry(fen: fen);
     _rememberPositionAnalysis(fen, cached.mergedWithAnalysisLines(lines));
   }
 
@@ -3648,7 +3650,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
     final fen = update.request.fen;
     final cached =
-        _positionAnalysisCacheByFen[fen] ?? PositionAnalysisCacheEntry(fen: fen);
+        _positionAnalysisCacheByFen[fen] ??
+        PositionAnalysisCacheEntry(fen: fen);
     _rememberPositionAnalysis(fen, cached.mergedWithPrimaryUpdate(update));
     _primaryEngineUpdateByFen[fen] = update;
     while (_primaryEngineUpdateByFen.length > _positionAnalysisCacheLimit) {
@@ -3777,8 +3780,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _PendingMoveQualityGrading pending, {
     String? fen,
     bool? whiteToMove,
-  }
-  ) {
+  }) {
     final engine = _engine;
     final targetFen = fen ?? pending.postMoveFen;
     if (engine == null || targetFen == null) {
@@ -3916,7 +3918,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final currentFen = _genFen();
     final cachedPosition = _cachedPositionAnalysisForFen(currentFen);
     final livePreMoveSnapshot =
-        _currentEvalSnapshot != null && _currentEvalSnapshot!.matchesFen(currentFen)
+        _currentEvalSnapshot != null &&
+            _currentEvalSnapshot!.matchesFen(currentFen)
         ? _currentEvalSnapshot
         : null;
     final preMoveSnapshot = preferBestEvalSnapshot(
@@ -10409,7 +10412,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _topLines = [];
       _analysisLines = [];
       _analysisLinesFen = null;
-        _restoreCachedEvalForFen(_genFen());
+      _restoreCachedEvalForFen(_genFen());
       _vsBotCharge = preserveSpentPowerCharge
           ? chargeAtUndo
           : restoredCharge ??

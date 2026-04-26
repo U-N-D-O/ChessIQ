@@ -161,7 +161,8 @@ class PositionAnalysisCacheEntry {
   final EngineLine? primaryLine;
   final List<EngineLine> analysisLines;
 
-  int get analysisDepth => analysisLines.isEmpty ? 0 : analysisLines.first.depth;
+  int get analysisDepth =>
+      analysisLines.isEmpty ? 0 : analysisLines.first.depth;
 
   int get primaryDepth => primaryLine?.depth ?? 0;
 
@@ -184,7 +185,9 @@ class PositionAnalysisCacheEntry {
     );
   }
 
-  PositionAnalysisCacheEntry mergedWithPrimaryUpdate(EngineSearchUpdate update) {
+  PositionAnalysisCacheEntry mergedWithPrimaryUpdate(
+    EngineSearchUpdate update,
+  ) {
     assert(update.request.fen == fen);
     return copyWith(
       evalSnapshot: preferBestEvalSnapshot(evalSnapshot, update.snapshot),
@@ -192,7 +195,9 @@ class PositionAnalysisCacheEntry {
     );
   }
 
-  PositionAnalysisCacheEntry mergedWithAnalysisLines(List<EngineLine> nextLines) {
+  PositionAnalysisCacheEntry mergedWithAnalysisLines(
+    List<EngineLine> nextLines,
+  ) {
     return copyWith(
       analysisLines: preferDeeperAnalysisLines(analysisLines, nextLines),
     );
@@ -259,7 +264,9 @@ List<EngineLine> preferDeeperAnalysisLines(
 ) {
   final normalizedCurrent = _normalizedEngineLines(current);
   final normalizedCandidate = _normalizedEngineLines(candidate);
-  final currentDepth = normalizedCurrent.isEmpty ? 0 : normalizedCurrent.first.depth;
+  final currentDepth = normalizedCurrent.isEmpty
+      ? 0
+      : normalizedCurrent.first.depth;
   final candidateDepth = normalizedCandidate.isEmpty
       ? 0
       : normalizedCandidate.first.depth;
@@ -288,8 +295,9 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
   PositionAnalysisCacheEntry? postMoveCacheEntry,
   required int minimumDepth,
 }) {
-  final normalizedCapturedPreMoveLines =
-      _normalizedEngineLines(capturedPreMoveLines);
+  final normalizedCapturedPreMoveLines = _normalizedEngineLines(
+    capturedPreMoveLines,
+  );
   final preMoveLines = preferDeeperAnalysisLines(
     normalizedCapturedPreMoveLines,
     preMoveCacheEntry?.analysisLines ?? const <EngineLine>[],
@@ -334,7 +342,9 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
     } else {
       preMoveMoverEvalPawns = resolvedPreMovePrimaryLine.eval / 100.0;
       preMoveMoverWinProbability = whiteCentipawnsToMoverWinProbability(
-        moverIsWhite ? resolvedPreMovePrimaryLine.eval : -resolvedPreMovePrimaryLine.eval,
+        moverIsWhite
+            ? resolvedPreMovePrimaryLine.eval
+            : -resolvedPreMovePrimaryLine.eval,
         moverIsWhite: moverIsWhite,
       );
       usedPreMoveFallback = true;
@@ -349,7 +359,8 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
       ? null
       : identical(resolvedPostMoveLine, livePostMoveLine)
       ? livePostMoveWhiteToMove ?? postMoveCacheEntry?.evalSnapshot?.whiteToMove
-      : postMoveCacheEntry?.evalSnapshot?.whiteToMove ?? livePostMoveWhiteToMove;
+      : postMoveCacheEntry?.evalSnapshot?.whiteToMove ??
+            livePostMoveWhiteToMove;
   final hasMaturePostMoveLine =
       resolvedPostMoveLine != null &&
       resolvedPostMoveWhiteToMove != null &&
