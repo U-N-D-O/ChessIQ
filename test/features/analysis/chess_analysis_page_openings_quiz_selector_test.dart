@@ -521,11 +521,32 @@ void main() {
       expect(modeRect.top, lessThan(levelRect.top));
       expect(levelRect.top, lessThan(missionRect.top));
 
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>('quiz_setup_mode_info_identify_opening_name'),
-        ),
+      final startButton = find.byKey(
+        const ValueKey<String>('quiz_setup_start_button'),
       );
+      expect(startButton, findsOneWidget);
+      await tester.dragUntilVisible(
+        startButton,
+        find.byType(Scrollable).first,
+        const Offset(0, -300),
+      );
+      await tester.pump();
+      expect(
+        find.descendant(of: startButton, matching: find.text('START QUIZ')),
+        findsOneWidget,
+      );
+
+      final identifyInfoButton = find.byKey(
+        const ValueKey<String>('quiz_setup_mode_info_identify_opening_name'),
+      );
+      await tester.dragUntilVisible(
+        identifyInfoButton,
+        find.byType(Scrollable).first,
+        const Offset(0, 300),
+      );
+      await tester.pump();
+
+      await tester.tap(identifyInfoButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
 
@@ -609,6 +630,15 @@ void main() {
         find.byKey(const ValueKey<String>('quiz_setup_level_panel')),
       );
       expect(modeRect.left, lessThan(levelRect.left));
+
+      final startButton = find.byKey(
+        const ValueKey<String>('quiz_setup_start_button'),
+      );
+      expect(startButton, findsOneWidget);
+      expect(
+        find.descendant(of: startButton, matching: find.text('START QUIZ')),
+        findsOneWidget,
+      );
 
       final identifyRect = tester.getRect(identifyCard);
       final completeRect = tester.getRect(completeCard);

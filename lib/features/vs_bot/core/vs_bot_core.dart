@@ -1322,6 +1322,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         final selectedDifficulty = _selectedBotDifficulty;
         final progressTitle = _vsBotProgressTitle;
         final progressMessage = _vsBotProgressMessage;
+        final showProgressOverlay =
+            isWin && progressTitle != null && progressMessage != null;
         final challengeTone = selectedBot == null
           ? null
           : _botDifficultyToneFor(selectedBot, selectedDifficulty, arcade);
@@ -1369,7 +1371,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         }
 
         Widget? progressCard;
-        if (progressTitle != null && progressMessage != null) {
+        if (!showProgressOverlay &&
+            progressTitle != null &&
+            progressMessage != null) {
           progressCard = Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -1630,6 +1634,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 isWin: isWin,
                 accent: accent,
                 icon: icon,
+                arcade: arcade,
+                progressTitle: showProgressOverlay ? progressTitle : null,
+                progressMessage: showProgressOverlay ? progressMessage : null,
               ),
               SizedBox(height: isLandscape ? 10 : 18),
               Text(
@@ -1786,137 +1793,228 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     required bool isWin,
     required Color accent,
     required IconData icon,
+    required _VsBotArcadePalette arcade,
+    String? progressTitle,
+    String? progressMessage,
   }) {
+    final hasProgressOverlay =
+        isWin && progressTitle != null && progressMessage != null;
+    const overlayDelayMs = 1500;
+    const overlayDurationMs = 420;
+    const overlayTotalMs = overlayDelayMs + overlayDurationMs;
+    final overlayStart = overlayDelayMs / overlayTotalMs;
+
     return SizedBox(
-      width: 96,
-      height: 96,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 1150),
-        curve: Curves.easeOutCubic,
-        builder: (context, progress, child) {
-          final isDraw = outcome == GameOutcome.draw;
-          const introMultiplier = 1.0;
-          final glowAlpha = 0.12 + ((1 - progress) * 0.34 * introMultiplier);
-          final ringOpacity = ((1 - progress) * 0.55 * introMultiplier).clamp(
-            0.0,
-            1.0,
-          );
-          final ringScale = 0.84 + (progress * 0.62);
-          final winIconScale =
-              0.70 + (0.30 * Curves.easeOutBack.transform(progress));
-          final drawIconScale = 0.88 + (0.12 * progress);
+      width: hasProgressOverlay ? 292 : 96,
+      height: hasProgressOverlay ? 132 : 96,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          SizedBox(
+            width: 96,
+            height: 96,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 1150),
+              curve: Curves.easeOutCubic,
+              builder: (context, progress, child) {
+                final isDraw = outcome == GameOutcome.draw;
+                const introMultiplier = 1.0;
+                final glowAlpha =
+                    0.12 + ((1 - progress) * 0.34 * introMultiplier);
+                final ringOpacity =
+                    ((1 - progress) * 0.55 * introMultiplier).clamp(
+                      0.0,
+                      1.0,
+                    );
+                final ringScale = 0.84 + (progress * 0.62);
+                final winIconScale =
+                    0.70 + (0.30 * Curves.easeOutBack.transform(progress));
+                final drawIconScale = 0.88 + (0.12 * progress);
 
-          double lossShake = 0;
-          if (!isWin && !isDraw) {
-            if (progress < 0.20) {
-              lossShake = (-12 * introMultiplier) * (progress / 0.20);
-            } else if (progress < 0.40) {
-              lossShake = (12 * introMultiplier) * ((progress - 0.20) / 0.20);
-            } else if (progress < 0.60) {
-              lossShake = (-8 * introMultiplier) * ((progress - 0.40) / 0.20);
-            } else if (progress < 0.80) {
-              lossShake = (8 * introMultiplier) * ((progress - 0.60) / 0.20);
-            }
-          }
+                double lossShake = 0;
+                if (!isWin && !isDraw) {
+                  if (progress < 0.20) {
+                    lossShake = (-12 * introMultiplier) * (progress / 0.20);
+                  } else if (progress < 0.40) {
+                    lossShake =
+                        (12 * introMultiplier) * ((progress - 0.20) / 0.20);
+                  } else if (progress < 0.60) {
+                    lossShake =
+                        (-8 * introMultiplier) * ((progress - 0.40) / 0.20);
+                  } else if (progress < 0.80) {
+                    lossShake =
+                        (8 * introMultiplier) * ((progress - 0.60) / 0.20);
+                  }
+                }
 
-          final iconScale = isDraw
-              ? drawIconScale
-              : isWin
-              ? winIconScale
-              : 1.0;
+                final iconScale = isDraw
+                    ? drawIconScale
+                    : isWin
+                    ? winIconScale
+                    : 1.0;
 
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      accent.withValues(alpha: glowAlpha),
-                      accent.withValues(alpha: 0.03),
-                    ],
-                  ),
-                ),
-              ),
-              if (isDraw)
-                Transform.scale(
-                  scale: ringScale,
-                  child: Opacity(
-                    opacity: ringOpacity,
-                    child: Container(
-                      width: 94,
-                      height: 94,
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 96,
+                      height: 96,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: accent.withValues(alpha: 0.40),
-                          width: 2.0,
+                        gradient: RadialGradient(
+                          colors: [
+                            accent.withValues(alpha: glowAlpha),
+                            accent.withValues(alpha: 0.03),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-              if (isWin)
-                Opacity(
-                  opacity: (1 - progress).clamp(0.0, 1.0),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: const [
-                      Positioned(
-                        top: 6,
-                        child: Icon(
-                          Icons.star_rounded,
-                          color: Color(0xFFFFF0AA),
-                          size: 14,
+                    if (isDraw)
+                      Transform.scale(
+                        scale: ringScale,
+                        child: Opacity(
+                          opacity: ringOpacity,
+                          child: Container(
+                            width: 94,
+                            height: 94,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: accent.withValues(alpha: 0.40),
+                                width: 2.0,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      Positioned(
-                        left: 7,
-                        child: Icon(
-                          Icons.star_rounded,
-                          color: Color(0xFFFFF0AA),
-                          size: 11,
+                    if (isWin)
+                      Opacity(
+                        opacity: (1 - progress).clamp(0.0, 1.0),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: const [
+                            Positioned(
+                              top: 6,
+                              child: Icon(
+                                Icons.star_rounded,
+                                color: Color(0xFFFFF0AA),
+                                size: 14,
+                              ),
+                            ),
+                            Positioned(
+                              left: 7,
+                              child: Icon(
+                                Icons.star_rounded,
+                                color: Color(0xFFFFF0AA),
+                                size: 11,
+                              ),
+                            ),
+                            Positioned(
+                              right: 7,
+                              child: Icon(
+                                Icons.star_rounded,
+                                color: Color(0xFFFFF0AA),
+                                size: 11,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Positioned(
-                        right: 7,
-                        child: Icon(
-                          Icons.star_rounded,
-                          color: Color(0xFFFFF0AA),
-                          size: 11,
+                    Transform.translate(
+                      offset: Offset(lossShake, 0),
+                      child: Transform.scale(
+                        scale: iconScale,
+                        child: Container(
+                          width: 76,
+                          height: 76,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: [
+                                accent.withValues(alpha: 0.38),
+                                accent.withValues(alpha: 0.08),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: accent.withValues(alpha: 0.48),
+                            ),
+                          ),
+                          child: Icon(icon, color: accent, size: 34),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              Transform.translate(
-                offset: Offset(lossShake, 0),
-                child: Transform.scale(
-                  scale: iconScale,
-                  child: Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          accent.withValues(alpha: 0.38),
-                          accent.withValues(alpha: 0.08),
-                        ],
-                      ),
-                      border: Border.all(color: accent.withValues(alpha: 0.48)),
                     ),
-                    child: Icon(icon, color: accent, size: 34),
+                  ],
+                );
+              },
+            ),
+          ),
+          if (hasProgressOverlay)
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: overlayTotalMs),
+              curve: Curves.linear,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 280),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                decoration: _vsBotArcadePanelDecoration(
+                  palette: arcade,
+                  accent: accent,
+                  radius: 20,
+                  borderWidth: 2.2,
+                  inset: true,
+                  elevated: false,
+                  fillColor: Color.alphaBlend(
+                    accent.withValues(alpha: arcade.monochrome ? 0.08 : 0.14),
+                    arcade.panelAlt,
                   ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      progressTitle.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: puzzleAcademyIdentityStyle(
+                        palette: arcade.base,
+                        size: 8.0,
+                        color: accent,
+                        withGlow: true,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      progressMessage,
+                      textAlign: TextAlign.center,
+                      style: puzzleAcademyHudStyle(
+                        palette: arcade.base,
+                        size: 10.6,
+                        color: arcade.textMuted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          );
-        },
+              builder: (context, progress, child) {
+                final reveal = progress <= overlayStart
+                    ? 0.0
+                    : Curves.easeOutCubic.transform(
+                        (progress - overlayStart) / (1 - overlayStart),
+                      );
+
+                return IgnorePointer(
+                  child: Opacity(
+                    opacity: reveal,
+                    child: Transform.translate(
+                      offset: Offset(0, 10 * (1 - reveal)),
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
     );
   }

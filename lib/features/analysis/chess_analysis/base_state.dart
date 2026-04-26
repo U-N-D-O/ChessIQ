@@ -5369,6 +5369,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       ),
       builder: (sheetContext) {
         final sheetScheme = Theme.of(sheetContext).colorScheme;
+        final isLandscape =
+            MediaQuery.of(sheetContext).orientation == Orientation.landscape;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -5393,55 +5395,76 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
                 ),
                 const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    for (final option in options)
-                      InkWell(
-                        onTap: () =>
-                            Navigator.of(sheetContext).pop(option.value),
-                        borderRadius: BorderRadius.circular(18),
-                        child: Container(
-                          width: 132,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Color.alphaBlend(
-                              sheetScheme.primary.withValues(alpha: 0.06),
-                              sheetScheme.surface,
-                            ),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: sheetScheme.outline.withValues(
-                                alpha: 0.28,
-                              ),
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _pieceImage(
-                                '${option.value}_${whitePiece ? 'w' : 'b'}',
-                                width: 60,
-                                height: 60,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                option.label,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: sheetScheme.onSurface,
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    const spacing = 12.0;
+                    final targetTileWidth = isLandscape
+                        ? ((constraints.maxWidth -
+                                    (spacing * (options.length - 1))) /
+                                options.length)
+                            .clamp(78.0, 132.0)
+                            .toDouble()
+                        : ((constraints.maxWidth - spacing) / 2)
+                            .clamp(120.0, 132.0)
+                            .toDouble();
+                    final pieceSize = isLandscape
+                        ? (targetTileWidth - 30).clamp(44.0, 60.0).toDouble()
+                        : 60.0;
+
+                    return Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        for (final option in options)
+                          SizedBox(
+                            width: targetTileWidth,
+                            child: InkWell(
+                              onTap: () =>
+                                  Navigator.of(sheetContext).pop(option.value),
+                              borderRadius: BorderRadius.circular(18),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Color.alphaBlend(
+                                    sheetScheme.primary.withValues(alpha: 0.06),
+                                    sheetScheme.surface,
+                                  ),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: sheetScheme.outline.withValues(
+                                      alpha: 0.28,
+                                    ),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _pieceImage(
+                                      '${option.value}_${whitePiece ? 'w' : 'b'}',
+                                      width: pieceSize,
+                                      height: pieceSize,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      option.label,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: sheetScheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

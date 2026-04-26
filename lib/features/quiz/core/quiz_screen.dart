@@ -5274,6 +5274,123 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
+  Widget _buildQuizAcademyStartButton({
+    required Key buttonKey,
+    required _QuizAcademyPalette palette,
+    required String label,
+    required Color accent,
+    required VoidCallback? onTap,
+  }) {
+    final enabled = onTap != null;
+    final foreground = accent.computeLuminance() > 0.55
+        ? const Color(0xFF081015)
+        : Colors.white;
+    final effectiveForeground = enabled
+        ? foreground
+        : foreground.withValues(alpha: 0.55);
+    final effectiveAccent = enabled ? accent : accent.withValues(alpha: 0.46);
+
+    return Material(
+      key: buttonKey,
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Color.alphaBlend(
+                  palette.boardLight.withValues(alpha: 0.18),
+                  effectiveAccent,
+                ),
+                effectiveAccent,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: effectiveAccent.withValues(alpha: enabled ? 0.96 : 0.42),
+              width: 2,
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: palette.shadow.withValues(alpha: enabled ? 0.26 : 0.14),
+                offset: const Offset(5, 5),
+                blurRadius: 0,
+              ),
+              if (enabled)
+                BoxShadow(
+                  color: effectiveAccent.withValues(alpha: 0.20),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                ),
+            ],
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: effectiveForeground.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: effectiveForeground.withValues(alpha: 0.26),
+                    width: 2,
+                  ),
+                ),
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  size: 24,
+                  color: effectiveForeground,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'START QUIZ',
+                      style: _academyHudStyle(
+                        palette: palette,
+                        color: effectiveForeground.withValues(alpha: 0.88),
+                        size: 10.6,
+                        weight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      label,
+                      style: _academyDisplayStyle(
+                        palette: palette,
+                        color: effectiveForeground,
+                        size: 17,
+                        weight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                Icons.arrow_forward_rounded,
+                size: 24,
+                color: effectiveForeground.withValues(alpha: 0.92),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuizAcademyMissionPanel({
     required _QuizAcademySetupLayoutSpec layout,
     required int currentPoolCount,
@@ -5376,14 +5493,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: _academyHudButton(
+            child: _buildQuizAcademyStartButton(
               buttonKey: const ValueKey<String>('quiz_setup_start_button'),
               palette: palette,
-              icon: Icons.play_arrow_rounded,
               label: _academyQuizModeStartLabel(_quizMode),
               accent: modeAccent,
               onTap: canStart ? _startQuizSession : null,
-              filled: true,
             ),
           ),
         ],
