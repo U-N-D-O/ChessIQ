@@ -184,6 +184,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   DateTime? _menuSparkLastUpdate;
   DateTime? _creditsBackdropLastUpdate;
+  late final Future<String> _creditsVersionFuture = _loadCreditsVersionLabel();
   double _menuDotTime = 0.0;
   double _blueYellowContactTime = 0.0;
   late final double _blueDotPhase;
@@ -2144,6 +2145,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   color: visuals.palette.text.withValues(alpha: 0.88),
                 ),
               ),
+              SizedBox(height: condensed ? 8 : 10),
+              _buildCreditsVersionLabel(visuals, condensed: condensed),
             ],
           );
 
@@ -2180,6 +2183,45 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           );
         },
       ),
+    );
+  }
+
+  Future<String> _loadCreditsVersionLabel() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final version = packageInfo.version.trim();
+      final buildNumber = packageInfo.buildNumber.trim();
+      if (version.isEmpty) {
+        return 'Version unavailable';
+      }
+      return buildNumber.isEmpty
+          ? 'Version $version'
+          : 'Version $version (Build $buildNumber)';
+    } catch (_) {
+      return 'Version unavailable';
+    }
+  }
+
+  Widget _buildCreditsVersionLabel(
+    _CreditsDialogVisuals visuals, {
+    required bool condensed,
+  }) {
+    return FutureBuilder<String>(
+      future: _creditsVersionFuture,
+      initialData: 'Version...',
+      builder: (context, snapshot) {
+        final versionLabel = snapshot.data ?? 'Version...';
+        return Text(
+          versionLabel,
+          key: const ValueKey<String>('credits_version_label'),
+          style: _creditsBodyStyle(
+            visuals,
+            size: condensed ? 11.0 : 11.6,
+            color: visuals.secondaryAccent.withValues(alpha: 0.90),
+            weight: FontWeight.w700,
+          ),
+        );
+      },
     );
   }
 
@@ -4814,7 +4856,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (mounted) {
       setState(() => _quizEligibleCount = eligible.length);
     }
-    _addLog('Quiz-eligible openings: ${eligible.length}');
   }
 
   String _normalizeSan(String raw) {

@@ -3,6 +3,7 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/analysis/screens/chess_analysis_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +15,13 @@ Future<EconomyProvider> _pumpCreditsDialog(
     'mute_sounds_v1': true,
     'haptics_enabled_v1': false,
   });
+  PackageInfo.setMockInitialValues(
+    appName: 'ChessIQ',
+    packageName: 'com.example.chessiq',
+    version: '1.0.0',
+    buildNumber: '1',
+    buildSignature: '',
+  );
 
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
@@ -81,10 +89,15 @@ void main() {
       final ownership = find.byKey(
         const ValueKey<String>('credits_ownership_copy'),
       );
+      final versionLabel = find.byKey(
+        const ValueKey<String>('credits_version_label'),
+      );
 
       expect(shell, findsOneWidget);
       expect(title, findsOneWidget);
       expect(ownership, findsOneWidget);
+      expect(versionLabel, findsOneWidget);
+      expect(find.text('Version 1.0.0 (Build 1)'), findsOneWidget);
       expect(
         find.descendant(
           of: ownership,
