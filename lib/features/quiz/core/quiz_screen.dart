@@ -202,64 +202,177 @@ class _QuizAcademySetupGlowPainter extends CustomPainter {
   const _QuizAcademySetupGlowPainter({
     required this.palette,
     required this.phase,
+    required this.reducedEffects,
   });
 
   final _QuizAcademyPalette palette;
   final double phase;
+  final bool reducedEffects;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final beamPaint = Paint()
-      ..shader = ui.Gradient.linear(
-        Offset.zero,
-        Offset(size.width, size.height),
-        <Color>[
-          palette.boardLight.withValues(alpha: 0.0),
-          palette.boardLight.withValues(alpha: 0.08),
-          palette.boardLight.withValues(alpha: 0.0),
-        ],
-        <double>[0.0, 0.5, 1.0],
-      );
-    for (var index = 0; index < 4; index++) {
-      final shift =
-          ((phase * (size.width + 200)) + (index * size.width * 0.32)) %
-          (size.width + 220);
-      final path = Path()
-        ..moveTo(shift - 150, 0)
-        ..lineTo(shift - 60, 0)
-        ..lineTo(shift + 40, size.height)
-        ..lineTo(shift - 50, size.height)
-        ..close();
-      canvas.drawPath(path, beamPaint);
-    }
+    final motionPhase = reducedEffects ? 0.0 : phase * pi * 2;
 
-    final orbColors = <Color>[
-      palette.cyan.withValues(alpha: 0.16),
-      palette.amber.withValues(alpha: 0.14),
-      palette.emerald.withValues(alpha: 0.11),
-    ];
-    for (var index = 0; index < orbColors.length; index++) {
-      final drift = (((phase + (index * 0.24)) % 1.0) - 0.5) * 90;
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(size.width * 0.08, 0),
+          Offset(size.width * 0.92, size.height),
+          <Color>[
+            palette.cyan.withValues(alpha: 0.035),
+            palette.amber.withValues(alpha: 0.018),
+            palette.emerald.withValues(alpha: 0.045),
+          ],
+          <double>[0.0, 0.48, 1.0],
+        ),
+    );
+
+    void drawAura({
+      required double alignmentX,
+      required double alignmentY,
+      required double radiusFactor,
+      required double xAmplitude,
+      required double yAmplitude,
+      required double speed,
+      required double offset,
+      required Color color,
+    }) {
       final center = Offset(
-        (size.width * (0.22 + (index * 0.26))) + drift,
-        size.height * (0.2 + (index * 0.18)),
+        size.width * alignmentX +
+            sin((motionPhase * speed) + offset) * size.width * xAmplitude,
+        size.height * alignmentY +
+            cos((motionPhase * speed * 0.82) + offset) *
+                size.height *
+                yAmplitude,
       );
-      final radius = size.shortestSide * (index == 1 ? 0.22 : 0.18);
+      final radius = size.shortestSide * radiusFactor;
       canvas.drawCircle(
         center,
         radius,
         Paint()
-          ..shader = ui.Gradient.radial(center, radius, <Color>[
-            orbColors[index],
-            orbColors[index].withValues(alpha: 0.0),
-          ]),
+          ..shader = ui.Gradient.radial(
+            center,
+            radius,
+            <Color>[
+              color,
+              color.withValues(alpha: color.a * 0.42),
+              color.withValues(alpha: 0.0),
+            ],
+            <double>[0.0, 0.55, 1.0],
+          ),
       );
     }
+
+    drawAura(
+      alignmentX: 0.14,
+      alignmentY: 0.18,
+      radiusFactor: 0.34,
+      xAmplitude: 0.018,
+      yAmplitude: 0.012,
+      speed: 0.18,
+      offset: 0.4,
+      color: palette.cyan.withValues(alpha: 0.12),
+    );
+    drawAura(
+      alignmentX: 0.82,
+      alignmentY: 0.16,
+      radiusFactor: 0.30,
+      xAmplitude: 0.015,
+      yAmplitude: 0.014,
+      speed: 0.16,
+      offset: 1.8,
+      color: palette.amber.withValues(alpha: 0.10),
+    );
+    drawAura(
+      alignmentX: 0.56,
+      alignmentY: 0.74,
+      radiusFactor: 0.42,
+      xAmplitude: 0.02,
+      yAmplitude: 0.01,
+      speed: 0.12,
+      offset: 3.2,
+      color: palette.emerald.withValues(alpha: 0.08),
+    );
+
+    final cloudPaints = <Paint>[
+      Paint()..color = palette.cyan.withValues(alpha: 0.055),
+      Paint()..color = palette.amber.withValues(alpha: 0.045),
+      Paint()..color = palette.text.withValues(alpha: 0.04),
+    ];
+    for (var index = 0; index < 7; index++) {
+      final drift = sin((motionPhase * 0.15) + (index * 0.9)) * 10;
+      final top = size.height * (0.12 + ((index % 4) * 0.12));
+      final left = size.width * (0.06 + ((index * 0.14) % 0.82)) + drift;
+      final width = size.width * (index.isEven ? 0.16 : 0.11);
+      final height = index % 3 == 0 ? 14.0 : 10.0;
+      final rect = Rect.fromLTWH(left, top, width, height);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+        cloudPaints[index % cloudPaints.length],
+      );
+    }
+
+    final chipPaint = Paint()..color = palette.text.withValues(alpha: 0.075);
+    final sparkPaint = Paint()
+      ..color = palette.boardLight.withValues(alpha: 0.08);
+    for (var index = 0; index < 16; index++) {
+      final baseX = size.width * ((index * 17 % 100) / 100);
+      final baseY = size.height * (0.10 + ((index * 13 % 55) / 100));
+      final driftX = sin((motionPhase * 0.10) + index) * 4;
+      final driftY = cos((motionPhase * 0.08) + index) * 3;
+      final chipSize = index % 4 == 0 ? 4.0 : 3.0;
+      final rect = Rect.fromLTWH(
+        baseX + driftX,
+        baseY + driftY,
+        chipSize,
+        chipSize,
+      );
+      canvas.drawRect(rect, index.isEven ? chipPaint : sparkPaint);
+    }
+
+    final floorGlow = Rect.fromLTWH(
+      size.width * 0.06,
+      size.height * 0.70,
+      size.width * 0.88,
+      size.height * 0.20,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(floorGlow, const Radius.circular(40)),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          floorGlow.topCenter,
+          floorGlow.bottomCenter,
+          <Color>[
+            palette.boardLight.withValues(alpha: 0.0),
+            palette.boardLight.withValues(alpha: 0.05),
+            palette.boardDark.withValues(alpha: 0.10),
+          ],
+          <double>[0.0, 0.42, 1.0],
+        ),
+    );
+
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(0, size.height),
+          <Color>[
+            Colors.transparent,
+            palette.shell.withValues(alpha: 0.03),
+            palette.backdrop.withValues(alpha: 0.12),
+          ],
+          <double>[0.0, 0.72, 1.0],
+        ),
+    );
   }
 
   @override
   bool shouldRepaint(covariant _QuizAcademySetupGlowPainter oldDelegate) {
-    return oldDelegate.phase != phase || oldDelegate.palette != palette;
+    return oldDelegate.phase != phase ||
+        oldDelegate.palette != palette ||
+        oldDelegate.reducedEffects != reducedEffects;
   }
 }
 
@@ -3871,12 +3984,28 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final pageTitle = _quizOpeningsRoutePage
         ? 'OPENINGS QUIZ'
         : 'OPENING ACADEMY';
-    final pageSubtitle = _quizOpeningsRoutePage
-        ? 'MODE / LEVEL / START'
-        : 'QUIZ OR STUDY';
+    final pageSubtitle = _quizOpeningsRoutePage ? '' : 'QUIZ OR STUDY';
     final compactLandscapeHeader = layout.compactLandscape;
     final compactPortraitSetupHeader =
         _quizOpeningsRoutePage && layout.compactPortrait;
+    final setupBackdropReducedEffects =
+        media.disableAnimations || layout.compactPhoneLayout;
+    final backgroundColors = _quizOpeningsRoutePage
+        ? <Color>[
+            Color.alphaBlend(
+              palette.cyan.withValues(alpha: useMonochrome ? 0.04 : 0.16),
+              palette.backdrop,
+            ),
+            Color.alphaBlend(
+              palette.amber.withValues(alpha: useMonochrome ? 0.03 : 0.10),
+              palette.shell,
+            ),
+            Color.alphaBlend(
+              palette.emerald.withValues(alpha: useMonochrome ? 0.04 : 0.12),
+              palette.panelAlt,
+            ),
+          ]
+        : <Color>[palette.backdrop, palette.shell, palette.panelAlt];
     final currentPoolCount = _quizEligiblePool(
       mode: _quizMode,
       difficulty: _quizDifficulty,
@@ -3890,11 +4019,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: <Color>[
-                palette.backdrop,
-                palette.shell,
-                palette.panelAlt,
-              ],
+              colors: backgroundColors,
               stops: const [0.0, 0.55, 1.0],
             ),
           ),
@@ -3909,7 +4034,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   return CustomPaint(
                     painter: _QuizAcademySetupGlowPainter(
                       palette: palette,
-                      phase: _pulseController.value,
+                      phase: setupBackdropReducedEffects
+                          ? 0.0
+                          : _pulseController.value,
+                      reducedEffects: setupBackdropReducedEffects,
                     ),
                   );
                 },
@@ -3981,16 +4109,18 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                         letterSpacing: 1.0,
                       ),
                     ),
-                    SizedBox(height: compactLandscapeHeader ? 4 : 6),
-                    Text(
-                      pageSubtitle,
-                      style: _academyHudStyle(
-                        palette: palette,
-                        size: compactLandscapeHeader ? 11.2 : 12,
-                        weight: FontWeight.w700,
-                        letterSpacing: 0.85,
+                    if (pageSubtitle.isNotEmpty) ...<Widget>[
+                      SizedBox(height: compactLandscapeHeader ? 4 : 6),
+                      Text(
+                        pageSubtitle,
+                        style: _academyHudStyle(
+                          palette: palette,
+                          size: compactLandscapeHeader ? 11.2 : 12,
+                          weight: FontWeight.w700,
+                          letterSpacing: 0.85,
+                        ),
                       ),
-                    ),
+                    ],
                     if (!_quizOpeningsRoutePage &&
                         backTooltip.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 4),
@@ -4852,8 +4982,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           _academyPanelHeader(
             palette: palette,
             title: 'LEVEL',
-            subtitle:
-                '${_quizSetupDifficultyLabel(_quizDifficulty)} is selected. Choose the difficulty you want to start.',
+            subtitle: '',
             infoTitle: 'Quiz Levels',
             infoMessage: _quizSetupDifficultyPanelMessage(),
             infoButtonKey: const ValueKey<String>(
@@ -5174,7 +5303,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           _academyPanelHeader(
             palette: palette,
             title: 'START QUIZ',
-            subtitle: 'Review the selected mode and level, then begin.',
+            subtitle: '',
             infoTitle: 'Quiz Session Details',
             infoMessage:
                 'Every quiz uses 10 fixed questions. Selected mode: $modeTitle. Selected level: ${_quizSetupDifficultyLabel(_quizDifficulty)}. Playable lines available right now: $currentPoolCount. Academy progress only advances on a 100% perfect finish.',
@@ -5753,7 +5882,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               Expanded(
                 child: Text(
                   topFeedbackMessage!,
-                  maxLines: compactPlayLayout ? 2 : 2,
+                  maxLines: compactPlayLayout ? 1 : 2,
+                  softWrap: !compactPlayLayout,
                   overflow: TextOverflow.ellipsis,
                   style: _academyHudStyle(
                     palette: palette,
@@ -6521,18 +6651,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           ? 62.0
                           : 48.0;
                       final promptHeight = displayedPrompt.isEmpty ? 0.0 : 32.0;
-                      final optionStatusHeight =
-                          answersLocked &&
-                              displayedQuizMode != GambitQuizMode.guessLine
-                          ? optionCount * 14.0
-                          : 0.0;
                       final estimatedQuestionHeight =
                           (densePanelPadding * 2) +
                           promptHeight +
                           (displayedPrompt.isEmpty ? 0.0 : 10.0) +
                           (optionCount * optionHeight) +
                           (max(0, optionCount - 1) * compactOptionSpacing) +
-                          optionStatusHeight +
                           88.0;
                       final maxQuestionHeight = max(
                         220.0,

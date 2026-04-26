@@ -314,6 +314,23 @@ void _expectCompactPhoneOptionStatusLabelsHidden() {
   expect(find.text('Reviewed option'), findsNothing);
 }
 
+void _expectCompactPhoneFeedbackOverlaySingleLine(WidgetTester tester) {
+  final feedbackOverlay = find.byKey(
+    const ValueKey<String>('quiz_session_feedback_overlay'),
+  );
+  final feedbackText = find.descendant(
+    of: feedbackOverlay,
+    matching: find.byWidgetPredicate(
+      (widget) =>
+          widget is Text && widget.data != null && widget.data!.isNotEmpty,
+    ),
+  );
+
+  final textWidget = tester.widget<Text>(feedbackText);
+  expect(textWidget.maxLines, 1);
+  expect(textWidget.softWrap, isFalse);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -472,6 +489,16 @@ void main() {
         findsNothing,
       );
       expect(find.text('Choose how this quiz asks the opening.'), findsNothing);
+      expect(
+        find.textContaining(
+          'is selected. Choose the difficulty you want to start.',
+        ),
+        findsNothing,
+      );
+      expect(
+        find.text('Review the selected mode and level, then begin.'),
+        findsNothing,
+      );
       expect(_assetImageFinder('assets/academy/quiz_name.png'), findsOneWidget);
       expect(_assetImageFinder('assets/academy/quiz_line.png'), findsOneWidget);
 
@@ -528,6 +555,7 @@ void main() {
       await _pumpOpeningsQuizSelector(tester, size: const Size(844, 390));
 
       expect(find.text('OPENINGS QUIZ ROUTES'), findsNothing);
+      expect(find.text('MODE / LEVEL / START'), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('quiz_setup_mode_panel')),
         findsOneWidget,
@@ -563,6 +591,16 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Choose how this quiz asks the opening.'), findsNothing);
+      expect(
+        find.textContaining(
+          'is selected. Choose the difficulty you want to start.',
+        ),
+        findsNothing,
+      );
+      expect(
+        find.text('Review the selected mode and level, then begin.'),
+        findsNothing,
+      );
 
       final modeRect = tester.getRect(
         find.byKey(const ValueKey<String>('quiz_setup_mode_panel')),
@@ -679,6 +717,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
 
+      final boardRectBeforeSubmit = tester.getRect(boardCard);
+      final questionRectBeforeSubmit = tester.getRect(questionPanel);
+      final actionRectBeforeSubmit = tester.getRect(primaryAction);
+
       await tester.tap(
         find.byKey(const ValueKey<String>('quiz_session_primary_action')),
       );
@@ -697,6 +739,22 @@ void main() {
       expect(feedbackOverlayRect.left, closeTo(topPanelRect.left, 0.01));
       expect(feedbackOverlayRect.width, closeTo(topPanelRect.width, 0.01));
       expect(feedbackOverlayRect.height, closeTo(topPanelRect.height, 0.01));
+      _expectCompactPhoneFeedbackOverlaySingleLine(tester);
+      final boardRectAfterSubmit = tester.getRect(boardCard);
+      final questionRectAfterSubmit = tester.getRect(questionPanel);
+      final actionRectAfterSubmit = tester.getRect(primaryAction);
+      expect(
+        boardRectAfterSubmit.top,
+        closeTo(boardRectBeforeSubmit.top, 0.01),
+      );
+      expect(
+        questionRectAfterSubmit.top,
+        closeTo(questionRectBeforeSubmit.top, 0.01),
+      );
+      expect(
+        actionRectAfterSubmit.top,
+        closeTo(actionRectBeforeSubmit.top, 0.01),
+      );
       _expectCompactPhoneOptionStatusLabelsHidden();
       _expectFinderWithinViewport(tester, primaryAction, viewport);
       _expectAllOptionsWithinViewport(tester, optionFinder, viewport);
@@ -781,6 +839,10 @@ void main() {
 
       _expectCompactPhoneOptionStatusLabelsHidden();
 
+      final boardRectBeforeSubmit = tester.getRect(boardCard);
+      final questionRectBeforeSubmit = tester.getRect(questionPanel);
+      final actionRectBeforeSubmit = tester.getRect(primaryAction);
+
       await tester.tap(
         find.byKey(const ValueKey<String>('quiz_session_primary_action')),
       );
@@ -799,6 +861,22 @@ void main() {
       expect(feedbackOverlayRect.left, closeTo(topPanelRect.left, 0.01));
       expect(feedbackOverlayRect.width, closeTo(topPanelRect.width, 0.01));
       expect(feedbackOverlayRect.height, closeTo(topPanelRect.height, 0.01));
+      _expectCompactPhoneFeedbackOverlaySingleLine(tester);
+      final boardRectAfterSubmit = tester.getRect(boardCard);
+      final questionRectAfterSubmit = tester.getRect(questionPanel);
+      final actionRectAfterSubmit = tester.getRect(primaryAction);
+      expect(
+        boardRectAfterSubmit.top,
+        closeTo(boardRectBeforeSubmit.top, 0.01),
+      );
+      expect(
+        questionRectAfterSubmit.top,
+        closeTo(questionRectBeforeSubmit.top, 0.01),
+      );
+      expect(
+        actionRectAfterSubmit.top,
+        closeTo(actionRectBeforeSubmit.top, 0.01),
+      );
       _expectCompactPhoneOptionStatusLabelsHidden();
 
       _expectFinderWithinViewport(tester, primaryAction, viewport);
