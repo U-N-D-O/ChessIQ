@@ -75,11 +75,11 @@ String _quizStudyBrowserInfoMessage(
 }) {
   final categoryLabel = state._quizStudyCategoryLabel(state._quizStudyCategory);
   return '$categoryLabel currently includes '
-      '$familyCount opening ${familyCount == 1 ? 'family' : 'families'} and '
+      '$familyCount saved opening ${familyCount == 1 ? 'group' : 'groups'} and '
       '$openingCount saved ${openingCount == 1 ? 'line' : 'lines'}. '
       'You have already opened $studiedCount '
       '${studiedCount == 1 ? 'line' : 'lines'} for study. '
-      'Search checks both family names and opening names.';
+      'Search checks parent openings, systems, and line names.';
 }
 
 String _quizStudyLineInfoMessage(
@@ -90,10 +90,14 @@ String _quizStudyLineInfoMessage(
 }) {
   final studiedCount = state._quizStudyOpeningCounts[line.name] ?? 0;
   final storedMoves = line.normalizedMoves;
+  final baseLabel = state._quizStudyBaseLabel(familyName);
   final infoLines = <String>[
     'Category: ${state._quizStudyCategoryLabel(state._quizStudyCategory)}',
-    'Family: $familyName',
-    'Variation: $variationLabel',
+    '$baseLabel: $familyName',
+    if (variationLabel == 'Mainline')
+      'Mainline'
+    else
+      'Variation: $variationLabel',
     if (variationLabel != line.name) 'Opening: ${line.name}',
     'Stored moves: ${line.moveTokens.length}',
     'Times studied: $studiedCount',
@@ -587,7 +591,7 @@ Widget _buildQuizStudySearchControls(
             decoration: InputDecoration(
               hintText: compactLandscape
                   ? 'Search openings'
-                  : 'Search family or opening name',
+                  : 'Search parent opening, system, or line',
               hintStyle: state._academyHudStyle(
                 palette: palette,
                 size: compactLandscape ? 11.6 : 12.4,
@@ -1427,10 +1431,10 @@ Widget _buildQuizStudyFamilyCard(
                               : hasStudiedLines
                               ? '$studiedCount of ${group.lines.length} studied'
                               : familyHasSelection
-                              ? 'Current opening family'
+                              ? 'Current ${state._quizStudyBaseLabelLower(group.familyName)}'
                               : searchActive
-                              ? 'Matching family'
-                              : 'Tap to see saved openings',
+                              ? 'Matching ${state._quizStudyBaseLabelLower(group.familyName)}'
+                              : 'Tap to see saved lines',
                           style: state._academyHudStyle(
                             palette: palette,
                             size: compactFamilyCard ? 11.4 : 12.2,
@@ -1444,7 +1448,8 @@ Widget _buildQuizStudyFamilyCard(
                           _buildQuizStudyMeter(
                             state,
                             palette: palette,
-                            label: 'FAMILY PROGRESS',
+                            label:
+                                '${state._quizStudyBaseLabel(group.familyName).toUpperCase()} PROGRESS',
                             valueLabel:
                                 '${(studyProgress * 100).toStringAsFixed(0)}%',
                             value: studyProgress,
@@ -1728,7 +1733,7 @@ Widget _buildQuizStudyDetailHeaderPanel(
             runSpacing: 10,
             children: <Widget>[
               _buildQuizStudySummaryChip(
-                label: 'Family',
+                label: state._quizStudyBaseLabel(familyName),
                 value: familyName,
                 icon: Icons.account_tree_outlined,
                 accent: palette.cyan,
@@ -1972,7 +1977,7 @@ Widget _buildQuizStudyFamilyNavigatorPanel(
             title: 'VARIATIONS',
             subtitle: familyLines.length > 1
                 ? 'Switch lines without leaving $familyName.'
-                : 'This family currently stores one line in this category.',
+                : 'This opening group currently stores one line in this category.',
           ),
           const SizedBox(height: 14),
         ],

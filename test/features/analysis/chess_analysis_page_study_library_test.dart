@@ -466,5 +466,11 @@ void main() {
       find.byKey(const ValueKey<String>('quiz_study_detail_inline_info_panel')),
       findsOneWidget,
     );
+    expect(find.text('FAMILY'), findsNothing);
+    expect(
+      find.text('PARENT OPENING').evaluate().isNotEmpty ||
+          find.text('SYSTEM').evaluate().isNotEmpty,
+      isTrue,
+    );
   });
 }

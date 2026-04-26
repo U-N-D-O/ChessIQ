@@ -9,6 +9,8 @@ import 'package:provider/provider.dart';
 
 class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
   _TestPuzzleAcademyProvider({
+    this.nodesValue = _defaultNodes,
+    this.examResultsValue = const <AcademyExamResult>[],
     this.scoreboardLoadedValue = true,
     this.scoreboardSyncingValue = false,
     this.scoreboardEntriesValue = const [
@@ -23,17 +25,18 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
     this.completedTodayDailyCountValue = 0,
   }) : _progress =
            PuzzleProgressModel.initial(
-             nodes: {for (final node in _nodes) node.key: node},
+             nodes: {for (final node in nodesValue) node.key: node},
            ).copyWith(
              handle: 'Tester',
              country: 'US',
+             examResults: examResultsValue,
              seenSemesters: {
                for (final semester in PuzzleAcademyProvider().semesters)
                  semester.id,
              },
            );
 
-  static const List<EloNodeProgress> _nodes = [
+  static const List<EloNodeProgress> _defaultNodes = [
     EloNodeProgress(
       startElo: 450,
       endElo: 500,
@@ -81,6 +84,8 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
   ];
 
   final PuzzleProgressModel _progress;
+  final List<EloNodeProgress> nodesValue;
+  final List<AcademyExamResult> examResultsValue;
   final bool scoreboardLoadedValue;
   final bool scoreboardSyncingValue;
   final List<LeaderboardEntry> scoreboardEntriesValue;
@@ -205,7 +210,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'Academy hub phone page only shows back and two visible pictures',
+    'Academy hub phone page shows logo, top controls, and two visible pictures',
     (tester) async {
       final provider = _TestPuzzleAcademyProvider();
 
@@ -219,10 +224,23 @@ void main() {
         find.byKey(const ValueKey<String>('academy_hub_back_button')),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.settings_outlined), findsNothing);
-      expect(find.byIcon(Icons.storefront_outlined), findsNothing);
-      expect(find.text('Choose Your Training Lane'), findsNothing);
-      expect(find.byType(Image), findsNWidgets(2));
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_logo')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_theme_button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_settings_button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_overview_badge')),
+        findsOneWidget,
+      );
+      expect(find.byType(Image), findsNWidgets(3));
 
       final examsArtFrame = find.byKey(
         const ValueKey<String>('academy_hub_art_frame_exams'),
@@ -240,14 +258,14 @@ void main() {
       expect((examsSize.width - quizSize.width).abs(), lessThan(0.1));
       expect((examsSize.height - quizSize.height).abs(), lessThan(0.1));
       expect(examsSize.width, greaterThan(360));
-      expect(examsSize.height + quizSize.height, greaterThan(700));
+      expect(examsSize.height + quizSize.height, greaterThan(620));
       expect(examsRect.top, greaterThanOrEqualTo(0));
       expect(quizRect.bottom, lessThanOrEqualTo(844));
     },
   );
 
   testWidgets(
-    'Academy hub tablet page only adds the training-lane heading above two pictures',
+    'Academy hub tablet page keeps the logo, controls, and two pictures',
     (tester) async {
       final provider = _TestPuzzleAcademyProvider();
 
@@ -261,10 +279,23 @@ void main() {
         find.byKey(const ValueKey<String>('academy_hub_back_button')),
         findsOneWidget,
       );
-      expect(find.text('Choose Your Training Lane'), findsOneWidget);
-      expect(find.byIcon(Icons.settings_outlined), findsNothing);
-      expect(find.byIcon(Icons.storefront_outlined), findsNothing);
-      expect(find.byType(Image), findsNWidgets(2));
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_logo')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_theme_button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_settings_button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_overview_badge')),
+        findsOneWidget,
+      );
+      expect(find.byType(Image), findsNWidgets(3));
 
       final examsArtFrame = find.byKey(
         const ValueKey<String>('academy_hub_art_frame_exams'),
@@ -324,6 +355,232 @@ void main() {
     expect((firstOffset.dy - secondOffset.dy).abs(), lessThan(20));
     expect((firstOffset.dx - secondOffset.dx).abs(), greaterThan(40));
   });
+
+  testWidgets(
+    'Academy exams dashboard only shows an earned rank band after its solve target',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(1200, 900),
+      );
+
+      await _openExamsDashboard(tester);
+
+      expect(find.text('450-500'), findsOneWidget);
+      expect(find.text('500-550'), findsNothing);
+      expect(find.textContaining('500-550'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'Academy exams dashboard stays open after the screen is rebuilt at a new size',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(1200, 900),
+      );
+
+      await _openExamsDashboard(tester);
+      expect(find.text('Puzzle Academy Exams'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(1024, 768),
+      );
+
+      expect(find.text('Puzzle Academy Exams'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_card_exams')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'Academy exams dashboard shows overall logged exams when the active semester has none',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider(
+        nodesValue: const <EloNodeProgress>[
+          EloNodeProgress(
+            startElo: 450,
+            endElo: 500,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 500,
+            endElo: 550,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 550,
+            endElo: 600,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 600,
+            endElo: 650,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 650,
+            endElo: 700,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 700,
+            endElo: 750,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 750,
+            endElo: 800,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 800,
+            endElo: 850,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 850,
+            endElo: 900,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 900,
+            endElo: 950,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 950,
+            endElo: 1000,
+            totalPuzzles: 500,
+            solvedCount: 150,
+            attempts: 170,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 1000,
+            endElo: 1050,
+            totalPuzzles: 500,
+            solvedCount: 20,
+            attempts: 26,
+            unlocked: true,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+          EloNodeProgress(
+            startElo: 1050,
+            endElo: 1100,
+            totalPuzzles: 500,
+            solvedCount: 0,
+            attempts: 0,
+            unlocked: false,
+            goldCrown: false,
+            themeRewardUnlocked: false,
+            speedDemon: false,
+          ),
+        ],
+        examResultsValue: const <AcademyExamResult>[
+          AcademyExamResult(
+            nodeKey: '450_500',
+            score: 9200,
+            leaderboardScore: 9200,
+            correctCount: 43,
+            totalCount: 50,
+            elapsedMs: 420000,
+            timeLimitMs: 3600000,
+            completedAtMs: 1,
+          ),
+        ],
+      );
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(1200, 900),
+      );
+
+      await _openExamsDashboard(tester);
+
+      expect(find.text('1 exam logged overall'), findsOneWidget);
+      expect(find.text('No exams logged yet'), findsNothing);
+    },
+  );
 
   testWidgets(
     'Academy exams portrait phone collapses dashboard and stats by default',

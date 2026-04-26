@@ -322,10 +322,87 @@ void main() {
     expect(find.text('QUIZ CARTRIDGE'), findsNothing);
     expect(find.text('PRESS START'), findsNothing);
     expect(find.text('QUIZ OR STUDY'), findsOneWidget);
-    expect(find.text('CHOOSE MODE'), findsOneWidget);
+    expect(find.text('CHOOSE MODE'), findsNothing);
     expect(find.text('SET UP QUIZ'), findsOneWidget);
     expect(find.text('OPEN STUDY'), findsOneWidget);
-    expect(find.textContaining('Quiz opens the setup screen'), findsOneWidget);
+    expect(find.text('STYLE'), findsNothing);
+    expect(find.text('STATS'), findsNothing);
+    expect(find.textContaining('Quiz opens the setup screen'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets(
+    'opening academy launcher keeps header on one row in compact landscape',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpOpeningsAcademyLauncher(tester, size: const Size(667, 375));
+
+      final backButton = find.byKey(
+        const ValueKey<String>('quiz_academy_header_back_button'),
+      );
+      final titleBlock = find.byKey(
+        const ValueKey<String>('quiz_academy_header_title_block'),
+      );
+      final styleButton = find.byKey(
+        const ValueKey<String>('quiz_academy_header_style_button'),
+      );
+      final statsButton = find.byKey(
+        const ValueKey<String>('quiz_academy_header_stats_button'),
+      );
+
+      expect(backButton, findsOneWidget);
+      expect(titleBlock, findsOneWidget);
+      expect(styleButton, findsOneWidget);
+      expect(statsButton, findsOneWidget);
+      expect(find.text('STYLE'), findsNothing);
+      expect(find.text('STATS'), findsNothing);
+
+      final backRect = tester.getRect(backButton);
+      final titleRect = tester.getRect(titleBlock);
+      final styleRect = tester.getRect(styleButton);
+      final statsRect = tester.getRect(statsButton);
+
+      expect(backRect.right, lessThan(titleRect.left));
+      expect(titleRect.right, lessThan(styleRect.left));
+      expect(styleRect.right, lessThan(statsRect.left));
+      expect((titleRect.top - backRect.top).abs(), lessThan(12));
+      expect((styleRect.top - backRect.top).abs(), lessThan(12));
+      expect((statsRect.top - backRect.top).abs(), lessThan(12));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets('opening academy launcher omits the choose mode box on iPad', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpOpeningsAcademyLauncher(tester, size: const Size(1024, 768));
+
+    expect(find.text('QUIZ OR STUDY'), findsOneWidget);
+    expect(find.text('CHOOSE MODE'), findsNothing);
+    expect(find.textContaining('Quiz opens the setup screen'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('quiz_academy_launcher_quiz')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('quiz_academy_launcher_study')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets(

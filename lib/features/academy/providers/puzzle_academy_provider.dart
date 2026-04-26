@@ -284,6 +284,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   List<LeaderboardEntry> _remoteScoreboardEntries = const <LeaderboardEntry>[];
   bool _scoreboardSyncing = false;
   String? _lastScoreboardError;
+  bool _showAcademyExamsDashboard = false;
 
   bool get initialized => _initialized;
   bool get isLoading => _isLoading;
@@ -300,6 +301,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   List<PuzzleItem> get dailyPuzzles => _dailyPuzzles;
   Duration get examDuration => _examDuration;
   int get examPuzzleCount => _examPuzzleCount;
+  bool get showAcademyExamsDashboard => _showAcademyExamsDashboard;
+  int get totalLoggedExamCount => progress.examResults.length;
   List<PuzzleItem> get basePuzzles => _basePuzzleCacheByNode.values
       .expand((items) => items)
       .toList(growable: false);
@@ -435,6 +438,31 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       highest = max(highest, node.endElo);
     }
     return highest;
+  }
+
+  void setShowAcademyExamsDashboard(bool value) {
+    if (_showAcademyExamsDashboard == value) {
+      return;
+    }
+    _showAcademyExamsDashboard = value;
+    notifyListeners();
+  }
+
+  EloNodeProgress get displayRankNode {
+    final nodes = orderedNodes;
+    if (nodes.isEmpty) {
+      throw StateError('No academy nodes available');
+    }
+
+    var rankedNode = nodes.first;
+    for (final node in nodes) {
+      if (node.solvedCount < node.unlockTarget) {
+        break;
+      }
+      rankedNode = node;
+    }
+
+    return rankedNode;
   }
 
   bool get shouldAskForProfile =>

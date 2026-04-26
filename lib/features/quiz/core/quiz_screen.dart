@@ -199,9 +199,27 @@ class _QuizAcademyBackdropPainter extends CustomPainter {
 }
 
 abstract class _QuizScreen extends _AnalysisPageShared {
+  final GlobalKey _quizAcademyModePanelFocusKey = GlobalKey();
   final GlobalKey _quizStudyBoardKey = GlobalKey();
   final GlobalKey _quizStudyLibraryIndexKey = GlobalKey();
   final GlobalKey _quizStudyLibrarySelectionKey = GlobalKey();
+
+  void _focusQuizAcademyModePanel() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final targetContext = _quizAcademyModePanelFocusKey.currentContext;
+      if (targetContext == null) return;
+
+      unawaited(
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOut,
+          alignment: 0.0,
+        ),
+      );
+    });
+  }
 
   void _focusQuizStudyBoard() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -733,6 +751,33 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     return _quizStudyCanonicalizeFamily(family).toLowerCase();
   }
 
+  bool _quizStudyIsSystemFamily(String familyName) {
+    final normalized = _quizStudyCanonicalFamilyKey(
+      familyName,
+    ).replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+    return normalized.contains('system') || normalized.contains('formation');
+  }
+
+  String _quizStudyBaseLabel(String familyName) {
+    return _quizStudyIsSystemFamily(familyName) ? 'System' : 'Parent Opening';
+  }
+
+  String _quizStudyBaseLabelLower(String familyName) {
+    return _quizStudyBaseLabel(familyName).toLowerCase();
+  }
+
+  String _quizStudyDisplayLineLabel(String label) {
+    return label
+        .replaceAll(
+          RegExp(r'\bMain\s+Lines\b', caseSensitive: false),
+          'Mainlines',
+        )
+        .replaceAll(
+          RegExp(r'\bMain\s+Line\b', caseSensitive: false),
+          'Mainline',
+        );
+  }
+
   String _quizStudyFamilyName(String name) {
     return _quizStudyCanonicalizeFamily(_quizStudyFamilyCandidate(name));
   }
@@ -778,7 +823,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         (_quizStudyCanonicalFamilyKey(rawFamily) ==
                 _quizStudyCanonicalFamilyKey(familyName) &&
             cleanedName == rawFamily)) {
-      return 'Main line';
+      return 'Mainline';
     }
 
     final familyPrefixes = <String>{familyName, rawFamily, canonicalFamily}
@@ -796,12 +841,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       if (cleanedName.startsWith(prefix)) {
         final remainder = cleanedName.substring(prefix.length).trim();
         if (remainder.isNotEmpty) {
-          return remainder;
+          return _quizStudyDisplayLineLabel(remainder);
         }
       }
     }
 
-    return cleanedName;
+    return _quizStudyDisplayLineLabel(cleanedName);
   }
 
   List<EcoLine> _dedupeQuizStudyLinesByName(Iterable<EcoLine> lines) {
@@ -3764,6 +3809,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final pageSubtitle = _quizOpeningsRoutePage
         ? 'MODE / LEVEL / START'
         : 'QUIZ OR STUDY';
+    final compactLandscapeHeader = layout.compactLandscape;
     final currentPoolCount = _quizEligiblePool(
       mode: _quizMode,
       difficulty: _quizDifficulty,
@@ -3792,30 +3838,44 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           children: [
             LayoutBuilder(
               builder: (context, constraints) {
-                final stacked = constraints.maxWidth < 780;
+                final stacked =
+                    constraints.maxWidth < 780 && !compactLandscapeHeader;
+                final backButton = _academyHudButton(
+                  buttonKey: const ValueKey<String>(
+                    'quiz_academy_header_back_button',
+                  ),
+                  palette: palette,
+                  icon: Icons.arrow_back,
+                  label: _quizOpeningsRoutePage ? 'BACK' : 'EXIT',
+                  accent: palette.text,
+                  onTap: backAction,
+                );
+                final styleButton = _buildQuizAcademyHeaderIconButton(
+                  buttonKey: const ValueKey<String>(
+                    'quiz_academy_header_style_button',
+                  ),
+                  palette: palette,
+                  icon: Icons.palette_outlined,
+                  accent: palette.amber,
+                  tooltip: 'Style',
+                  onTap: _openAppearanceSettings,
+                );
+                final statsButton = !_quizOpeningsRoutePage
+                    ? _buildQuizAcademyHeaderIconButton(
+                        buttonKey: const ValueKey<String>(
+                          'quiz_academy_header_stats_button',
+                        ),
+                        palette: palette,
+                        icon: Icons.insights_outlined,
+                        accent: palette.cyan,
+                        tooltip: 'Stats',
+                        onTap: _openQuizStatsSheet,
+                      )
+                    : null;
                 final actionButtons = <Widget>[
-                  _academyHudButton(
-                    palette: palette,
-                    icon: Icons.arrow_back,
-                    label: _quizOpeningsRoutePage ? 'BACK' : 'EXIT',
-                    accent: palette.text,
-                    onTap: backAction,
-                  ),
-                  _academyHudButton(
-                    palette: palette,
-                    icon: Icons.palette_outlined,
-                    label: 'STYLE',
-                    accent: palette.amber,
-                    onTap: _openAppearanceSettings,
-                  ),
-                  if (!_quizOpeningsRoutePage)
-                    _academyHudButton(
-                      palette: palette,
-                      icon: Icons.insights_outlined,
-                      label: 'STATS',
-                      accent: palette.cyan,
-                      onTap: _openQuizStatsSheet,
-                    ),
+                  backButton,
+                  styleButton,
+                  ...?statsButton == null ? null : <Widget>[statsButton],
                 ];
                 final actions = Wrap(
                   spacing: 10,
@@ -3824,23 +3884,26 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   children: actionButtons,
                 );
                 final titleBlock = Column(
+                  key: const ValueKey<String>(
+                    'quiz_academy_header_title_block',
+                  ),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       pageTitle,
                       style: _academyDisplayStyle(
                         palette: palette,
-                        size: 24,
+                        size: compactLandscapeHeader ? 20 : 24,
                         weight: FontWeight.w700,
                         letterSpacing: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: compactLandscapeHeader ? 4 : 6),
                     Text(
                       pageSubtitle,
                       style: _academyHudStyle(
                         palette: palette,
-                        size: 12,
+                        size: compactLandscapeHeader ? 11.2 : 12,
                         weight: FontWeight.w700,
                         letterSpacing: 0.85,
                       ),
@@ -3862,7 +3925,22 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       ? _academyQuizModeAccent(palette, _quizMode)
                       : palette.cyan,
                   fillColor: palette.shell,
-                  child: stacked
+                  child: compactLandscapeHeader
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: <Widget>[
+                            backButton,
+                            const SizedBox(width: 12),
+                            Expanded(child: titleBlock),
+                            const SizedBox(width: 12),
+                            styleButton,
+                            if (statsButton != null) ...<Widget>[
+                              const SizedBox(width: 8),
+                              statsButton,
+                            ],
+                          ],
+                        )
+                      : stacked
                       ? Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
@@ -3905,6 +3983,50 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
+  Widget _buildQuizAcademyHeaderIconButton({
+    Key? buttonKey,
+    required _QuizAcademyPalette palette,
+    required IconData icon,
+    required Color accent,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        key: buttonKey,
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Ink(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                accent.withValues(alpha: 0.08),
+                palette.shell,
+              ),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: accent.withValues(alpha: 0.48),
+                width: 2,
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: palette.shadow.withValues(alpha: 0.22),
+                  offset: const Offset(4, 4),
+                  blurRadius: 0,
+                ),
+              ],
+            ),
+            child: Icon(icon, size: 18, color: accent),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _returnToQuizSelector() {
     setState(() {
       _quizOpeningsRoutePage = false;
@@ -3922,64 +4044,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       useMonochrome: useMonochrome,
       isDark: isDark,
     );
-    final eligibleCount = _quizEligiblePool(
-      mode: _quizMode,
-      difficulty: _quizDifficulty,
-    ).length;
-    final highestUnlocked = _quizAcademyProgress.highestUnlockedDifficulty();
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 980;
-        final dualColumn = constraints.maxWidth >= 700 && !wide;
-        final overviewPanel = _academyPixelPanel(
-          palette: palette,
-          accent: palette.cyan,
-          fillColor: palette.shell,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _academyPanelHeader(
-                palette: palette,
-                title: 'CHOOSE MODE',
-                subtitle:
-                    'Quiz opens the setup screen. Study opens the opening library.',
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: <Widget>[
-                  _buildQuizAcademyMetricChip(
-                    palette: palette,
-                    label: 'LINES',
-                    value: max(eligibleCount, _ecoOpenings.length).toString(),
-                    accent: palette.cyan,
-                    icon: Icons.grid_view_rounded,
-                    compact: true,
-                  ),
-                  _buildQuizAcademyMetricChip(
-                    palette: palette,
-                    label: 'LEVEL',
-                    value: _quizAcademyBracketShortName(highestUnlocked),
-                    accent: _quizDifficultyColor(highestUnlocked),
-                    icon: _quizAcademyBracketIcon(highestUnlocked),
-                    compact: true,
-                  ),
-                  _buildQuizAcademyMetricChip(
-                    palette: palette,
-                    label: 'UNLOCKS',
-                    value:
-                        '${_quizAcademyProgress.requiredPerfectSessions} perfect sessions',
-                    accent: palette.emerald,
-                    icon: Icons.workspace_premium_outlined,
-                    compact: true,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
+        final dualColumn = constraints.maxWidth >= 700;
         final quizCard = _buildQuizAcademyLauncherCard(
           cardKey: const ValueKey<String>('quiz_academy_launcher_quiz'),
           palette: palette,
@@ -4002,6 +4070,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 difficulty: _quizDifficulty,
               ).length;
             });
+            _focusQuizAcademyModePanel();
           },
         );
         final studyCard = _buildQuizAcademyLauncherCard(
@@ -4016,15 +4085,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           accent: palette.amber,
           onTap: () => _selectQuizAcademyMode(studyMode: true),
         );
-        final selectorDeck = wide
-            ? Column(
-                children: <Widget>[
-                  quizCard,
-                  const SizedBox(height: 16),
-                  studyCard,
-                ],
-              )
-            : dualColumn
+        final selectorDeck = dualColumn
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -4041,25 +4102,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 ],
               );
 
-        if (!wide) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              overviewPanel,
-              const SizedBox(height: 18),
-              selectorDeck,
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Expanded(flex: 11, child: overviewPanel),
-            const SizedBox(width: 18),
-            Expanded(flex: 9, child: selectorDeck),
-          ],
-        );
+        return selectorDeck;
       },
     );
   }
@@ -4214,107 +4257,111 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         final splitPanels =
             constraints.maxWidth >= 980 ||
             (layout.isLandscape && constraints.maxWidth >= 740);
-        final modePanel = _academyPixelPanel(
-          panelKey: const ValueKey<String>('quiz_setup_mode_panel'),
-          palette: palette,
-          accent: modeAccent,
-          padding: EdgeInsets.all(layout.panelPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _academyPanelHeader(
-                palette: palette,
-                title: 'QUIZ MODE',
-                subtitle: 'Choose how this quiz asks the opening.',
-                infoTitle: 'Quiz Modes',
-                infoMessage:
-                    'Identify Opening Name asks you to choose the opening name from the shown position. Complete Opening Line asks you to choose the next move in the opening line. Every session uses 10 questions.',
-                infoButtonKey: const ValueKey<String>(
-                  'quiz_setup_mode_panel_info_button',
+        final modePanel = KeyedSubtree(
+          key: _quizAcademyModePanelFocusKey,
+          child: _academyPixelPanel(
+            panelKey: const ValueKey<String>('quiz_setup_mode_panel'),
+            palette: palette,
+            accent: modeAccent,
+            padding: EdgeInsets.all(layout.panelPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _academyPanelHeader(
+                  palette: palette,
+                  title: 'QUIZ MODE',
+                  subtitle: 'Choose how this quiz asks the opening.',
+                  infoTitle: 'Quiz Modes',
+                  infoMessage:
+                      'Identify Opening Name asks you to choose the opening name from the shown position. Complete Opening Line asks you to choose the next move in the opening line. Every session uses 10 questions.',
+                  infoButtonKey: const ValueKey<String>(
+                    'quiz_setup_mode_panel_info_button',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (context, deckConstraints) {
-                  final stacked =
-                      deckConstraints.maxWidth <
-                      (layout.compactPhoneLayout ? 420 : 520);
-                  final cards = <Widget>[
-                    _buildQuizAcademyModeCard(
-                      cardKey: const ValueKey<String>(
-                        'quiz_setup_mode_card_identify_opening_name',
+                const SizedBox(height: 16),
+                LayoutBuilder(
+                  builder: (context, deckConstraints) {
+                    final stacked =
+                        !layout.compactLandscape &&
+                        deckConstraints.maxWidth <
+                            (layout.compactPhoneLayout ? 420 : 520);
+                    final cards = <Widget>[
+                      _buildQuizAcademyModeCard(
+                        cardKey: const ValueKey<String>(
+                          'quiz_setup_mode_card_identify_opening_name',
+                        ),
+                        infoButtonKey: const ValueKey<String>(
+                          'quiz_setup_mode_info_identify_opening_name',
+                        ),
+                        palette: palette,
+                        title: _academyQuizModeTitle(GambitQuizMode.guessName),
+                        answerLabel: _academyQuizModeAnswerLabel(
+                          GambitQuizMode.guessName,
+                        ),
+                        infoMessage: _academyQuizModeInfoMessage(
+                          GambitQuizMode.guessName,
+                        ),
+                        icon: _academyQuizModeIcon(GambitQuizMode.guessName),
+                        accent: palette.cyan,
+                        selected:
+                            !_quizStudyMode &&
+                            _quizMode == GambitQuizMode.guessName,
+                        compact: layout.compactPhoneLayout,
+                        onTap: () => _selectQuizAcademyMode(
+                          mode: GambitQuizMode.guessName,
+                          studyMode: false,
+                        ),
                       ),
-                      infoButtonKey: const ValueKey<String>(
-                        'quiz_setup_mode_info_identify_opening_name',
+                      _buildQuizAcademyModeCard(
+                        cardKey: const ValueKey<String>(
+                          'quiz_setup_mode_card_complete_opening_line',
+                        ),
+                        infoButtonKey: const ValueKey<String>(
+                          'quiz_setup_mode_info_complete_opening_line',
+                        ),
+                        palette: palette,
+                        title: _academyQuizModeTitle(GambitQuizMode.guessLine),
+                        answerLabel: _academyQuizModeAnswerLabel(
+                          GambitQuizMode.guessLine,
+                        ),
+                        infoMessage: _academyQuizModeInfoMessage(
+                          GambitQuizMode.guessLine,
+                        ),
+                        icon: _academyQuizModeIcon(GambitQuizMode.guessLine),
+                        accent: palette.amber,
+                        selected:
+                            !_quizStudyMode &&
+                            _quizMode == GambitQuizMode.guessLine,
+                        compact: layout.compactPhoneLayout,
+                        onTap: () => _selectQuizAcademyMode(
+                          mode: GambitQuizMode.guessLine,
+                          studyMode: false,
+                        ),
                       ),
-                      palette: palette,
-                      title: _academyQuizModeTitle(GambitQuizMode.guessName),
-                      answerLabel: _academyQuizModeAnswerLabel(
-                        GambitQuizMode.guessName,
-                      ),
-                      infoMessage: _academyQuizModeInfoMessage(
-                        GambitQuizMode.guessName,
-                      ),
-                      icon: _academyQuizModeIcon(GambitQuizMode.guessName),
-                      accent: palette.cyan,
-                      selected:
-                          !_quizStudyMode &&
-                          _quizMode == GambitQuizMode.guessName,
-                      compact: layout.compactPhoneLayout,
-                      onTap: () => _selectQuizAcademyMode(
-                        mode: GambitQuizMode.guessName,
-                        studyMode: false,
-                      ),
-                    ),
-                    _buildQuizAcademyModeCard(
-                      cardKey: const ValueKey<String>(
-                        'quiz_setup_mode_card_complete_opening_line',
-                      ),
-                      infoButtonKey: const ValueKey<String>(
-                        'quiz_setup_mode_info_complete_opening_line',
-                      ),
-                      palette: palette,
-                      title: _academyQuizModeTitle(GambitQuizMode.guessLine),
-                      answerLabel: _academyQuizModeAnswerLabel(
-                        GambitQuizMode.guessLine,
-                      ),
-                      infoMessage: _academyQuizModeInfoMessage(
-                        GambitQuizMode.guessLine,
-                      ),
-                      icon: _academyQuizModeIcon(GambitQuizMode.guessLine),
-                      accent: palette.amber,
-                      selected:
-                          !_quizStudyMode &&
-                          _quizMode == GambitQuizMode.guessLine,
-                      compact: layout.compactPhoneLayout,
-                      onTap: () => _selectQuizAcademyMode(
-                        mode: GambitQuizMode.guessLine,
-                        studyMode: false,
-                      ),
-                    ),
-                  ];
+                    ];
 
-                  if (stacked) {
-                    return Column(
+                    if (stacked) {
+                      return Column(
+                        children: <Widget>[
+                          cards[0],
+                          SizedBox(height: layout.compactPhoneLayout ? 10 : 12),
+                          cards[1],
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        cards[0],
-                        SizedBox(height: layout.compactPhoneLayout ? 10 : 12),
-                        cards[1],
+                        Expanded(child: cards[0]),
+                        SizedBox(width: layout.compactPhoneLayout ? 10 : 12),
+                        Expanded(child: cards[1]),
                       ],
                     );
-                  }
-
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(child: cards[0]),
-                      SizedBox(width: layout.compactPhoneLayout ? 10 : 12),
-                      Expanded(child: cards[1]),
-                    ],
-                  );
-                },
-              ),
-            ],
+                  },
+                ),
+              ],
+            ),
           ),
         );
         final levelPanel = _buildQuizAcademyLevelPanel(
@@ -4374,6 +4421,13 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required bool compact,
     required VoidCallback onTap,
   }) {
+    final contentPadding = compact ? 12.0 : 16.0;
+    final iconBoxSize = compact ? 40.0 : 46.0;
+    final iconSize = compact ? 20.0 : 22.0;
+    final titleGap = compact ? 10.0 : 12.0;
+    final sectionGap = compact ? 10.0 : 12.0;
+    final footerGap = compact ? 12.0 : 16.0;
+    final helperMinHeight = compact ? 18.0 : 24.0;
     final cardColor = selected
         ? Color.alphaBlend(accent.withValues(alpha: 0.18), palette.panelAlt)
         : palette.panelAlt;
@@ -4390,7 +4444,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
         child: Ink(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(contentPadding),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -4423,8 +4477,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Container(
-                    width: 46,
-                    height: 46,
+                    width: iconBoxSize,
+                    height: iconBoxSize,
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: 0.20),
                       borderRadius: BorderRadius.circular(4),
@@ -4433,9 +4487,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                         width: 2,
                       ),
                     ),
-                    child: Icon(icon, color: accent, size: 22),
+                    child: Icon(icon, color: accent, size: iconSize),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: titleGap),
                   Expanded(
                     child: Text(
                       title,
@@ -4455,7 +4509,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: sectionGap),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -4472,9 +4526,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: footerGap),
               ConstrainedBox(
-                constraints: BoxConstraints(minHeight: compact ? 20 : 24),
+                constraints: BoxConstraints(minHeight: helperMinHeight),
                 child: Text(
                   selected
                       ? 'Ready to start with this quiz mode.'
@@ -4487,7 +4541,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: sectionGap),
               Row(
                 children: <Widget>[
                   Expanded(

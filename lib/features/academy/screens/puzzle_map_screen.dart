@@ -423,6 +423,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       if (result == null) {
         if (allowExitToMenu) {
           _dismissedProfileSetupToMenu = true;
+          provider.setShowAcademyExamsDashboard(false);
           widget.onBack();
         }
         return;
@@ -1164,21 +1165,20 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   void _openAcademyExams() {
-    if (_activeView == _AcademyEntryView.exams) {
+    final provider = context.read<PuzzleAcademyProvider>();
+    if (provider.showAcademyExamsDashboard) {
       return;
     }
-    setState(() {
-      _activeView = _AcademyEntryView.exams;
-    });
+    provider.setShowAcademyExamsDashboard(true);
   }
 
   void _handleAcademyBack() {
-    if (_activeView == _AcademyEntryView.exams) {
-      setState(() {
-        _activeView = _AcademyEntryView.hub;
-      });
+    final provider = context.read<PuzzleAcademyProvider>();
+    if (provider.showAcademyExamsDashboard) {
+      provider.setShowAcademyExamsDashboard(false);
       return;
     }
+    provider.setShowAcademyExamsDashboard(false);
     widget.onBack();
   }
 
@@ -1298,6 +1298,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     return SafeArea(
       child: Consumer<PuzzleAcademyProvider>(
         builder: (context, provider, _) {
+          _activeView = provider.showAcademyExamsDashboard
+              ? _AcademyEntryView.exams
+              : _AcademyEntryView.hub;
           final materialTheme = Theme.of(context);
           final scheme = materialTheme.colorScheme;
           final isDark = materialTheme.brightness == Brightness.dark;
@@ -1326,11 +1329,17 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   final rootContent = Stack(
                     key: _academyRootContentKey,
                     children: [
-                      if (!useReducedWindowsVisuals)
+                      if (_activeView == _AcademyEntryView.hub)
+                        Positioned.fill(
+                          child: _buildAcademyHubBackdrop(
+                            monochrome: monochrome,
+                          ),
+                        )
+                      else if (!useReducedWindowsVisuals)
                         Positioned.fill(
                           child: _buildAtmosphere(
                             monochrome,
-                            includeYellow: _activeView == _AcademyEntryView.hub,
+                            includeYellow: false,
                           ),
                         ),
                       if (_activeView == _AcademyEntryView.hub)
@@ -1421,14 +1430,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       media,
     );
     final compactHub = constraints.maxHeight < 420;
-    final horizontalPadding = selectorLayout.isTablet ? 20.0 : 8.0;
-    final topPadding = compactHub ? 8.0 : 12.0;
-    final bottomPadding = max(12.0, 12.0 + media.padding.bottom);
+    final horizontalPadding = selectorLayout.isTablet ? 20.0 : 4.0;
+    final topPadding = compactHub ? 8.0 : 10.0;
+    final bottomPadding = max(14.0, 14.0 + media.padding.bottom);
     final contentHeight = max(
       0.0,
       constraints.maxHeight - topPadding - bottomPadding,
     );
-    final maxContentWidth = selectorLayout.isTablet ? 1120.0 : 900.0;
+    final maxContentWidth = selectorLayout.isTablet ? 1180.0 : 940.0;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -1445,24 +1454,17 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  height: compactHub ? 40 : 48,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      key: const ValueKey<String>('academy_hub_back_button'),
-                      onPressed: _handleAcademyBack,
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      tooltip: 'Back to menu',
-                    ),
-                  ),
+                _buildAcademyHubTopBar(
+                  monochrome: monochrome,
+                  compact: compactHub,
+                  themeProvider: themeProvider,
                 ),
-                if (selectorLayout.isTablet) ...[
-                  SizedBox(height: compactHub ? 4 : 6),
-                  _buildAcademyHubOverview(monochrome: monochrome),
-                  SizedBox(height: compactHub ? 6 : 10),
-                ] else
-                  SizedBox(height: compactHub ? 6 : 8),
+                SizedBox(height: compactHub ? 8 : 10),
+                _buildAcademyHubOverview(
+                  monochrome: monochrome,
+                  compact: compactHub || !selectorLayout.isTablet,
+                ),
+                SizedBox(height: compactHub ? 10 : 14),
                 Expanded(
                   child: _buildAcademyHubSelector(
                     provider: provider,
@@ -1479,19 +1481,247 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  Widget _buildAcademyHubOverview({required bool monochrome}) {
+  Widget _buildAcademyHubTopBar({
+    required bool monochrome,
+    required bool compact,
+    required AppThemeProvider themeProvider,
+  }) {
     final palette = puzzleAcademyPalette(
       context,
       monochromeOverride: monochrome,
     );
-    return Text(
-      'Choose Your Training Lane',
-      textAlign: TextAlign.center,
-      style: puzzleAcademyDisplayStyle(
-        palette: palette,
-        size: 15.5,
-        color: palette.text,
-        letterSpacing: monochrome ? 0.28 : 0.18,
+    final hubLabel = puzzleAcademyHudStyle(
+      palette: palette,
+      size: compact ? 8.8 : 9.6,
+      weight: FontWeight.w800,
+      color: palette.textMuted,
+      letterSpacing: 1.04,
+      height: 1.0,
+    );
+
+    return SizedBox(
+      height: compact ? 74 : 88,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _buildAcademyHubTopActionButton(
+              key: const ValueKey<String>('academy_hub_back_button'),
+              icon: Icons.arrow_back_rounded,
+              tooltip: 'Back to menu',
+              accent: palette.text,
+              monochrome: monochrome,
+              onPressed: _handleAcademyBack,
+            ),
+          ),
+          Align(
+            alignment: Alignment.center,
+            child: GestureDetector(
+              key: const ValueKey<String>('academy_hub_logo'),
+              onTap: widget.onShowCredits,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/ChessIQ.png',
+                    width: compact ? 108 : 128,
+                    height: compact ? 28 : 34,
+                    fit: BoxFit.contain,
+                  ),
+                  SizedBox(height: compact ? 4 : 6),
+                  Text('ACADEMY', style: hubLabel),
+                ],
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildAcademyHubTopActionButton(
+                  key: const ValueKey<String>('academy_hub_theme_button'),
+                  icon: Icons.palette_outlined,
+                  tooltip: widget.cinematicThemeEnabled
+                      ? 'Theme locked by cinematic mode'
+                      : 'Toggle academy theme',
+                  accent: themeProvider.themeStyle == AppThemeStyle.monochrome
+                      ? palette.amber
+                      : palette.cyan,
+                  monochrome: monochrome,
+                  onPressed: widget.cinematicThemeEnabled
+                      ? () => _openQuickThemeSettings(themeProvider)
+                      : () => unawaited(_toggleAcademyHubTheme(themeProvider)),
+                ),
+                const SizedBox(width: 8),
+                _buildAcademyHubTopActionButton(
+                  key: const ValueKey<String>('academy_hub_settings_button'),
+                  icon: Icons.settings_outlined,
+                  tooltip: 'Settings',
+                  accent: palette.amber,
+                  monochrome: monochrome,
+                  onPressed: () => _openQuickThemeSettings(themeProvider),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAcademyHubTopActionButton({
+    required Key key,
+    required IconData icon,
+    required String tooltip,
+    required Color accent,
+    required bool monochrome,
+    required VoidCallback onPressed,
+  }) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              accent.withValues(alpha: monochrome ? 0.14 : 0.18),
+              palette.panel,
+            ),
+            Color.alphaBlend(
+              accent.withValues(alpha: monochrome ? 0.06 : 0.10),
+              palette.panelAlt,
+            ),
+          ],
+        ),
+        border: Border.all(
+          color: accent.withValues(alpha: monochrome ? 0.52 : 0.72),
+          width: 1.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: monochrome ? 0.14 : 0.24),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: IconButton(
+        key: key,
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon),
+        color: accent,
+        splashRadius: 22,
+      ),
+    );
+  }
+
+  Widget _buildAcademyHubOverview({
+    required bool monochrome,
+    required bool compact,
+  }) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: compact ? 440 : 560),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(
+                  palette.cyan.withValues(alpha: monochrome ? 0.10 : 0.14),
+                  palette.panel,
+                ),
+                Color.alphaBlend(
+                  palette.amber.withValues(alpha: monochrome ? 0.08 : 0.12),
+                  palette.panelAlt,
+                ),
+              ],
+            ),
+            border: Border.all(
+              color: Color.alphaBlend(
+                palette.cyan.withValues(alpha: monochrome ? 0.40 : 0.58),
+                palette.amber.withValues(alpha: monochrome ? 0.28 : 0.44),
+              ),
+              width: 1.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: palette.cyan.withValues(alpha: monochrome ? 0.10 : 0.18),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 14 : 18,
+              vertical: compact ? 10 : 12,
+            ),
+            child: Column(
+              key: const ValueKey<String>('academy_hub_overview_badge'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Choose Your Curriculum',
+                  textAlign: TextAlign.center,
+                  style: puzzleAcademyDisplayStyle(
+                    palette: palette,
+                    size: compact ? 13.6 : 15.8,
+                    color: palette.text,
+                    letterSpacing: monochrome ? 0.24 : 0.18,
+                  ),
+                ),
+                if (!compact) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    'Puzzle Academy drives exam promotion. Opening Study sharpens your pattern memory before the next run.',
+                    textAlign: TextAlign.center,
+                    style: puzzleAcademyCompactStyle(
+                      palette: palette,
+                      size: 10.6,
+                      color: palette.textMuted,
+                      height: 1.28,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAcademyHubBackdrop({required bool monochrome}) {
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: ValueListenableBuilder<double>(
+          valueListenable: _academyBlueDotTime,
+          builder: (context, time, _) {
+            return CustomPaint(
+              painter: _AcademyHubBackdropPainter(
+                monochrome: monochrome,
+                time: time,
+              ),
+              child: const SizedBox.expand(),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1586,6 +1816,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         ? const Color(0xFF9FA7B3)
         : const Color(0xFF137A9A);
     final frontierNode = _academyHubFrontierNode(provider);
+    final rankNode = provider.displayRankNode;
     final semester = provider.semesterForNode(frontierNode);
     final semesterNodes = provider.orderedNodes
         .where((node) => semester.includes(node.startElo))
@@ -1637,7 +1868,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       progress: semesterProgress,
       badges: [
         _AcademyHubCardBadge(
-          label: frontierNode.title,
+          label: rankNode.title,
           icon: Icons.bolt_rounded,
           accent: accent,
         ),
@@ -1913,13 +2144,105 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required double imageScale,
     required Offset imageOffset,
   }) {
-    return _buildAcademyHubCardArtFrame(
-      model: model,
-      monochrome: monochrome,
-      horizontal: layout.usesRail,
-      isLaunching: isLaunching,
-      imageScale: imageScale,
-      imageOffset: imageOffset,
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    final radius = layout.usesRail ? 18.0 : 22.0;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              model.accent.withValues(alpha: monochrome ? 0.10 : 0.14),
+              palette.panel,
+            ),
+            Color.alphaBlend(
+              model.shadowColor.withValues(alpha: monochrome ? 0.10 : 0.14),
+              palette.panelAlt,
+            ),
+          ],
+        ),
+        border: Border.all(
+          color: model.accent.withValues(alpha: monochrome ? 0.58 : 0.82),
+          width: 2.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: model.shadowColor.withValues(
+              alpha: monochrome ? 0.16 : 0.28,
+            ),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(layout.usesRail ? 6 : 8),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius - 6),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: monochrome ? 0.06 : 0.10),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: monochrome ? 0.08 : 0.16),
+                    ],
+                    stops: const [0.0, 0.38, 1.0],
+                  ),
+                ),
+              ),
+              _buildAcademyHubCardArtFrame(
+                model: model,
+                monochrome: monochrome,
+                horizontal: layout.usesRail,
+                isLaunching: isLaunching,
+                imageScale: imageScale,
+                imageOffset: imageOffset,
+              ),
+              Positioned(
+                left: 0,
+                top: 0,
+                child: Container(
+                  width: layout.usesRail ? 66 : 84,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: model.accent.withValues(alpha: 0.92),
+                    borderRadius: const BorderRadius.only(
+                      bottomRight: Radius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: layout.usesRail ? 72 : 94,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: model.accent.withValues(
+                      alpha: monochrome ? 0.56 : 0.82,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -2656,12 +2979,20 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       monochromeOverride: monochrome,
     );
     final frontierNode = _academyHubFrontierNode(provider);
+    final rankNode = provider.displayRankNode;
     final semester = provider.semesterForNode(frontierNode);
     final semesterProgress = provider.semesterProgress(semester);
     final overallProgress = provider.overallMasteryProgress;
     final completedExams = provider.completedExamCountInSemester(semester);
+    final totalLoggedExams = provider.totalLoggedExamCount;
     final examReady = provider.canTakeExam(frontierNode);
     final requirementSummary = _academyExamGateSummary(provider, frontierNode);
+    final examLogLabel = completedExams > 0
+        ? '$completedExams ${completedExams == 1 ? 'exam' : 'exams'} logged'
+        : totalLoggedExams > 0
+        ? '$totalLoggedExams ${totalLoggedExams == 1 ? 'exam' : 'exams'} logged overall'
+        : 'No exams logged yet';
+    final hasLoggedExams = completedExams > 0 || totalLoggedExams > 0;
 
     return PuzzleAcademyPanel(
       accent: palette.amber,
@@ -2742,22 +3073,18 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 monochromeOverride: monochrome,
               ),
               PuzzleAcademyTag(
-                label: frontierNode.title,
+                label: rankNode.title,
                 icon: Icons.flag_rounded,
                 accent: palette.amber,
                 compact: true,
                 monochromeOverride: monochrome,
               ),
               PuzzleAcademyTag(
-                label: completedExams > 0
-                    ? '$completedExams exams logged'
-                    : 'No exams logged yet',
+                label: examLogLabel,
                 icon: Icons.fact_check_outlined,
-                accent: completedExams > 0
-                    ? palette.emerald
-                    : palette.textMuted,
+                accent: hasLoggedExams ? palette.emerald : palette.textMuted,
                 compact: true,
-                filled: completedExams > 0,
+                filled: hasLoggedExams,
                 monochromeOverride: monochrome,
               ),
             ],
@@ -3902,6 +4229,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     }
   }
 
+  Future<void> _toggleAcademyHubTheme(AppThemeProvider themeProvider) async {
+    final nextStyle = themeProvider.themeStyle == AppThemeStyle.monochrome
+        ? AppThemeStyle.standard
+        : AppThemeStyle.monochrome;
+    await themeProvider.setThemeStyle(nextStyle);
+  }
+
   Map<SemesterRange, List<EloNodeProgress>> _groupBySemester(
     PuzzleAcademyProvider provider,
   ) {
@@ -3940,6 +4274,261 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     }
 
     return grouped;
+  }
+}
+
+class _AcademyHubBackdropPainter extends CustomPainter {
+  const _AcademyHubBackdropPainter({
+    required this.monochrome,
+    required this.time,
+  });
+
+  final bool monochrome;
+  final double time;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shortestSide = min(size.width, size.height);
+    final pixel = max(4.0, shortestSide / 92);
+    final skyTop = monochrome
+        ? const Color(0xFF2F3238)
+        : const Color(0xFF16264F);
+    final skyBottom = monochrome
+        ? const Color(0xFF181A20)
+        : const Color(0xFF11172E);
+    final horizonGlow = monochrome
+        ? const Color(0xFFCACED7)
+        : const Color(0xFFE6C45B);
+    final skylineBase = monochrome
+        ? const Color(0xFF626771)
+        : const Color(0xFF27456A);
+    final skylineAccent = monochrome
+        ? const Color(0xFF8C919C)
+        : const Color(0xFF4F7EC1);
+    final floorBase = monochrome
+        ? const Color(0xFF1D2128)
+        : const Color(0xFF101B34);
+    final gridLine = monochrome
+        ? const Color(0xFF7D818A)
+        : const Color(0xFF4ED3FF);
+    final starColor = monochrome
+        ? const Color(0xFFE5E7EB)
+        : const Color(0xFF91EBFF);
+    final cloudColor = monochrome
+        ? const Color(0xFF9FA4AE)
+        : const Color(0xFF75C9FF);
+
+    final backgroundPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: <Color>[skyTop, skyBottom],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, backgroundPaint);
+
+    final glowCenter = Offset(
+      size.width * 0.5,
+      size.height * 0.19 + sin(time * 0.22) * pixel * 1.4,
+    );
+    final glowPaint = Paint()
+      ..shader = RadialGradient(
+        center: Alignment(
+          (glowCenter.dx / size.width) * 2 - 1,
+          (glowCenter.dy / size.height) * 2 - 1,
+        ),
+        radius:
+            min(size.width * 0.46, size.height * 0.34) /
+            max(size.width, size.height),
+        colors: <Color>[
+          horizonGlow.withValues(alpha: monochrome ? 0.16 : 0.22),
+          horizonGlow.withValues(alpha: monochrome ? 0.04 : 0.08),
+          Colors.transparent,
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, glowPaint);
+
+    _drawSun(canvas, size, pixel, horizonGlow);
+    _drawStars(canvas, size, pixel, starColor);
+    _drawCloud(
+      canvas,
+      size,
+      pixel,
+      Offset(
+        ((size.width * 0.16) + time * pixel * 2.6) % (size.width + 18 * pixel) -
+            12 * pixel,
+        size.height * 0.17,
+      ),
+      cloudColor,
+    );
+    _drawCloud(
+      canvas,
+      size,
+      pixel,
+      Offset(
+        size.width -
+            ((((size.width * 0.24) + time * pixel * 2.1) %
+                    (size.width + 22 * pixel)) -
+                10 * pixel),
+        size.height * 0.26,
+      ),
+      cloudColor.withValues(alpha: monochrome ? 0.66 : 0.78),
+    );
+    _drawSkyline(canvas, size, pixel, skylineBase, skylineAccent);
+    _drawFloor(canvas, size, pixel, floorBase, gridLine);
+    _drawScanlines(canvas, size, pixel);
+  }
+
+  void _drawSun(Canvas canvas, Size size, double pixel, Color color) {
+    final centerX = size.width * 0.5;
+    final baseY = size.height * 0.11 + sin(time * 0.24) * pixel * 1.2;
+    final stripePaint = Paint()
+      ..color = color.withValues(alpha: monochrome ? 0.28 : 0.46);
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: monochrome ? 0.06 : 0.10);
+
+    for (var row = 0; row < 8; row++) {
+      final inset = row * pixel * 1.2;
+      final width = min(size.width * 0.32, pixel * 30) - inset * 1.4;
+      final top = baseY + row * pixel * 1.28;
+      final rect = Rect.fromCenter(
+        center: Offset(centerX, top),
+        width: width,
+        height: pixel,
+      );
+      canvas.drawRect(rect.shift(Offset(0, pixel * 0.3)), shadowPaint);
+      canvas.drawRect(rect, stripePaint);
+    }
+  }
+
+  void _drawStars(Canvas canvas, Size size, double pixel, Color color) {
+    final starPaint = Paint();
+    for (var index = 0; index < 26; index++) {
+      final x = (((index * 37) % 100) / 100.0) * size.width;
+      final y = ((((index * 29) + 11) % 40) / 100.0) * size.height;
+      final twinkle = 0.42 + 0.34 * sin(time * 1.6 + index * 0.9).abs();
+      starPaint.color = color.withValues(alpha: twinkle);
+      final extent = index % 3 == 0 ? pixel * 0.9 : pixel * 0.65;
+      canvas.drawRect(Rect.fromLTWH(x, y, extent, extent), starPaint);
+    }
+  }
+
+  void _drawCloud(
+    Canvas canvas,
+    Size size,
+    double pixel,
+    Offset anchor,
+    Color color,
+  ) {
+    final blocks = <Offset>[
+      const Offset(0, 1),
+      const Offset(1, 0),
+      const Offset(2, 0),
+      const Offset(3, 1),
+      const Offset(4, 1),
+      const Offset(1, 1),
+      const Offset(2, 1),
+      const Offset(3, 0),
+      const Offset(2, 2),
+      const Offset(3, 2),
+    ];
+    final cloudPaint = Paint()..color = color.withValues(alpha: 0.20);
+    for (final block in blocks) {
+      final left = anchor.dx + block.dx * pixel * 3.2;
+      final top = anchor.dy + block.dy * pixel * 2.2;
+      if (left > size.width + pixel * 8 || left < -pixel * 16) {
+        continue;
+      }
+      canvas.drawRect(
+        Rect.fromLTWH(left, top, pixel * 3.2, pixel * 2.2),
+        cloudPaint,
+      );
+    }
+  }
+
+  void _drawSkyline(
+    Canvas canvas,
+    Size size,
+    double pixel,
+    Color base,
+    Color accent,
+  ) {
+    final basePaint = Paint()..color = base.withValues(alpha: 0.54);
+    final accentPaint = Paint()..color = accent.withValues(alpha: 0.30);
+    final buildingWidths = <double>[8, 11, 6, 10, 7, 12, 8, 9, 6, 10];
+    final buildingHeights = <double>[18, 26, 14, 22, 16, 28, 20, 24, 15, 19];
+    var x = -pixel * 2;
+    for (var i = 0; x < size.width + pixel * 8; i++) {
+      final width = buildingWidths[i % buildingWidths.length] * pixel;
+      final height = buildingHeights[i % buildingHeights.length] * pixel;
+      final rect = Rect.fromLTWH(x, size.height * 0.56 - height, width, height);
+      canvas.drawRect(rect, basePaint);
+      final windowSize = pixel * 0.9;
+      for (var row = 0; row < 3; row++) {
+        for (var col = 0; col < 3; col++) {
+          if ((row + col + i) % 2 == 0) {
+            final left = rect.left + pixel * 1.4 + col * pixel * 2.2;
+            final top = rect.top + pixel * 1.8 + row * pixel * 2.2;
+            canvas.drawRect(
+              Rect.fromLTWH(left, top, windowSize, windowSize),
+              accentPaint,
+            );
+          }
+        }
+      }
+      x += width - pixel * 0.8;
+    }
+  }
+
+  void _drawFloor(
+    Canvas canvas,
+    Size size,
+    double pixel,
+    Color base,
+    Color grid,
+  ) {
+    final floorTop = size.height * 0.58;
+    canvas.drawRect(
+      Rect.fromLTWH(0, floorTop, size.width, size.height - floorTop),
+      Paint()..color = base.withValues(alpha: 0.80),
+    );
+
+    final horizontalPaint = Paint()
+      ..color = grid.withValues(alpha: monochrome ? 0.08 : 0.14)
+      ..strokeWidth = pixel * 0.4;
+    for (var index = 0; index < 8; index++) {
+      final t = index / 7;
+      final y = lerpDouble(floorTop, size.height, t * t)!;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), horizontalPaint);
+    }
+
+    final verticalPaint = Paint()
+      ..color = grid.withValues(alpha: monochrome ? 0.06 : 0.12)
+      ..strokeWidth = pixel * 0.34;
+    for (var index = -6; index <= 6; index++) {
+      final bottomX = size.width * 0.5 + index * pixel * 10;
+      canvas.drawLine(
+        Offset(size.width * 0.5, floorTop),
+        Offset(bottomX, size.height),
+        verticalPaint,
+      );
+    }
+  }
+
+  void _drawScanlines(Canvas canvas, Size size, double pixel) {
+    final scanlinePaint = Paint()
+      ..color = Colors.white.withValues(alpha: monochrome ? 0.028 : 0.038);
+    final spacing = pixel * 2.1;
+    for (double y = 0; y < size.height; y += spacing) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, y, size.width, pixel * 0.28),
+        scanlinePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AcademyHubBackdropPainter oldDelegate) {
+    return oldDelegate.monochrome != monochrome || oldDelegate.time != time;
   }
 }
 
