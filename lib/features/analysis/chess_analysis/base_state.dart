@@ -124,6 +124,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _moveQualityGradingMultiPv = 4;
   static const int _moveQualityGradingDepth = 10;
+  static const int _positionAnalysisCacheLimit = 24;
   static const Duration _gameResultRevealDuration = Duration(
     milliseconds: 1150,
   );
@@ -360,8 +361,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   EngineSearchHandle? _botSearchHandle;
   int _engineRequestSequence = 0;
   EvalSnapshot? _currentEvalSnapshot;
+    final Map<String, PositionAnalysisCacheEntry> _positionAnalysisCacheByFen =
+      <String, PositionAnalysisCacheEntry>{};
   final Map<String, EngineSearchUpdate> _primaryEngineUpdateByFen =
       <String, EngineSearchUpdate>{};
+    final Map<String, EngineSearchHandle>
+      _backgroundMoveQualityConfirmationsByFen =
+      <String, EngineSearchHandle>{};
   Completer<List<EngineLine>>? _botSearchCompleter;
   final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
   int _botSearchMultiPv = 1;
@@ -2790,12 +2796,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _lastMoveQualityBadgeSquare = null;
   }
 
-  void _invalidateMoveQualityGradingPipeline({bool clearPendingMove = false}) {
+  void _cancelBackgroundMoveQualityConfirmations({
+    String reason = 'move-quality pipeline invalidated',
+  }) {
+    for (final handle in _backgroundMoveQualityConfirmationsByFen.values.toList()) {
+      handle.cancel(reason: reason);
+    }
+    _backgroundMoveQualityConfirmationsByFen.clear();
+  }
+
+  void _invalidateMoveQualityGradingPipeline({
+    bool clearPendingMove = false,
+    bool cancelBackgroundConfirmations = true,
+  }) {
     _moveQualityGradingGeneration++;
-    _engine?.cancelSearches(
-      roles: <EngineRequestRole>{EngineRequestRole.backgroundConfirmation},
-      reason: 'move-quality pipeline invalidated',
-    );
+    if (cancelBackgroundConfirmations) {
+      _cancelBackgroundMoveQualityConfirmations();
+    }
     final active = _gradingSearchCompleter;
     if (active != null && !active.isCompleted) {
       active.complete(null);
@@ -2824,8 +2841,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     EngineLine? livePostMoveLine,
     bool? livePostMoveWhiteToMove,
     EngineRequestRole? livePostMoveRole,
+    bool cancelBackgroundConfirmations = false,
   }) {
-    _invalidateMoveQualityGradingPipeline();
+    _invalidateMoveQualityGradingPipeline(
+      cancelBackgroundConfirmations: cancelBackgroundConfirmations,
+    );
     final generation = _moveQualityGradingGeneration;
     _moveQualityGradingOperation = Future<void>(() async {
       if (!mounted || generation != _moveQualityGradingGeneration) {
@@ -2840,6 +2860,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     });
     unawaited(_moveQualityGradingOperation.catchError((_) {}));
+  }
+
+  bool _restorePendingMoveQualityGrading(_PendingMoveQualityGrading pending) {
+    final active = _pendingMoveQualityGrading;
+    if (active != null &&
+        (active.moveIndex != pending.moveIndex || active.uci != pending.uci)) {
+      return false;
+    }
+    _pendingMoveQualityGrading = pending;
+    return true;
+  }
+
+  void _deferPendingMoveQualityGrading(
+    _PendingMoveQualityGrading pending, {
+    required bool needsPreMoveConfirmation,
+    required bool needsPostMoveConfirmation,
+  }) {
+    if (!_restorePendingMoveQualityGrading(pending)) {
+      return;
+    }
+    if (needsPreMoveConfirmation) {
+      _queueBackgroundMoveQualityConfirmation(
+        pending,
+        fen: pending.preMoveFen,
+        whiteToMove: pending.moverIsWhite,
+      );
+    }
+    if (needsPostMoveConfirmation) {
+      _queueBackgroundMoveQualityConfirmation(pending);
+    }
   }
 
   double _pieceMaterialValue(String piece) {
@@ -2867,14 +2917,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       total += _pieceMaterialValue(piece);
     }
     return total;
-  }
-
-  double _whiteEvalPawnsFromLiveState() {
-    final snapshot = _currentEvalSnapshot;
-    if (snapshot != null && snapshot.matchesFen(_genFen())) {
-      return snapshot.evalPawnsWhite;
-    }
-    return _evalWhiteTurn ? _currentEval : -_currentEval;
   }
 
   double _moverEvalPawnsFromWhiteEval(
@@ -3343,7 +3385,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _engineOwner = null;
     _botSearchHandle = null;
     _currentEvalSnapshot = null;
-    _primaryEngineUpdateByFen.clear();
+    _cancelBackgroundMoveQualityConfirmations(reason: 'engine session released');
+    _clearPositionAnalysisCache();
     if (engine == null) return;
     try {
       await engine.stop();
@@ -3405,6 +3448,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _clearVsBotOverlayState();
     _cancelGameResultReveal();
     _cancelPendingMoveQualityGrading();
+    _clearPositionAnalysisCache();
     _clearMoveQualityOverlay();
     _clearMoveQualityBadge();
     boardState = _initialBoardState();
@@ -3550,12 +3594,64 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  void _rememberPositionAnalysis(
+    String fen,
+    PositionAnalysisCacheEntry entry,
+  ) {
+    _positionAnalysisCacheByFen.remove(fen);
+    _positionAnalysisCacheByFen[fen] = entry;
+    while (_positionAnalysisCacheByFen.length > _positionAnalysisCacheLimit) {
+      _positionAnalysisCacheByFen.remove(_positionAnalysisCacheByFen.keys.first);
+    }
+  }
+
+  PositionAnalysisCacheEntry? _cachedPositionAnalysisForFen(String fen) {
+    final cached = _positionAnalysisCacheByFen[fen];
+    if (cached == null) {
+      return null;
+    }
+    _positionAnalysisCacheByFen.remove(fen);
+    _positionAnalysisCacheByFen[fen] = cached;
+    return cached;
+  }
+
+  void _recordPositionAnalysisLines(String fen, List<EngineLine> lines) {
+    if (lines.isEmpty) {
+      return;
+    }
+    final cached =
+        _positionAnalysisCacheByFen[fen] ?? PositionAnalysisCacheEntry(fen: fen);
+    _rememberPositionAnalysis(fen, cached.mergedWithAnalysisLines(lines));
+  }
+
+  void _clearPositionAnalysisCache() {
+    _positionAnalysisCacheByFen.clear();
+    _primaryEngineUpdateByFen.clear();
+  }
+
+  void _restoreCachedEvalForFen(String fen) {
+    final cached = _cachedPositionAnalysisForFen(fen);
+    final snapshot = cached?.evalSnapshot;
+    if (snapshot == null) {
+      _currentEvalSnapshot = null;
+      _currentDepth = 0;
+      _currentEval = 0.0;
+      _evalWhiteTurn = _isWhiteTurn;
+      return;
+    }
+    _applyCanonicalEvalSnapshot(snapshot);
+  }
+
   void _recordPrimaryEngineUpdate(EngineSearchUpdate update) {
     if (!update.isPrimaryVariation) {
       return;
     }
-    _primaryEngineUpdateByFen[update.request.fen] = update;
-    while (_primaryEngineUpdateByFen.length > 24) {
+    final fen = update.request.fen;
+    final cached =
+        _positionAnalysisCacheByFen[fen] ?? PositionAnalysisCacheEntry(fen: fen);
+    _rememberPositionAnalysis(fen, cached.mergedWithPrimaryUpdate(update));
+    _primaryEngineUpdateByFen[fen] = update;
+    while (_primaryEngineUpdateByFen.length > _positionAnalysisCacheLimit) {
       _primaryEngineUpdateByFen.remove(_primaryEngineUpdateByFen.keys.first);
     }
   }
@@ -3587,15 +3683,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     final pending = _pendingMoveQualityGrading;
-    if (pending == null || pending.postMoveFen != update.request.fen) {
+    final matchesPostMoveFen = pending?.postMoveFen == update.request.fen;
+    final matchesPreMoveFen = pending?.preMoveFen == update.request.fen;
+    if (pending == null || (!matchesPostMoveFen && !matchesPreMoveFen)) {
       return;
     }
     _pendingMoveQualityGrading = null;
     _scheduleMoveQualityGrading(
       pending,
-      livePostMoveLine: update.line,
-      livePostMoveWhiteToMove: update.request.whiteToMove,
-      livePostMoveRole: update.request.role,
+      livePostMoveLine: matchesPostMoveFen ? update.line : null,
+      livePostMoveWhiteToMove: matchesPostMoveFen
+          ? update.request.whiteToMove
+          : null,
+      livePostMoveRole: matchesPostMoveFen ? update.request.role : null,
     );
   }
 
@@ -3640,6 +3740,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _topLines = [];
       }
     });
+    _recordPositionAnalysisLines(
+      update.request.fen,
+      _analysisLinesFen == update.request.fen
+          ? _analysisLines
+          : const <EngineLine>[],
+    );
   }
 
   void _handleBotSearchUpdate(EngineSearchUpdate update) {
@@ -3668,24 +3774,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _queueBackgroundMoveQualityConfirmation(
-    _PendingMoveQualityGrading pending,
+    _PendingMoveQualityGrading pending, {
+    String? fen,
+    bool? whiteToMove,
+  }
   ) {
     final engine = _engine;
-    final postMoveFen = pending.postMoveFen;
-    if (engine == null || postMoveFen == null) {
+    final targetFen = fen ?? pending.postMoveFen;
+    if (engine == null || targetFen == null) {
+      return;
+    }
+    if (_backgroundMoveQualityConfirmationsByFen.containsKey(targetFen)) {
       return;
     }
 
-    final whiteToMove = pending.postMoveWhiteToMove ?? !pending.moverIsWhite;
+    final targetWhiteToMove =
+        whiteToMove ?? pending.postMoveWhiteToMove ?? !pending.moverIsWhite;
+    late final EngineSearchHandle confirmationHandle;
     var consumedPrimaryLine = false;
-    engine.scheduleSearch(
+    confirmationHandle = engine.scheduleSearch(
       EngineRequestSpec(
         requestId: _nextEngineRequestId(
           EngineRequestRole.backgroundConfirmation,
         ),
         role: EngineRequestRole.backgroundConfirmation,
-        fen: postMoveFen,
-        whiteToMove: whiteToMove,
+        fen: targetFen,
+        whiteToMove: targetWhiteToMove,
         multiPv: 1,
         depth: _moveQualityGradingDepth,
         timeout: Duration(milliseconds: _playVsBot ? 900 : 1400),
@@ -3699,15 +3813,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         consumedPrimaryLine = true;
         _scheduleMoveQualityGrading(
           pending,
-          livePostMoveLine: update.line,
-          livePostMoveWhiteToMove: update.request.whiteToMove,
-          livePostMoveRole: update.request.role,
+          livePostMoveLine: update.request.fen == pending.postMoveFen
+              ? update.line
+              : null,
+          livePostMoveWhiteToMove: update.request.fen == pending.postMoveFen
+              ? update.request.whiteToMove
+              : null,
+          livePostMoveRole: update.request.fen == pending.postMoveFen
+              ? update.request.role
+              : null,
         );
-        _engine?.cancelSearches(
-          roles: <EngineRequestRole>{EngineRequestRole.backgroundConfirmation},
-          reason: 'background confirmation satisfied',
-        );
+        confirmationHandle.cancel(reason: 'background confirmation satisfied');
       },
+    );
+    _backgroundMoveQualityConfirmationsByFen[targetFen] = confirmationHandle;
+    unawaited(
+      confirmationHandle.result.whenComplete(() {
+        if (identical(
+          _backgroundMoveQualityConfirmationsByFen[targetFen],
+          confirmationHandle,
+        )) {
+          _backgroundMoveQualityConfirmationsByFen.remove(targetFen);
+        }
+      }),
     );
   }
 
@@ -3786,16 +3914,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final currentFen = _genFen();
-    final preMoveSnapshot = _currentEvalSnapshot;
-    final preMoveWhiteEval =
-        _currentDepth > 0 &&
-            preMoveSnapshot != null &&
-            preMoveSnapshot.matchesFen(currentFen)
-        ? _whiteEvalPawnsFromLiveState()
+    final cachedPosition = _cachedPositionAnalysisForFen(currentFen);
+    final livePreMoveSnapshot =
+        _currentEvalSnapshot != null && _currentEvalSnapshot!.matchesFen(currentFen)
+        ? _currentEvalSnapshot
         : null;
-    final preMoveLines = List<EngineLine>.from(
+    final preMoveSnapshot = preferBestEvalSnapshot(
+      cachedPosition?.evalSnapshot,
+      livePreMoveSnapshot,
+    );
+    final preMoveWhiteEval = preMoveSnapshot?.evalPawnsWhite;
+    final preMoveLines = preferDeeperAnalysisLines(
       _analysisLinesFen == currentFen ? _analysisLines : const <EngineLine>[],
-    )..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      cachedPosition?.analysisLines ?? const <EngineLine>[],
+    );
     final totalLegalMoveCount = _currentSideLegalMoveCount();
     return _PendingMoveQualityGrading(
       moveIndex: _historyIndex + 1,
@@ -3891,49 +4023,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         gradingGeneration != _moveQualityGradingGeneration) {
       return;
     }
-    var preMoveLines = pending.preMoveLines;
-    var preMoveMoverWinProbability = pending.preMoveMoverWinProbability;
-    var preMoveMoverEvalPawns = pending.preMoveMoverEvalPawns;
-    var usedPreMoveFallback =
-        preMoveMoverWinProbability == null || preMoveLines.isEmpty;
-    if (preMoveLines.isNotEmpty && preMoveMoverWinProbability == null) {
-      final preMoveLine = preMoveLines.first;
-      final preMoveWhiteEvalPawns = pending.moverIsWhite
-          ? preMoveLine.eval / 100.0
-          : -preMoveLine.eval / 100.0;
-      preMoveMoverWinProbability = _moverWinProbabilityFromEngineLine(
-        preMoveLine,
-        whiteToMove: pending.moverIsWhite,
-        moverIsWhite: pending.moverIsWhite,
+    final evidence = resolveMoveQualityEvidence(
+      moverIsWhite: pending.moverIsWhite,
+      capturedPreMoveLines: pending.preMoveLines,
+      capturedPreMoveMoverWinProbability: pending.preMoveMoverWinProbability,
+      capturedPreMoveMoverEvalPawns: pending.preMoveMoverEvalPawns,
+      preMoveCacheEntry: _cachedPositionAnalysisForFen(pending.preMoveFen),
+      livePostMoveLine: livePostMoveLine,
+      livePostMoveWhiteToMove: livePostMoveWhiteToMove,
+      postMoveCacheEntry: pending.postMoveFen == null
+          ? null
+          : _cachedPositionAnalysisForFen(pending.postMoveFen!),
+      minimumDepth: _moveQualityGradingDepth,
+    );
+    if (!evidence.isReadyToPublish) {
+      _deferPendingMoveQualityGrading(
+        pending,
+        needsPreMoveConfirmation: evidence.needsPreMoveConfirmation,
+        needsPostMoveConfirmation: evidence.needsPostMoveConfirmation,
       );
-      preMoveMoverEvalPawns = _moverEvalPawnsFromWhiteEval(
-        preMoveWhiteEvalPawns,
-        pending.moverIsWhite,
-      );
-      usedPreMoveFallback = false;
+      return;
     }
+    final preMoveLines = evidence.preMoveLines;
+    final preMoveMoverWinProbability = evidence.preMoveMoverWinProbability;
+    final preMoveMoverEvalPawns = evidence.preMoveMoverEvalPawns;
+    final usedPreMoveFallback = evidence.usedPreMoveFallback;
+    final postMoveLine = evidence.postMoveLine;
+    final postMoveWhiteToMove = evidence.postMoveWhiteToMove;
+    livePostMoveRole ??= pending.postMoveFen == null
+        ? null
+        : _positionAnalysisCacheByFen[pending.postMoveFen!]?.evalSnapshot?.role;
 
     if (gradingGeneration != null &&
         gradingGeneration != _moveQualityGradingGeneration) {
       return;
-    }
-
-    EngineLine? postMoveLine = livePostMoveLine;
-    var postMoveWhiteToMove =
-        livePostMoveWhiteToMove ?? pending.postMoveWhiteToMove ?? _isWhiteTurn;
-    if (postMoveLine == null) {
-      final postMoveFen = pending.postMoveFen;
-      if (postMoveFen == null) {
-        return;
-      }
-      final cachedUpdate = _primaryEngineUpdateByFen[postMoveFen];
-      if (cachedUpdate == null) {
-        _queueBackgroundMoveQualityConfirmation(pending);
-        return;
-      }
-      postMoveLine = cachedUpdate.line;
-      postMoveWhiteToMove = cachedUpdate.request.whiteToMove;
-      livePostMoveRole = cachedUpdate.request.role;
     }
 
     if (gradingGeneration != null &&
@@ -3950,8 +4073,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final postMoveMoverWinProbability = _moverWinProbabilityFromEngineLine(
-      postMoveLine,
-      whiteToMove: postMoveWhiteToMove,
+      postMoveLine!,
+      whiteToMove: postMoveWhiteToMove!,
       moverIsWhite: pending.moverIsWhite,
     );
     final effectivePreMoveMoverWinProbability =
@@ -4060,6 +4183,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
 
     setState(() {
+      if (_pendingMoveQualityGrading?.moveIndex == pending.moveIndex &&
+          _pendingMoveQualityGrading?.uci == pending.uci) {
+        _pendingMoveQualityGrading = null;
+      }
       if (pending.moveIndex < _moveHistory.length &&
           _moveHistory[pending.moveIndex].uci == pending.uci) {
         _moveHistory[pending.moveIndex] = updatedMove;
@@ -5400,13 +5527,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     const spacing = 12.0;
                     final targetTileWidth = isLandscape
                         ? ((constraints.maxWidth -
-                                    (spacing * (options.length - 1))) /
-                                options.length)
-                            .clamp(78.0, 132.0)
-                            .toDouble()
+                                      (spacing * (options.length - 1))) /
+                                  options.length)
+                              .clamp(78.0, 132.0)
+                              .toDouble()
                         : ((constraints.maxWidth - spacing) / 2)
-                            .clamp(120.0, 132.0)
-                            .toDouble();
+                              .clamp(120.0, 132.0)
+                              .toDouble();
                     final pieceSize = isLandscape
                         ? (targetTileWidth - 30).clamp(44.0, 60.0).toDouble()
                         : 60.0;
@@ -6614,6 +6741,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         livePostMoveLine: cachedPostMoveUpdate?.line,
         livePostMoveWhiteToMove: cachedPostMoveUpdate?.request.whiteToMove,
         livePostMoveRole: cachedPostMoveUpdate?.request.role,
+        cancelBackgroundConfirmations: true,
       );
     }
     final moverIsWhite = _isWhiteTurn;
@@ -6780,8 +6908,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _cancelPendingMoveQualityGrading();
       _clearMoveQualityOverlay();
       _clearMoveQualityBadge();
-      _currentEvalSnapshot = null;
-      _primaryEngineUpdateByFen.clear();
       _historyIndex = index;
       // Truncate any future moves so they don't interfere with opening/gambit lookups
       if (index < _moveHistory.length - 1) {
@@ -6803,8 +6929,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _topLines = [];
       _analysisLines = [];
       _analysisLinesFen = null;
-      _currentDepth = 0;
-      _currentEval = 0.0;
+      _restoreCachedEvalForFen(_genFen());
     });
     _persistAnalysisSnapshotIfNeeded();
     _analyze();
@@ -10250,8 +10375,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _botSearchCompleter = null;
       _pendingMoveQualityGrading = null;
       _vsBotOptimalLineRevealActive = false;
-      _currentEvalSnapshot = null;
-      _primaryEngineUpdateByFen.clear();
       _clearMoveQualityOverlay();
       _clearMoveQualityBadge();
 
@@ -10286,8 +10409,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _topLines = [];
       _analysisLines = [];
       _analysisLinesFen = null;
-      _currentDepth = 0;
-      _currentEval = 0.0;
+        _restoreCachedEvalForFen(_genFen());
       _vsBotCharge = preserveSpentPowerCharge
           ? chargeAtUndo
           : restoredCharge ??
@@ -12657,11 +12779,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       suggestedMoves: _multiPvCount,
       maxSuggestedMoves: _maxSuggestionsAllowed,
       onEngineDepthChanged: (value) {
+        final changed = value != _engineDepth;
         setState(() => _engineDepth = value);
+        if (changed) {
+          _clearPositionAnalysisCache();
+        }
         _analyze();
       },
       onEngineDepthChangeEnd: (value) {
+        final changed = value != _engineDepth;
         setState(() => _engineDepth = value);
+        if (changed) {
+          _clearPositionAnalysisCache();
+        }
         _persistCurrentSettings();
       },
       onSuggestedMovesChanged: (value) {

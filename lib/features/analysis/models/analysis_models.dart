@@ -146,6 +146,234 @@ class EngineSearchUpdate {
   bool get isPrimaryVariation => line.multiPv == 1;
 }
 
+class PositionAnalysisCacheEntry {
+  static const Object _sentinel = Object();
+
+  const PositionAnalysisCacheEntry({
+    required this.fen,
+    this.evalSnapshot,
+    this.primaryLine,
+    this.analysisLines = const <EngineLine>[],
+  });
+
+  final String fen;
+  final EvalSnapshot? evalSnapshot;
+  final EngineLine? primaryLine;
+  final List<EngineLine> analysisLines;
+
+  int get analysisDepth => analysisLines.isEmpty ? 0 : analysisLines.first.depth;
+
+  int get primaryDepth => primaryLine?.depth ?? 0;
+
+  PositionAnalysisCacheEntry copyWith({
+    Object? evalSnapshot = _sentinel,
+    Object? primaryLine = _sentinel,
+    Object? analysisLines = _sentinel,
+  }) {
+    return PositionAnalysisCacheEntry(
+      fen: fen,
+      evalSnapshot: identical(evalSnapshot, _sentinel)
+          ? this.evalSnapshot
+          : evalSnapshot as EvalSnapshot?,
+      primaryLine: identical(primaryLine, _sentinel)
+          ? this.primaryLine
+          : primaryLine as EngineLine?,
+      analysisLines: identical(analysisLines, _sentinel)
+          ? this.analysisLines
+          : analysisLines as List<EngineLine>,
+    );
+  }
+
+  PositionAnalysisCacheEntry mergedWithPrimaryUpdate(EngineSearchUpdate update) {
+    assert(update.request.fen == fen);
+    return copyWith(
+      evalSnapshot: preferBestEvalSnapshot(evalSnapshot, update.snapshot),
+      primaryLine: preferDeeperEngineLine(primaryLine, update.line),
+    );
+  }
+
+  PositionAnalysisCacheEntry mergedWithAnalysisLines(List<EngineLine> nextLines) {
+    return copyWith(
+      analysisLines: preferDeeperAnalysisLines(analysisLines, nextLines),
+    );
+  }
+}
+
+class MoveQualityEvidenceResolution {
+  const MoveQualityEvidenceResolution({
+    required this.preMoveLines,
+    required this.preMoveMoverWinProbability,
+    required this.preMoveMoverEvalPawns,
+    required this.postMoveLine,
+    required this.postMoveWhiteToMove,
+    required this.usedPreMoveFallback,
+    required this.needsPreMoveConfirmation,
+    required this.needsPostMoveConfirmation,
+  });
+
+  final List<EngineLine> preMoveLines;
+  final double? preMoveMoverWinProbability;
+  final double? preMoveMoverEvalPawns;
+  final EngineLine? postMoveLine;
+  final bool? postMoveWhiteToMove;
+  final bool usedPreMoveFallback;
+  final bool needsPreMoveConfirmation;
+  final bool needsPostMoveConfirmation;
+
+  bool get isReadyToPublish =>
+      !needsPreMoveConfirmation && !needsPostMoveConfirmation;
+}
+
+EvalSnapshot? preferBestEvalSnapshot(
+  EvalSnapshot? current,
+  EvalSnapshot? candidate,
+) {
+  if (candidate == null) {
+    return current;
+  }
+  if (current == null) {
+    return candidate;
+  }
+  if (candidate.depth != current.depth) {
+    return candidate.depth > current.depth ? candidate : current;
+  }
+  return candidate.timestamp.isAfter(current.timestamp) ? candidate : current;
+}
+
+EngineLine? preferDeeperEngineLine(EngineLine? current, EngineLine? candidate) {
+  if (candidate == null) {
+    return current;
+  }
+  if (current == null) {
+    return candidate;
+  }
+  if (candidate.depth != current.depth) {
+    return candidate.depth > current.depth ? candidate : current;
+  }
+  return candidate;
+}
+
+List<EngineLine> preferDeeperAnalysisLines(
+  List<EngineLine> current,
+  List<EngineLine> candidate,
+) {
+  final normalizedCurrent = _normalizedEngineLines(current);
+  final normalizedCandidate = _normalizedEngineLines(candidate);
+  final currentDepth = normalizedCurrent.isEmpty ? 0 : normalizedCurrent.first.depth;
+  final candidateDepth = normalizedCandidate.isEmpty
+      ? 0
+      : normalizedCandidate.first.depth;
+
+  if (candidateDepth > currentDepth) {
+    return normalizedCandidate;
+  }
+  if (currentDepth > candidateDepth) {
+    return normalizedCurrent;
+  }
+  if (normalizedCandidate.length >= normalizedCurrent.length &&
+      normalizedCandidate.isNotEmpty) {
+    return normalizedCandidate;
+  }
+  return normalizedCurrent;
+}
+
+MoveQualityEvidenceResolution resolveMoveQualityEvidence({
+  required bool moverIsWhite,
+  required List<EngineLine> capturedPreMoveLines,
+  required double? capturedPreMoveMoverWinProbability,
+  required double? capturedPreMoveMoverEvalPawns,
+  PositionAnalysisCacheEntry? preMoveCacheEntry,
+  EngineLine? livePostMoveLine,
+  bool? livePostMoveWhiteToMove,
+  PositionAnalysisCacheEntry? postMoveCacheEntry,
+  required int minimumDepth,
+}) {
+  final normalizedCapturedPreMoveLines =
+      _normalizedEngineLines(capturedPreMoveLines);
+  final preMoveLines = preferDeeperAnalysisLines(
+    normalizedCapturedPreMoveLines,
+    preMoveCacheEntry?.analysisLines ?? const <EngineLine>[],
+  );
+
+  final capturedPreMovePrimaryLine = normalizedCapturedPreMoveLines.isEmpty
+      ? null
+      : normalizedCapturedPreMoveLines.first;
+  final cachedPreMovePrimaryLine = preMoveCacheEntry?.primaryLine;
+  final resolvedPreMovePrimaryLine = preferDeeperEngineLine(
+    capturedPreMovePrimaryLine,
+    cachedPreMovePrimaryLine,
+  );
+  final resolvedPreMoveSnapshot = preMoveCacheEntry?.evalSnapshot;
+
+  final hasMaturePreMoveSnapshot =
+      resolvedPreMoveSnapshot != null &&
+      resolvedPreMoveSnapshot.depth >= minimumDepth;
+  final hasMaturePreMovePrimaryLine =
+      resolvedPreMovePrimaryLine != null &&
+      resolvedPreMovePrimaryLine.depth >= minimumDepth;
+
+  double? preMoveMoverWinProbability;
+  double? preMoveMoverEvalPawns;
+  var usedPreMoveFallback = false;
+  if (hasMaturePreMoveSnapshot) {
+    final whiteEvalPawns = resolvedPreMoveSnapshot.evalPawnsWhite;
+    preMoveMoverEvalPawns = moverIsWhite ? whiteEvalPawns : -whiteEvalPawns;
+    preMoveMoverWinProbability = centipawnsToWinProbability(
+      preMoveMoverEvalPawns * 100,
+    );
+  } else if (hasMaturePreMovePrimaryLine) {
+    final canReuseCapturedEval =
+        capturedPreMovePrimaryLine != null &&
+        resolvedPreMovePrimaryLine == capturedPreMovePrimaryLine &&
+        capturedPreMovePrimaryLine.depth >= minimumDepth &&
+        capturedPreMoveMoverWinProbability != null &&
+        capturedPreMoveMoverEvalPawns != null;
+    if (canReuseCapturedEval) {
+      preMoveMoverWinProbability = capturedPreMoveMoverWinProbability;
+      preMoveMoverEvalPawns = capturedPreMoveMoverEvalPawns;
+    } else {
+      preMoveMoverEvalPawns = resolvedPreMovePrimaryLine.eval / 100.0;
+      preMoveMoverWinProbability = whiteCentipawnsToMoverWinProbability(
+        moverIsWhite ? resolvedPreMovePrimaryLine.eval : -resolvedPreMovePrimaryLine.eval,
+        moverIsWhite: moverIsWhite,
+      );
+      usedPreMoveFallback = true;
+    }
+  }
+
+  final resolvedPostMoveLine = preferDeeperEngineLine(
+    postMoveCacheEntry?.primaryLine,
+    livePostMoveLine,
+  );
+  final resolvedPostMoveWhiteToMove = resolvedPostMoveLine == null
+      ? null
+      : identical(resolvedPostMoveLine, livePostMoveLine)
+      ? livePostMoveWhiteToMove ?? postMoveCacheEntry?.evalSnapshot?.whiteToMove
+      : postMoveCacheEntry?.evalSnapshot?.whiteToMove ?? livePostMoveWhiteToMove;
+  final hasMaturePostMoveLine =
+      resolvedPostMoveLine != null &&
+      resolvedPostMoveWhiteToMove != null &&
+      resolvedPostMoveLine.depth >= minimumDepth;
+
+  return MoveQualityEvidenceResolution(
+    preMoveLines: preMoveLines,
+    preMoveMoverWinProbability: preMoveMoverWinProbability,
+    preMoveMoverEvalPawns: preMoveMoverEvalPawns,
+    postMoveLine: resolvedPostMoveLine,
+    postMoveWhiteToMove: resolvedPostMoveWhiteToMove,
+    usedPreMoveFallback: usedPreMoveFallback,
+    needsPreMoveConfirmation:
+        !hasMaturePreMoveSnapshot && !hasMaturePreMovePrimaryLine,
+    needsPostMoveConfirmation: !hasMaturePostMoveLine,
+  );
+}
+
+List<EngineLine> _normalizedEngineLines(List<EngineLine> lines) {
+  final normalized = List<EngineLine>.from(lines);
+  normalized.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+  return normalized;
+}
+
 class EngineSearchResult {
   const EngineSearchResult({
     required this.request,

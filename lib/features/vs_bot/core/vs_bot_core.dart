@@ -67,13 +67,13 @@ class _VsBotSetupLayoutSpec {
         compactLandscape || compactPortrait || media.size.width <= 430;
 
     final cardViewportHeight = compactLandscape
-      ? 262.0
+        ? 262.0
         : isLandscape
-      ? 308.0
+        ? 308.0
         : tightPortrait
-        ? 348.0
+      ? 304.0
         : compactPortrait
-        ? 378.0
+      ? 332.0
         : 426.0;
 
     final viewportFraction = tightPortrait
@@ -81,9 +81,9 @@ class _VsBotSetupLayoutSpec {
         : compactPortrait
         ? 0.72
         : compactLandscape
-      ? 0.60
+        ? 0.60
         : isLandscape
-      ? 0.58
+        ? 0.58
         : 0.60;
 
     return _VsBotSetupLayoutSpec(
@@ -1325,8 +1325,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         final showProgressOverlay =
             isWin && progressTitle != null && progressMessage != null;
         final challengeTone = selectedBot == null
-          ? null
-          : _botDifficultyToneFor(selectedBot, selectedDifficulty, arcade);
+            ? null
+            : _botDifficultyToneFor(selectedBot, selectedDifficulty, arcade);
         final challengeAccent = challengeTone?.accent ?? arcade.cyan;
         final challengeGlowAccent = challengeTone?.aura ?? challengeAccent;
         final summaryText = isDraw
@@ -1823,11 +1823,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 const introMultiplier = 1.0;
                 final glowAlpha =
                     0.12 + ((1 - progress) * 0.34 * introMultiplier);
-                final ringOpacity =
-                    ((1 - progress) * 0.55 * introMultiplier).clamp(
-                      0.0,
-                      1.0,
-                    );
+                final ringOpacity = ((1 - progress) * 0.55 * introMultiplier)
+                    .clamp(0.0, 1.0);
                 final ringScale = 0.84 + (progress * 0.62);
                 final winIconScale =
                     0.70 + (0.30 * Curves.easeOutBack.transform(progress));
@@ -2219,31 +2216,31 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     final locked = !_isBotUnlocked(bot);
     final clearedTierCount = _clearedTierCountForBot(bot);
     final difficultyTone = locked
-      ? null
-      : _botDifficultyToneFor(bot, previewDifficulty, arcade);
+        ? null
+        : _botDifficultyToneFor(bot, previewDifficulty, arcade);
     final difficultyAccent = locked ? arcade.line : difficultyTone!.accent;
     final difficultyGlowAccent = locked
-      ? arcade.line
-      : (difficultyTone!.aura ?? difficultyTone.accent);
+        ? arcade.line
+        : (difficultyTone!.aura ?? difficultyTone.accent);
     final profileAccent = _vsBotProfileAccent(bot.profile, arcade);
     final shellAccent = locked
         ? arcade.line
         : Color.lerp(profileAccent, difficultyAccent, 0.55)!;
     final shellGlowAccent = locked
-      ? shellAccent
-      : Color.lerp(profileAccent, difficultyGlowAccent, 0.35)!;
+        ? shellAccent
+        : Color.lerp(profileAccent, difficultyGlowAccent, 0.35)!;
     final cardMaxWidth = layout.compactLandscape
-      ? 292.0
-      : layout.isLandscape
-      ? 324.0
-      : layout.tightPortrait
-      ? 264.0
-      : layout.compactPortrait
-      ? 252.0
-      : 236.0;
+        ? 292.0
+        : layout.isLandscape
+        ? 324.0
+        : layout.tightPortrait
+        ? 264.0
+        : layout.compactPortrait
+        ? 252.0
+        : 236.0;
     final showCardStatus = !layout.isLandscape && !layout.compactPhoneLayout;
     final showCardDescription =
-      !layout.isLandscape && !layout.compactPhoneLayout;
+        !layout.isLandscape && !layout.compactPhoneLayout;
     final statusText = locked
         ? 'Clear all ${_botCharacters[max(0, index - 1)].name} tiers first.'
         : clearedTierCount == 3
@@ -2264,7 +2261,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 8 : 10,
-            vertical: compact ? 10 : 12,
+            vertical: compact ? 6 : 12,
           ),
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: cardMaxWidth),
@@ -2287,11 +2284,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               child: LayoutBuilder(
                 builder: (context, cardConstraints) {
                   final footerReserve =
-                    (layout.isLandscape
-                      ? (compactLandscape ? 84.0 : 74.0)
-                      : compact
-                      ? 124.0
-                      : 116.0) +
+                      (layout.isLandscape
+                          ? (compactLandscape ? 84.0 : 74.0)
+                          : compact
+                        ? 92.0
+                          : 116.0) +
                       (showCardStatus ? 36.0 : 0.0) +
                       (showCardDescription
                           ? (layout.isLandscape ? 32.0 : 44.0)
@@ -2325,24 +2322,31 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                           const SizedBox(width: 8),
                           Expanded(
                             child: PuzzleAcademyTag(
-                              label:
-                                  _vsBotProfileLabel(bot.profile).toUpperCase(),
+                              label: _vsBotProfileLabel(
+                                bot.profile,
+                              ).toUpperCase(),
                               accent: profileAccent,
                               compact: true,
                               filled:
                                   !compact && index == _botSetupSelectedIndex,
                               foregroundColor:
-                                  !compact &&
-                                      index == _botSetupSelectedIndex
+                                  !compact && index == _botSetupSelectedIndex
                                   ? filledTagForeground
                                   : null,
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: compactLandscape ? 6 : compact ? 8 : 10),
+                      SizedBox(
+                        height: compactLandscape
+                            ? 6
+                            : compact
+                            ? 8
+                            : 10,
+                      ),
                       GestureDetector(
-                        onTap: () => unawaited(_launchBotFromSelector(bot, index)),
+                        onTap: () =>
+                            unawaited(_launchBotFromSelector(bot, index)),
                         child: Container(
                           decoration: _vsBotArcadePanelDecoration(
                             palette: arcade,
@@ -2354,7 +2358,13 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                             elevated: !locked,
                             fillColor: arcade.panelAlt,
                           ),
-                          padding: EdgeInsets.all(compactLandscape ? 4 : compact ? 6 : 8),
+                          padding: EdgeInsets.all(
+                            compactLandscape
+                                ? 4
+                                : compact
+                                ? 6
+                                : 8,
+                          ),
                           child: Center(
                             child: SizedBox(
                               width: avatarExtent,
@@ -2456,7 +2466,13 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                           ),
                         ),
                       ),
-                      SizedBox(height: compactLandscape ? 8 : compact ? 10 : 12),
+                      SizedBox(
+                        height: compactLandscape
+                            ? 8
+                            : compact
+                            ? 10
+                            : 12,
+                      ),
                       Text(
                         bot.name,
                         textAlign: TextAlign.center,
@@ -2464,13 +2480,21 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         overflow: TextOverflow.ellipsis,
                         style: puzzleAcademyDisplayStyle(
                           palette: arcade.base,
-                          size: compactLandscape ? 16 : compact ? 18 : 20,
+                          size: compactLandscape
+                              ? 16
+                              : compact
+                              ? 18
+                              : 20,
                           color: arcade.text,
                         ),
                       ),
                       if (showCardStatus || showCardDescription)
                         SizedBox(
-                          height: compactLandscape ? 4 : compact ? 6 : 8,
+                          height: compactLandscape
+                              ? 4
+                              : compact
+                              ? 6
+                              : 8,
                         ),
                       if (showCardStatus) ...[
                         SizedBox(height: compact ? 8 : 10),
@@ -2770,11 +2794,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       _botSetupSelectedDifficulty,
     );
     final selectedBotClearedCount = _clearedTierCountForBot(selectedBot);
-    final ladderStatusText =
+    final tierStatusText =
         selectedTierLockReason ??
         (selectedTierCleared
             ? '${selectedBot.name} ${_botSetupSelectedDifficulty.label} is already cleared. Replay it or push to the next tier.'
-            : 'Win this tier to unlock the next step in the ladder.');
+            : 'Win this tier to unlock the next contestant.');
     final pulse = _pulseController.value;
     final media = MediaQuery.of(context);
     final layout = _VsBotSetupLayoutSpec.fromMedia(media);
@@ -2789,33 +2813,33 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     );
     final selectedDifficultyColor = selectedDifficultyTone.accent;
     final selectedDifficultyGlowAccent =
-      selectedDifficultyTone.aura ?? selectedDifficultyTone.accent;
+        selectedDifficultyTone.aura ?? selectedDifficultyTone.accent;
     final tightPortrait = layout.tightPortrait;
     final compactPhoneLayout = layout.compactPhoneLayout;
     final cardViewportHeight = layout.cardViewportHeight;
     final sectionGap = layout.sectionGap;
     final splitLandscapeControls =
-      layout.isLandscape && media.size.width >= 660;
-    final denseSelectorTiles =
-      compactPhoneLayout || splitLandscapeControls;
+        layout.isLandscape && media.size.width >= 660;
+    final showTierStatusText = !compactPhoneLayout || layout.isLandscape;
+    final denseSelectorTiles = compactPhoneLayout || splitLandscapeControls;
     final compactSelectorTiles = compactPhoneLayout;
     final landscapeControlWidth = splitLandscapeControls
         ? (layout.compactLandscape
-            ? (media.size.width * 0.382).clamp(324.0, 336.0)
-            : (media.size.width * 0.36).clamp(348.0, 376.0))
+                  ? (media.size.width * 0.382).clamp(324.0, 336.0)
+                  : (media.size.width * 0.36).clamp(348.0, 376.0))
               .toDouble()
         : 0.0;
     final selectorActionHeight = splitLandscapeControls
-      ? 48.0
+        ? 48.0
         : (compactPhoneLayout ? 50.0 : 56.0);
     final selectorViewportHeight = splitLandscapeControls
-      ? cardViewportHeight + 8
-      : layout.isLandscape
-      ? cardViewportHeight + 12
-      : cardViewportHeight;
+        ? cardViewportHeight + 8
+        : layout.isLandscape
+        ? cardViewportHeight + 12
+        : cardViewportHeight;
     final splitLandscapePanelHeight = splitLandscapeControls
-      ? selectorViewportHeight + 48.0
-      : 0.0;
+        ? selectorViewportHeight + 48.0
+        : 0.0;
     final profileAccent = _vsBotProfileAccent(selectedBot.profile, arcade);
     final marqueeAccent = Color.lerp(
       profileAccent,
@@ -2841,10 +2865,26 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           fillColor: arcade.panel,
         ),
         padding: EdgeInsets.fromLTRB(
-          splitLandscapeControls ? 14 : 16,
-          splitLandscapeControls ? 8 : 14,
-          splitLandscapeControls ? 14 : 16,
-          splitLandscapeControls ? 8 : 16,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 12
+            : 16,
+          splitLandscapeControls
+            ? 8
+            : compactPhoneLayout
+            ? 12
+            : 14,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 12
+            : 16,
+          splitLandscapeControls
+            ? 8
+            : compactPhoneLayout
+            ? 12
+            : 16,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2861,18 +2901,20 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 ),
               ],
             ),
-            SizedBox(height: splitLandscapeControls ? 6 : 10),
-            Text(
-              ladderStatusText,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: puzzleAcademyHudStyle(
-                palette: arcade.base,
-                size: splitLandscapeControls ? 11.2 : 11.8,
-                color: arcade.textMuted,
+            if (showTierStatusText) ...[
+              SizedBox(height: splitLandscapeControls ? 6 : 10),
+              Text(
+                tierStatusText,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: puzzleAcademyHudStyle(
+                  palette: arcade.base,
+                  size: splitLandscapeControls ? 11.2 : 11.8,
+                  color: arcade.textMuted,
+                ),
               ),
-            ),
+            ],
             if (!layout.compactPhoneLayout && !splitLandscapeControls) ...[
               const SizedBox(height: 10),
               Text(
@@ -2890,75 +2932,91 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             if (splitLandscapeControls)
               const Spacer()
             else
-              const SizedBox(height: 14),
+              SizedBox(
+                height: showTierStatusText ||
+                        (!layout.compactPhoneLayout && !splitLandscapeControls)
+                    ? 14
+                    : 8,
+              ),
             LayoutBuilder(
               builder: (context, inner) {
-                final spacing =
-                    inner.maxWidth < 460 || compactSelectorTiles ? 8.0 : 12.0;
-                final tileWidth =
-                    ((inner.maxWidth - (spacing * 2)) / 3).toDouble();
+                final spacing = inner.maxWidth < 460 || compactSelectorTiles
+                    ? 8.0
+                    : 12.0;
+                final tileWidth = ((inner.maxWidth - (spacing * 2)) / 3)
+                    .toDouble();
                 return Wrap(
                   alignment: WrapAlignment.center,
                   spacing: spacing,
                   runSpacing: spacing,
-                  children: BotDifficulty.values.map((difficulty) {
-                    final tierUnlocked = _isBotTierUnlocked(
-                      selectedBot,
-                      difficulty,
-                    );
-                    final tierCleared = _hasClearedBotTier(
-                      selectedBot,
-                      difficulty,
-                    );
-                    final tierSelected =
-                        _botSetupSelectedDifficulty == difficulty;
-                    final tone = tierUnlocked
-                      ? _botDifficultyToneFor(selectedBot, difficulty, arcade)
-                      : null;
-                    final accent = tierUnlocked ? tone!.accent : arcade.line;
-                    final glowAccent = tierUnlocked
-                      ? (tone!.aura ?? tone.accent)
-                      : arcade.line;
-                    final caption = tierUnlocked
-                      ? splitLandscapeControls
-                        ? '${selectedBot.settingsFor(difficulty).elo}\nElo'
-                        : compactSelectorTiles
-                        ? '${selectedBot.settingsFor(difficulty).elo} Elo'
-                              : tierCleared
-                              ? 'Clear // ${selectedBot.settingsFor(difficulty).elo} Elo'
-                              : '${_vsBotTierTitle(difficulty)} // ${selectedBot.settingsFor(difficulty).elo} Elo'
-                        : (_botTierLockReason(selectedBot, difficulty) ??
+                  children: BotDifficulty.values
+                      .map((difficulty) {
+                        final tierUnlocked = _isBotTierUnlocked(
+                          selectedBot,
+                          difficulty,
+                        );
+                        final tierCleared = _hasClearedBotTier(
+                          selectedBot,
+                          difficulty,
+                        );
+                        final tierSelected =
+                            _botSetupSelectedDifficulty == difficulty;
+                        final tone = tierUnlocked
+                            ? _botDifficultyToneFor(
+                                selectedBot,
+                                difficulty,
+                                arcade,
+                              )
+                            : null;
+                        final accent = tierUnlocked
+                            ? tone!.accent
+                            : arcade.line;
+                        final glowAccent = tierUnlocked
+                            ? (tone!.aura ?? tone.accent)
+                            : arcade.line;
+                        final caption = tierUnlocked
+                            ? splitLandscapeControls
+                                  ? '${selectedBot.settingsFor(difficulty).elo}\nElo'
+                                  : compactSelectorTiles
+                                  ? '${selectedBot.settingsFor(difficulty).elo} Elo'
+                                  : tierCleared
+                                  ? 'Clear // ${selectedBot.settingsFor(difficulty).elo} Elo'
+                                  : '${_vsBotTierTitle(difficulty)} // ${selectedBot.settingsFor(difficulty).elo} Elo'
+                            : compactSelectorTiles
+                            ? 'Locked'
+                            : (_botTierLockReason(selectedBot, difficulty) ??
                               'Locked');
 
-                    return SizedBox(
-                      width: tileWidth,
-                      child: _buildVsBotSelectorChoiceTile(
-                        arcade: arcade,
-                        caption: caption,
-                        label: difficulty.label,
-                        leading: Icon(
-                          tierCleared
-                              ? Icons.check_circle_rounded
-                              : tierUnlocked
-                              ? Icons.bolt_rounded
-                              : Icons.lock_outline_rounded,
-                          size: 18,
-                          color: tierUnlocked ? accent : arcade.textMuted,
-                        ),
-                        accent: accent,
-                        glowAccent: glowAccent,
-                        selected: tierSelected,
-                        enabled: tierUnlocked,
-                        compact: denseSelectorTiles,
-                        captionMaxLines: splitLandscapeControls ? 2 : null,
-                        onTap: () {
-                          setState(
-                            () => _botSetupSelectedDifficulty = difficulty,
-                          );
-                        },
-                      ),
-                    );
-                  }).toList(growable: false),
+                        return SizedBox(
+                          width: tileWidth,
+                          child: _buildVsBotSelectorChoiceTile(
+                            arcade: arcade,
+                            caption: caption,
+                            label: difficulty.label,
+                            leading: Icon(
+                              tierCleared
+                                  ? Icons.check_circle_rounded
+                                  : tierUnlocked
+                                  ? Icons.bolt_rounded
+                                  : Icons.lock_outline_rounded,
+                              size: 18,
+                              color: tierUnlocked ? accent : arcade.textMuted,
+                            ),
+                            accent: accent,
+                            glowAccent: glowAccent,
+                            selected: tierSelected,
+                            enabled: tierUnlocked,
+                            compact: denseSelectorTiles,
+                            captionMaxLines: splitLandscapeControls ? 2 : null,
+                            onTap: () {
+                              setState(
+                                () => _botSetupSelectedDifficulty = difficulty,
+                              );
+                            },
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
                 );
               },
             ),
@@ -2978,20 +3036,37 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           fillColor: arcade.panel,
         ),
         padding: EdgeInsets.fromLTRB(
-          splitLandscapeControls ? 14 : 16,
-          splitLandscapeControls ? 8 : 14,
-          splitLandscapeControls ? 14 : 16,
-          splitLandscapeControls ? 8 : 16,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 12
+            : 16,
+          splitLandscapeControls
+            ? 8
+            : compactPhoneLayout
+            ? 12
+            : 14,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 12
+            : 16,
+          splitLandscapeControls
+            ? 8
+            : compactPhoneLayout
+            ? 12
+            : 16,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             LayoutBuilder(
               builder: (context, inner) {
-                final spacing =
-                    inner.maxWidth < 460 || compactSelectorTiles ? 8.0 : 12.0;
-                final tileWidth =
-                    ((inner.maxWidth - (spacing * 2)) / 3).toDouble();
+                final spacing = inner.maxWidth < 460 || compactSelectorTiles
+                    ? 8.0
+                    : 12.0;
+                final tileWidth = ((inner.maxWidth - (spacing * 2)) / 3)
+                    .toDouble();
                 return Wrap(
                   alignment: WrapAlignment.center,
                   spacing: spacing,
@@ -3023,7 +3098,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       child: _buildVsBotSelectorChoiceTile(
                         arcade: arcade,
                         caption: splitLandscapeControls
-                          ? 'Mixed start'
+                            ? 'Mixed start'
                             : compactSelectorTiles
                             ? 'Mixed start'
                             : 'Randomized launch',
@@ -3039,9 +3114,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         compact: denseSelectorTiles,
                         captionMaxLines: splitLandscapeControls ? 2 : null,
                         onTap: () {
-                          setState(
-                            () => _botSideChoice = BotSideChoice.random,
-                          );
+                          setState(() => _botSideChoice = BotSideChoice.random);
                         },
                       ),
                     ),
@@ -3126,17 +3199,33 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               ? selectedDifficultyColor
               : arcade.crimson,
           glowAccent: selectedTierUnlocked
-            ? selectedDifficultyGlowAccent
-            : arcade.crimson,
+              ? selectedDifficultyGlowAccent
+              : arcade.crimson,
           radius: 26,
           borderWidth: 3.0,
           fillColor: arcade.marquee,
         ),
         padding: EdgeInsets.fromLTRB(
-          splitLandscapeControls ? 14 : 18,
-          splitLandscapeControls ? 14 : 18,
-          splitLandscapeControls ? 14 : 18,
-          splitLandscapeControls ? 14 : 18,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 14
+            : 18,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 14
+            : 18,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 14
+            : 18,
+          splitLandscapeControls
+            ? 14
+            : compactPhoneLayout
+            ? 14
+            : 18,
         ),
         child: SizedBox(
           height: selectorActionHeight,
@@ -3160,10 +3249,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               foregroundColor: selectedTierUnlocked
                   ? filledButtonForeground
                   : arcade.textMuted,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               radius: 16,
             ),
             icon: const Icon(Icons.play_arrow_rounded, size: 22),
@@ -3333,10 +3419,18 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     fillColor: arcade.shell,
                   ),
                   padding: EdgeInsets.fromLTRB(
-                    14,
-                    splitLandscapeControls ? 10 : 14,
-                    14,
-                    splitLandscapeControls ? 10 : 14,
+                    compactPhoneLayout ? 12 : 14,
+                    splitLandscapeControls
+                        ? 10
+                        : compactPhoneLayout
+                        ? 10
+                        : 14,
+                    compactPhoneLayout ? 12 : 14,
+                    splitLandscapeControls
+                        ? 10
+                        : compactPhoneLayout
+                        ? 10
+                        : 14,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3450,20 +3544,21 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                 onPressed: _botSetupSelectedIndex == 0
                                     ? null
                                     : () => _animateBotSetupTo(
-                                          _botSetupSelectedIndex - 1,
-                                        ),
+                                        _botSetupSelectedIndex - 1,
+                                      ),
                               ),
                             ),
                             Positioned(
                               right: tightPortrait ? 8 : 12,
                               child: buildNavButton(
                                 icon: Icons.chevron_right_rounded,
-                                onPressed: _botSetupSelectedIndex ==
+                                onPressed:
+                                    _botSetupSelectedIndex ==
                                         _botCharacters.length - 1
                                     ? null
                                     : () => _animateBotSetupTo(
-                                          _botSetupSelectedIndex + 1,
-                                        ),
+                                        _botSetupSelectedIndex + 1,
+                                      ),
                               ),
                             ),
                             Positioned(
@@ -3588,12 +3683,32 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     ),
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
-                        max(tightPortrait ? 12.0 : 16.0, media.viewPadding.left + 10),
-                        max(compactPhoneLayout ? 12.0 : 14.0, media.viewPadding.top + 8),
-                        max(tightPortrait ? 12.0 : 16.0, media.viewPadding.right + 10),
-                        max(compactPhoneLayout ? 14.0 : 18.0, media.viewPadding.bottom + 10),
+                        max(
+                          tightPortrait ? 12.0 : 16.0,
+                          media.viewPadding.left + 10,
+                        ),
+                        layout.isLandscape
+                            ? max(
+                                compactPhoneLayout ? 12.0 : 14.0,
+                                media.viewPadding.top + 8,
+                              )
+                            : max(
+                                tightPortrait ? 4.0 : 6.0,
+                                media.viewPadding.top,
+                              ),
+                        max(
+                          tightPortrait ? 12.0 : 16.0,
+                          media.viewPadding.right + 10,
+                        ),
+                        max(
+                          compactPhoneLayout ? 14.0 : 18.0,
+                          media.viewPadding.bottom + 10,
+                        ),
                       ),
-                      child: Center(
+                      child: Align(
+                        alignment: layout.isLandscape
+                            ? Alignment.center
+                            : Alignment.topCenter,
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
                             maxWidth: contentMaxWidth,

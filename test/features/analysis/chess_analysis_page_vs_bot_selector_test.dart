@@ -10,10 +10,12 @@ Future<void> _pumpVsBotSelector(
   WidgetTester tester, {
   required Size size,
   bool monochrome = false,
+  Map<String, Object> initialPrefs = const <String, Object>{},
 }) async {
-  SharedPreferences.setMockInitialValues(const <String, Object>{
+  SharedPreferences.setMockInitialValues(<String, Object>{
     'mute_sounds_v1': true,
     'haptics_enabled_v1': false,
+    ...initialPrefs,
   });
 
   tester.view.devicePixelRatio = 1.0;
@@ -68,14 +70,72 @@ void main() {
       expect(find.text('YOU OPEN'), findsOneWidget);
       expect(find.text('MIXED START'), findsOneWidget);
       expect(find.text('100 ELO'), findsWidgets);
+      expect(
+        find.text('Win this tier to unlock the next contestant.'),
+        findsNothing,
+      );
+      expect(find.textContaining('unlock Medium.'), findsNothing);
+      expect(find.textContaining('unlock Hard.'), findsNothing);
 
       final avatarFinder = find.byKey(
         const ValueKey<String>('bot_setup_avatar_frame_mochi-gearheart'),
       );
       expect(avatarFinder, findsOneWidget);
 
+      final startButtonFinder = find.byKey(
+        const ValueKey<String>('bot_setup_start_button'),
+      );
+      expect(startButtonFinder, findsOneWidget);
+
+      final backButtonRect = tester.getRect(find.byIcon(Icons.arrow_back_rounded));
+      final startButtonRect = tester.getRect(startButtonFinder);
+
       final avatarSize = tester.getSize(avatarFinder);
       expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
+      expect(backButtonRect.top, lessThanOrEqualTo(28));
+      expect(startButtonRect.bottom, lessThanOrEqualTo(844));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'vs bot selector hides helper guidance on compact iPhone portrait',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(390, 844),
+        initialPrefs: const <String, Object>{
+          'vs_bot_completed_tiers_v1': <String>['mochi-gearheart:easy'],
+        },
+      );
+
+      await tester.tap(find.text('Easy'));
+      await tester.pump();
+
+      expect(
+        find.textContaining('is already cleared. Replay it or push to the next tier.'),
+        findsNothing,
+      );
+      expect(
+        find.text('Win this tier to unlock the next contestant.'),
+        findsNothing,
+      );
+
+      await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.textContaining('tiers to unlock'), findsNothing);
+      final startButtonRect = tester.getRect(
+        find.byKey(const ValueKey<String>('bot_setup_start_button')),
+      );
+      expect(startButtonRect.bottom, lessThanOrEqualTo(844));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -99,6 +159,10 @@ void main() {
       expect(find.text('BOT OPENS'), findsOneWidget);
       expect(find.text('100\nELO'), findsOneWidget);
       expect(find.textContaining('/3 TIERS'), findsOneWidget);
+      expect(
+        find.text('Win this tier to unlock the next contestant.'),
+        findsOneWidget,
+      );
       expect(find.text('Easy'), findsOneWidget);
       expect(find.text('Medium'), findsOneWidget);
       expect(find.text('Hard'), findsOneWidget);
@@ -140,6 +204,40 @@ void main() {
 
       final avatarSize = tester.getSize(avatarFinder);
       expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'vs bot selector keeps long progress guidance on compact iPhone landscape',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(844, 390),
+        initialPrefs: const <String, Object>{
+          'vs_bot_completed_tiers_v1': <String>['mochi-gearheart:easy'],
+        },
+      );
+
+      await tester.tap(find.text('Easy'));
+      await tester.pump();
+
+      expect(
+        find.textContaining('is already cleared. Replay it or push to the next tier.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.textContaining('tiers to unlock'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

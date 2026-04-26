@@ -556,7 +556,63 @@ void main() {
       );
       expect(find.text('CLOSE'), findsOneWidget);
 
-      await tester.tap(find.text('CLOSE'));
+      final closeButton = find.ancestor(
+        of: find.text('CLOSE'),
+        matching: find.byType(Material),
+      ).last;
+      await tester.ensureVisible(closeButton);
+      await tester.tap(closeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'opening quiz level info caps hard and oracle tiers at four choices',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpOpeningsQuizSelector(tester, size: const Size(390, 844));
+
+      final levelInfoButton = find.byKey(
+        const ValueKey<String>('quiz_setup_level_info_button'),
+      );
+      expect(levelInfoButton, findsOneWidget);
+
+      await tester.dragUntilVisible(
+        levelInfoButton,
+        find.byType(Scrollable).first,
+        const Offset(0, 300),
+      );
+      await tester.pump();
+
+      await tester.tap(levelInfoButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(
+        find.textContaining('Hard: Expect sharper theory'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Very Hard: Finish with rare lines'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('(4 choices per question).'), findsOneWidget);
+      expect(find.textContaining('(5 choices per question).'), findsNothing);
+
+      final closeButton = find.ancestor(
+        of: find.text('CLOSE'),
+        matching: find.byType(Material),
+      ).last;
+      await tester.ensureVisible(closeButton);
+      await tester.tap(closeButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
 
@@ -664,6 +720,9 @@ void main() {
       final boardCard = find.byKey(
         const ValueKey<String>('quiz_session_board_card'),
       );
+      final boardSquare = find.byKey(
+        const ValueKey<String>('quiz_session_board_square'),
+      );
       final topPanel = find.byKey(
         const ValueKey<String>('quiz_session_top_panel'),
       );
@@ -679,14 +738,21 @@ void main() {
       final optionFinder = _liveQuizOptionFinder();
 
       expect(boardCard, findsOneWidget);
+      expect(boardSquare, findsOneWidget);
       expect(topPanel, findsOneWidget);
       expect(compactSummary, findsOneWidget);
       expect(find.text('Q 1/10'), findsOneWidget);
       expect(questionPanel, findsOneWidget);
       expect(primaryAction, findsOneWidget);
       expect(optionFinder, findsAtLeastNWidgets(3));
+      expect(optionFinder.evaluate().length, lessThanOrEqualTo(4));
 
       expect(tester.getSize(topPanel).height, lessThan(90.0));
+      expect(tester.getRect(topPanel).top, lessThanOrEqualTo(8.0));
+      expect(
+        tester.getSize(boardCard).width - tester.getSize(boardSquare).width,
+        lessThan(24.0),
+      );
       _expectFinderWithinViewport(tester, boardCard, viewport);
       _expectFinderWithinViewport(tester, questionPanel, viewport);
       _expectFinderWithinViewport(tester, primaryAction, viewport);

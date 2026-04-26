@@ -2,6 +2,42 @@ import 'package:chessiq/features/analysis/models/analysis_models.dart';
 import 'package:chessiq/features/analysis/models/move_quality.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+EngineSearchUpdate _engineUpdate({
+  required String requestId,
+  required String fen,
+  required bool whiteToMove,
+  required int depth,
+  required int evalCp,
+  required String move,
+  EngineRequestRole role = EngineRequestRole.liveAnalysis,
+}) {
+  final request = EngineRequestSpec(
+    requestId: requestId,
+    role: role,
+    fen: fen,
+    whiteToMove: whiteToMove,
+    multiPv: 1,
+    depth: depth,
+    timeout: const Duration(milliseconds: 900),
+  );
+  final line = EngineLine(move, evalCp, depth, 1);
+  return EngineSearchUpdate(
+    request: request,
+    line: line,
+    snapshot: EvalSnapshot.fromRelativeScore(
+      requestId: requestId,
+      role: role,
+      fen: fen,
+      whiteToMove: whiteToMove,
+      depth: depth,
+      multiPv: 1,
+      relativeEvalCp: evalCp,
+      timestamp: DateTime.utc(2026, 4, 26, 12, depth),
+    ),
+    timestamp: DateTime.utc(2026, 4, 26, 12, depth),
+  );
+}
+
 void main() {
   group('Engine request models', () {
     test('normalizes snapshot scores to white-side centipawns', () {
@@ -35,6 +71,123 @@ void main() {
       );
 
       expect(request.goCommand, 'go depth 12 searchmoves e2e4 d2d4');
+    });
+  });
+
+  group('Position analysis cache', () {
+    test('keeps deepest primary evidence and richest matching line set', () {
+      final shallow = _engineUpdate(
+        requestId: 'live-1',
+        fen: 'fen cache',
+        whiteToMove: true,
+        depth: 8,
+        evalCp: 34,
+        move: 'e2e4',
+      );
+      final deep = _engineUpdate(
+        requestId: 'live-2',
+        fen: 'fen cache',
+        whiteToMove: true,
+        depth: 12,
+        evalCp: 48,
+        move: 'd2d4',
+      );
+      final regressed = _engineUpdate(
+        requestId: 'live-3',
+        fen: 'fen cache',
+        whiteToMove: true,
+        depth: 6,
+        evalCp: 21,
+        move: 'g1f3',
+      );
+
+      final entry = const PositionAnalysisCacheEntry(fen: 'fen cache')
+          .mergedWithPrimaryUpdate(shallow)
+          .mergedWithPrimaryUpdate(deep)
+          .mergedWithPrimaryUpdate(regressed)
+          .mergedWithAnalysisLines(<EngineLine>[
+            EngineLine('d2d4', 48, 12, 1),
+            EngineLine('e2e4', 31, 12, 2),
+          ])
+          .mergedWithAnalysisLines(<EngineLine>[
+            EngineLine('g1f3', 21, 6, 1),
+          ]);
+
+      expect(entry.evalSnapshot, isNotNull);
+      expect(entry.evalSnapshot!.depth, 12);
+      expect(entry.primaryLine, isNotNull);
+      expect(entry.primaryLine!.move, 'd2d4');
+      expect(entry.primaryLine!.depth, 12);
+      expect(entry.analysisDepth, 12);
+      expect(entry.analysisLines, hasLength(2));
+      expect(entry.analysisLines.first.move, 'd2d4');
+    });
+  });
+
+  group('Move quality evidence resolution', () {
+    test('defers publication until same-fen pre-move evidence is confirmed', () {
+      final postMoveCache = const PositionAnalysisCacheEntry(fen: 'fen post')
+          .mergedWithPrimaryUpdate(
+            _engineUpdate(
+              requestId: 'post-1',
+              fen: 'fen post',
+              whiteToMove: false,
+              depth: 10,
+              evalCp: -22,
+              move: 'e7e5',
+              role: EngineRequestRole.backgroundConfirmation,
+            ),
+          );
+
+      final unresolved = resolveMoveQualityEvidence(
+        moverIsWhite: true,
+        capturedPreMoveLines: const <EngineLine>[],
+        capturedPreMoveMoverWinProbability: null,
+        capturedPreMoveMoverEvalPawns: null,
+        preMoveCacheEntry: null,
+        livePostMoveLine: null,
+        livePostMoveWhiteToMove: null,
+        postMoveCacheEntry: postMoveCache,
+        minimumDepth: 10,
+      );
+
+      expect(unresolved.isReadyToPublish, isFalse);
+      expect(unresolved.needsPreMoveConfirmation, isTrue);
+      expect(unresolved.needsPostMoveConfirmation, isFalse);
+
+      final preMoveCache = const PositionAnalysisCacheEntry(fen: 'fen pre')
+          .mergedWithPrimaryUpdate(
+            _engineUpdate(
+              requestId: 'pre-1',
+              fen: 'fen pre',
+              whiteToMove: true,
+              depth: 10,
+              evalCp: 55,
+              move: 'd2d4',
+              role: EngineRequestRole.backgroundConfirmation,
+            ),
+          );
+
+      final resolved = resolveMoveQualityEvidence(
+        moverIsWhite: true,
+        capturedPreMoveLines: const <EngineLine>[],
+        capturedPreMoveMoverWinProbability: null,
+        capturedPreMoveMoverEvalPawns: null,
+        preMoveCacheEntry: preMoveCache,
+        livePostMoveLine: null,
+        livePostMoveWhiteToMove: null,
+        postMoveCacheEntry: postMoveCache,
+        minimumDepth: 10,
+      );
+
+      expect(resolved.isReadyToPublish, isTrue);
+      expect(resolved.needsPreMoveConfirmation, isFalse);
+      expect(resolved.needsPostMoveConfirmation, isFalse);
+      expect(resolved.usedPreMoveFallback, isFalse);
+      expect(resolved.preMoveMoverEvalPawns, closeTo(0.55, 1e-9));
+      expect(resolved.preMoveMoverWinProbability, greaterThan(0.5));
+      expect(resolved.postMoveLine, isNotNull);
+      expect(resolved.postMoveWhiteToMove, isFalse);
     });
   });
 

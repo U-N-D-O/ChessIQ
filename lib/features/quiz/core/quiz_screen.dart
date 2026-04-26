@@ -1424,9 +1424,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       case QuizDifficulty.medium:
         return 4;
       case QuizDifficulty.hard:
-        return 5;
+        return 4;
       case QuizDifficulty.veryHard:
-        return 5;
+        return 4;
     }
   }
 
@@ -5686,10 +5686,16 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         isLandscape && hasQuizBoard && media.size.width >= 920;
     final pageHorizontalPadding = compactLandscapePlayLayout
         ? 6.0
-        : compactPlayLayout
+      : compactPortraitPlayLayout
+      ? 8.0
+      : compactPlayLayout
         ? 12.0
         : 16.0;
-    final pageTopPadding = compactLandscapePlayLayout ? 6.0 : 12.0;
+    final pageTopPadding = compactLandscapePlayLayout
+      ? 6.0
+      : compactPortraitPlayLayout
+      ? 4.0
+      : 12.0;
     final pageBottomPadding = compactLandscapePlayLayout ? 8.0 : 16.0;
     final quizPadding = EdgeInsets.fromLTRB(
       pageHorizontalPadding + media.padding.left,
@@ -5698,15 +5704,23 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       pageBottomPadding + media.padding.bottom,
     );
     final routeAccent = _academyQuizModeAccent(palette, displayedQuizMode);
-    final topToContentGap = compactLandscapePlayLayout ? 6.0 : 12.0;
+    final topToContentGap = compactLandscapePlayLayout
+      ? 6.0
+      : compactPortraitPlayLayout
+      ? 8.0
+      : 12.0;
     final contentGap = compactLandscapePlayLayout
         ? 8.0
-        : compactPlayLayout
+      : compactPortraitPlayLayout
+      ? 8.0
+      : compactPlayLayout
         ? 10.0
         : 12.0;
     final densePanelPadding = compactLandscapePlayLayout
         ? 4.0
-        : compactPlayLayout
+      : compactPortraitPlayLayout
+      ? 8.0
+      : compactPlayLayout
         ? 10.0
         : 12.0;
     final compactOptionSpacing = compactLandscapePlayLayout
@@ -5716,7 +5730,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         : 10.0;
     final topPanelPadding = compactLandscapePlayLayout
         ? const EdgeInsets.symmetric(horizontal: 4, vertical: 4)
-        : compactPlayLayout
+      : compactPortraitPlayLayout
+      ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+      : compactPlayLayout
         ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
         : const EdgeInsets.all(10);
     final topPanelGap = compactLandscapePlayLayout ? 4.0 : 8.0;
@@ -6763,16 +6779,24 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           : displayedOptions.length;
                       final optionHeight =
                           displayedQuizMode == GambitQuizMode.guessLine
-                          ? 62.0
+                        ? 66.0
                           : 48.0;
-                      final promptHeight = displayedPrompt.isEmpty ? 0.0 : 32.0;
+                      final promptHeight = displayedPrompt.isEmpty
+                        ? 0.0
+                        : displayedQuizMode == GambitQuizMode.guessLine
+                        ? 40.0
+                        : 32.0;
+                      final footerAllowance =
+                        displayedQuizMode == GambitQuizMode.guessLine
+                        ? 100.0
+                        : 88.0;
                       final estimatedQuestionHeight =
                           (densePanelPadding * 2) +
                           promptHeight +
                           (displayedPrompt.isEmpty ? 0.0 : 10.0) +
                           (optionCount * optionHeight) +
                           (max(0, optionCount - 1) * compactOptionSpacing) +
-                          88.0;
+                        footerAllowance;
                       final maxQuestionHeight = max(
                         220.0,
                         constraints.maxHeight - 120.0,
@@ -6794,7 +6818,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           ? max(
                               0.0,
                               min(
-                                constraints.maxWidth - 20,
+                                constraints.maxWidth - (densePanelPadding * 2),
                                 boardAreaHeight - compactBoardChromeHeight,
                               ),
                             )
