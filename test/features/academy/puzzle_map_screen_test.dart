@@ -193,6 +193,14 @@ Future<void> _pumpPuzzleMapScreen(
   await tester.pump(const Duration(milliseconds: 80));
 }
 
+Future<void> _openExamsDashboard(WidgetTester tester) async {
+  await tester.tap(
+    find.byKey(const ValueKey<String>('academy_hub_card_exams')),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 700));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -295,14 +303,10 @@ void main() {
     await _pumpPuzzleMapScreen(
       tester,
       provider: provider,
-      size: const Size(520, 320),
+      size: const Size(1200, 900),
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('academy_hub_card_exams')),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 700));
+    await _openExamsDashboard(tester);
 
     expect(tester.takeException(), isNull);
     expect(find.text('Puzzle Academy Exams'), findsOneWidget);
@@ -319,6 +323,137 @@ void main() {
     final secondOffset = tester.getTopLeft(secondLevel);
     expect((firstOffset.dy - secondOffset.dy).abs(), lessThan(20));
     expect((firstOffset.dx - secondOffset.dx).abs(), greaterThan(40));
+  });
+
+  testWidgets(
+    'Academy exams portrait phone collapses dashboard and stats by default',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(390, 844),
+      );
+
+      await _openExamsDashboard(tester);
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_appbar_title'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_dashboard_toggle'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_stats_toggle'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_dashboard_panel'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_exams_compact_stats_panel')),
+        findsNothing,
+      );
+      expect(find.text('Puzzle Academy Exams'), findsNothing);
+      expect(find.text('Coins 120'), findsNothing);
+      expect(
+        find.text(
+          'Switch between worldwide and local exam standings without leaving the map.',
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_dashboard_toggle'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_dashboard_panel'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Puzzle Academy Exams'), findsOneWidget);
+      expect(find.text('NEXT EXAM GATE'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_stats_toggle'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      expect(
+        find.byKey(const ValueKey<String>('academy_exams_compact_stats_panel')),
+        findsOneWidget,
+      );
+      expect(find.text('Coins 120'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Academy exams short landscape uses compact fold-down dashboard', (
+    tester,
+  ) async {
+    final provider = _TestPuzzleAcademyProvider();
+
+    await _pumpPuzzleMapScreen(
+      tester,
+      provider: provider,
+      size: const Size(844, 390),
+    );
+
+    await _openExamsDashboard(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('academy_exams_compact_appbar_title')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('academy_exams_compact_dashboard_toggle'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('academy_exams_compact_stats_toggle')),
+      findsOneWidget,
+    );
+    expect(find.text('Puzzle Academy Exams'), findsNothing);
+    expect(find.text('Coins 120'), findsNothing);
+    expect(
+      find.text(
+        'Switch between worldwide and local exam standings without leaving the map.',
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('academy_exams_compact_dashboard_toggle'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(find.text('Puzzle Academy Exams'), findsOneWidget);
+    expect(find.text('NEXT EXAM GATE'), findsOneWidget);
   });
 
   testWidgets(

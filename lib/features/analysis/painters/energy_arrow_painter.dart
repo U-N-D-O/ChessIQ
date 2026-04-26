@@ -232,6 +232,14 @@ class EnergyArrowPainter extends CustomPainter {
         ..close();
 
       final solidHeadColor = baseColor.withValues(alpha: alphaScale);
+      final headBorderColor = solidHeadColor.computeLuminance() > 0.62
+          ? const Color(
+              0xFF69727F,
+            ).withValues(alpha: useStaticStyle ? 0.96 : max(0.72, alphaScale))
+          : _darkenColor(
+              solidHeadColor,
+              0.15,
+            ).withValues(alpha: useStaticStyle ? 0.92 : max(0.62, alphaScale));
       canvas.drawPath(
         headPath,
         Paint()
@@ -241,9 +249,9 @@ class EnergyArrowPainter extends CustomPainter {
       canvas.drawPath(
         headPath,
         Paint()
-          ..color = _darkenColor(solidHeadColor, 0.15)
+          ..color = headBorderColor
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4
+          ..strokeWidth = useStaticStyle ? 1.8 : 1.4
           ..strokeJoin = StrokeJoin.round,
       );
 

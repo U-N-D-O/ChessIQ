@@ -200,6 +200,10 @@ Widget _buildQuizStudyScreen(_QuizScreen state) {
   final pageSubtitle = showingDetail
       ? '$detailFamilyName • $categoryLabel'
       : '$categoryLabel category';
+  final compactLandscapeDetail =
+      showingDetail &&
+      layout.mode == _QuizStudyLayoutMode.phoneLandscape &&
+      !layout.isTablet;
   final sideInset = max(
     layout.horizontalPadding,
     (media.size.width - layout.contentMaxWidth) / 2,
@@ -284,23 +288,35 @@ Widget _buildQuizStudyScreen(_QuizScreen state) {
                   layout: layout,
                   title: pageTitle,
                   subtitle: pageSubtitle,
+                  compactLandscapeFamilyLabel: compactLandscapeDetail
+                      ? detailFamilyName
+                      : null,
                 ),
                 SizedBox(height: layout.sectionGap),
                 Expanded(
-                  child: ListView(
-                    padding: EdgeInsets.only(bottom: contentBottomPadding),
-                    children: <Widget>[
-                      if (showingDetail)
-                        _buildQuizStudyDetailScreen(
+                  child: compactLandscapeDetail
+                      ? _buildQuizStudyDetailScreen(
                           state,
                           selectedLine: selectedLine,
                           palette: palette,
                           layout: layout,
                         )
-                      else
-                        browserContent,
-                    ],
-                  ),
+                      : ListView(
+                          padding: EdgeInsets.only(
+                            bottom: contentBottomPadding,
+                          ),
+                          children: <Widget>[
+                            if (showingDetail)
+                              _buildQuizStudyDetailScreen(
+                                state,
+                                selectedLine: selectedLine,
+                                palette: palette,
+                                layout: layout,
+                              )
+                            else
+                              browserContent,
+                          ],
+                        ),
                 ),
               ],
             ),
@@ -319,9 +335,14 @@ Widget _buildQuizStudyTopBar(
   required _QuizStudyLayoutSpec layout,
   required String title,
   required String subtitle,
+  String? compactLandscapeFamilyLabel,
 }) {
   final useStackedLayout = layout.compactPhoneLayout;
   final compactPhoneTopBar = useStackedLayout;
+  final compactLandscapeDetail =
+      layout.mode == _QuizStudyLayoutMode.phoneLandscape &&
+      !layout.isTablet &&
+      showingDetail;
   final styleButton = _buildQuizStudyTopIconButton(
     state,
     palette: palette,
@@ -380,7 +401,52 @@ Widget _buildQuizStudyTopBar(
     padding: compactPhoneTopBar
         ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
         : const EdgeInsets.all(10),
-    child: useStackedLayout
+    child: compactLandscapeDetail
+        ? Row(
+            children: <Widget>[
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: state._academyHudButton(
+                  palette: palette,
+                  icon: Icons.keyboard_return_rounded,
+                  label: 'BACK TO BROWSER',
+                  accent: accent,
+                  onTap: state._closeQuizStudyDetail,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      compactLandscapeFamilyLabel ?? '',
+                      key: const ValueKey<String>(
+                        'quiz_study_compact_landscape_family_label',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: state._academyHudStyle(
+                        palette: palette,
+                        size: 11.2,
+                        color: palette.textMuted,
+                        weight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              styleButton,
+              const SizedBox(width: 8),
+              statsButton,
+            ],
+          )
+        : useStackedLayout
         ? Row(
             children: <Widget>[
               Expanded(
@@ -1591,7 +1657,11 @@ Widget _buildQuizStudyDetailHeaderPanel(
   required _QuizAcademyPalette palette,
   required Color accent,
   required _QuizStudyLayoutSpec layout,
+  Widget? compactLandscapeControls,
 }) {
+  final compactLandscape =
+      layout.mode == _QuizStudyLayoutMode.phoneLandscape && !layout.isTablet;
+
   return state._academyPixelPanel(
     panelKey: const ValueKey<String>('quiz_study_detail_header_panel'),
     palette: palette,
@@ -1600,20 +1670,56 @@ Widget _buildQuizStudyDetailHeaderPanel(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        state._academyPanelHeader(
-          palette: palette,
-          title: variationLabel,
-          subtitle:
-              '$familyName • ${state._quizStudyCategoryLabel(state._quizStudyCategory)}',
-          infoTitle: 'Opening details',
-          infoMessage: _quizStudyLineInfoMessage(
-            state,
-            line: selectedLine,
-            familyName: familyName,
-            variationLabel: variationLabel,
+        if (compactLandscape)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  variationLabel,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: state._academyDisplayStyle(
+                    palette: palette,
+                    size: 18,
+                    color: palette.text,
+                    weight: FontWeight.w700,
+                    letterSpacing: 0.65,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              state._buildQuizInfoButton(
+                buttonKey: const ValueKey<String>('quiz_study_detail_info'),
+                title: 'Opening details',
+                message: _quizStudyLineInfoMessage(
+                  state,
+                  line: selectedLine,
+                  familyName: familyName,
+                  variationLabel: variationLabel,
+                ),
+              ),
+            ],
+          )
+        else
+          state._academyPanelHeader(
+            palette: palette,
+            title: variationLabel,
+            subtitle:
+                '$familyName • ${state._quizStudyCategoryLabel(state._quizStudyCategory)}',
+            infoTitle: 'Opening details',
+            infoMessage: _quizStudyLineInfoMessage(
+              state,
+              line: selectedLine,
+              familyName: familyName,
+              variationLabel: variationLabel,
+            ),
+            infoButtonKey: const ValueKey<String>('quiz_study_detail_info'),
           ),
-          infoButtonKey: const ValueKey<String>('quiz_study_detail_info'),
-        ),
+        if (compactLandscape && compactLandscapeControls != null) ...<Widget>[
+          const SizedBox(height: 10),
+          compactLandscapeControls,
+        ],
         if (layout.showInlineSecondaryInfo) ...<Widget>[
           const SizedBox(height: 12),
           Wrap(
@@ -1663,6 +1769,8 @@ Widget _buildQuizStudyDetailScreen(
   required _QuizAcademyPalette palette,
   required _QuizStudyLayoutSpec layout,
 }) {
+  final compactLandscape =
+      layout.mode == _QuizStudyLayoutMode.phoneLandscape && !layout.isTablet;
   final accent = state._quizStudyCategoryColor(state._quizStudyCategory);
   final preview = state._buildQuizStudyPreview(selectedLine);
   final familyName = state._quizStudyFamilyName(selectedLine.name);
@@ -1670,7 +1778,17 @@ Widget _buildQuizStudyDetailScreen(
   final studyCount = state._quizStudyCountFor(selectedLine.name);
   final boardMaxWidth = MediaQuery.sizeOf(state.context).width >= 1000
       ? 420.0
+      : compactLandscape
+      ? 260.0
       : 320.0;
+  final replayControls = _buildQuizStudyReplayControls(
+    state,
+    selectedLine: selectedLine,
+    preview: preview,
+    palette: palette,
+    accent: accent,
+    maxWidth: compactLandscape ? double.infinity : boardMaxWidth,
+  );
   final variationLabel = state._quizStudyVariationLabel(
     selectedLine,
     familyName,
@@ -1684,6 +1802,7 @@ Widget _buildQuizStudyDetailScreen(
     palette: palette,
     accent: accent,
     layout: layout,
+    compactLandscapeControls: compactLandscape ? replayControls : null,
   );
   final navigatorPanel = _buildQuizStudyFamilyNavigatorPanel(
     state,
@@ -1692,6 +1811,7 @@ Widget _buildQuizStudyDetailScreen(
     familyLines: familyLines,
     palette: palette,
     accent: accent,
+    compactLandscape: compactLandscape,
   );
   final boardPanel = _buildQuizStudyBoardWalkthroughPanel(
     state,
@@ -1700,7 +1820,58 @@ Widget _buildQuizStudyDetailScreen(
     palette: palette,
     accent: accent,
     boardMaxWidth: boardMaxWidth,
+    compactLandscape: compactLandscape,
   );
+
+  if (compactLandscape) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final panelGap = max(8.0, layout.sectionGap - 4);
+        const compactBoardChromeHeight = 40.0;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Expanded(
+              flex: 6,
+              child: LayoutBuilder(
+                builder: (context, leftConstraints) {
+                  final boardSize = max(
+                    0.0,
+                    min(
+                      leftConstraints.maxWidth - 24.0,
+                      constraints.maxHeight - compactBoardChromeHeight,
+                    ),
+                  );
+                  return _buildQuizStudyBoardWalkthroughPanel(
+                    state,
+                    selectedLine: selectedLine,
+                    preview: preview,
+                    palette: palette,
+                    accent: accent,
+                    boardMaxWidth: boardSize,
+                    compactLandscape: true,
+                  );
+                },
+              ),
+            ),
+            SizedBox(width: panelGap),
+            Expanded(
+              flex: 5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  detailHeader,
+                  SizedBox(height: panelGap),
+                  Expanded(child: navigatorPanel),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   return Column(
     children: <Widget>[
@@ -1743,7 +1914,50 @@ Widget _buildQuizStudyFamilyNavigatorPanel(
   required List<EcoLine> familyLines,
   required _QuizAcademyPalette palette,
   required Color accent,
+  bool compactLandscape = false,
 }) {
+  final navigatorBody = familyLines.length > 1
+      ? Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: familyLines
+              .map(
+                (line) => _buildQuizStudyFamilyChoiceChip(
+                  state,
+                  palette: palette,
+                  label: state._quizStudyVariationLabel(line, familyName),
+                  studied: state._quizStudyCountFor(line.name) > 0,
+                  selected: line.name == selectedLine.name,
+                  onTap: () =>
+                      state._selectQuizStudyOpening(line, focusBoard: true),
+                  accent: accent,
+                ),
+              )
+              .toList(growable: false),
+        )
+      : Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              accent.withValues(alpha: 0.10),
+              palette.shell,
+            ),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: accent.withValues(alpha: 0.28), width: 2),
+          ),
+          child: Text(
+            'No other saved line is grouped with this opening in ${state._quizStudyCategoryLabel(state._quizStudyCategory).toLowerCase()}.',
+            style: state._academyHudStyle(
+              palette: palette,
+              size: 12.5,
+              color: palette.textMuted,
+              weight: FontWeight.w600,
+              height: 1.45,
+            ),
+          ),
+        );
+
   return state._academyPixelPanel(
     panelKey: const ValueKey<String>('quiz_study_detail_navigator_panel'),
     palette: palette,
@@ -1752,59 +1966,24 @@ Widget _buildQuizStudyFamilyNavigatorPanel(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        state._academyPanelHeader(
-          palette: palette,
-          title: 'VARIATIONS',
-          subtitle: familyLines.length > 1
-              ? 'Switch lines without leaving $familyName.'
-              : 'This family currently stores one line in this category.',
-        ),
-        const SizedBox(height: 14),
-        if (familyLines.length > 1)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: familyLines
-                .map(
-                  (line) => _buildQuizStudyFamilyChoiceChip(
-                    state,
-                    palette: palette,
-                    label: state._quizStudyVariationLabel(line, familyName),
-                    studied: state._quizStudyCountFor(line.name) > 0,
-                    selected: line.name == selectedLine.name,
-                    onTap: () =>
-                        state._selectQuizStudyOpening(line, focusBoard: true),
-                    accent: accent,
-                  ),
-                )
-                .toList(growable: false),
+        if (!compactLandscape) ...<Widget>[
+          state._academyPanelHeader(
+            palette: palette,
+            title: 'VARIATIONS',
+            subtitle: familyLines.length > 1
+                ? 'Switch lines without leaving $familyName.'
+                : 'This family currently stores one line in this category.',
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (compactLandscape)
+          Expanded(
+            child: Scrollbar(
+              child: SingleChildScrollView(child: navigatorBody),
+            ),
           )
         else
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                accent.withValues(alpha: 0.10),
-                palette.shell,
-              ),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: accent.withValues(alpha: 0.28),
-                width: 2,
-              ),
-            ),
-            child: Text(
-              'No other saved line is grouped with this opening in ${state._quizStudyCategoryLabel(state._quizStudyCategory).toLowerCase()}.',
-              style: state._academyHudStyle(
-                palette: palette,
-                size: 12.5,
-                color: palette.textMuted,
-                weight: FontWeight.w600,
-                height: 1.45,
-              ),
-            ),
-          ),
+          navigatorBody,
       ],
     ),
   );
@@ -1817,9 +1996,8 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
   required _QuizAcademyPalette palette,
   required Color accent,
   required double boardMaxWidth,
+  bool compactLandscape = false,
 }) {
-  final currentPly = preview?.shownPly ?? 0;
-  final totalPly = preview?.totalPly ?? selectedLine.moveTokens.length;
   final previewUnavailableCopy =
       'This opening could not be replayed into a clean preview board, but the stored line is still available in Opening Details.';
 
@@ -1833,12 +2011,14 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          state._academyPanelHeader(
-            palette: palette,
-            title: 'BOARD',
-            subtitle: 'Replay the selected line move by move.',
-          ),
-          const SizedBox(height: 14),
+          if (!compactLandscape) ...<Widget>[
+            state._academyPanelHeader(
+              palette: palette,
+              title: 'BOARD',
+              subtitle: 'Replay the selected line move by move.',
+            ),
+            const SizedBox(height: 14),
+          ],
           if (preview != null)
             Center(
               child: ConstrainedBox(
@@ -1903,7 +2083,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
           else
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
+              padding: EdgeInsets.all(compactLandscape ? 12 : 14),
               decoration: BoxDecoration(
                 color: Color.alphaBlend(
                   palette.amber.withValues(alpha: 0.08),
@@ -1923,57 +2103,83 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                 ),
               ),
             ),
-          const SizedBox(height: 14),
-          Align(
-            alignment: Alignment.center,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: boardMaxWidth),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    _buildQuizStudyReplayButton(
-                      state,
-                      palette: palette,
-                      icon: Icons.skip_previous_rounded,
-                      label: 'START',
-                      tooltip: 'Jump to the start position',
-                      onPressed: preview != null && currentPly > 0
-                          ? () => state._resetQuizStudyPosition(selectedLine)
-                          : null,
-                      accent: palette.amber,
-                    ),
-                    const SizedBox(width: 10),
-                    _buildQuizStudyReplayButton(
-                      state,
-                      palette: palette,
-                      icon: Icons.chevron_left_rounded,
-                      label: 'BACK',
-                      tooltip: 'Step back one move',
-                      onPressed: preview != null && currentPly > 0
-                          ? () => state._stepQuizStudyBackward(selectedLine)
-                          : null,
-                      accent: accent,
-                    ),
-                    const SizedBox(width: 10),
-                    _buildQuizStudyReplayButton(
-                      state,
-                      palette: palette,
-                      icon: Icons.chevron_right_rounded,
-                      label: 'NEXT',
-                      tooltip: 'Step forward one move',
-                      onPressed: preview != null && currentPly < totalPly
-                          ? () => state._stepQuizStudyForward(selectedLine)
-                          : null,
-                      accent: palette.cyan,
-                    ),
-                  ],
-                ),
-              ),
+          if (!compactLandscape) ...<Widget>[
+            const SizedBox(height: 14),
+            _buildQuizStudyReplayControls(
+              state,
+              selectedLine: selectedLine,
+              preview: preview,
+              palette: palette,
+              accent: accent,
+              maxWidth: boardMaxWidth,
             ),
-          ),
+          ],
         ],
+      ),
+    ),
+  );
+}
+
+Widget _buildQuizStudyReplayControls(
+  _QuizScreen state, {
+  required EcoLine selectedLine,
+  required _QuizStudyPreview? preview,
+  required _QuizAcademyPalette palette,
+  required Color accent,
+  required double maxWidth,
+}) {
+  final currentPly = preview?.shownPly ?? 0;
+  final totalPly = preview?.totalPly ?? selectedLine.moveTokens.length;
+
+  return KeyedSubtree(
+    key: const ValueKey<String>('quiz_study_detail_replay_controls'),
+    child: Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _buildQuizStudyReplayButton(
+                state,
+                palette: palette,
+                icon: Icons.skip_previous_rounded,
+                label: 'START',
+                tooltip: 'Jump to the start position',
+                onPressed: preview != null && currentPly > 0
+                    ? () => state._resetQuizStudyPosition(selectedLine)
+                    : null,
+                accent: palette.amber,
+              ),
+              const SizedBox(width: 10),
+              _buildQuizStudyReplayButton(
+                state,
+                palette: palette,
+                icon: Icons.chevron_left_rounded,
+                label: 'BACK',
+                tooltip: 'Step back one move',
+                onPressed: preview != null && currentPly > 0
+                    ? () => state._stepQuizStudyBackward(selectedLine)
+                    : null,
+                accent: accent,
+              ),
+              const SizedBox(width: 10),
+              _buildQuizStudyReplayButton(
+                state,
+                palette: palette,
+                icon: Icons.chevron_right_rounded,
+                label: 'NEXT',
+                tooltip: 'Step forward one move',
+                onPressed: preview != null && currentPly < totalPly
+                    ? () => state._stepQuizStudyForward(selectedLine)
+                    : null,
+                accent: palette.cyan,
+              ),
+            ],
+          ),
+        ),
       ),
     ),
   );

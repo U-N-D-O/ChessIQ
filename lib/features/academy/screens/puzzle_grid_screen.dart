@@ -33,6 +33,8 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
   double _lastScrollPosition = 0.0;
   bool _didScrollToFrontier = false;
   _GridViewMode _viewMode = _GridViewMode.all;
+  bool _compactGridIntelExpanded = false;
+  _GridMetrics? _activeGridMetrics;
   static const double _gridHorizontalPadding = 32.0;
   static const double _gridSpacing = 10.0;
 
@@ -73,16 +75,8 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
       final frontier = academy.frontierPuzzleIndexForNode(widget.node);
       if (frontier <= 0) return;
 
-      final metrics = _gridMetricsForWidth(MediaQuery.sizeOf(context).width);
-      final rowIndex = frontier ~/ metrics.crossAxisCount;
-      final offset = max(
-        0.0,
-        (rowIndex * metrics.rowExtent) - (metrics.rowExtent * 0.35),
-      );
-
       if (!_scrollController.hasClients) return;
-      final maxScroll = _scrollController.position.maxScrollExtent;
-      _scrollController.jumpTo(offset.clamp(0.0, maxScroll));
+      _scrollController.jumpTo(_frontierScrollOffset(visibleIndex: frontier));
     });
   }
 
@@ -91,11 +85,37 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     final academy = context.watch<PuzzleAcademyProvider>();
     final appTheme = context.watch<AppThemeProvider>();
     final theme = Theme.of(context);
+    final media = MediaQuery.of(context);
     final monochrome = appTheme.isMonochrome || widget.cinematicThemeEnabled;
     final palette = puzzleAcademyPalette(
       context,
       monochromeOverride: monochrome,
     );
+    final safeHeight = media.size.height - media.padding.vertical;
+    final isLandscape = media.size.width > safeHeight;
+    final compactLandscape = isLandscape && safeHeight <= 500;
+    final compactPortrait =
+        !isLandscape && (safeHeight <= 780 || media.size.width <= 430);
+    final compactPhoneLayout =
+        compactLandscape || compactPortrait || media.size.width <= 430;
+    final pagePadding = EdgeInsets.fromLTRB(
+      compactPhoneLayout ? 12 : 16,
+      compactLandscape ? 8 : 12,
+      compactPhoneLayout ? 12 : 16,
+      compactLandscape ? 10 : 16,
+    );
+    final headerPadding = EdgeInsets.all(
+      compactLandscape
+          ? 10
+          : compactPhoneLayout
+          ? 12
+          : 14,
+    );
+    final headerGap = compactLandscape
+        ? 8.0
+        : compactPhoneLayout
+        ? 10.0
+        : 12.0;
     final nodeAccent = widget.node.goldCrown ? palette.amber : palette.cyan;
     final total = academy.gridPuzzleCountForNode(widget.node);
     final frontier = academy.frontierPuzzleIndexForNode(widget.node);
@@ -148,6 +168,146 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
         .toList(growable: false);
 
     final visibleFrontier = visibleIndices.contains(frontier);
+    final statusPills = Wrap(
+      key: const ValueKey<String>('puzzle_grid_status_pills'),
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _StatusPill(
+          label: 'FRONTIER ${frontier + 1}',
+          icon: Icons.navigation_rounded,
+          tone: nodeAccent,
+          monochrome: monochrome,
+          compact: compactPhoneLayout,
+        ),
+        _StatusPill(
+          label: examUnlocked ? 'EXAM READY' : '$remainingToExam LEFT',
+          icon: Icons.workspace_premium_outlined,
+          tone: examUnlocked
+              ? const Color(0xFF89DBA7)
+              : const Color(0xFFD8B640),
+          monochrome: monochrome,
+          compact: compactPhoneLayout,
+        ),
+        if (!compactPhoneLayout && bestExam != null)
+          _StatusPill(
+            label: 'BEST ${bestExam.grade} ${bestExam.score}',
+            icon: Icons.military_tech_outlined,
+            tone: palette.amber,
+            monochrome: monochrome,
+            compact: compactPhoneLayout,
+          ),
+      ],
+    );
+    final compactIntelToggle = _CompactGridIntelButton(
+      expanded: _compactGridIntelExpanded,
+      monochrome: monochrome,
+      onTap: () {
+        setState(() {
+          _compactGridIntelExpanded = !_compactGridIntelExpanded;
+        });
+      },
+    );
+    final modeChipChildren = <Widget>[
+      _ModeChip(
+        key: const ValueKey<String>('puzzle_grid_chip_all'),
+        label: 'All',
+        selected: _viewMode == _GridViewMode.all,
+        icon: Icons.grid_view_rounded,
+        monochrome: monochrome,
+        compact: compactPhoneLayout,
+        onTap: () {
+          setState(() => _viewMode = _GridViewMode.all);
+        },
+      ),
+      _ModeChip(
+        key: const ValueKey<String>('puzzle_grid_chip_queue'),
+        label: compactPhoneLayout ? 'Queue' : 'Action Queue',
+        selected: _viewMode == _GridViewMode.actionable,
+        icon: Icons.bolt_rounded,
+        monochrome: monochrome,
+        compact: compactPhoneLayout,
+        onTap: () {
+          setState(() => _viewMode = _GridViewMode.actionable);
+        },
+      ),
+      _ModeChip(
+        key: const ValueKey<String>('puzzle_grid_chip_overlay'),
+        label: compactPhoneLayout ? 'Overlay' : 'Grid Overlay',
+        selected: false,
+        icon: Icons.open_in_full_rounded,
+        monochrome: monochrome,
+        compact: compactPhoneLayout,
+        onTap: () {
+          _openGridPopup(
+            academy: academy,
+            visibleIndices: visibleIndices,
+            frontier: frontier,
+            monochrome: monochrome,
+          );
+        },
+      ),
+    ];
+    final modeChips = Wrap(
+      key: const ValueKey<String>('puzzle_grid_mode_chips'),
+      spacing: 8,
+      runSpacing: 8,
+      children: modeChipChildren,
+    );
+    final compactTopControls = Column(
+      key: const ValueKey<String>('puzzle_grid_compact_top_controls'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[compactIntelToggle, modeChipChildren[0]],
+        ),
+        SizedBox(height: headerGap),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[modeChipChildren[1], modeChipChildren[2]],
+        ),
+      ],
+    );
+    final fullInfoButtons = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: infoItems
+          .map(
+            (item) => _InfoQuickButton(
+              item: item,
+              monochrome: monochrome,
+              onTap: () => _showInfoSheet(item),
+            ),
+          )
+          .toList(growable: false),
+    );
+    final compactIntelPanel = PuzzleAcademyAnimatedSwap(
+      child: _compactGridIntelExpanded
+          ? Padding(
+              key: const ValueKey<String>('puzzle_grid_compact_intel_panel'),
+              padding: EdgeInsets.only(top: headerGap),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: infoItems
+                    .map(
+                      (item) => _InfoQuickButton(
+                        item: item,
+                        monochrome: monochrome,
+                        compact: true,
+                        onTap: () => _showInfoSheet(item),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            )
+          : const SizedBox(
+              key: ValueKey<String>('puzzle_grid_compact_intel_collapsed'),
+            ),
+    );
     final content = Stack(
       children: [
         Positioned.fill(
@@ -159,7 +319,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
         ),
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            padding: pagePadding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -170,7 +330,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                     radius: 10,
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
+                    padding: headerPadding,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -182,8 +342,8 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                               child: Material(
                                 color: Colors.transparent,
                                 child: Container(
-                                  width: 42,
-                                  height: 42,
+                                  width: compactPhoneLayout ? 36 : 42,
+                                  height: compactPhoneLayout ? 36 : 42,
                                   decoration: BoxDecoration(
                                     color: nodeAccent.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(6),
@@ -197,7 +357,11 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                                       '${widget.node.startElo}',
                                       style: puzzleAcademyHudStyle(
                                         palette: palette,
-                                        size: 11.6,
+                                        size: compactLandscape
+                                            ? 10.4
+                                            : compactPhoneLayout
+                                            ? 11.0
+                                            : 11.6,
                                         weight: FontWeight.w800,
                                         letterSpacing: 0.85,
                                         height: 1.0,
@@ -217,19 +381,30 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                                     '${widget.node.title} Grid',
                                     style: puzzleAcademyDisplayStyle(
                                       palette: palette,
-                                      size: 18,
+                                      size: compactLandscape
+                                          ? 15.6
+                                          : compactPhoneLayout
+                                          ? 16.6
+                                          : 18,
                                       color: nodeAccent,
                                     ),
+                                    maxLines: compactLandscape ? 1 : 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Frontier #${frontier + 1} of $total. Keep the live surface minimal and open intel buttons for rules, scoring, and tile detail.',
-                                    style: puzzleAcademyHudStyle(
-                                      palette: palette,
-                                      size: 11.7,
-                                      weight: FontWeight.w600,
+                                  if (!compactPhoneLayout) ...<Widget>[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Frontier #${frontier + 1} of $total. Keep the live surface minimal and open intel buttons for rules, scoring, and tile detail.',
+                                      key: const ValueKey<String>(
+                                        'puzzle_grid_header_body_copy',
+                                      ),
+                                      style: puzzleAcademyHudStyle(
+                                        palette: palette,
+                                        size: 11.7,
+                                        weight: FontWeight.w600,
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -243,97 +418,34 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _StatusPill(
-                              label: 'FRONTIER ${frontier + 1}',
-                              icon: Icons.navigation_rounded,
-                              tone: nodeAccent,
-                              monochrome: monochrome,
-                            ),
-                            _StatusPill(
-                              label: examUnlocked
-                                  ? 'EXAM READY'
-                                  : '$remainingToExam LEFT',
-                              icon: Icons.workspace_premium_outlined,
-                              tone: examUnlocked
-                                  ? const Color(0xFF89DBA7)
-                                  : const Color(0xFFD8B640),
-                              monochrome: monochrome,
-                            ),
-                            if (bestExam != null)
-                              _StatusPill(
-                                label:
-                                    'BEST ${bestExam.grade} ${bestExam.score}',
-                                icon: Icons.military_tech_outlined,
-                                tone: palette.amber,
-                                monochrome: monochrome,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _ModeChip(
-                              label: 'All',
-                              selected: _viewMode == _GridViewMode.all,
-                              icon: Icons.grid_view_rounded,
-                              monochrome: monochrome,
-                              onTap: () {
-                                setState(() => _viewMode = _GridViewMode.all);
-                              },
-                            ),
-                            _ModeChip(
-                              label: 'Action Queue',
-                              selected: _viewMode == _GridViewMode.actionable,
-                              icon: Icons.bolt_rounded,
-                              monochrome: monochrome,
-                              onTap: () {
-                                setState(
-                                  () => _viewMode = _GridViewMode.actionable,
-                                );
-                              },
-                            ),
-                            _ModeChip(
-                              label: 'Grid Overlay',
-                              selected: false,
-                              icon: Icons.open_in_full_rounded,
-                              monochrome: monochrome,
-                              onTap: () {
-                                _openGridPopup(
-                                  academy: academy,
-                                  visibleIndices: visibleIndices,
-                                  frontier: frontier,
-                                  monochrome: monochrome,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: infoItems
-                              .map(
-                                (item) => _InfoQuickButton(
-                                  item: item,
-                                  monochrome: monochrome,
-                                  onTap: () => _showInfoSheet(item),
-                                ),
-                              )
-                              .toList(growable: false),
-                        ),
+                        SizedBox(height: headerGap),
+                        if (compactLandscape) ...<Widget>[
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: statusPills),
+                              const SizedBox(width: 10),
+                              Expanded(child: compactTopControls),
+                            ],
+                          ),
+                          compactIntelPanel,
+                        ] else ...<Widget>[
+                          statusPills,
+                          SizedBox(height: headerGap),
+                          if (compactPhoneLayout)
+                            compactTopControls
+                          else
+                            modeChips,
+                          if (!compactPhoneLayout) ...<Widget>[
+                            SizedBox(height: headerGap),
+                            fullInfoButtons,
+                          ] else ...<Widget>[compactIntelPanel],
+                        ],
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: compactLandscape ? 8 : 12),
                 if (!visibleFrontier && _viewMode != _GridViewMode.all)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -350,7 +462,11 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                         accent: palette.cyan,
                       ),
                       icon: const Icon(Icons.navigation_rounded),
-                      label: const Text('Show full grid and jump to frontier'),
+                      label: Text(
+                        compactPhoneLayout
+                            ? 'Show full grid'
+                            : 'Show full grid and jump to frontier',
+                      ),
                     ),
                   ),
                 Expanded(
@@ -363,7 +479,7 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
                       elevated: false,
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.all(10),
+                      padding: EdgeInsets.all(compactPhoneLayout ? 8 : 10),
                       child: _buildGridView(
                         academy: academy,
                         visibleIndices: visibleIndices,
@@ -398,7 +514,9 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
         actions: [
           IconButton(
             tooltip: 'Jump to frontier',
-            onPressed: () => _jumpToFrontier(frontier),
+            onPressed: () => _jumpToFrontier(
+              _visibleIndexForFrontier(visibleIndices, frontier),
+            ),
             icon: const Icon(Icons.navigation_rounded),
           ),
           Padding(
@@ -428,61 +546,77 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     required bool monochrome,
     bool compactTiles = false,
   }) {
-    return GridView.builder(
-      controller: controller,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: gridMetrics.crossAxisCount,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1,
-      ),
-      itemCount: visibleIndices.length,
-      itemBuilder: (context, visibleIndex) {
-        final index = visibleIndices[visibleIndex];
-        final puzzle = academy.puzzleForNodeIndex(widget.node, index);
-        final tileState = academy.tileStateForNodeIndex(widget.node, index);
-        final enabled =
-            puzzle != null && academy.canOpenGridIndex(widget.node, index);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final liveMetrics = _gridMetricsForCrossAxisCount(
+          gridWidth: max(220.0, constraints.maxWidth),
+          crossAxisCount: gridMetrics.crossAxisCount,
+        );
+        if (!compactTiles) {
+          _activeGridMetrics = liveMetrics;
+        }
 
-        return _AnimatedGridTile(
-          order: visibleIndex,
-          child: _GridTile(
-            index: index,
-            state: tileState,
-            isFrontier: index == frontier,
-            enabled: enabled,
-            compact: compactTiles,
-            monochrome: monochrome,
-            onLongPress: () {
-              _showTileDetails(
+        return GridView.builder(
+          key: const ValueKey<String>('puzzle_grid_view'),
+          controller: controller,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: gridMetrics.crossAxisCount,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1,
+          ),
+          itemCount: visibleIndices.length,
+          itemBuilder: (context, visibleIndex) {
+            final index = visibleIndices[visibleIndex];
+            final puzzle = academy.puzzleForNodeIndex(widget.node, index);
+            final tileState = academy.tileStateForNodeIndex(widget.node, index);
+            final enabled =
+                puzzle != null && academy.canOpenGridIndex(widget.node, index);
+
+            return _AnimatedGridTile(
+              order: visibleIndex,
+              child: _GridTile(
+                key: ValueKey<String>('puzzle_grid_tile_${index + 1}'),
                 index: index,
                 state: tileState,
-                puzzle: puzzle,
+                isFrontier: index == frontier,
                 enabled: enabled,
-              );
-            },
-            onTap: !enabled
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => PuzzleNodeScreen(
-                          node: widget.node,
-                          heroTag: widget.heroTag,
-                          initialPuzzle: puzzle,
-                          initialPuzzleIndex: index,
-                          initialReviewMode:
-                              tileState != PuzzleGridTileState.nextAvailable,
-                          cinematicThemeEnabled: widget.cinematicThemeEnabled,
-                          onExitToMap: () {
-                            Navigator.of(context).pop();
-                            Navigator.of(context).pop();
-                          },
-                        ),
-                      ),
-                    );
-                  },
-          ),
+                compact: compactTiles,
+                monochrome: monochrome,
+                onLongPress: () {
+                  _showTileDetails(
+                    index: index,
+                    state: tileState,
+                    puzzle: puzzle,
+                    enabled: enabled,
+                  );
+                },
+                onTap: !enabled
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => PuzzleNodeScreen(
+                              node: widget.node,
+                              heroTag: widget.heroTag,
+                              initialPuzzle: puzzle,
+                              initialPuzzleIndex: index,
+                              initialReviewMode:
+                                  tileState !=
+                                  PuzzleGridTileState.nextAvailable,
+                              cinematicThemeEnabled:
+                                  widget.cinematicThemeEnabled,
+                              onExitToMap: () {
+                                Navigator.of(context).pop();
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                          ),
+                        );
+                      },
+              ),
+            );
+          },
         );
       },
     );
@@ -558,6 +692,16 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     final crossAxisCount = maxCrossAxisCount != null
         ? rawCount.clamp(1, maxCrossAxisCount)
         : rawCount;
+    return _gridMetricsForCrossAxisCount(
+      gridWidth: gridWidth,
+      crossAxisCount: crossAxisCount,
+    );
+  }
+
+  _GridMetrics _gridMetricsForCrossAxisCount({
+    required double gridWidth,
+    required int crossAxisCount,
+  }) {
     final totalSpacing = (crossAxisCount - 1) * _gridSpacing;
     final tileSize = (gridWidth - totalSpacing) / crossAxisCount;
     return _GridMetrics(
@@ -709,17 +853,33 @@ class _PuzzleGridScreenState extends State<PuzzleGridScreen> {
     };
   }
 
-  void _jumpToFrontier(int frontier) {
-    if (!_scrollController.hasClients) return;
-    final metrics = _gridMetricsForWidth(MediaQuery.sizeOf(context).width);
-    final rowIndex = frontier ~/ metrics.crossAxisCount;
-    final offset = max(
-      0.0,
-      (rowIndex * metrics.rowExtent) - (metrics.rowExtent * 0.35),
-    );
+  int _visibleIndexForFrontier(List<int> visibleIndices, int frontier) {
+    final visibleIndex = visibleIndices.indexOf(frontier);
+    return visibleIndex >= 0 ? visibleIndex : frontier;
+  }
+
+  double _frontierScrollOffset({required int visibleIndex}) {
+    if (!_scrollController.hasClients) return 0.0;
+    final metrics =
+        _activeGridMetrics ??
+        _gridMetricsForWidth(MediaQuery.sizeOf(context).width);
+    final rowIndex = visibleIndex ~/ metrics.crossAxisCount;
+    final rowOffset = rowIndex * metrics.rowExtent;
+    final viewportDimension = _scrollController.position.viewportDimension;
+    final leadingInset = viewportDimension <= metrics.rowExtent
+        ? 0.0
+        : max(
+            metrics.rowExtent * 0.7,
+            (viewportDimension - metrics.rowExtent) * 0.18,
+          );
     final maxScroll = _scrollController.position.maxScrollExtent;
+    return (rowOffset - leadingInset).clamp(0.0, maxScroll);
+  }
+
+  void _jumpToFrontier(int visibleIndex) {
+    if (!_scrollController.hasClients) return;
     _scrollController.animateTo(
-      offset.clamp(0.0, maxScroll),
+      _frontierScrollOffset(visibleIndex: visibleIndex),
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOutCubic,
     );
@@ -934,12 +1094,14 @@ class _StatusPill extends StatelessWidget {
     required this.icon,
     required this.tone,
     required this.monochrome,
+    this.compact = false,
   });
 
   final String label;
   final IconData icon;
   final Color tone;
   final bool monochrome;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -948,7 +1110,10 @@ class _StatusPill extends StatelessWidget {
       monochromeOverride: monochrome,
     );
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 9 : 10,
+        vertical: compact ? 5 : 6,
+      ),
       decoration: BoxDecoration(
         color: tone.withValues(alpha: monochrome ? 0.18 : 0.12),
         borderRadius: BorderRadius.circular(4),
@@ -957,13 +1122,13 @@ class _StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: tone),
+          Icon(icon, size: compact ? 13 : 14, color: tone),
           const SizedBox(width: 6),
           Text(
             label,
             style: puzzleAcademyHudStyle(
               palette: palette,
-              size: 10.8,
+              size: compact ? 10.0 : 10.8,
               weight: FontWeight.w800,
               letterSpacing: 0.9,
               height: 1.0,
@@ -981,11 +1146,13 @@ class _InfoQuickButton extends StatelessWidget {
     required this.item,
     required this.onTap,
     required this.monochrome,
+    this.compact = false,
   });
 
   final _GridInfoItem item;
   final VoidCallback onTap;
   final bool monochrome;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -999,7 +1166,10 @@ class _InfoQuickButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 9 : 10,
+            vertical: compact ? 6 : 7,
+          ),
           decoration: BoxDecoration(
             color: item.tone.withValues(alpha: monochrome ? 0.18 : 0.12),
             borderRadius: BorderRadius.circular(4),
@@ -1011,13 +1181,13 @@ class _InfoQuickButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(item.icon, size: 14, color: item.tone),
+              Icon(item.icon, size: compact ? 13 : 14, color: item.tone),
               const SizedBox(width: 6),
               Text(
                 item.title.toUpperCase(),
                 style: puzzleAcademyHudStyle(
                   palette: palette,
-                  size: 10.6,
+                  size: compact ? 10.0 : 10.6,
                   weight: FontWeight.w800,
                   letterSpacing: 0.9,
                   height: 1.0,
@@ -1025,7 +1195,11 @@ class _InfoQuickButton extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(Icons.info_outline_rounded, size: 13, color: item.tone),
+              Icon(
+                Icons.info_outline_rounded,
+                size: compact ? 12 : 13,
+                color: item.tone,
+              ),
             ],
           ),
         ),
@@ -1036,11 +1210,13 @@ class _InfoQuickButton extends StatelessWidget {
 
 class _ModeChip extends StatelessWidget {
   const _ModeChip({
+    super.key,
     required this.label,
     required this.selected,
     required this.icon,
     required this.monochrome,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
@@ -1048,6 +1224,7 @@ class _ModeChip extends StatelessWidget {
   final IconData icon;
   final bool monochrome;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1076,17 +1253,24 @@ class _ModeChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: compact ? 7 : 9,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: tone.withValues(alpha: 0.92)),
+              Icon(
+                icon,
+                size: compact ? 15 : 16,
+                color: tone.withValues(alpha: 0.92),
+              ),
               const SizedBox(width: 7),
               Text(
                 label,
                 style: puzzleAcademyHudStyle(
                   palette: palette,
-                  size: 10.8,
+                  size: compact ? 10.0 : 10.8,
                   weight: FontWeight.w800,
                   letterSpacing: 0.9,
                   height: 1.0,
@@ -1097,6 +1281,41 @@ class _ModeChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CompactGridIntelButton extends StatelessWidget {
+  const _CompactGridIntelButton({
+    required this.expanded,
+    required this.monochrome,
+    required this.onTap,
+  });
+
+  final bool expanded;
+  final bool monochrome;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+
+    return OutlinedButton.icon(
+      key: const ValueKey<String>('puzzle_grid_compact_intel_toggle'),
+      onPressed: onTap,
+      style: puzzleAcademyOutlinedButtonStyle(
+        palette: palette,
+        accent: palette.amber,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+      icon: Icon(
+        expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+        size: 18,
+      ),
+      label: Text(expanded ? 'HIDE INTEL' : 'MORE INTEL'),
     );
   }
 }
@@ -1177,6 +1396,7 @@ class _AnimatedGridTileState extends State<_AnimatedGridTile>
 
 class _GridTile extends StatelessWidget {
   const _GridTile({
+    super.key,
     required this.index,
     required this.state,
     required this.isFrontier,

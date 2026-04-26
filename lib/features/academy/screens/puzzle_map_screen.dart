@@ -286,6 +286,8 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   _AcademyHubFlightData? _academyHubFlight;
   _AcademyHubQuizSnapshot _academyHubQuizSnapshot =
       const _AcademyHubQuizSnapshot();
+  bool _compactDashboardOverviewExpanded = false;
+  bool _compactDashboardStatsExpanded = false;
 
   bool get _useReducedWindowsVisualEffects =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
@@ -588,7 +590,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         ? 'Syncing the live Academy board and preserving your selected scope.'
         : profileMissing
         ? 'Set up your academy profile to appear on the live board.'
-        : 'Switch between worldwide and local exam standings without leaving the map.';
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -623,16 +625,19 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        Text(
-          helperText,
-          style: puzzleAcademyHudStyle(
-            palette: palette,
-            size: 11.8,
-            weight: FontWeight.w600,
+        if (helperText != null) ...<Widget>[
+          const SizedBox(height: 10),
+          Text(
+            helperText,
+            style: puzzleAcademyHudStyle(
+              palette: palette,
+              size: 11.8,
+              weight: FontWeight.w600,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
+        ] else
+          const SizedBox(height: 12),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -2267,9 +2272,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required AppThemeProvider themeProvider,
     required bool monochrome,
   }) {
+    final media = MediaQuery.of(context);
+    final safeHeight = max(0.0, constraints.maxHeight - media.padding.vertical);
     final aspectRatio = constraints.maxWidth / max(1.0, constraints.maxHeight);
     final useDualPaneLayout = aspectRatio >= 0.95;
-    final compactDashboard = useDualPaneLayout && constraints.maxWidth < 760;
+    final compactDashboard =
+        useDualPaneLayout && (constraints.maxWidth < 760 || safeHeight <= 500);
     final grouped = _groupBySemester(provider);
 
     if (useDualPaneLayout) {
@@ -2298,6 +2306,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               grouped,
               themeProvider: themeProvider,
               monochrome: monochrome,
+              compactHeader: compactDashboard,
             ),
           ),
         ],
@@ -2671,52 +2680,56 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              PuzzleAcademyTag(
-                label: 'ACADEMY',
-                icon: Icons.home_outlined,
-                accent: palette.cyan,
-                compact: true,
-                filled: true,
-                monochromeOverride: monochrome,
-              ),
-              PuzzleAcademyTag(
-                label: 'EXAMS',
-                icon: Icons.extension_outlined,
-                accent: palette.amber,
-                compact: true,
-                filled: true,
-                monochromeOverride: monochrome,
-              ),
-              OutlinedButton.icon(
-                onPressed: _handleAcademyBack,
-                icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                label: const Text('Back to Hub'),
-                style: _academyOutlinedButtonStyle(
-                  accent: palette.textMuted,
-                  monochrome: monochrome,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+          if (!compact) ...<Widget>[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                PuzzleAcademyTag(
+                  label: 'ACADEMY',
+                  icon: Icons.home_outlined,
+                  accent: palette.cyan,
+                  compact: true,
+                  filled: true,
+                  monochromeOverride: monochrome,
+                ),
+                PuzzleAcademyTag(
+                  label: 'EXAMS',
+                  icon: Icons.extension_outlined,
+                  accent: palette.amber,
+                  compact: true,
+                  filled: true,
+                  monochromeOverride: monochrome,
+                ),
+                OutlinedButton.icon(
+                  onPressed: _handleAcademyBack,
+                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                  label: const Text('Back to Hub'),
+                  style: _academyOutlinedButtonStyle(
+                    accent: palette.textMuted,
+                    monochrome: monochrome,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
           PuzzleAcademySectionHeader(
             title: 'Puzzle Academy Exams',
             subtitle:
                 '${_academySemesterShortTitle(semester)} is your active semester. ${examReady ? 'The next board is ready to enter.' : 'The next exam gate is still locked.'}',
             accent: palette.amber,
             icon: Icons.extension_outlined,
+            titleSize: compact ? 13.2 : 14,
+            subtitleSize: compact ? 11.4 : 12.2,
             monochromeOverride: monochrome,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: compact ? 10 : 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -2749,30 +2762,30 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: compact ? 12 : 14),
           Text(
             'NEXT EXAM GATE',
             style: puzzleAcademyHudStyle(
               palette: palette,
-              size: 10.4,
+              size: compact ? 10.0 : 10.4,
               weight: FontWeight.w800,
               color: palette.textMuted,
               letterSpacing: 0.96,
               height: 1.0,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: compact ? 5 : 6),
           Text(
             requirementSummary,
             style: puzzleAcademyCompactStyle(
               palette: palette,
-              size: 12.4,
+              size: compact ? 12.0 : 12.4,
               weight: FontWeight.w700,
               color: palette.text,
               height: 1.3,
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: compact ? 12 : 14),
           compact
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2905,6 +2918,118 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     return 'Review the semester board to check the remaining promotion gates for ${frontierNode.title}.';
   }
 
+  Widget _buildCompactDashboardToggle({
+    required String keyName,
+    required String label,
+    required IconData icon,
+    required Color accent,
+    required bool monochrome,
+    required bool expanded,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        key: ValueKey<String>(keyName),
+        onPressed: onPressed,
+        style: _academyOutlinedButtonStyle(
+          accent: accent,
+          monochrome: monochrome,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label)),
+            Icon(
+              expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactDashboardSections(
+    PuzzleAcademyProvider provider, {
+    required bool monochrome,
+  }) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCompactDashboardToggle(
+          keyName: 'academy_exams_compact_dashboard_toggle',
+          label: 'Mastery Dashboard',
+          icon: Icons.extension_outlined,
+          accent: palette.amber,
+          monochrome: monochrome,
+          expanded: _compactDashboardOverviewExpanded,
+          onPressed: () {
+            setState(() {
+              _compactDashboardOverviewExpanded =
+                  !_compactDashboardOverviewExpanded;
+            });
+          },
+        ),
+        PuzzleAcademyAnimatedSwap(
+          child: _compactDashboardOverviewExpanded
+              ? Padding(
+                  key: const ValueKey<String>(
+                    'academy_exams_compact_dashboard_panel',
+                  ),
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _buildAcademyExamsOverview(
+                    provider,
+                    monochrome: monochrome,
+                    compact: true,
+                  ),
+                )
+              : const SizedBox(
+                  key: ValueKey<String>(
+                    'academy_exams_compact_dashboard_collapsed',
+                  ),
+                ),
+        ),
+        const SizedBox(height: 10),
+        _buildCompactDashboardToggle(
+          keyName: 'academy_exams_compact_stats_toggle',
+          label: 'Academy Stats',
+          icon: Icons.stacked_bar_chart_rounded,
+          accent: palette.cyan,
+          monochrome: monochrome,
+          expanded: _compactDashboardStatsExpanded,
+          onPressed: () {
+            setState(() {
+              _compactDashboardStatsExpanded = !_compactDashboardStatsExpanded;
+            });
+          },
+        ),
+        PuzzleAcademyAnimatedSwap(
+          child: _compactDashboardStatsExpanded
+              ? Padding(
+                  key: const ValueKey<String>(
+                    'academy_exams_compact_stats_panel',
+                  ),
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _buildHeroStatsBar(provider, compact: true),
+                )
+              : const SizedBox(
+                  key: ValueKey<String>(
+                    'academy_exams_compact_stats_collapsed',
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPortraitMap(
     PuzzleAcademyProvider provider,
     Map<SemesterRange, List<EloNodeProgress>> grouped, {
@@ -2912,46 +3037,56 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required bool monochrome,
   }) {
     _ensureExpandedSemester(provider);
+    final media = MediaQuery.of(context);
+    final safeHeight = max(0.0, media.size.height - media.padding.vertical);
+    final compactPhoneLayout = media.size.width <= 430 || safeHeight <= 780;
     return CustomScrollView(
       slivers: [
         _buildSliverAppBar(
           provider,
           themeProvider: themeProvider,
           monochrome: monochrome,
+          compact: compactPhoneLayout,
         ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mastery Dashboard',
-                  style: puzzleAcademyDisplayStyle(
-                    palette: puzzleAcademyPalette(
-                      context,
-                      monochromeOverride: monochrome,
-                    ),
-                    size: 18,
-                    color: _accentGold(context),
+            child: compactPhoneLayout
+                ? _buildCompactDashboardSections(
+                    provider,
+                    monochrome: monochrome,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mastery Dashboard',
+                        style: puzzleAcademyDisplayStyle(
+                          palette: puzzleAcademyPalette(
+                            context,
+                            monochromeOverride: monochrome,
+                          ),
+                          size: 18,
+                          color: _accentGold(context),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildAcademyExamsOverview(
+                        provider,
+                        monochrome: monochrome,
+                        compact: true,
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                _buildAcademyExamsOverview(
-                  provider,
-                  monochrome: monochrome,
-                  compact: true,
-                ),
-              ],
+          ),
+        ),
+        if (!compactPhoneLayout)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _buildHeroStatsBar(provider),
             ),
           ),
-        ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: _buildHeroStatsBar(provider),
-          ),
-        ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -3026,6 +3161,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     Map<SemesterRange, List<EloNodeProgress>> grouped, {
     required AppThemeProvider themeProvider,
     required bool monochrome,
+    required bool compactHeader,
   }) {
     _ensureExpandedSemester(provider);
     return LayoutBuilder(
@@ -3050,6 +3186,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
               provider,
               themeProvider: themeProvider,
               monochrome: monochrome,
+              compact: compactHeader,
             ),
             for (final entry in grouped.entries) ...[
               SliverToBoxAdapter(
@@ -3107,11 +3244,72 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     PuzzleAcademyProvider provider, {
     required AppThemeProvider themeProvider,
     required bool monochrome,
+    bool compact = false,
   }) {
     final palette = puzzleAcademyPalette(
       context,
       monochromeOverride: monochrome,
     );
+
+    final titleContent = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: widget.onShowCredits,
+            child: Image.asset(
+              'assets/ChessIQ.png',
+              width: compact ? 58 : 72,
+              height: compact ? 18 : 20,
+              fit: BoxFit.contain,
+            ),
+          ),
+          SizedBox(width: compact ? 6 : 8),
+          Text(
+            'Puzzle Academy',
+            style: puzzleAcademyDisplayStyle(
+              palette: palette,
+              size: compact ? 11.8 : 13.6,
+              color: palette.cyan,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (compact) {
+      return SliverAppBar(
+        pinned: true,
+        toolbarHeight: 64,
+        backgroundColor: palette.panel.withValues(alpha: 0.92),
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          onPressed: _handleAcademyBack,
+          tooltip: 'Back to Academy hub',
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: KeyedSubtree(
+          key: const ValueKey<String>('academy_exams_compact_appbar_title'),
+          child: titleContent,
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Settings',
+            onPressed: () => _openQuickThemeSettings(themeProvider),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: IconButton(
+              onPressed: _openStore,
+              icon: const Icon(Icons.storefront_outlined),
+            ),
+          ),
+        ],
+      );
+    }
 
     return SliverAppBar(
       pinned: true,
@@ -3140,34 +3338,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       flexibleSpace: FlexibleSpaceBar(
         expandedTitleScale: 1.0,
         titlePadding: const EdgeInsetsDirectional.only(bottom: 12),
-        title: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: widget.onShowCredits,
-                  child: Image.asset(
-                    'assets/ChessIQ.png',
-                    width: 72,
-                    height: 20,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Puzzle Academy',
-                  style: puzzleAcademyDisplayStyle(
-                    palette: palette,
-                    size: 13.6,
-                    color: palette.cyan,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        title: Center(child: titleContent),
         background: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -3198,102 +3369,68 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       right: false,
       child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 12, 20),
+          padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 18, 12, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              compact
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: _handleAcademyBack,
-                          icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                          label: const Text('Academy'),
-                          style: _academyOutlinedButtonStyle(
-                            accent: palette.textMuted,
-                            monochrome: monochrome,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
+            children: <Widget>[
+              if (compact) ...<Widget>[
+                _buildCompactDashboardSections(
+                  provider,
+                  monochrome: monochrome,
+                ),
+                const SizedBox(height: 12),
+              ] else ...<Widget>[
+                Row(
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: _handleAcademyBack,
+                      icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                      label: const Text('Academy'),
+                      style: _academyOutlinedButtonStyle(
+                        accent: palette.textMuted,
+                        monochrome: monochrome,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
                         ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Academy > Exams',
-                          style: puzzleAcademyHudStyle(
-                            palette: palette,
-                            size: 10.8,
-                            weight: FontWeight.w800,
-                            color: palette.textMuted,
-                            letterSpacing: 0.96,
-                            height: 1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Mastery Dashboard',
-                          style: puzzleAcademyDisplayStyle(
-                            palette: palette,
-                            size: 18,
-                            color: palette.amber,
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: _handleAcademyBack,
-                          icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                          label: const Text('Academy'),
-                          style: _academyOutlinedButtonStyle(
-                            accent: palette.textMuted,
-                            monochrome: monochrome,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Academy > Exams',
-                                style: puzzleAcademyHudStyle(
-                                  palette: palette,
-                                  size: 10.8,
-                                  weight: FontWeight.w800,
-                                  color: palette.textMuted,
-                                  letterSpacing: 0.96,
-                                  height: 1.0,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Mastery Dashboard',
-                                style: puzzleAcademyDisplayStyle(
-                                  palette: palette,
-                                  size: 22,
-                                  color: palette.amber,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-              const SizedBox(height: 12),
-              _buildAcademyExamsOverview(
-                provider,
-                monochrome: monochrome,
-                compact: compact,
-              ),
-              if (!compact) ...[
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Academy > Exams',
+                            style: puzzleAcademyHudStyle(
+                              palette: palette,
+                              size: 10.8,
+                              weight: FontWeight.w800,
+                              color: palette.textMuted,
+                              letterSpacing: 0.96,
+                              height: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Mastery Dashboard',
+                            style: puzzleAcademyDisplayStyle(
+                              palette: palette,
+                              size: 22,
+                              color: palette.amber,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildAcademyExamsOverview(
+                  provider,
+                  monochrome: monochrome,
+                  compact: false,
+                ),
                 const SizedBox(height: 12),
                 _buildHeroStatsBar(provider),
                 const SizedBox(height: 12),
@@ -3538,7 +3675,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  Widget _buildHeroStatsBar(PuzzleAcademyProvider provider) {
+  Widget _buildHeroStatsBar(
+    PuzzleAcademyProvider provider, {
+    bool compact = false,
+  }) {
     final palette = puzzleAcademyPalette(
       context,
       monochromeOverride:
@@ -3548,13 +3688,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     return PuzzleAcademyPanel(
       accent: palette.cyan,
       radius: 10,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compact ? 12 : 16),
       monochromeOverride:
           context.read<AppThemeProvider>().isMonochrome ||
           widget.cinematicThemeEnabled,
       child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
+        spacing: compact ? 8 : 10,
+        runSpacing: compact ? 8 : 10,
         children: [
           _StatChip(
             label: 'Coins',

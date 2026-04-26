@@ -231,6 +231,18 @@ Future<void> _openFirstVariation(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 900));
 }
 
+void _expectFinderWithinViewport(
+  WidgetTester tester,
+  Finder finder,
+  Size viewport,
+) {
+  final rect = tester.getRect(finder);
+  expect(rect.top, greaterThanOrEqualTo(0));
+  expect(rect.left, greaterThanOrEqualTo(0));
+  expect(rect.bottom, lessThanOrEqualTo(viewport.height));
+  expect(rect.right, lessThanOrEqualTo(viewport.width));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -305,10 +317,12 @@ void main() {
   testWidgets(
     'study library uses side-by-side compact landscape panels without inline extras',
     (tester) async {
+      const viewport = Size(844, 390);
+
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await _pumpOpeningsStudyLibrary(tester, size: const Size(844, 390));
+      await _pumpOpeningsStudyLibrary(tester, size: viewport);
 
       final categoryPanel = find.byKey(
         const ValueKey<String>('quiz_study_category_panel'),
@@ -359,9 +373,48 @@ void main() {
 
       await _openFirstVariation(tester);
 
+      final detailHeader = find.byKey(
+        const ValueKey<String>('quiz_study_detail_header_panel'),
+      );
+      final boardPanel = find.byKey(
+        const ValueKey<String>('quiz_study_detail_board_panel'),
+      );
+      final navigatorPanel = find.byKey(
+        const ValueKey<String>('quiz_study_detail_navigator_panel'),
+      );
+      final compactFamilyLabel = find.byKey(
+        const ValueKey<String>('quiz_study_compact_landscape_family_label'),
+      );
+      final replayControls = find.byKey(
+        const ValueKey<String>('quiz_study_detail_replay_controls'),
+      );
+
+      expect(detailHeader, findsOneWidget);
+      expect(boardPanel, findsOneWidget);
+      expect(navigatorPanel, findsOneWidget);
+      expect(compactFamilyLabel, findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('quiz_study_detail_header_panel')),
+        find.descendant(of: detailHeader, matching: replayControls),
         findsOneWidget,
+      );
+      expect(
+        find.descendant(of: boardPanel, matching: replayControls),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: boardPanel, matching: find.text('BOARD')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: navigatorPanel, matching: find.text('VARIATIONS')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: navigatorPanel,
+          matching: find.textContaining('Switch lines'),
+        ),
+        findsNothing,
       );
       expect(
         find.byKey(
@@ -369,6 +422,20 @@ void main() {
         ),
         findsNothing,
       );
+
+      _expectFinderWithinViewport(tester, detailHeader, viewport);
+      _expectFinderWithinViewport(tester, boardPanel, viewport);
+      _expectFinderWithinViewport(tester, navigatorPanel, viewport);
+
+      final boardRect = tester.getRect(boardPanel);
+      final detailHeaderRect = tester.getRect(detailHeader);
+      final navigatorRect = tester.getRect(navigatorPanel);
+      final compactFamilyRect = tester.getRect(compactFamilyLabel);
+      expect(boardRect.left, lessThan(detailHeaderRect.left));
+      expect(boardRect.left, lessThan(navigatorRect.left));
+      expect(detailHeaderRect.top, lessThanOrEqualTo(navigatorRect.top));
+      expect(compactFamilyRect.top, lessThan(detailHeaderRect.top));
+      expect(tester.takeException(), isNull);
     },
   );
 

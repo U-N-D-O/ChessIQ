@@ -2405,34 +2405,37 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
-  void _openPreviousQuizReview() {
-    if (_quizReviewHistory.isEmpty) return;
-
-    setState(() {
-      final nextIndex = _quizReviewIndex == null
-          ? _quizReviewHistory.length - 1
-          : max(0, _quizReviewIndex! - 1);
-      _quizReviewIndex = nextIndex;
-      _quizPlayActive = false;
-      _quizPlayBoard = <String, String>{};
-      _quizPlayArrowCount = 0;
-      _quizFlyFrom = null;
-      _quizFlyTo = null;
-      _quizFlyPiece = null;
-      _quizFlyProgress = 0.0;
-    });
-  }
-
   void _exitQuizReviewMode() {
     if (_quizReviewIndex == null) return;
     setState(() => _quizReviewIndex = null);
   }
 
+  void _clearQuizFeedbackOverlay() {
+    _quizFeedbackOverlayTimer?.cancel();
+    _quizFeedbackOverlayTimer = null;
+    _quizFeedbackOverlayMessage = null;
+    _quizFeedbackOverlayCorrect = null;
+  }
+
+  void _showQuizFeedbackOverlay({required String message, bool? isCorrect}) {
+    _quizFeedbackOverlayTimer?.cancel();
+    setState(() {
+      _quizFeedbackOverlayMessage = message;
+      _quizFeedbackOverlayCorrect = isCorrect;
+    });
+    _quizFeedbackOverlayTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) {
+        return;
+      }
+      setState(_clearQuizFeedbackOverlay);
+    });
+  }
+
   void _clearQuizRoundState() {
+    _clearQuizFeedbackOverlay();
     _quizPrompt = '';
     _quizPromptFocus = '';
     _quizOptions = const <String>[];
-    _quizFeedback = '';
     _quizBoardState = <String, String>{};
     _quizContinuation = <EngineLine>[];
     _quizWhiteToMove = true;
@@ -2501,6 +2504,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           isDark: isDark,
         );
         final effectiveAccent = accent ?? palette.cyan;
+        final maxDialogHeight = min(
+          MediaQuery.of(ctx).size.height * 0.82,
+          560.0,
+        );
 
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -2509,77 +2516,87 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             vertical: 24,
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+            constraints: BoxConstraints(
+              maxWidth: 480,
+              maxHeight: maxDialogHeight,
+            ),
             child: _academyPixelPanel(
               palette: palette,
               accent: effectiveAccent,
               fillColor: palette.panel,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  key: const ValueKey<String>(
+                    'quiz_academy_notice_scroll_view',
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      _academyTag(
-                        palette: palette,
-                        label: tagLabel,
-                        accent: effectiveAccent,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _academyTag(
+                            palette: palette,
+                            label: tagLabel,
+                            accent: effectiveAccent,
+                          ),
+                          const Spacer(),
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: Color.alphaBlend(
+                                effectiveAccent.withValues(alpha: 0.12),
+                                palette.panelAlt,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: effectiveAccent.withValues(alpha: 0.50),
+                                width: 2,
+                              ),
+                            ),
+                            child: Icon(icon, size: 18, color: effectiveAccent),
+                          ),
+                        ],
                       ),
-                      const Spacer(),
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Color.alphaBlend(
-                            effectiveAccent.withValues(alpha: 0.12),
-                            palette.panelAlt,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: effectiveAccent.withValues(alpha: 0.50),
-                            width: 2,
-                          ),
+                      const SizedBox(height: 14),
+                      Text(
+                        title.toUpperCase(),
+                        style: _academyDisplayStyle(
+                          palette: palette,
+                          size: 22,
+                          weight: FontWeight.w700,
+                          letterSpacing: 0.85,
                         ),
-                        child: Icon(icon, size: 18, color: effectiveAccent),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        message,
+                        style: _academyHudStyle(
+                          palette: palette,
+                          size: 12.8,
+                          color: palette.text,
+                          weight: FontWeight.w600,
+                          letterSpacing: 0.24,
+                          height: 1.48,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: _academyHudButton(
+                          palette: palette,
+                          icon: Icons.check_rounded,
+                          label: actionLabel,
+                          accent: effectiveAccent,
+                          onTap: () => Navigator.of(ctx).pop(),
+                          filled: true,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    title.toUpperCase(),
-                    style: _academyDisplayStyle(
-                      palette: palette,
-                      size: 22,
-                      weight: FontWeight.w700,
-                      letterSpacing: 0.85,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    message,
-                    style: _academyHudStyle(
-                      palette: palette,
-                      size: 12.8,
-                      color: palette.text,
-                      weight: FontWeight.w600,
-                      letterSpacing: 0.24,
-                      height: 1.48,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _academyHudButton(
-                      palette: palette,
-                      icon: Icons.check_rounded,
-                      label: actionLabel,
-                      accent: effectiveAccent,
-                      onTap: () => Navigator.of(ctx).pop(),
-                      filled: true,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -2901,13 +2918,13 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
 
     setState(() {
+      _clearQuizFeedbackOverlay();
       _syncQuizDifficultyToAcademyProgress();
       _quizStudyMode = false;
       _quizQuestionsTarget = 10;
       _quizSessionStarted = true;
       _quizSessionAnswered = 0;
       _quizSessionCorrect = 0;
-      _quizFeedback = '';
       _quizAnswered = false;
       _quizSelectedIndex = -1;
       _quizReviewHistory.clear();
@@ -3359,11 +3376,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
     if (gambits.length < 3) {
       setState(() {
+        _clearQuizFeedbackOverlay();
         _quizPrompt = 'Not enough gambits loaded yet.';
         _quizPromptFocus = '';
         _quizOptions = const <String>[];
         _quizCorrectIndex = 0;
-        _quizFeedback = '';
         _quizBoardState = <String, String>{};
         _quizContinuation = <EngineLine>[];
         _quizWhiteToMove = true;
@@ -3405,11 +3422,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
     if (correct == null || snapshot == null) {
       setState(() {
+        _clearQuizFeedbackOverlay();
         _quizPrompt = 'Unable to build a playable quiz board for now.';
         _quizPromptFocus = '';
         _quizOptions = const <String>[];
         _quizCorrectIndex = 0;
-        _quizFeedback = '';
         _quizBoardState = <String, String>{};
         _quizContinuation = <EngineLine>[];
         _quizWhiteToMove = true;
@@ -3463,9 +3480,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
 
     setState(() {
+      _clearQuizFeedbackOverlay();
       _quizMode = activeMode;
       _quizCorrectIndex = correctIndex;
-      _quizFeedback = '';
       _quizBoardState = Map<String, String>.from(resolvedSnapshot.boardState);
       _quizContinuation = List<EngineLine>.from(resolvedSnapshot.continuation);
       _quizWhiteToMove = resolvedSnapshot.whiteToMove;
@@ -3616,9 +3633,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       if (isCorrect) {
         _quizSessionCorrect += 1;
       }
-      _quizFeedback = feedback;
       _recordQuizResult(isCorrect: isCorrect);
     });
+    _showQuizFeedbackOverlay(message: feedback, isCorrect: isCorrect);
 
     if (isCorrect) {
       if (nextStreak >= 5) {
@@ -3692,7 +3709,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     if (_quizAnswered || _quizReviewIndex != null) return;
     setState(() {
       _quizSelectedIndex = index;
-      _quizFeedback = '';
       _quizPreviewContinuation = _quizMode == GambitQuizMode.guessLine
           ? _buildQuizPreviewContinuationForOption(index)
           : <EngineLine>[];
@@ -3702,9 +3718,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   void _submitSelectedQuizGuess() {
     if (_quizAnswered) return;
     if (_quizSelectedIndex < 0 || _quizSelectedIndex >= _quizOptions.length) {
-      setState(() {
-        _quizFeedback = 'Choose an option first, then tap Guess.';
-      });
+      _showQuizFeedbackOverlay(
+        message: 'Choose an option first, then tap Guess.',
+      );
       return;
     }
     _submitQuizAnswer(_quizSelectedIndex);
@@ -5014,6 +5030,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     Key? buttonKey,
     required String title,
     required String message,
+    double size = 28,
+    double iconSize = 15,
+    Color? accentOverride,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -5025,7 +5044,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       useMonochrome: useMonochrome,
       isDark: isDark,
     );
-    final accent = palette.cyan;
+    final accent = accentOverride ?? palette.cyan;
 
     return Tooltip(
       key: buttonKey,
@@ -5037,8 +5056,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               unawaited(_showQuizInfoDialog(title: title, message: message)),
           borderRadius: BorderRadius.circular(4),
           child: Ink(
-            width: 28,
-            height: 28,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               color: Color.alphaBlend(
                 accent.withValues(alpha: 0.08),
@@ -5057,7 +5076,55 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 ),
               ],
             ),
-            child: Icon(Icons.info_outline_rounded, size: 15, color: accent),
+            child: Icon(
+              Icons.info_outline_rounded,
+              size: iconSize,
+              color: accent,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizTopIconButton({
+    Key? buttonKey,
+    required _QuizAcademyPalette palette,
+    required IconData icon,
+    required Color accent,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        key: buttonKey,
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Ink(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                accent.withValues(alpha: 0.08),
+                palette.shell,
+              ),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: accent.withValues(alpha: 0.48),
+                width: 2,
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: palette.shadow.withValues(alpha: 0.22),
+                  offset: const Offset(4, 4),
+                  blurRadius: 0,
+                ),
+              ],
+            ),
+            child: Icon(icon, size: 18, color: accent),
           ),
         ),
       ),
@@ -5079,12 +5146,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       isDark: isDark,
     );
     final isLandscape = media.orientation == Orientation.landscape;
-    final quizPadding = EdgeInsets.fromLTRB(
-      16 + media.padding.left,
-      12 + media.padding.top,
-      16 + media.padding.right,
-      16 + media.padding.bottom,
-    );
     final reviewEntry = _quizReviewIndex == null
         ? null
         : _quizReviewHistory[_quizReviewIndex!];
@@ -5097,7 +5158,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         reviewEntry?.correctIndex ?? _quizCorrectIndex;
     final displayedSelectedIndex =
         reviewEntry?.selectedIndex ?? _quizSelectedIndex;
-    final displayedFeedback = reviewEntry?.feedback ?? _quizFeedback;
     final displayedContinuation =
         reviewEntry?.continuation ?? _quizContinuation;
     final previewContinuation =
@@ -5121,9 +5181,62 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             previewContinuation.isNotEmpty);
     final isCorrectAnswer =
         answersLocked && displayedSelectedIndex == displayedCorrectIndex;
-    final sideBySideLayout =
+    final safeHeight = media.size.height - media.padding.vertical;
+    final isTabletLayout =
+        media.size.width >= 920 ||
+        (media.size.width >= 760 && safeHeight >= 700);
+    final compactPhoneLayout = !isTabletLayout;
+    final compactPortraitPlayLayout = compactPhoneLayout && !isLandscape;
+    final compactLandscapePlayLayout = compactPhoneLayout && isLandscape;
+    final compactPlayLayout = compactPhoneLayout;
+    final wideSideBySideLayout =
         isLandscape && hasQuizBoard && media.size.width >= 920;
+    final pageHorizontalPadding = compactLandscapePlayLayout
+        ? 6.0
+        : compactPlayLayout
+        ? 12.0
+        : 16.0;
+    final pageTopPadding = compactLandscapePlayLayout ? 6.0 : 12.0;
+    final pageBottomPadding = compactLandscapePlayLayout ? 8.0 : 16.0;
+    final quizPadding = EdgeInsets.fromLTRB(
+      pageHorizontalPadding + media.padding.left,
+      pageTopPadding + media.padding.top,
+      pageHorizontalPadding + media.padding.right,
+      pageBottomPadding + media.padding.bottom,
+    );
     final routeAccent = _academyQuizModeAccent(palette, displayedQuizMode);
+    final topToContentGap = compactLandscapePlayLayout ? 6.0 : 12.0;
+    final contentGap = compactLandscapePlayLayout
+        ? 8.0
+        : compactPlayLayout
+        ? 10.0
+        : 12.0;
+    final densePanelPadding = compactLandscapePlayLayout
+        ? 4.0
+        : compactPlayLayout
+        ? 10.0
+        : 12.0;
+    final compactOptionSpacing = compactLandscapePlayLayout
+        ? 4.0
+        : compactPlayLayout
+        ? 8.0
+        : 10.0;
+    final topPanelPadding = compactLandscapePlayLayout
+        ? const EdgeInsets.symmetric(horizontal: 4, vertical: 4)
+        : compactPlayLayout
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
+        : const EdgeInsets.all(10);
+    final topPanelGap = compactLandscapePlayLayout ? 4.0 : 8.0;
+    final optionButtonPadding = compactLandscapePlayLayout
+        ? const EdgeInsets.fromLTRB(8, 5, 8, 5)
+        : compactPlayLayout
+        ? const EdgeInsets.fromLTRB(10, 8, 10, 8)
+        : const EdgeInsets.fromLTRB(10, 10, 10, 10);
+    final optionBadgeSize = compactLandscapePlayLayout
+        ? 28.0
+        : compactPlayLayout
+        ? 30.0
+        : 34.0;
     final questionCounter = min(
       _quizSessionAnswered + (_quizAnswered ? 0 : 1),
       _quizQuestionsTarget,
@@ -5136,6 +5249,39 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         : displayedQuizMode == GambitQuizMode.guessLine
         ? 'Tap an option to preview its continuation on the board, then lock in your answer.'
         : 'Read the board, pick the right opening name, and keep the streak moving.';
+    final questionLead = displayedQuizMode == GambitQuizMode.guessLine
+        ? 'Complete This Opening Line'
+        : 'Name This Opening';
+    final boardTitle = reviewMode ? 'Review Board' : 'Board Preview';
+    final boardInstruction = reviewMode
+        ? 'Compare the stored continuation with the answer you selected for this earlier round.'
+        : displayedQuizMode == GambitQuizMode.guessLine
+        ? 'Selecting a line previews its continuation directly on the board.'
+        : 'Read the position first, then choose the matching opening name.';
+    final questionInstruction = reviewMode
+        ? 'Review the saved answer choices, then return to the live round when you are ready.'
+        : displayedQuizMode == GambitQuizMode.guessLine
+        ? 'Tap each candidate to preview its continuation on the board before you commit.'
+        : 'Study the board and choose the opening name that matches it.';
+    final compactStatusSummary = <String>[
+      headerTitle.toUpperCase(),
+      'Q $questionCounter/$_quizQuestionsTarget',
+      'SCORE $_quizScore',
+      'STREAK $_quizStreak',
+      if (reviewMode &&
+          _quizReviewIndex != null &&
+          _quizReviewHistory.isNotEmpty)
+        'REVIEW ${_quizReviewIndex! + 1}/${_quizReviewHistory.length}',
+    ].join('  •  ');
+    final quizInfoMessage = <String>[
+      headerSubtitle,
+      boardInstruction,
+      questionInstruction,
+      if (displayedPromptFocus.isNotEmpty) displayedPromptFocus,
+    ].where((segment) => segment.trim().isNotEmpty).join('\n\n');
+    final topFeedbackMessage = reviewMode ? null : _quizFeedbackOverlayMessage;
+    final showQuizFeedbackOverlay =
+        topFeedbackMessage != null && topFeedbackMessage.isNotEmpty;
     final sessionBodyStyle = _academyHudStyle(
       palette: palette,
       size: 12.7,
@@ -5156,18 +5302,33 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
 
     Widget buildQuizTopPanel() {
+      final styleButton = _buildQuizTopIconButton(
+        palette: palette,
+        icon: Icons.palette_outlined,
+        accent: palette.cyan,
+        tooltip: 'Style',
+        onTap: _openAppearanceSettings,
+      );
+      final statsButton = _buildQuizTopIconButton(
+        palette: palette,
+        icon: Icons.insights_outlined,
+        accent: palette.amber,
+        tooltip: 'Stats',
+        onTap: _openQuizStatsSheet,
+      );
       final badges = <Widget>[
         _academyTag(
           palette: palette,
           label: _academyQuizModeTitle(displayedQuizMode).toUpperCase(),
           accent: routeAccent,
         ),
-        _academyTag(
-          palette: palette,
-          label:
-              '${_quizAcademyBracketShortName(_quizDifficulty).toUpperCase()} BRACKET',
-          accent: palette.textMuted,
-        ),
+        if (!compactPlayLayout)
+          _academyTag(
+            palette: palette,
+            label:
+                '${_quizAcademyBracketShortName(_quizDifficulty).toUpperCase()} BRACKET',
+            accent: palette.textMuted,
+          ),
         _academyTag(
           palette: palette,
           label: 'Q $questionCounter/$_quizQuestionsTarget',
@@ -5194,53 +5355,169 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           ),
       ];
 
-      final actionButtons = <Widget>[
-        _academyHudButton(
-          palette: palette,
-          icon: Icons.arrow_back_rounded,
-          label: 'BACK TO SETUP',
-          accent: palette.text,
-          onTap: _returnToQuizSetup,
-        ),
-        _academyHudButton(
-          palette: palette,
-          icon: Icons.palette_outlined,
-          label: 'STYLE',
-          accent: palette.cyan,
-          onTap: _openAppearanceSettings,
-        ),
-        _academyHudButton(
-          palette: palette,
-          icon: Icons.insights_outlined,
-          label: 'QUIZ STATS',
-          accent: palette.amber,
-          onTap: _openQuizStatsSheet,
-        ),
-      ];
-
       return _academyPixelPanel(
+        panelKey: const ValueKey<String>('quiz_session_top_panel'),
         palette: palette,
         accent: routeAccent,
         fillColor: palette.panelAlt,
+        padding: topPanelPadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Wrap(spacing: 10, runSpacing: 10, children: badges),
-            const SizedBox(height: 14),
-            Text(
-              headerTitle,
-              style: _academyDisplayStyle(
-                palette: palette,
-                size: media.size.width < 420 ? 22 : 26,
-                weight: FontWeight.w700,
-                letterSpacing: 0.9,
-              ),
+            Row(
+              children: <Widget>[
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: _academyHudButton(
+                    buttonKey: const ValueKey<String>(
+                      'quiz_session_back_button',
+                    ),
+                    palette: palette,
+                    icon: Icons.arrow_back_rounded,
+                    label: compactPlayLayout ? 'BACK' : 'BACK TO SETUP',
+                    accent: palette.text,
+                    onTap: _returnToQuizSetup,
+                  ),
+                ),
+                if (compactLandscapePlayLayout) ...<Widget>[
+                  SizedBox(width: topPanelGap),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          key: const ValueKey<String>(
+                            'quiz_session_compact_summary',
+                          ),
+                          compactStatusSummary,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: _academyHudStyle(
+                            palette: palette,
+                            size: 10.8,
+                            weight: FontWeight.w700,
+                            color: palette.textMuted,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: topPanelGap),
+                ] else if (compactPlayLayout) ...<Widget>[
+                  SizedBox(width: topPanelGap),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          key: const ValueKey<String>(
+                            'quiz_session_compact_summary',
+                          ),
+                          'Q $questionCounter/$_quizQuestionsTarget',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: _academyHudStyle(
+                            palette: palette,
+                            size: 11.0,
+                            weight: FontWeight.w800,
+                            color: palette.emerald,
+                            letterSpacing: 0.45,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: topPanelGap),
+                ] else ...<Widget>[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      headerTitle.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: _academyDisplayStyle(
+                        palette: palette,
+                        size: 17,
+                        weight: FontWeight.w700,
+                        letterSpacing: 0.9,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                styleButton,
+                SizedBox(width: topPanelGap),
+                statsButton,
+                SizedBox(width: topPanelGap),
+                _buildQuizInfoButton(
+                  buttonKey: const ValueKey<String>('quiz_session_info_button'),
+                  title: headerTitle,
+                  message: quizInfoMessage,
+                  size: 42,
+                  iconSize: 18,
+                  accentOverride: routeAccent,
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(headerSubtitle, style: sessionBodyStyle),
-            const SizedBox(height: 14),
-            Wrap(spacing: 10, runSpacing: 10, children: actionButtons),
+            if (!compactPlayLayout) ...<Widget>[
+              const SizedBox(height: 10),
+              Wrap(spacing: 8, runSpacing: 8, children: badges),
+            ],
           ],
+        ),
+      );
+    }
+
+    Widget buildQuizFeedbackOverlayPanel() {
+      final isCorrectOverlay = _quizFeedbackOverlayCorrect;
+      final accent = isCorrectOverlay == true
+          ? palette.emerald
+          : isCorrectOverlay == false
+          ? palette.signal
+          : routeAccent;
+      final icon = isCorrectOverlay == true
+          ? Icons.check_circle_rounded
+          : Icons.info_outline_rounded;
+
+      return Positioned.fill(
+        child: _academyPixelPanel(
+          panelKey: const ValueKey<String>('quiz_session_feedback_overlay'),
+          palette: palette,
+          accent: accent,
+          fillColor: Color.alphaBlend(
+            palette.shell.withValues(alpha: 0.16),
+            palette.panelAlt,
+          ),
+          padding: topPanelPadding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Icon(icon, size: compactPlayLayout ? 18 : 20, color: accent),
+              SizedBox(width: compactPlayLayout ? 8 : 10),
+              Expanded(
+                child: Text(
+                  topFeedbackMessage!,
+                  maxLines: compactPlayLayout ? 2 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _academyHudStyle(
+                    palette: palette,
+                    size: compactPlayLayout ? 11.2 : 11.8,
+                    weight: FontWeight.w800,
+                    color: palette.text,
+                    letterSpacing: 0.22,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -5267,9 +5544,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       : _quizPlayArrowCount,
                 )
                 .toList();
-      final canOpenHistory = reviewMode
-          ? (_quizReviewIndex ?? 0) > 0
-          : _quizReviewHistory.isNotEmpty;
       final boardAccent = showingLivePreview
           ? palette.amber
           : reviewMode
@@ -5277,22 +5551,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           : answersLocked
           ? (isCorrectAnswer ? palette.emerald : palette.signal)
           : routeAccent;
-      final boardTitle = reviewMode ? 'Review Board' : 'Board Preview';
-      final boardSubtitle = reviewMode
-          ? 'Compare the stored continuation with the answer you selected for this earlier round.'
-          : displayedQuizMode == GambitQuizMode.guessLine
-          ? 'Selecting a line previews its continuation directly on the board.'
-          : 'Read the position first, then choose the matching opening name.';
       final boardBadges = <Widget>[
         _academyTag(
           palette: palette,
           label: 'POSITION $displayedShownPly PLY',
           accent: boardAccent,
-        ),
-        _academyTag(
-          palette: palette,
-          label: displayedWhiteToMove ? 'WHITE TO MOVE' : 'BLACK TO MOVE',
-          accent: displayedWhiteToMove ? palette.cyan : palette.amber,
         ),
         _academyTag(
           palette: palette,
@@ -5314,53 +5577,36 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             accent: isCorrectAnswer ? palette.emerald : palette.signal,
           ),
       ];
-      final boardActions = <Widget>[
-        if (canOpenHistory)
-          _academyHudButton(
-            palette: palette,
-            icon: Icons.history_edu_outlined,
-            label: reviewMode ? 'OLDER REVIEW' : 'REVIEW LOG',
-            accent: palette.amber,
-            onTap: _openPreviousQuizReview,
-          ),
-        if (reviewMode)
-          _academyHudButton(
-            palette: palette,
-            icon: Icons.play_circle_outline_rounded,
-            label: 'LIVE ROUND',
-            accent: palette.cyan,
-            onTap: _exitQuizReviewMode,
-          ),
-      ];
+      final compactBoardBadges = const <Widget>[];
 
       return _academyPixelPanel(
+        panelKey: const ValueKey<String>('quiz_session_board_card'),
         palette: palette,
         accent: boardAccent,
         fillColor: palette.panel,
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(densePanelPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(
-              boardTitle.toUpperCase(),
-              style: _academyHudStyle(
-                palette: palette,
-                size: 11.8,
-                weight: FontWeight.w800,
-                color: boardAccent,
-                letterSpacing: 0.95,
-                height: 1.0,
+            if (!compactPlayLayout) ...<Widget>[
+              Text(
+                boardTitle.toUpperCase(),
+                style: _academyHudStyle(
+                  palette: palette,
+                  size: 11.8,
+                  weight: FontWeight.w800,
+                  color: boardAccent,
+                  letterSpacing: 0.95,
+                  height: 1.0,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(boardSubtitle, style: sessionDetailStyle),
-            if (boardActions.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(boardInstruction, style: sessionDetailStyle),
               const SizedBox(height: 10),
-              Wrap(spacing: 10, runSpacing: 10, children: boardActions),
             ],
-            const SizedBox(height: 12),
             Center(
               child: SizedBox(
+                key: const ValueKey<String>('quiz_session_board_square'),
                 width: maxBoardSize,
                 height: maxBoardSize,
                 child: AspectRatio(
@@ -5454,8 +5700,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            Wrap(spacing: 8, runSpacing: 8, children: boardBadges),
+            if ((compactPlayLayout ? compactBoardBadges : boardBadges)
+                .isNotEmpty) ...<Widget>[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: compactPlayLayout ? compactBoardBadges : boardBadges,
+              ),
+            ],
           ],
         ),
       );
@@ -5471,15 +5724,20 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       return <Widget>[
         for (int i = 0; i < displayedOptions.length; i++)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: EdgeInsets.only(
+              bottom: i == displayedOptions.length - 1
+                  ? 0
+                  : compactOptionSpacing,
+            ),
             child: Material(
+              key: ValueKey<String>('quiz_session_option_$i'),
               color: Colors.transparent,
               child: InkWell(
                 onTap: answersLocked ? null : () => _selectQuizAnswerOption(i),
                 borderRadius: BorderRadius.circular(4),
                 child: Ink(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                  padding: optionButtonPadding,
                   decoration: BoxDecoration(
                     color: Color.alphaBlend(
                       (answersLocked
@@ -5523,8 +5781,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Container(
-                        width: 34,
-                        height: 34,
+                        width: optionBadgeSize,
+                        height: optionBadgeSize,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: Color.alphaBlend(
@@ -5563,14 +5821,24 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                 : !answersLocked && i == displayedSelectedIndex
                                 ? routeAccent
                                 : palette.text,
-                            size: 13,
+                            size: compactLandscapePlayLayout
+                                ? 11.6
+                                : compactPlayLayout
+                                ? 12
+                                : 13,
                             weight: FontWeight.w800,
                             letterSpacing: 0.8,
                             height: 1.0,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: compactLandscapePlayLayout
+                            ? 6
+                            : compactPlayLayout
+                            ? 8
+                            : 10,
+                      ),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -5585,73 +5853,103 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                     ),
                                     child: _buildMoveSequenceText(
                                       displayedOptions[i],
-                                      fontSize: 13.6,
+                                      fontSize: compactPlayLayout ? 12.6 : 13.6,
                                       color: palette.text,
                                       fontWeight:
                                           answersLocked &&
                                               i == displayedCorrectIndex
                                           ? FontWeight.w800
                                           : FontWeight.w700,
-                                      maxLines: 4,
+                                      maxLines: compactLandscapePlayLayout
+                                          ? 2
+                                          : compactPlayLayout
+                                          ? 3
+                                          : 4,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   )
                                 : Text(
                                     displayedOptions[i],
-                                    maxLines: 3,
+                                    maxLines: compactPlayLayout ? 2 : 3,
                                     overflow: TextOverflow.ellipsis,
                                     style: _academyHudStyle(
                                       palette: palette,
                                       color: palette.text,
-                                      size: 13.4,
+                                      size: compactLandscapePlayLayout
+                                          ? 12.0
+                                          : compactPlayLayout
+                                          ? 12.6
+                                          : 13.4,
                                       weight:
                                           answersLocked &&
                                               i == displayedCorrectIndex
                                           ? FontWeight.w800
                                           : FontWeight.w700,
                                       letterSpacing: 0.24,
-                                      height: 1.25,
+                                      height: compactLandscapePlayLayout
+                                          ? 1.12
+                                          : compactPlayLayout
+                                          ? 1.18
+                                          : 1.25,
                                     ),
                                   ),
-                            const SizedBox(height: 5),
-                            Text(
-                              answersLocked
-                                  ? i == displayedCorrectIndex
-                                        ? 'Correct answer'
-                                        : i == displayedSelectedIndex
-                                        ? 'Your answer'
-                                        : 'Reviewed option'
-                                  : i == displayedSelectedIndex
-                                  ? displayedQuizMode ==
-                                            GambitQuizMode.guessLine
-                                        ? 'Previewing on board'
-                                        : 'Selected'
-                                  : displayedQuizMode ==
-                                        GambitQuizMode.guessLine
-                                  ? 'Tap to preview'
-                                  : 'Tap to select',
-                              style: _academyHudStyle(
-                                palette: palette,
-                                color:
-                                    answersLocked && i == displayedCorrectIndex
-                                    ? palette.emerald
-                                    : answersLocked &&
-                                          i == displayedSelectedIndex
-                                    ? palette.signal
-                                    : !answersLocked &&
-                                          i == displayedSelectedIndex
-                                    ? routeAccent
-                                    : palette.textMuted,
-                                size: 11,
-                                weight: FontWeight.w700,
-                                letterSpacing: 0.22,
-                                height: 1.2,
+                            if (!compactPlayLayout ||
+                                (answersLocked &&
+                                    displayedQuizMode !=
+                                        GambitQuizMode.guessLine)) ...<Widget>[
+                              SizedBox(height: compactPlayLayout ? 4 : 5),
+                              Text(
+                                answersLocked
+                                    ? i == displayedCorrectIndex
+                                          ? 'Correct answer'
+                                          : i == displayedSelectedIndex
+                                          ? 'Your answer'
+                                          : 'Reviewed option'
+                                    : i == displayedSelectedIndex
+                                    ? displayedQuizMode ==
+                                              GambitQuizMode.guessLine
+                                          ? 'Previewing'
+                                          : 'Selected'
+                                    : displayedQuizMode ==
+                                          GambitQuizMode.guessLine
+                                    ? 'Tap to preview'
+                                    : 'Tap to select',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _academyHudStyle(
+                                  palette: palette,
+                                  color:
+                                      answersLocked &&
+                                          i == displayedCorrectIndex
+                                      ? palette.emerald
+                                      : answersLocked &&
+                                            i == displayedSelectedIndex
+                                      ? palette.signal
+                                      : !answersLocked &&
+                                            i == displayedSelectedIndex
+                                      ? routeAccent
+                                      : palette.textMuted,
+                                  size: compactLandscapePlayLayout
+                                      ? 9.8
+                                      : compactPlayLayout
+                                      ? 10.2
+                                      : 11,
+                                  weight: FontWeight.w700,
+                                  letterSpacing: 0.22,
+                                  height: 1.15,
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: compactLandscapePlayLayout
+                            ? 6
+                            : compactPlayLayout
+                            ? 8
+                            : 10,
+                      ),
                       Icon(
                         answersLocked
                             ? i == displayedCorrectIndex
@@ -5664,7 +5962,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                   ? Icons.play_circle_fill_rounded
                                   : Icons.radio_button_checked)
                             : Icons.radio_button_unchecked,
-                        size: 20,
+                        size: compactLandscapePlayLayout
+                            ? 16
+                            : compactPlayLayout
+                            ? 18
+                            : 20,
                         color: answersLocked && i == displayedCorrectIndex
                             ? palette.emerald
                             : answersLocked && i == displayedSelectedIndex
@@ -5682,51 +5984,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       ];
     }
 
-    Widget buildQuizFeedbackBanner() {
-      final accent = isCorrectAnswer ? palette.emerald : palette.signal;
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-        decoration: BoxDecoration(
-          color: Color.alphaBlend(
-            accent.withValues(alpha: 0.14),
-            palette.panelAlt,
-          ),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: accent.withValues(alpha: 0.72), width: 2),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Icon(
-              isCorrectAnswer
-                  ? Icons.check_circle_rounded
-                  : Icons.info_outline_rounded,
-              size: 18,
-              color: accent,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                displayedFeedback,
-                style: _academyHudStyle(
-                  palette: palette,
-                  color: accent,
-                  size: 12.3,
-                  weight: FontWeight.w700,
-                  letterSpacing: 0.22,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     Widget buildQuizPrimaryActionButton() {
       final canSubmitGuess =
           _quizSelectedIndex >= 0 && _quizSelectedIndex < _quizOptions.length;
       return _academyHudButton(
+        buttonKey: const ValueKey<String>('quiz_session_primary_action'),
         palette: palette,
         icon: reviewMode
             ? Icons.history_toggle_off_rounded
@@ -5756,7 +6018,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       );
     }
 
-    Widget buildQuizQuestionPanel({required bool useScrollableOptions}) {
+    Widget buildQuizQuestionPanel({
+      required bool useScrollableOptions,
+      bool pinFooter = false,
+    }) {
       final questionAccent = displayedQuizMode == GambitQuizMode.guessLine
           ? palette.amber
           : routeAccent;
@@ -5769,89 +6034,124 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           : displayedQuizMode == GambitQuizMode.guessLine
           ? 'PICK A LINE'
           : 'PICK A NAME';
-      final questionLead = displayedQuizMode == GambitQuizMode.guessLine
-          ? 'Complete This Opening Line'
-          : 'Name This Opening';
       final optionButtons = buildQuizOptionButtons();
+      final promptStyle = displayedQuizMode == GambitQuizMode.guessLine
+          ? _academyDisplayStyle(
+              palette: palette,
+              size: compactLandscapePlayLayout
+                  ? 15.5
+                  : compactPlayLayout
+                  ? 17
+                  : (media.size.width < 420 ? 18 : 20),
+              weight: FontWeight.w700,
+              letterSpacing: compactPlayLayout ? 0.5 : 0.65,
+            )
+          : _academyHudStyle(
+              palette: palette,
+              size: compactPlayLayout ? 12.5 : 12.7,
+              weight: FontWeight.w700,
+              color: palette.text,
+              letterSpacing: 0.28,
+              height: compactPlayLayout ? 1.2 : 1.25,
+            );
 
       final header = <Widget>[
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: <Widget>[
-            _academyTag(
+        if (!compactPlayLayout) ...<Widget>[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _academyTag(
+                palette: palette,
+                label: questionLead.toUpperCase(),
+                accent: questionAccent,
+              ),
+              _academyTag(
+                palette: palette,
+                label: selectedLabel,
+                accent: displayedSelectedIndex >= 0 || answersLocked
+                    ? questionAccent
+                    : palette.textMuted,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ] else if (displayedPrompt.isEmpty) ...<Widget>[
+          Text(
+            questionLead.toUpperCase(),
+            style: _academyHudStyle(
               palette: palette,
-              label: questionLead.toUpperCase(),
-              accent: questionAccent,
+              size: 11.8,
+              weight: FontWeight.w800,
+              color: questionAccent,
+              letterSpacing: 0.85,
             ),
-            _academyTag(
-              palette: palette,
-              label: selectedLabel,
-              accent: displayedSelectedIndex >= 0 || answersLocked
-                  ? questionAccent
-                  : palette.textMuted,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+          ),
+          const SizedBox(height: 8),
+        ],
         if (displayedPrompt.isNotEmpty) ...<Widget>[
           Text(
             displayedPrompt,
-            style: displayedQuizMode == GambitQuizMode.guessLine
-                ? _academyDisplayStyle(
-                    palette: palette,
-                    size: media.size.width < 420 ? 18 : 20,
-                    weight: FontWeight.w700,
-                    letterSpacing: 0.65,
-                  )
-                : sessionBodyStyle,
+            maxLines: compactLandscapePlayLayout
+                ? 2
+                : compactPlayLayout
+                ? 3
+                : 4,
+            overflow: compactPlayLayout ? TextOverflow.ellipsis : null,
+            style: promptStyle,
           ),
-          const SizedBox(height: 8),
+          SizedBox(
+            height: compactLandscapePlayLayout
+                ? 6
+                : compactPlayLayout
+                ? 10
+                : 8,
+          ),
         ],
-        Text(
-          displayedQuizMode == GambitQuizMode.guessLine
-              ? 'Tap each candidate to preview its continuation on the board before you commit.'
-              : 'Study the board and choose the opening name that matches it.',
-          style: sessionBodyStyle,
-        ),
-        if (displayedPromptFocus.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 8),
-          Text(displayedPromptFocus, style: sessionDetailStyle),
-        ],
-        if (!reviewMode &&
-            !_quizAnswered &&
-            displayedSelectedIndex < 0) ...<Widget>[
-          const SizedBox(height: 8),
-          Text(
-            'Choose an option to enable LOCK GUESS.',
-            style: _academyHudStyle(
-              palette: palette,
-              color: palette.signal,
-              size: 11.4,
-              weight: FontWeight.w700,
-              letterSpacing: 0.22,
+        if (!compactPlayLayout) ...<Widget>[
+          Text(questionInstruction, style: sessionBodyStyle),
+          if (displayedPromptFocus.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(displayedPromptFocus, style: sessionDetailStyle),
+          ],
+          if (!reviewMode &&
+              !_quizAnswered &&
+              displayedSelectedIndex < 0) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              'Choose an option to enable LOCK GUESS.',
+              style: _academyHudStyle(
+                palette: palette,
+                color: palette.signal,
+                size: 11.4,
+                weight: FontWeight.w700,
+                letterSpacing: 0.22,
+              ),
             ),
-          ),
+          ],
         ],
-        const SizedBox(height: 14),
+        if (!compactPlayLayout) const SizedBox(height: 14),
       ];
 
       final footer = <Widget>[
-        if (displayedFeedback.isNotEmpty) ...<Widget>[
-          buildQuizFeedbackBanner(),
-          const SizedBox(height: 12),
-        ],
-        Align(
-          alignment: Alignment.centerRight,
-          child: buildQuizPrimaryActionButton(),
-        ),
+        if (compactPlayLayout)
+          SizedBox(
+            width: double.infinity,
+            child: buildQuizPrimaryActionButton(),
+          )
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: buildQuizPrimaryActionButton(),
+          ),
       ];
 
       return _academyPixelPanel(
+        panelKey: const ValueKey<String>('quiz_session_question_panel'),
         palette: palette,
         accent: questionAccent,
         fillColor: palette.panel,
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(densePanelPadding),
         child: useScrollableOptions
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -5866,7 +6166,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[...header, ...optionButtons, ...footer],
+                children: <Widget>[
+                  ...header,
+                  ...optionButtons,
+                  if (pinFooter) const Spacer(),
+                  ...footer,
+                ],
               ),
       );
     }
@@ -5879,12 +6184,17 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           padding: quizPadding,
           child: Column(
             children: <Widget>[
-              buildQuizTopPanel(),
-              const SizedBox(height: 12),
+              Stack(
+                children: <Widget>[
+                  buildQuizTopPanel(),
+                  if (showQuizFeedbackOverlay) buildQuizFeedbackOverlayPanel(),
+                ],
+              ),
+              SizedBox(height: topToContentGap),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    if (sideBySideLayout) {
+                    if (wideSideBySideLayout) {
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
@@ -5907,7 +6217,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                               },
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: contentGap),
                           Expanded(
                             flex: 6,
                             child: buildQuizQuestionPanel(
@@ -5918,10 +6228,118 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       );
                     }
 
+                    if (compactLandscapePlayLayout && hasQuizBoard) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Expanded(
+                            flex: 5,
+                            child: LayoutBuilder(
+                              builder: (context, leftConstraints) {
+                                final compactBoardChromeHeight =
+                                    6.0 + (densePanelPadding * 2);
+                                final boardSize = max(
+                                  0.0,
+                                  min(
+                                    leftConstraints.maxWidth -
+                                        (densePanelPadding * 2) -
+                                        6.0,
+                                    leftConstraints.maxHeight -
+                                        compactBoardChromeHeight,
+                                  ),
+                                );
+                                return buildQuizBoardCard(
+                                  maxBoardSize: boardSize,
+                                );
+                              },
+                            ),
+                          ),
+                          SizedBox(width: contentGap),
+                          Expanded(
+                            flex: 6,
+                            child: buildQuizQuestionPanel(
+                              useScrollableOptions: false,
+                              pinFooter: true,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    if (compactPortraitPlayLayout) {
+                      final optionCount = displayedOptions.isEmpty
+                          ? _quizOptionCountForDifficulty(_quizDifficulty)
+                          : displayedOptions.length;
+                      final optionHeight =
+                          displayedQuizMode == GambitQuizMode.guessLine
+                          ? 62.0
+                          : 48.0;
+                      final promptHeight = displayedPrompt.isEmpty ? 0.0 : 32.0;
+                      final optionStatusHeight =
+                          answersLocked &&
+                              displayedQuizMode != GambitQuizMode.guessLine
+                          ? optionCount * 14.0
+                          : 0.0;
+                      final estimatedQuestionHeight =
+                          (densePanelPadding * 2) +
+                          promptHeight +
+                          (displayedPrompt.isEmpty ? 0.0 : 10.0) +
+                          (optionCount * optionHeight) +
+                          (max(0, optionCount - 1) * compactOptionSpacing) +
+                          optionStatusHeight +
+                          88.0;
+                      final maxQuestionHeight = max(
+                        220.0,
+                        constraints.maxHeight - 120.0,
+                      );
+                      final questionHeight = hasQuizBoard
+                          ? estimatedQuestionHeight
+                                .clamp(220.0, maxQuestionHeight)
+                                .toDouble()
+                          : constraints.maxHeight;
+                      final boardAreaHeight = max(
+                        0.0,
+                        constraints.maxHeight -
+                            questionHeight -
+                            (hasQuizBoard ? contentGap : 0.0),
+                      );
+                      final compactBoardChromeHeight =
+                          6.0 + (densePanelPadding * 2);
+                      final boardSize = hasQuizBoard
+                          ? max(
+                              0.0,
+                              min(
+                                constraints.maxWidth - 20,
+                                boardAreaHeight - compactBoardChromeHeight,
+                              ),
+                            )
+                          : null;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          if (hasQuizBoard)
+                            SizedBox(
+                              height: boardAreaHeight,
+                              child: buildQuizBoardCard(
+                                maxBoardSize: boardSize,
+                              ),
+                            ),
+                          if (hasQuizBoard) SizedBox(height: contentGap),
+                          Expanded(
+                            child: buildQuizQuestionPanel(
+                              useScrollableOptions: false,
+                              pinFooter: true,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
                     return ListView(
                       children: <Widget>[
                         if (hasQuizBoard) buildQuizBoardCard(),
-                        if (hasQuizBoard) const SizedBox(height: 12),
+                        if (hasQuizBoard) SizedBox(height: contentGap),
                         buildQuizQuestionPanel(useScrollableOptions: false),
                       ],
                     );

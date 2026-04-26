@@ -466,7 +466,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String _quizPromptFocus = '';
   List<String> _quizOptions = <String>[];
   int _quizCorrectIndex = 0;
-  String _quizFeedback = '';
+  Timer? _quizFeedbackOverlayTimer;
+  String? _quizFeedbackOverlayMessage;
+  bool? _quizFeedbackOverlayCorrect;
   Map<String, String> _quizBoardState = <String, String>{};
   List<EngineLine> _quizContinuation = <EngineLine>[];
   bool _quizWhiteToMove = true;
@@ -14513,6 +14515,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     WidgetsBinding.instance.removeObserver(this);
     _editModeHintTimer?.cancel();
     _moveQualityOverlayTimer?.cancel();
+    _quizFeedbackOverlayTimer?.cancel();
     _cancelPendingMoveQualityGrading();
     _clearBotGhostArrows();
     unawaited(_engine?.stop());
