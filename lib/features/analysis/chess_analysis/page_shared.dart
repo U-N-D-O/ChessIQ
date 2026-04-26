@@ -293,6 +293,7 @@ class _MenuBlastBackdropPainter extends CustomPainter {
           lineColor.withValues(alpha: reducedEffects ? 0.04 : 0.10),
           lineColor.withValues(alpha: 0.0),
         ],
+        const <double>[0.0, 0.5, 1.0],
       );
 
     final laneCount = reducedEffects ? 7 : 11;
@@ -360,6 +361,7 @@ class _MenuBlastBackdropPainter extends CustomPainter {
           secondaryColor.withValues(alpha: reducedEffects ? 0.04 : 0.08),
           Colors.transparent,
         ],
+        const <double>[0.0, 0.5, 1.0],
       );
     canvas.drawCircle(
       anchor,
@@ -453,13 +455,18 @@ class _MenuBlastBackdropPainter extends CustomPainter {
       canvas.drawRect(
         rect,
         Paint()
-          ..shader = ui.Gradient.linear(rect.topLeft, rect.topRight, <Color>[
-            (index.isEven ? cyan : amber).withValues(alpha: 0.0),
-            (index.isEven ? pink : crimson).withValues(
-              alpha: reducedEffects ? 0.06 : 0.12,
-            ),
-            (index.isEven ? cyan : amber).withValues(alpha: 0.0),
-          ]),
+          ..shader = ui.Gradient.linear(
+            rect.topLeft,
+            rect.topRight,
+            <Color>[
+              (index.isEven ? cyan : amber).withValues(alpha: 0.0),
+              (index.isEven ? pink : crimson).withValues(
+                alpha: reducedEffects ? 0.06 : 0.12,
+              ),
+              (index.isEven ? cyan : amber).withValues(alpha: 0.0),
+            ],
+            const <double>[0.0, 0.5, 1.0],
+          ),
       );
     }
 
@@ -684,6 +691,7 @@ class _CreditsRetroBackdropPainter extends CustomPainter {
               highlightColor.withValues(alpha: 0.10 + glitchStrength * 0.16),
               highlightColor.withValues(alpha: 0.0),
             ],
+            const <double>[0.0, 0.5, 1.0],
           ),
       );
     }

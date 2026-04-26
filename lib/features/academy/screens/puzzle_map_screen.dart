@@ -26,7 +26,6 @@ import '../data/country_names.dart';
 import '../data/profanity_filter.dart';
 
 part 'package:chessiq/features/academy/widgets/puzzle_map_components.dart';
-
 enum _LeaderboardScope { international, national }
 
 enum _AcademyEntryView { hub, exams }
@@ -102,8 +101,7 @@ class _AcademyHubQuizSnapshot {
   bool get hasProgress =>
       studiedOpenings > 0 || studyReps > 0 || totalAnswered > 0;
 
-  double get accuracy =>
-      totalAnswered <= 0 ? 0 : correctAnswers / totalAnswered;
+  double get accuracy => totalAnswered <= 0 ? 0 : correctAnswers / totalAnswered;
 }
 
 class _AcademyHubCardBadge {
@@ -120,13 +118,77 @@ class _AcademyHubCardBadge {
   final bool filled;
 }
 
+enum _AcademyHubSelectorLayoutMode {
+  phonePortrait,
+  phoneLandscapeRail,
+  tabletTwoUp,
+}
+
+class _AcademyHubSelectorLayoutSpec {
+  const _AcademyHubSelectorLayoutSpec({
+    required this.mode,
+    required this.selectorGap,
+  });
+
+  factory _AcademyHubSelectorLayoutSpec.fromConstraints(
+    BoxConstraints constraints,
+    MediaQueryData media,
+  ) {
+    final safeHeight = max(0.0, constraints.maxHeight - media.padding.vertical);
+    final isLandscape = constraints.maxWidth > safeHeight;
+    final shortLandscape = isLandscape && safeHeight <= 500;
+    if (shortLandscape) {
+      return const _AcademyHubSelectorLayoutSpec(
+        mode: _AcademyHubSelectorLayoutMode.phoneLandscapeRail,
+        selectorGap: 12,
+      );
+    }
+
+    final tabletTwoUp =
+        constraints.maxWidth >= 920 ||
+        (constraints.maxWidth >= 760 && safeHeight >= 720);
+    if (tabletTwoUp) {
+      return const _AcademyHubSelectorLayoutSpec(
+        mode: _AcademyHubSelectorLayoutMode.tabletTwoUp,
+        selectorGap: 14,
+      );
+    }
+
+    return const _AcademyHubSelectorLayoutSpec(
+      mode: _AcademyHubSelectorLayoutMode.phonePortrait,
+      selectorGap: 10,
+    );
+  }
+
+  final _AcademyHubSelectorLayoutMode mode;
+  final double selectorGap;
+
+  bool get isTablet => mode == _AcademyHubSelectorLayoutMode.tabletTwoUp;
+
+  bool get usesRail => mode == _AcademyHubSelectorLayoutMode.phoneLandscapeRail;
+
+  String get testKey => switch (mode) {
+    _AcademyHubSelectorLayoutMode.phonePortrait =>
+      'academy_hub_selector_phonePortrait',
+    _AcademyHubSelectorLayoutMode.phoneLandscapeRail =>
+      'academy_hub_selector_phoneLandscapeRail',
+    _AcademyHubSelectorLayoutMode.tabletTwoUp =>
+      'academy_hub_selector_tabletTwoUp',
+  };
+}
+
 class _AcademyHubCardModel {
   const _AcademyHubCardModel({
     required this.cardId,
     required this.eyebrow,
     required this.title,
+    required this.summary,
     required this.description,
+    required this.inlineDetails,
+    required this.artLabel,
     required this.imageAsset,
+    required this.imageAlignment,
+    required this.imagePadding,
     required this.accent,
     required this.shadowColor,
     required this.icon,
@@ -141,8 +203,13 @@ class _AcademyHubCardModel {
   final String cardId;
   final String eyebrow;
   final String title;
+  final String summary;
   final String description;
+  final List<String> inlineDetails;
+  final String artLabel;
   final String imageAsset;
+  final Alignment imageAlignment;
+  final EdgeInsets imagePadding;
   final Color accent;
   final Color shadowColor;
   final IconData icon;
@@ -1342,90 +1409,63 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final media = MediaQuery.of(context);
-    final sideBySide = constraints.maxWidth >= 920;
+    final selectorLayout = _AcademyHubSelectorLayoutSpec.fromConstraints(
+      constraints,
+      media,
+    );
     final compactHub = constraints.maxHeight < 420;
-    final maxContentWidth = sideBySide ? 1180.0 : 760.0;
+    final horizontalPadding = selectorLayout.isTablet ? 20.0 : 8.0;
+    final topPadding = compactHub ? 8.0 : 12.0;
+    final bottomPadding = max(12.0, 12.0 + media.padding.bottom);
+    final contentHeight = max(
+      0.0,
+      constraints.maxHeight - topPadding - bottomPadding,
+    );
+    final maxContentWidth = selectorLayout.isTablet ? 1120.0 : 900.0;
 
-    return SingleChildScrollView(
+    return Padding(
       padding: EdgeInsets.fromLTRB(
-        20,
-        compactHub ? 12 : 16,
-        20,
-        max(24, 20 + media.padding.bottom),
+        horizontalPadding,
+        topPadding,
+        horizontalPadding,
+        bottomPadding,
       ),
       child: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: maxContentWidth,
-            minHeight: compactHub ? 0.0 : max(0.0, constraints.maxHeight - 36),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: compactHub ? 44 : 50,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        onPressed: _handleAcademyBack,
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        tooltip: 'Back to menu',
-                      ),
+          constraints: BoxConstraints(maxWidth: maxContentWidth),
+          child: SizedBox(
+            height: contentHeight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: compactHub ? 40 : 48,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      key: const ValueKey<String>('academy_hub_back_button'),
+                      onPressed: _handleAcademyBack,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      tooltip: 'Back to menu',
                     ),
-                    Align(
-                      alignment: Alignment.center,
-                      child: GestureDetector(
-                        onTap: widget.onShowCredits,
-                        child: Image.asset(
-                          'assets/ChessIQ.png',
-                          width: 150,
-                          height: 42,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Settings',
-                            onPressed: () =>
-                                _openQuickThemeSettings(themeProvider),
-                            icon: const Icon(Icons.settings_outlined),
-                          ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            onPressed: _openStore,
-                            icon: const Icon(Icons.storefront_outlined),
-                            tooltip: 'Academy store',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              SizedBox(height: compactHub ? 12 : 18),
-              if (!compactHub) ...[
-                _buildAcademyHubOverview(
-                  provider: provider,
-                  monochrome: monochrome,
-                  sideBySide: sideBySide,
+                if (selectorLayout.isTablet) ...[
+                  SizedBox(height: compactHub ? 4 : 6),
+                  _buildAcademyHubOverview(monochrome: monochrome),
+                  SizedBox(height: compactHub ? 6 : 10),
+                ] else
+                  SizedBox(height: compactHub ? 6 : 8),
+                Expanded(
+                  child: _buildAcademyHubSelector(
+                    provider: provider,
+                    layout: selectorLayout,
+                    monochrome: monochrome,
+                    isDark: isDark,
+                  ),
                 ),
-                const SizedBox(height: 18),
               ],
-              _buildAcademyHubSelector(
-                provider: provider,
-                sideBySide: sideBySide,
-                monochrome: monochrome,
-                isDark: isDark,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1433,118 +1473,20 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }
 
   Widget _buildAcademyHubOverview({
-    required PuzzleAcademyProvider provider,
     required bool monochrome,
-    required bool sideBySide,
   }) {
     final palette = puzzleAcademyPalette(
       context,
       monochromeOverride: monochrome,
     );
-    final frontierNode = _academyHubFrontierNode(provider);
-    final semester = provider.semesterForNode(frontierNode);
-    final semesterNodes = provider.orderedNodes
-        .where((node) => semester.includes(node.startElo))
-        .toList(growable: false);
-    final crownedNodes = semesterNodes.where((node) => node.goldCrown).length;
-    final semesterProgress = provider.semesterProgress(semester);
-    final completedExams = provider.completedExamCountInSemester(semester);
-
-    return PuzzleAcademyPanel(
-      accent: palette.cyan,
-      fillColor: Color.alphaBlend(
-        palette.cyan.withValues(alpha: monochrome ? 0.08 : 0.05),
-        palette.panel,
-      ),
-      radius: sideBySide ? 24 : 22,
-      borderWidth: 2.4,
-      padding: EdgeInsets.fromLTRB(
-        sideBySide ? 22 : 18,
-        sideBySide ? 20 : 18,
-        sideBySide ? 22 : 18,
-        sideBySide ? 18 : 16,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          PuzzleAcademySectionHeader(
-            title: 'Choose Your Training Lane',
-            subtitle:
-                '${provider.currentTitle} is currently pushing through ${_academySemesterShortTitle(semester)} at ${frontierNode.title}.',
-            accent: palette.cyan,
-            icon: Icons.school_outlined,
-            monochromeOverride: monochrome,
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              PuzzleAcademyTag(
-                label: provider.currentTitle.toUpperCase(),
-                accent: palette.cyan,
-                compact: true,
-                filled: true,
-                monochromeOverride: monochrome,
-              ),
-              PuzzleAcademyTag(
-                label: '${provider.totalSolved} solved',
-                icon: Icons.bolt_rounded,
-                accent: palette.amber,
-                compact: true,
-                monochromeOverride: monochrome,
-              ),
-              PuzzleAcademyTag(
-                label: '$crownedNodes/${semesterNodes.length} crowns',
-                icon: Icons.workspace_premium_outlined,
-                accent: palette.emerald,
-                compact: true,
-                monochromeOverride: monochrome,
-              ),
-              PuzzleAcademyTag(
-                label: '$completedExams exams logged',
-                icon: Icons.fact_check_outlined,
-                accent: palette.cyan,
-                compact: true,
-                monochromeOverride: monochrome,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${_academySemesterShortTitle(semester).toUpperCase()} MASTERY',
-                  style: puzzleAcademyHudStyle(
-                    palette: palette,
-                    size: 10.8,
-                    weight: FontWeight.w800,
-                    color: palette.textMuted,
-                    letterSpacing: 1.0,
-                    height: 1.0,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '${(semesterProgress * 100).round()}%',
-                style: puzzleAcademyDisplayStyle(
-                  palette: palette,
-                  size: sideBySide ? 16 : 15,
-                  color: palette.text,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _buildAcademyHubProgressBar(
-            accent: palette.cyan,
-            progress: semesterProgress,
-            monochrome: monochrome,
-            height: sideBySide ? 10 : 9,
-          ),
-        ],
+    return Text(
+      'Choose Your Training Lane',
+      textAlign: TextAlign.center,
+      style: puzzleAcademyDisplayStyle(
+        palette: palette,
+        size: 15.5,
+        color: palette.text,
+        letterSpacing: monochrome ? 0.28 : 0.18,
       ),
     );
   }
@@ -1610,58 +1552,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  Widget _buildAcademyHubCta({
-    required String label,
-    required Color accent,
-    required bool monochrome,
-  }) {
-    final palette = puzzleAcademyPalette(
-      context,
-      monochromeOverride: monochrome,
-    );
-    final foreground = monochrome ? palette.text : const Color(0xFF08141A);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          accent.withValues(alpha: monochrome ? 0.20 : 0.90),
-          monochrome ? palette.panelAlt : Colors.black.withValues(alpha: 0.08),
-        ),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: accent.withValues(alpha: monochrome ? 0.74 : 0.92),
-          width: 1.4,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: monochrome ? 0.14 : 0.22),
-            blurRadius: monochrome ? 8 : 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: puzzleAcademyHudStyle(
-              palette: palette,
-              size: 10.8,
-              weight: FontWeight.w800,
-              color: foreground,
-              letterSpacing: 0.88,
-              height: 1.0,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Icon(Icons.arrow_forward_rounded, size: 15, color: foreground),
-        ],
-      ),
-    );
-  }
-
   EloNodeProgress _academyHubFrontierNode(PuzzleAcademyProvider provider) {
     final unlockedNodes = provider.orderedNodes
         .where((node) => node.unlocked)
@@ -1702,6 +1592,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     final examReady = provider.canTakeExam(frontierNode);
     final completedExams = provider.completedExamCountInSemester(semester);
     final readinessAccent = examReady ? palette.emerald : palette.amber;
+    final summary = examReady
+        ? completedExams > 0
+              ? '$completedExams ${completedExams == 1 ? 'score' : 'scores'} logged in ${_academySemesterShortTitle(semester)}.'
+              : '${frontierNode.title} exam board is ready.'
+        : solveRemaining > 0
+        ? 'Solve $solveRemaining more ${solveRemaining == 1 ? 'puzzle' : 'puzzles'} to unlock exams.'
+        : 'Review unlocked exams and promotion gates.';
 
     final description = examReady
         ? completedExams > 0
@@ -1710,13 +1607,22 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         : solveRemaining > 0
         ? 'Solve $solveRemaining more ${solveRemaining == 1 ? 'puzzle' : 'puzzles'} in ${frontierNode.title} to unlock its exam board.'
         : 'Open the semester board to review unlocked exams and promotion gates.';
+    final inlineDetails = <String>[
+      'Frontier node: ${frontierNode.title}',
+      '$semesterCrowns/${semesterNodes.length} crowns secured this semester',
+    ];
 
     return _AcademyHubCardModel(
       cardId: 'exams',
       eyebrow: _academySemesterShortTitle(semester).toUpperCase(),
       title: 'Puzzle Academy Exams',
+      summary: summary,
       description: description,
+      inlineDetails: inlineDetails,
+      artLabel: examReady ? 'LIVE BOARD' : 'PROMOTION GATE',
       imageAsset: 'assets/academy/exam.png',
+      imageAlignment: Alignment.center,
+      imagePadding: const EdgeInsets.all(4),
       accent: accent,
       shadowColor: shadowColor,
       icon: Icons.extension_outlined,
@@ -1779,23 +1685,45 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         : snapshot.studyReps > 0
         ? min(1.0, snapshot.studyReps / 18)
         : 0.0;
+    final summary = usesAccuracy
+      ? '$accuracyPercent% accuracy on ${snapshot.totalAnswered} quiz answers.'
+      : snapshot.studyReps > 0
+      ? snapshot.studiedOpenings > 0
+          ? '${snapshot.studyReps} reps across ${snapshot.studiedOpenings} openings.'
+          : '${snapshot.studyReps} study reps banked.'
+      : 'Review opening families before the next exam block.';
 
     final description = snapshot.hasProgress
         ? snapshot.studiedOpenings > 0
               ? 'You have reviewed ${snapshot.studiedOpenings} openings, logged ${snapshot.studyReps} study rep${snapshot.studyReps == 1 ? '' : 's'}, and built a ${snapshot.bestStreak}-best streak.'
               : 'You have answered ${snapshot.totalAnswered} opening questions with $accuracyPercent% accuracy. Jump back in and keep promoting the ladder.'
         : 'Study opening families, replay lines, and build recognition before the next exam block.';
+    final inlineDetails = <String>[
+      snapshot.studiedOpenings > 0
+        ? '${snapshot.studiedOpenings} openings reviewed'
+        : 'Study library ready to explore',
+      snapshot.bestStreak > 0
+        ? 'Best streak: ${snapshot.bestStreak}'
+        : usesAccuracy
+        ? 'Quiz accuracy: $accuracyPercent%'
+        : '${snapshot.studyReps} warmup reps logged',
+    ];
 
     return _AcademyHubCardModel(
       cardId: 'quiz',
       eyebrow: snapshot.hasProgress ? 'OPENING LADDER' : 'OPENING STUDY',
-      title: 'Opening Quiz',
+      title: 'Opening Study',
+      summary: summary,
       description: description,
-      imageAsset: 'assets/academy/quiz.png',
+      inlineDetails: inlineDetails,
+      artLabel: usesAccuracy ? 'QUIZ LADDER' : 'STUDY FILES',
+      imageAsset: 'assets/academy/openings_study.png',
+      imageAlignment: Alignment.center,
+      imagePadding: const EdgeInsets.all(4),
       accent: accent,
       shadowColor: shadowColor,
       icon: Icons.menu_book_outlined,
-      ctaLabel: snapshot.hasProgress ? 'Resume Quiz' : 'Open Quiz',
+      ctaLabel: snapshot.hasProgress ? 'Resume Study' : 'Open Study',
       progressLabel: usesAccuracy
           ? 'Quiz accuracy'
           : snapshot.studyReps > 0
@@ -1840,7 +1768,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         _runAcademyHubLaunchAnimation(
           cardId: 'quiz',
           title: 'Opening Quiz',
-          imageAsset: 'assets/academy/quiz.png',
+          imageAsset: 'assets/academy/openings_study.png',
           accent: accent,
           shadowColor: shadowColor,
           icon: Icons.menu_book_outlined,
@@ -1852,331 +1780,162 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   Widget _buildAcademyHubSelector({
     required PuzzleAcademyProvider provider,
-    required bool sideBySide,
+    required _AcademyHubSelectorLayoutSpec layout,
     required bool monochrome,
     required bool isDark,
   }) {
-    final examsAccent = monochrome
-        ? const Color(0xFFE2E6EC)
-        : const Color(0xFF6FE7FF);
-    final quizAccent = monochrome
-        ? const Color(0xFFF0E9DC)
-        : const Color(0xFFD8B640);
-    final activeAccent = switch (_academyHubLaunchingCardId) {
-      'exams' => examsAccent,
-      'quiz' => quizAccent,
-      _ => Color.lerp(examsAccent, quizAccent, 0.5)!,
-    };
     final examsModel = _buildAcademyExamsHubCardModel(
       provider: provider,
       monochrome: monochrome,
     );
     final quizModel = _buildAcademyQuizHubCardModel(monochrome: monochrome);
-    final examsCard = _buildAcademyHubCard(
-      model: examsModel,
-      monochrome: monochrome,
-      isDark: isDark,
-    );
-    final quizCard = _buildAcademyHubCard(
-      model: quizModel,
-      monochrome: monochrome,
-      isDark: isDark,
-    );
 
-    final selectorBody = sideBySide
-        ? Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Transform.translate(
-                  offset: const Offset(0, -6),
-                  child: examsCard,
-                ),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Transform.translate(
-                  offset: const Offset(0, 6),
-                  child: quizCard,
-                ),
-              ),
-            ],
-          )
-        : Column(
-            children: [
-              Transform.rotate(angle: -0.008, child: examsCard),
-              const SizedBox(height: 24),
-              Transform.rotate(angle: 0.008, child: quizCard),
-            ],
-          );
-
-    if (_useReducedWindowsVisualEffects) {
-      return Container(
-        padding: EdgeInsets.fromLTRB(
-          sideBySide ? 18 : 14,
-          sideBySide ? 20 : 16,
-          sideBySide ? 18 : 14,
-          sideBySide ? 20 : 16,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(sideBySide ? 28 : 24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
-                alpha: monochrome ? 0.82 : 0.92,
-              ),
-              Theme.of(
-                context,
-              ).colorScheme.surface.withValues(alpha: monochrome ? 0.94 : 0.98),
-            ],
-          ),
-          border: Border.all(
-            color: activeAccent.withValues(alpha: monochrome ? 0.28 : 0.36),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: selectorBody,
-      );
-    }
-
-    return AnimatedBuilder(
-      animation: _academyBlueDotTime,
-      builder: (context, child) {
-        final pulse = 0.5 + 0.5 * sin(_academyBlueDotTime.value * 0.8);
-        final radius = BorderRadius.circular(sideBySide ? 38 : 32);
-
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: sideBySide ? 22 : 10,
-              top: sideBySide ? 6 : 4,
-              child: IgnorePointer(
-                child: Container(
-                  width: sideBySide ? 180 : 124,
-                  height: sideBySide ? 104 : 84,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: RadialGradient(
-                      colors: [
-                        examsAccent.withValues(alpha: monochrome ? 0.10 : 0.18),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: sideBySide ? 18 : 10,
-              bottom: sideBySide ? 10 : 6,
-              child: IgnorePointer(
-                child: Container(
-                  width: sideBySide ? 190 : 132,
-                  height: sideBySide ? 112 : 88,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: RadialGradient(
-                      colors: [
-                        quizAccent.withValues(alpha: monochrome ? 0.10 : 0.20),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            ClipRRect(
-              borderRadius: radius,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: _useReducedWindowsVisualEffects ? 0 : 24,
-                  sigmaY: _useReducedWindowsVisualEffects ? 0 : 24,
-                ),
-                child: Container(
-                  padding: EdgeInsets.fromLTRB(
-                    sideBySide ? 22 : 14,
-                    sideBySide ? 28 : 20,
-                    sideBySide ? 22 : 14,
-                    sideBySide ? 28 : 20,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white.withValues(
-                          alpha: monochrome
-                              ? (isDark ? 0.14 : 0.24)
-                              : (isDark ? 0.08 : 0.20),
-                        ),
-                        activeAccent.withValues(
-                          alpha: monochrome
-                              ? (isDark ? 0.05 : 0.08)
-                              : (isDark
-                                    ? 0.06 + pulse * 0.03
-                                    : 0.10 + pulse * 0.04),
-                        ),
-                        Colors.white.withValues(
-                          alpha: monochrome
-                              ? (isDark ? 0.10 : 0.18)
-                              : (isDark ? 0.06 : 0.13),
-                        ),
-                      ],
-                    ),
-                    borderRadius: radius,
-                    border: Border.all(
-                      color: Color.alphaBlend(
-                        activeAccent.withValues(alpha: 0.14 + pulse * 0.08),
-                        Colors.white.withValues(alpha: 0.30),
-                      ),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: activeAccent.withValues(
-                          alpha: 0.07 + pulse * 0.04,
-                        ),
-                        blurRadius: 32,
-                        spreadRadius: 0.5,
-                        offset: const Offset(0, 12),
-                      ),
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: isDark ? 0.30 : 0.10,
-                        ),
-                        blurRadius: 30,
-                        offset: const Offset(0, 16),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white.withValues(
-                                    alpha: monochrome ? 0.05 : 0.14,
-                                  ),
-                                  Colors.white.withValues(alpha: 0.01),
-                                  activeAccent.withValues(
-                                    alpha: monochrome ? 0.02 : 0.05,
-                                  ),
-                                ],
-                                stops: const [0.0, 0.38, 1.0],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: -50,
-                        top: 12 + sin(_academyBlueDotTime.value * 0.55) * 12,
-                        child: IgnorePointer(
-                          child: Transform.rotate(
-                            angle: -0.42,
-                            child: Container(
-                              width: 160,
-                              height: 240,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    examsAccent.withValues(
-                                      alpha: monochrome ? 0.04 : 0.08,
-                                    ),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: -40,
-                        bottom: -8 + cos(_academyBlueDotTime.value * 0.48) * 10,
-                        child: IgnorePointer(
-                          child: Transform.rotate(
-                            angle: 0.38,
-                            child: Container(
-                              width: 180,
-                              height: 250,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    quizAccent.withValues(
-                                      alpha: monochrome ? 0.04 : 0.08,
-                                    ),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 26,
-                        right: 26,
-                        top: 0,
-                        child: IgnorePointer(
-                          child: Container(
-                            height: 1.1,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.white.withValues(alpha: 0.60),
-                                  Colors.transparent,
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      selectorBody,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildAcademyHubCard({
-    required _AcademyHubCardModel model,
-    required bool monochrome,
-    required bool isDark,
-  }) {
-    if (_useReducedWindowsVisualEffects) {
-      return _buildReducedAcademyHubCard(
+    Widget buildCard(_AcademyHubCardModel model) {
+      return _buildAcademyHubCard(
         model: model,
+        layout: layout,
         monochrome: monochrome,
         isDark: isDark,
       );
     }
 
+    return KeyedSubtree(
+      key: ValueKey<String>(layout.testKey),
+      child: switch (layout.mode) {
+      _AcademyHubSelectorLayoutMode.phonePortrait => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: buildCard(examsModel),
+          ),
+          SizedBox(height: layout.selectorGap),
+          Expanded(
+            child: buildCard(quizModel),
+          ),
+        ],
+      ),
+      _AcademyHubSelectorLayoutMode.tabletTwoUp => Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: buildCard(examsModel),
+          ),
+          SizedBox(width: layout.selectorGap),
+          Expanded(
+            child: buildCard(quizModel),
+          ),
+        ],
+      ),
+      _AcademyHubSelectorLayoutMode.phoneLandscapeRail => Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: buildCard(examsModel),
+          ),
+          SizedBox(width: layout.selectorGap),
+          Expanded(
+            child: buildCard(quizModel),
+          ),
+        ],
+      ),
+      },
+    );
+  }
+
+  Widget _buildAcademyHubCardArtFrame({
+    required _AcademyHubCardModel model,
+    required bool monochrome,
+    required bool horizontal,
+    required bool isLaunching,
+    required double imageScale,
+    required Offset imageOffset,
+  }) {
+    final palette = puzzleAcademyPalette(
+      context,
+      monochromeOverride: monochrome,
+    );
+    return SizedBox.expand(
+      key: ValueKey<String>('academy_hub_art_frame_${model.cardId}'),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: model.imagePadding,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                scale: imageScale,
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  offset: imageOffset,
+                  child: Image.asset(
+                    model.imageAsset,
+                    fit: BoxFit.contain,
+                    alignment: model.imageAlignment,
+                    filterQuality: _useReducedWindowsVisualEffects
+                        ? FilterQuality.medium
+                        : FilterQuality.high,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Icon(
+                          Icons.image_not_supported,
+                          size: horizontal ? 34 : 42,
+                          color: palette.textMuted,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 180),
+            opacity: isLaunching ? 1.0 : 0.0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment.center,
+                  radius: 1.0,
+                  colors: [
+                    model.accent.withValues(alpha: monochrome ? 0.12 : 0.18),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAcademyHubCardBody({
+    required _AcademyHubCardModel model,
+    required _AcademyHubSelectorLayoutSpec layout,
+    required bool monochrome,
+    required bool isLaunching,
+    required double imageScale,
+    required Offset imageOffset,
+  }) {
+    return _buildAcademyHubCardArtFrame(
+      model: model,
+      monochrome: monochrome,
+      horizontal: layout.usesRail,
+      isLaunching: isLaunching,
+      imageScale: imageScale,
+      imageOffset: imageOffset,
+    );
+  }
+
+  Widget _buildAcademyHubCard({
+    required _AcademyHubCardModel model,
+    required _AcademyHubSelectorLayoutSpec layout,
+    required bool monochrome,
+    required bool isDark,
+  }) {
     final cardKey = _academyHubCardKeyFor(model.cardId);
     final isHovered = _academyHubHoveredCardId == model.cardId;
     final isPressed = _academyHubPressedCardId == model.cardId;
@@ -2185,49 +1944,48 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         _academyHubLaunchingCardId != null &&
         _academyHubLaunchingCardId != model.cardId;
     final cardScale = isLaunching
-        ? 1.038
+        ? 1.032
         : isPressed
         ? 0.992
         : isHovered
-        ? 1.018
+        ? 1.016
         : 1.0;
     final cardOffset = isLaunching
-        ? const Offset(0, -0.028)
+        ? const Offset(0, -0.026)
         : isPressed
         ? const Offset(0, 0.010)
         : isHovered
-        ? const Offset(0, -0.014)
+        ? const Offset(0, -0.012)
         : Offset.zero;
     final cardTurns = isLaunching
-        ? 0.003
+        ? 0.002
         : isHovered
-        ? (model.cardId == 'exams' ? -0.0016 : 0.0016)
+        ? (model.cardId == 'exams' ? -0.0012 : 0.0012)
         : 0.0;
     final imageScale = isLaunching
-        ? 1.16
+        ? 1.08
         : isPressed
-        ? 1.02
+        ? 1.01
         : isHovered
-        ? 1.05
+        ? 1.02
         : 1.0;
     final imageOffset = isLaunching
         ? (model.cardId == 'exams'
-              ? const Offset(-0.02, -0.03)
-              : const Offset(0.02, -0.03))
+              ? const Offset(-0.02, -0.02)
+              : const Offset(0.02, -0.02))
         : isHovered
         ? (model.cardId == 'exams'
-              ? const Offset(-0.01, 0)
-              : const Offset(0.01, 0))
+              ? const Offset(-0.01, 0.0)
+              : const Offset(0.01, 0.0))
         : Offset.zero;
 
-    return AspectRatio(
-      aspectRatio: 16 / 9,
+    return SizedBox.expand(
       child: TweenAnimationBuilder<double>(
         tween: Tween<double>(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 560),
+        duration: const Duration(milliseconds: 520),
         curve: Curves.easeOutCubic,
         builder: (context, value, child) {
-          final slide = (1 - value) * 16;
+          final slide = (1 - value) * 14;
           return Transform.translate(
             offset: Offset(0, slide),
             child: Opacity(opacity: value, child: child),
@@ -2240,6 +1998,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             onEnter: (_) => _setAcademyHubHoveredCard(model.cardId),
             onExit: (_) => _setAcademyHubHoveredCard(null),
             child: Semantics(
+              key: ValueKey<String>('academy_hub_card_${model.cardId}'),
               button: true,
               label: model.title,
               child: AnimatedOpacity(
@@ -2247,839 +2006,35 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 curve: Curves.easeOut,
                 opacity: isDimmed ? 0.74 : 1.0,
                 child: AnimatedScale(
-                  duration: const Duration(milliseconds: 240),
+                  duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
                   scale: cardScale,
                   child: AnimatedSlide(
-                    duration: const Duration(milliseconds: 240),
+                    duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
                     offset: cardOffset,
                     child: AnimatedRotation(
-                      duration: const Duration(milliseconds: 240),
+                      duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
                       turns: cardTurns,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 240),
-                        curve: Curves.easeOutCubic,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: model.shadowColor.withValues(
-                                alpha: isLaunching
-                                    ? (isDark ? 0.34 : 0.30)
-                                    : isHovered
-                                    ? (isDark ? 0.30 : 0.27)
-                                    : (isDark ? 0.26 : 0.22),
-                              ),
-                              blurRadius: isLaunching
-                                  ? 42
-                                  : isHovered
-                                  ? 38
-                                  : 34,
-                              spreadRadius: isLaunching
-                                  ? 4
-                                  : isHovered
-                                  ? 3
-                                  : 2,
-                              offset: Offset(
-                                0,
-                                isLaunching
-                                    ? 24
-                                    : isHovered
-                                    ? 22
-                                    : 18,
-                              ),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: isDark ? 0.28 : 0.12,
-                              ),
-                              blurRadius: isLaunching ? 30 : 24,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(30),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: _academyHubLaunchInFlight
-                                ? null
-                                : model.onTap,
-                            onTapDown: (_) =>
-                                _setAcademyHubPressedCard(model.cardId),
-                            onTapCancel: () => _setAcademyHubPressedCard(null),
-                            borderRadius: BorderRadius.circular(30),
-                            splashColor: model.accent.withValues(alpha: 0.20),
-                            highlightColor: model.accent.withValues(
-                              alpha: 0.08,
-                            ),
-                            child: Ink(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(30),
-                                border: Border.all(
-                                  color: model.accent.withValues(
-                                    alpha: isLaunching
-                                        ? 0.86
-                                        : isHovered
-                                        ? 0.74
-                                        : 0.62,
-                                  ),
-                                ),
-                              ),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                        colors: [
-                                          model.accent.withValues(
-                                            alpha: monochrome ? 0.10 : 0.16,
-                                          ),
-                                          Colors.black.withValues(
-                                            alpha: monochrome ? 0.18 : 0.24,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned.fill(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: AnimatedScale(
-                                        duration: const Duration(
-                                          milliseconds: 240,
-                                        ),
-                                        curve: Curves.easeOutCubic,
-                                        scale: imageScale,
-                                        child: AnimatedSlide(
-                                          duration: const Duration(
-                                            milliseconds: 240,
-                                          ),
-                                          curve: Curves.easeOutCubic,
-                                          offset: imageOffset,
-                                          child: LayoutBuilder(
-                                            builder: (context, constraints) {
-                                              final leftInset = min(
-                                                constraints.maxWidth * 0.22,
-                                                122.0,
-                                              );
-                                              return Padding(
-                                                padding: EdgeInsets.fromLTRB(
-                                                  leftInset,
-                                                  8,
-                                                  8,
-                                                  8,
-                                                ),
-                                                child: Image.asset(
-                                                  model.imageAsset,
-                                                  fit: BoxFit.contain,
-                                                  alignment:
-                                                      Alignment.centerRight,
-                                                  filterQuality:
-                                                      _useReducedWindowsVisualEffects
-                                                      ? FilterQuality.medium
-                                                      : FilterQuality.high,
-                                                  errorBuilder:
-                                                      (
-                                                        context,
-                                                        error,
-                                                        stackTrace,
-                                                      ) {
-                                                        return const Center(
-                                                          child: Icon(
-                                                            Icons
-                                                                .image_not_supported,
-                                                            size: 42,
-                                                            color:
-                                                                Colors.white70,
-                                                          ),
-                                                        );
-                                                      },
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                        colors: [
-                                          Colors.black.withValues(
-                                            alpha: monochrome ? 0.74 : 0.68,
-                                          ),
-                                          Colors.black.withValues(
-                                            alpha: monochrome ? 0.34 : 0.28,
-                                          ),
-                                          Colors.black.withValues(
-                                            alpha: monochrome ? 0.12 : 0.10,
-                                          ),
-                                        ],
-                                        stops: const [0.0, 0.52, 1.0],
-                                      ),
-                                    ),
-                                  ),
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: RadialGradient(
-                                        center: const Alignment(-0.72, -0.82),
-                                        radius: 1.12,
-                                        colors: [
-                                          model.accent.withValues(
-                                            alpha: monochrome ? 0.12 : 0.18,
-                                          ),
-                                          Colors.transparent,
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  AnimatedOpacity(
-                                    duration: const Duration(milliseconds: 220),
-                                    opacity: isLaunching ? 1.0 : 0.0,
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: RadialGradient(
-                                          center: const Alignment(0.72, -0.68),
-                                          radius: 1.0,
-                                          colors: [
-                                            model.accent.withValues(
-                                              alpha: 0.28,
-                                            ),
-                                            Colors.transparent,
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  AnimatedBuilder(
-                                    animation: _academyBlueDotTime,
-                                    builder: (context, child) {
-                                      final highlightPulse =
-                                          0.84 +
-                                          0.16 *
-                                              sin(
-                                                _academyBlueDotTime.value *
-                                                        0.34 +
-                                                    (model.cardId == 'exams'
-                                                        ? 0.3
-                                                        : 1.7),
-                                              );
-                                      return IgnorePointer(
-                                        child: Opacity(
-                                          opacity: highlightPulse.clamp(
-                                            0.70,
-                                            1.0,
-                                          ),
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: Stack(
-                                      children: [
-                                        Positioned(
-                                          left: -26,
-                                          top: -38,
-                                          child: Transform.rotate(
-                                            angle: -0.34,
-                                            child: Container(
-                                              width: 170,
-                                              height: 250,
-                                              decoration: BoxDecoration(
-                                                gradient: LinearGradient(
-                                                  begin: Alignment.topCenter,
-                                                  end: Alignment.bottomCenter,
-                                                  colors: [
-                                                    Colors.white.withValues(
-                                                      alpha: 0.00,
-                                                    ),
-                                                    Colors.white.withValues(
-                                                      alpha: monochrome
-                                                          ? 0.08
-                                                          : 0.12,
-                                                    ),
-                                                    Colors.white.withValues(
-                                                      alpha: 0.00,
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          right: 12,
-                                          top: 10,
-                                          child: Container(
-                                            width: 110,
-                                            height: 86,
-                                            decoration: BoxDecoration(
-                                              gradient: RadialGradient(
-                                                colors: [
-                                                  Colors.white.withValues(
-                                                    alpha: monochrome
-                                                        ? 0.10
-                                                        : 0.16,
-                                                  ),
-                                                  Colors.transparent,
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      22,
-                                      20,
-                                      22,
-                                      20,
-                                    ),
-                                    child: LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        final compactCard =
-                                            constraints.maxHeight < 300 ||
-                                            constraints.maxWidth < 540;
-                                        final copyWidth = min(
-                                          constraints.maxWidth *
-                                              (compactCard ? 0.68 : 0.72),
-                                          compactCard ? 304.0 : 352.0,
-                                        );
-                                        final palette = puzzleAcademyPalette(
-                                          context,
-                                          monochromeOverride: monochrome,
-                                        );
-
-                                        if (compactCard) {
-                                          return Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Wrap(
-                                                spacing: 8,
-                                                runSpacing: 8,
-                                                crossAxisAlignment:
-                                                    WrapCrossAlignment.center,
-                                                children: [
-                                                  PuzzleAcademyTag(
-                                                    label: model.eyebrow,
-                                                    icon: model.icon,
-                                                    accent: model.accent,
-                                                    compact: true,
-                                                    filled: isLaunching,
-                                                    monochromeOverride:
-                                                        monochrome,
-                                                  ),
-                                                  Text(
-                                                    model.progressValue,
-                                                    style:
-                                                        puzzleAcademyDisplayStyle(
-                                                          palette: palette,
-                                                          size: 12.5,
-                                                          color: model.accent,
-                                                        ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 10),
-                                              ConstrainedBox(
-                                                constraints: BoxConstraints(
-                                                  maxWidth: copyWidth,
-                                                ),
-                                                child: Text(
-                                                  model.title,
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style:
-                                                      puzzleAcademyDisplayStyle(
-                                                        palette: palette,
-                                                        size: 15.2,
-                                                        color: Colors.white,
-                                                        letterSpacing:
-                                                            monochrome
-                                                            ? 0.14
-                                                            : 0.05,
-                                                      ),
-                                                ),
-                                              ),
-                                              const Spacer(),
-                                              Text(
-                                                model.progressLabel
-                                                    .toUpperCase(),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: puzzleAcademyHudStyle(
-                                                  palette: palette,
-                                                  size: 9.6,
-                                                  weight: FontWeight.w800,
-                                                  color: Colors.white70,
-                                                  letterSpacing: 0.92,
-                                                  height: 1.0,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              _buildAcademyHubProgressBar(
-                                                accent: model.accent,
-                                                progress: model.progress,
-                                                monochrome: monochrome,
-                                              ),
-                                              const SizedBox(height: 10),
-                                              _buildAcademyHubCta(
-                                                label: model.ctaLabel,
-                                                accent: model.accent,
-                                                monochrome: monochrome,
-                                              ),
-                                            ],
-                                          );
-                                        }
-
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Flexible(
-                                                  child: PuzzleAcademyTag(
-                                                    label: model.eyebrow,
-                                                    icon: model.icon,
-                                                    accent: model.accent,
-                                                    compact: true,
-                                                    filled: isLaunching,
-                                                    monochromeOverride:
-                                                        monochrome,
-                                                  ),
-                                                ),
-                                                const Spacer(),
-                                                AnimatedSlide(
-                                                  duration: const Duration(
-                                                    milliseconds: 220,
-                                                  ),
-                                                  curve: Curves.easeOutCubic,
-                                                  offset: isLaunching
-                                                      ? const Offset(0.14, 0)
-                                                      : Offset.zero,
-                                                  child: AnimatedRotation(
-                                                    duration: const Duration(
-                                                      milliseconds: 220,
-                                                    ),
-                                                    curve: Curves.easeOutCubic,
-                                                    turns: isLaunching
-                                                        ? 0.02
-                                                        : 0.0,
-                                                    child: Container(
-                                                      width: 44,
-                                                      height: 44,
-                                                      decoration: BoxDecoration(
-                                                        color: model.accent
-                                                            .withValues(
-                                                              alpha: monochrome
-                                                                  ? 0.18
-                                                                  : 0.24,
-                                                            ),
-                                                        shape: BoxShape.circle,
-                                                        border: Border.all(
-                                                          color: model.accent
-                                                              .withValues(
-                                                                alpha:
-                                                                    isLaunching
-                                                                    ? 0.84
-                                                                    : 0.64,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                      child: const Icon(
-                                                        Icons
-                                                            .arrow_forward_rounded,
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 14),
-                                            ConstrainedBox(
-                                              constraints: BoxConstraints(
-                                                maxWidth: copyWidth,
-                                              ),
-                                              child: Text(
-                                                model.title,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style:
-                                                    puzzleAcademyDisplayStyle(
-                                                      palette: palette,
-                                                      size: 17,
-                                                      color: Colors.white,
-                                                      letterSpacing: monochrome
-                                                          ? 0.18
-                                                          : 0.08,
-                                                    ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            ConstrainedBox(
-                                              constraints: BoxConstraints(
-                                                maxWidth: copyWidth + 10,
-                                              ),
-                                              child: Text(
-                                                model.description,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style:
-                                                    puzzleAcademyCompactStyle(
-                                                      palette: palette,
-                                                      size: 11.5,
-                                                      weight: FontWeight.w700,
-                                                      color: Colors.white
-                                                          .withValues(
-                                                            alpha: monochrome
-                                                                ? 0.86
-                                                                : 0.84,
-                                                          ),
-                                                      height: 1.34,
-                                                    ),
-                                              ),
-                                            ),
-                                            const Spacer(),
-                                            ConstrainedBox(
-                                              constraints: BoxConstraints(
-                                                maxWidth: copyWidth + 12,
-                                              ),
-                                              child: Wrap(
-                                                spacing: 8,
-                                                runSpacing: 8,
-                                                children: model.badges
-                                                    .map(
-                                                      (
-                                                        badge,
-                                                      ) => PuzzleAcademyTag(
-                                                        label: badge.label,
-                                                        icon: badge.icon,
-                                                        accent: badge.accent,
-                                                        compact: true,
-                                                        filled: badge.filled,
-                                                        monochromeOverride:
-                                                            monochrome,
-                                                      ),
-                                                    )
-                                                    .toList(growable: false),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    model.progressLabel
-                                                        .toUpperCase(),
-                                                    style:
-                                                        puzzleAcademyHudStyle(
-                                                          palette: palette,
-                                                          size: 10.2,
-                                                          weight:
-                                                              FontWeight.w800,
-                                                          color: Colors.white70,
-                                                          letterSpacing: 0.95,
-                                                          height: 1.0,
-                                                        ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Text(
-                                                  model.progressValue,
-                                                  style:
-                                                      puzzleAcademyDisplayStyle(
-                                                        palette: palette,
-                                                        size: 14,
-                                                        color: model.accent,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            _buildAcademyHubProgressBar(
-                                              accent: model.accent,
-                                              progress: model.progress,
-                                              monochrome: monochrome,
-                                            ),
-                                            const SizedBox(height: 12),
-                                            _buildAcademyHubCta(
-                                              label: model.ctaLabel,
-                                              accent: model.accent,
-                                              monochrome: monochrome,
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _academyHubLaunchInFlight ? null : model.onTap,
+                        onTapDown: (_) => _setAcademyHubPressedCard(model.cardId),
+                        onTapUp: (_) => _setAcademyHubPressedCard(null),
+                        onTapCancel: () => _setAcademyHubPressedCard(null),
+                        child: _buildAcademyHubCardBody(
+                          model: model,
+                          layout: layout,
+                          monochrome: monochrome,
+                          isLaunching: isLaunching,
+                          imageScale: imageScale,
+                          imageOffset: imageOffset,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReducedAcademyHubCard({
-    required _AcademyHubCardModel model,
-    required bool monochrome,
-    required bool isDark,
-  }) {
-    final cardKey = _academyHubCardKeyFor(model.cardId);
-    final palette = puzzleAcademyPalette(
-      context,
-      monochromeOverride: monochrome,
-    );
-
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: RepaintBoundary(
-        key: cardKey,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: model.onTap,
-            borderRadius: BorderRadius.circular(24),
-            child: Ink(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    model.accent.withValues(alpha: monochrome ? 0.14 : 0.18),
-                    Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
-                  ],
-                ),
-                border: Border.all(
-                  color: model.accent.withValues(
-                    alpha: monochrome ? 0.34 : 0.46,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: model.shadowColor.withValues(
-                      alpha: isDark ? 0.20 : 0.14,
-                    ),
-                    blurRadius: 16,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final compactCard =
-                      constraints.maxHeight < 300 || constraints.maxWidth < 540;
-
-                  return Padding(
-                    padding: EdgeInsets.all(compactCard ? 14 : 18),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: compactCard ? 7 : 6,
-                          child: compactCard
-                              ? Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      crossAxisAlignment:
-                                          WrapCrossAlignment.center,
-                                      children: [
-                                        PuzzleAcademyTag(
-                                          label: model.eyebrow,
-                                          icon: model.icon,
-                                          accent: model.accent,
-                                          compact: true,
-                                          monochromeOverride: monochrome,
-                                        ),
-                                        Text(
-                                          model.progressValue,
-                                          style: puzzleAcademyDisplayStyle(
-                                            palette: palette,
-                                            size: 12,
-                                            color: model.accent,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      model.title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: puzzleAcademyDisplayStyle(
-                                        palette: palette,
-                                        size: 14,
-                                        color: monochrome
-                                            ? const Color(0xFFF2F2F2)
-                                            : Colors.white,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    _buildAcademyHubProgressBar(
-                                      accent: model.accent,
-                                      progress: model.progress,
-                                      monochrome: monochrome,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _buildAcademyHubCta(
-                                      label: model.ctaLabel,
-                                      accent: model.accent,
-                                      monochrome: monochrome,
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    PuzzleAcademyTag(
-                                      label: model.eyebrow,
-                                      icon: model.icon,
-                                      accent: model.accent,
-                                      compact: true,
-                                      monochromeOverride: monochrome,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      model.title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: puzzleAcademyDisplayStyle(
-                                        palette: palette,
-                                        size: 15,
-                                        color: monochrome
-                                            ? const Color(0xFFF2F2F2)
-                                            : Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      model.description,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: puzzleAcademyCompactStyle(
-                                        palette: palette,
-                                        size: 10.8,
-                                        weight: FontWeight.w700,
-                                        color: monochrome
-                                            ? const Color(0xFFD8D8D8)
-                                            : Colors.white70,
-                                        height: 1.32,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
-                                      children: model.badges
-                                          .map(
-                                            (badge) => PuzzleAcademyTag(
-                                              label: badge.label,
-                                              icon: badge.icon,
-                                              accent: badge.accent,
-                                              compact: true,
-                                              filled: badge.filled,
-                                              monochromeOverride: monochrome,
-                                            ),
-                                          )
-                                          .toList(growable: false),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            model.progressLabel.toUpperCase(),
-                                            style: puzzleAcademyHudStyle(
-                                              palette: palette,
-                                              size: 10.0,
-                                              weight: FontWeight.w800,
-                                              color: monochrome
-                                                  ? const Color(0xFFD8D8D8)
-                                                  : Colors.white70,
-                                              letterSpacing: 0.92,
-                                              height: 1.0,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          model.progressValue,
-                                          style: puzzleAcademyDisplayStyle(
-                                            palette: palette,
-                                            size: 13,
-                                            color: model.accent,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    _buildAcademyHubProgressBar(
-                                      accent: model.accent,
-                                      progress: model.progress,
-                                      monochrome: monochrome,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _buildAcademyHubCta(
-                                      label: model.ctaLabel,
-                                      accent: model.accent,
-                                      monochrome: monochrome,
-                                    ),
-                                  ],
-                                ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          flex: compactCard ? 3 : 4,
-                          child: Image.asset(
-                            model.imageAsset,
-                            fit: BoxFit.contain,
-                            alignment: Alignment.centerRight,
-                            filterQuality: FilterQuality.low,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Icon(
-                                  Icons.image_not_supported,
-                                  size: 40,
-                                  color: model.accent.withValues(alpha: 0.8),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
               ),
             ),
           ),
@@ -3101,7 +2056,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       size.width * 1.12,
       size.height * 1.10,
     );
-
     return IgnorePointer(
       child: AnimatedBuilder(
         animation: _academyHubFlightController,

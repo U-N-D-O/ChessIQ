@@ -564,6 +564,9 @@ class CoordinatedEngineService extends EngineService {
     if (task.firstInfoAt == null) {
       task.firstInfoAt = snapshot.timestamp;
       _emitTimeline(EngineTimelineEventType.firstInfo, request: task.request);
+      if (task.request.firstInfoTimeout != null) {
+        _armTaskTimeout(task, _remainingTaskTimeout(task));
+      }
     }
 
     final update = EngineSearchUpdate(
@@ -631,6 +634,26 @@ class CoordinatedEngineService extends EngineService {
     await completer.future.timeout(const Duration(seconds: 3));
   }
 
+  void _armTaskTimeout(_ScheduledSearchTask task, Duration timeout) {
+    task.timeoutTimer?.cancel();
+    task.timeoutTimer = Timer(timeout, () {
+      _handleTaskTimeout(task);
+    });
+  }
+
+  Duration _remainingTaskTimeout(_ScheduledSearchTask task) {
+    final startedAt = task.startedAt;
+    if (startedAt == null) {
+      return task.request.timeout;
+    }
+    final remaining =
+        task.request.timeout - DateTime.now().difference(startedAt);
+    if (remaining.isNegative) {
+      return Duration.zero;
+    }
+    return remaining;
+  }
+
   void _startTask(_ScheduledSearchTask task) {
     task.startedAt = DateTime.now();
     _activeTask = task;
@@ -641,9 +664,10 @@ class CoordinatedEngineService extends EngineService {
     _sendRaw('setoption name MultiPV value ${task.request.multiPv}');
     _sendRaw('position fen ${task.request.fen}');
     _sendRaw(task.request.goCommand);
-    task.timeoutTimer = Timer(task.request.timeout, () {
-      _handleTaskTimeout(task);
-    });
+    _armTaskTimeout(
+      task,
+      task.request.firstInfoTimeout ?? task.request.timeout,
+    );
   }
 
   void _handleTaskTimeout(_ScheduledSearchTask task) {

@@ -38,6 +38,7 @@ class EngineRequestSpec {
     required this.whiteToMove,
     required this.multiPv,
     required this.timeout,
+    this.firstInfoTimeout,
     this.depth,
     this.moveTime,
     this.preCommands = const <String>[],
@@ -51,6 +52,7 @@ class EngineRequestSpec {
   final bool whiteToMove;
   final int multiPv;
   final Duration timeout;
+  final Duration? firstInfoTimeout;
   final int? depth;
   final Duration? moveTime;
   final List<String> preCommands;

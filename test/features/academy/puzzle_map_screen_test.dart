@@ -158,43 +158,151 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
   Future<void> ensureNodePuzzlesLoadedForNode(EloNodeProgress node) async {}
 }
 
+Future<void> _pumpPuzzleMapScreen(
+  WidgetTester tester, {
+  required PuzzleAcademyProvider provider,
+  required Size size,
+  VoidCallback onBack = _noop,
+  VoidCallback onOpenOpeningQuiz = _noop,
+}) async {
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = size;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<PuzzleAcademyProvider>.value(value: provider),
+        ChangeNotifierProvider<AppThemeProvider>(
+          create: (_) => AppThemeProvider(),
+        ),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: PuzzleMapScreen(
+            onBack: onBack,
+            onOpenOpeningQuiz: onOpenOpeningQuiz,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 80));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'Puzzle map shows two landscape cards per row on smaller phones',
+    'Academy hub phone page only shows back and two visible pictures',
     (tester) async {
       final provider = _TestPuzzleAcademyProvider();
 
-      tester.view.devicePixelRatio = 1.0;
-      tester.view.physicalSize = const Size(520, 320);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider<PuzzleAcademyProvider>.value(
-              value: provider,
-            ),
-            ChangeNotifierProvider<AppThemeProvider>(
-              create: (_) => AppThemeProvider(),
-            ),
-          ],
-          child: const MaterialApp(
-            home: Scaffold(
-              body: PuzzleMapScreen(onBack: _noop, onOpenOpeningQuiz: _noop),
-            ),
-          ),
-        ),
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(390, 844),
       );
 
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_back_button')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.settings_outlined), findsNothing);
+      expect(find.byIcon(Icons.storefront_outlined), findsNothing);
+      expect(find.text('Choose Your Training Lane'), findsNothing);
+      expect(find.byType(Image), findsNWidgets(2));
 
-      expect(find.byIcon(Icons.extension_outlined), findsOneWidget);
+      final examsArtFrame = find.byKey(
+        const ValueKey<String>('academy_hub_art_frame_exams'),
+      );
+      final quizArtFrame = find.byKey(
+        const ValueKey<String>('academy_hub_art_frame_quiz'),
+      );
+      final examsRect = tester.getRect(examsArtFrame);
+      final quizRect = tester.getRect(quizArtFrame);
+      final examsSize = tester.getSize(examsArtFrame);
+      final quizSize = tester.getSize(quizArtFrame);
 
-      await tester.tap(find.byIcon(Icons.extension_outlined));
+      expect(examsArtFrame, findsOneWidget);
+      expect(quizArtFrame, findsOneWidget);
+      expect((examsSize.width - quizSize.width).abs(), lessThan(0.1));
+      expect((examsSize.height - quizSize.height).abs(), lessThan(0.1));
+      expect(examsSize.width, greaterThan(360));
+      expect(examsSize.height + quizSize.height, greaterThan(700));
+      expect(examsRect.top, greaterThanOrEqualTo(0));
+      expect(quizRect.bottom, lessThanOrEqualTo(844));
+    },
+  );
+
+  testWidgets(
+    'Academy hub tablet page only adds the training-lane heading above two pictures',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(1024, 768),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_back_button')),
+        findsOneWidget,
+      );
+      expect(find.text('Choose Your Training Lane'), findsOneWidget);
+      expect(find.byIcon(Icons.settings_outlined), findsNothing);
+      expect(find.byIcon(Icons.storefront_outlined), findsNothing);
+      expect(find.byType(Image), findsNWidgets(2));
+
+      final examsArtFrame = find.byKey(
+        const ValueKey<String>('academy_hub_art_frame_exams'),
+      );
+      final quizArtFrame = find.byKey(
+        const ValueKey<String>('academy_hub_art_frame_quiz'),
+      );
+      expect(
+        (tester.getTopLeft(examsArtFrame).dy -
+                tester.getTopLeft(quizArtFrame).dy)
+            .abs(),
+        lessThan(20),
+      );
+      expect(
+        (tester.getSize(examsArtFrame).width -
+                tester.getSize(quizArtFrame).width)
+            .abs(),
+        lessThan(0.1),
+      );
+      expect(
+        (tester.getSize(examsArtFrame).height -
+                tester.getSize(quizArtFrame).height)
+            .abs(),
+        lessThan(0.1),
+      );
+      expect(
+        tester.getTopLeft(examsArtFrame).dx,
+        lessThan(tester.getTopLeft(quizArtFrame).dx),
+      );
+    },
+  );
+
+  testWidgets(
+    'Academy exams image opens the exams dashboard',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(520, 320),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('academy_hub_card_exams')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 
@@ -213,9 +321,6 @@ void main() {
       final secondOffset = tester.getTopLeft(secondLevel);
       expect((firstOffset.dy - secondOffset.dy).abs(), lessThan(20));
       expect((firstOffset.dx - secondOffset.dx).abs(), greaterThan(40));
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
     },
   );
 
@@ -257,7 +362,9 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(find.byIcon(Icons.extension_outlined));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('academy_hub_card_exams')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 
@@ -311,7 +418,9 @@ void main() {
 
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(find.byIcon(Icons.extension_outlined));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('academy_hub_card_exams')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
 

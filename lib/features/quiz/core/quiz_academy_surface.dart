@@ -125,39 +125,45 @@ extension _QuizAcademySurface on _QuizScreen {
     );
   }
 
-  Color _academyRouteAccent(_QuizAcademyPalette palette, GambitQuizMode mode) {
+  Color _academyQuizModeAccent(
+    _QuizAcademyPalette palette,
+    GambitQuizMode mode,
+  ) {
     return mode == GambitQuizMode.guessName ? palette.cyan : palette.amber;
   }
 
-  IconData _academyRouteIcon(GambitQuizMode mode) {
+  IconData _academyQuizModeIcon(GambitQuizMode mode) {
     return mode == GambitQuizMode.guessName
         ? Icons.badge_outlined
         : Icons.route_outlined;
   }
 
-  String _academyRouteTitle(GambitQuizMode mode) {
+  String _academyQuizModeTitle(GambitQuizMode mode) {
     return mode == GambitQuizMode.guessName
         ? 'Identify Opening Name'
         : 'Complete Opening Line';
   }
 
-  String _academyRouteDescription(GambitQuizMode mode) {
+  String _academyQuizModeInfoMessage(GambitQuizMode mode) {
     return mode == GambitQuizMode.guessName
-        ? 'Recognize the opening from the board in a fixed 10-question run.'
-        : 'Finish the correct continuation of the opening shell in a fixed 10-question run.';
+        ? 'See the position, then choose the correct opening name. This mode keeps the standard 10-question quiz flow and uses the selected level rules.'
+        : 'See the position, then choose the correct next move to continue the opening line. This mode keeps the standard 10-question quiz flow and uses the selected level rules.';
   }
 
-  String _academyRouteBadge(GambitQuizMode mode) {
-    return mode == GambitQuizMode.guessName ? 'Name Drill' : 'Line Drill';
+  String _academyQuizModeAnswerLabel(GambitQuizMode mode) {
+    return mode == GambitQuizMode.guessName
+        ? 'ANSWER WITH OPENING NAME'
+        : 'ANSWER WITH NEXT MOVE';
   }
 
-  String _academyRouteStartLabel(GambitQuizMode mode) {
+  String _academyQuizModeStartLabel(GambitQuizMode mode) {
     return mode == GambitQuizMode.guessName
-        ? 'START NAME DRILL'
-        : 'START LINE DRILL';
+        ? 'START NAME QUIZ'
+        : 'START LINE QUIZ';
   }
 
   Widget _academyPixelPanel({
+    Key? panelKey,
     required _QuizAcademyPalette palette,
     required Widget child,
     EdgeInsetsGeometry padding = const EdgeInsets.all(16),
@@ -168,6 +174,7 @@ extension _QuizAcademySurface on _QuizScreen {
     final effectiveAccent = accent ?? palette.cyan;
     final background = fillColor ?? palette.panel;
     return Container(
+      key: panelKey,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -205,6 +212,7 @@ extension _QuizAcademySurface on _QuizScreen {
     required String subtitle,
     String? infoTitle,
     String? infoMessage,
+    Key? infoButtonKey,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,26 +234,30 @@ extension _QuizAcademySurface on _QuizScreen {
             if (infoMessage != null) ...<Widget>[
               const SizedBox(width: 8),
               _buildQuizInfoButton(
+                buttonKey: infoButtonKey,
                 title: infoTitle ?? title,
                 message: infoMessage,
               ),
             ],
           ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          subtitle,
-          style: _academyHudStyle(
-            palette: palette,
-            size: 12.5,
-            weight: FontWeight.w600,
+        if (subtitle.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: _academyHudStyle(
+              palette: palette,
+              size: 12.5,
+              weight: FontWeight.w600,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 
   Widget _academyHudButton({
+    Key? buttonKey,
     required _QuizAcademyPalette palette,
     required IconData icon,
     required String label,
@@ -272,6 +284,7 @@ extension _QuizAcademySurface on _QuizScreen {
         : background;
 
     return Material(
+      key: buttonKey,
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -337,50 +350,6 @@ extension _QuizAcademySurface on _QuizScreen {
           letterSpacing: 0.95,
           height: 1.0,
         ),
-      ),
-    );
-  }
-
-  Widget _academyMarquee({
-    required _QuizAcademyPalette palette,
-    required String eyebrow,
-    required String title,
-    required String subtitle,
-    required Color accent,
-    required List<Widget> badges,
-  }) {
-    return _academyPixelPanel(
-      palette: palette,
-      accent: accent,
-      fillColor: palette.shell,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _academyTag(palette: palette, label: eyebrow, accent: accent),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            style: _academyDisplayStyle(
-              palette: palette,
-              size: 32,
-              weight: FontWeight.w700,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: _academyHudStyle(
-              palette: palette,
-              size: 13,
-              weight: FontWeight.w600,
-            ),
-          ),
-          if (badges.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 16),
-            Wrap(spacing: 10, runSpacing: 10, children: badges),
-          ],
-        ],
       ),
     );
   }

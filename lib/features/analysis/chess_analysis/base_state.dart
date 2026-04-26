@@ -151,6 +151,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   late AnimationController _openingButtonFlashController;
   late AnimationController _storeCoinGainController;
   bool _openingButtonFlashRed = false;
+  Timer? _openingModeFeedbackTimer;
+  String? _openingModeFeedbackLabel;
+  Color? _openingModeFeedbackColor;
   Offset? _buttonRippleCenter;
   Offset? _storeCoinGainCenter;
   int _storeCoinGainAmount = 10;
@@ -486,7 +489,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _quizStudyMode = false;
   bool _quizOpeningsRoutePage = false;
   QuizStudyCategory _quizStudyCategory = QuizStudyCategory.basic;
-  bool _quizStudyShelfExpanded = false;
   String _quizStudySearchQuery = '';
   bool _quizStudyDetailOpen = false;
   bool _quizStudyInfoExpanded = false;
@@ -494,7 +496,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _quizStudyExpandedFamily;
   Map<String, int> _quizStudyOpeningCounts = <String, int>{};
   int _quizStudyShownPly = 0;
-  bool _quizCurriculumExpanded = false;
   int _quizStreak = 0;
   int _quizBestStreak = 0;
   int _quizTotalAnswered = 0;
@@ -2637,18 +2638,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _playVsBot ? max(1, _multiPvCount) : _effectiveMultiPvCount;
 
   int get _analysisMultiPvCount {
+    // Live suggestions should track the user-facing slider exactly.
+    // Move grading already degrades confidence when fewer pre-move lines exist.
     final visibleCount = _shouldShowVisualSuggestions
         ? _visualSuggestionLineCount
         : 1;
-    final needsGradingContext =
-        !kIsWeb &&
-        (_playVsBot
-            ? _vsBotEvalEnabled && _isHumanTurnInBotGame
-            : _suggestionsEnabled);
-    return max(
-      visibleCount,
-      needsGradingContext ? _moveQualityGradingMultiPv : 1,
-    );
+    return max(1, visibleCount);
   }
 
   bool get _isEngineActive =>
@@ -3182,7 +3177,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedHistoryIndex = decoded['historyIndex'];
       final savedSuggestionsEnabled = decoded['suggestionsEnabled'];
       final savedTopLines = decoded['topLines'];
-      final savedGambitPreviewLines = decoded['gambitPreviewLines'];
       final savedCurrentEval = decoded['currentEval'];
       final savedCurrentDepth = decoded['currentDepth'];
       final savedEvalWhiteTurn = decoded['evalWhiteTurn'];
@@ -3295,15 +3289,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
       }
 
+      // Opening preview arrows are transient UI state and should not survive
+      // leaving and re-entering the analysis board.
       _gambitPreviewLines = <EngineLine>[];
-      if (savedGambitPreviewLines is List) {
-        for (final item in savedGambitPreviewLines) {
-          if (item is! Map) continue;
-          final restored = EngineLine.fromMap(item);
-          if (restored == null) continue;
-          _gambitPreviewLines.add(restored);
-        }
-      }
 
       _currentOpening = savedCurrentOpening is String
           ? savedCurrentOpening
@@ -3526,6 +3514,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     'setoption name Contempt value 0',
   ];
 
+  Duration _analysisLiveCompletionTimeout({
+    required int depth,
+    required int multiPv,
+  }) {
+    final extraDepth = max(0, depth - 10);
+    final extraMultiPv = max(0, multiPv - 1);
+    final totalMs =
+        4000 +
+        (extraDepth * 900) +
+        (extraMultiPv * 1200) +
+        (extraDepth * extraMultiPv * 180);
+    return Duration(milliseconds: min(totalMs, 45000));
+  }
+
   String _nextEngineRequestId(EngineRequestRole role) {
     _engineRequestSequence++;
     return '${role.name}-$_engineRequestSequence';
@@ -3609,7 +3611,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _shouldShowVisualSuggestions && (!_playVsBot || _isHumanTurnInBotGame);
     final analysisMultiPvCount = _analysisMultiPvCount;
     setState(() {
-      _currentDepth = update.line.depth;
+      _currentDepth = max(_currentDepth, update.line.depth);
       _analysisLinesFen = update.request.fen;
       if (update.isPrimaryVariation &&
           _shouldPublishEvalSnapshot(update.snapshot)) {
@@ -3628,8 +3630,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               line.multiPv == update.line.multiPv ||
               line.multiPv > _visualSuggestionLineCount,
         );
-        _topLines.add(update.line);
-        _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+        if (update.line.multiPv <= _visualSuggestionLineCount) {
+          _topLines.add(update.line);
+          _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+        }
       } else if (_topLines.isNotEmpty && update.isPrimaryVariation) {
         _topLines = [];
       }
@@ -3741,15 +3745,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _analysisLinesFen = null;
       _currentDepth = 0;
     });
+    final analysisMultiPvCount = _analysisMultiPvCount;
     engine.scheduleSearch(
       EngineRequestSpec(
         requestId: _nextEngineRequestId(EngineRequestRole.liveAnalysis),
         role: EngineRequestRole.liveAnalysis,
         fen: _genFen(),
         whiteToMove: _isWhiteTurn,
-        multiPv: _analysisMultiPvCount,
+        multiPv: analysisMultiPvCount,
         depth: _engineDepth,
-        timeout: Duration(milliseconds: _playVsBot ? 1800 : 2600),
+        timeout: _playVsBot
+            ? const Duration(milliseconds: 1800)
+            : _analysisLiveCompletionTimeout(
+                depth: _engineDepth,
+                multiPv: analysisMultiPvCount,
+              ),
+        firstInfoTimeout: _playVsBot
+            ? null
+            : const Duration(milliseconds: 2600),
         preCommands: _analysisEngineRequestCommands,
       ),
       onUpdate: _handleLiveAnalysisUpdate,
@@ -4231,6 +4244,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final isLight = theme.brightness == Brightness.light;
+    final accentColor = useMonochrome ? scheme.onSurface : quality.color;
+    final panelColor = useMonochrome
+        ? Color.alphaBlend(
+            scheme.onSurface.withValues(alpha: isLight ? 0.06 : 0.12),
+            scheme.surface,
+          )
+        : Color.alphaBlend(
+            quality.color.withValues(alpha: isLight ? 0.10 : 0.14),
+            scheme.surface,
+          );
+    final borderColor = useMonochrome
+        ? scheme.onSurface.withValues(alpha: isLight ? 0.16 : 0.24)
+        : quality.color.withValues(alpha: isLight ? 0.28 : 0.40);
+    final shadowColor = (useMonochrome ? scheme.shadow : quality.color)
+        .withValues(alpha: isLight ? 0.10 : 0.18);
+    final titleColor = scheme.onSurface;
+    final messageColor = scheme.onSurface.withValues(
+      alpha: isLight ? 0.76 : 0.82,
+    );
+
     return IgnorePointer(
       child: Padding(
         padding: contentPadding,
@@ -4239,12 +4278,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0E1420).withValues(alpha: 0.94),
+              color: panelColor,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: quality.color.withValues(alpha: 0.42)),
+              border: Border.all(color: borderColor),
               boxShadow: [
                 BoxShadow(
-                  color: quality.color.withValues(alpha: 0.20),
+                  color: shadowColor,
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -4259,7 +4298,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     Text(
                       quality.displaySymbol,
                       style: TextStyle(
-                        color: quality.color,
+                        color: accentColor,
                         fontSize: quality == MoveQuality.masterstroke ? 22 : 18,
                         fontWeight: FontWeight.w900,
                       ),
@@ -4268,8 +4307,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: titleColor,
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.5,
@@ -4281,8 +4320,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 const SizedBox(height: 8),
                 Text(
                   message,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: messageColor,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                     height: 1.2,
@@ -4465,8 +4504,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             (e) =>
                 e.multiPv == multiPv || e.multiPv > _visualSuggestionLineCount,
           );
-          _topLines.add(EngineLine(move, cp, depth, multiPv));
-          _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+          if (multiPv <= _visualSuggestionLineCount) {
+            _topLines.add(EngineLine(move, cp, depth, multiPv));
+            _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+          }
         } else if (_topLines.isNotEmpty && multiPv == 1) {
           _topLines = [];
         }
@@ -4833,7 +4874,37 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       ? const Color(0xFFB16CFF)
       : const Color(0xFFFFD166);
 
+  Color _openingModeButtonColor(OpeningMode mode) {
+    return switch (mode) {
+      OpeningMode.yellowGlow => const Color(0xFFFFD166),
+      OpeningMode.violetGlow => const Color(0xFFB16CFF),
+      OpeningMode.blueGlow || OpeningMode.off => const Color(0xFF5AAEE8),
+    };
+  }
+
+  String? _openingModeFeedbackLabelFor(OpeningMode mode) {
+    return switch (mode) {
+      OpeningMode.yellowGlow => 'select',
+      OpeningMode.blueGlow => 'possible',
+      OpeningMode.violetGlow => 'gambit',
+      OpeningMode.off => null,
+    };
+  }
+
+  void _scheduleOpeningModeFeedbackDismiss() {
+    _openingModeFeedbackTimer?.cancel();
+    _openingModeFeedbackTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (!mounted) return;
+      setState(() {
+        _openingModeFeedbackLabel = null;
+        _openingModeFeedbackColor = null;
+      });
+    });
+  }
+
   void _toggleGambitMode() {
+    String? feedbackLabel;
+    Color? feedbackColor;
     setState(() {
       // Cycle: off -> yellow -> blue -> violet -> yellow
       if (_openingMode == OpeningMode.off) {
@@ -4877,7 +4948,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _gambitPreviewLines = [];
         _addLog('Opening mode back to yellow');
       }
+
+      feedbackLabel = _openingModeFeedbackLabelFor(_openingMode);
+      feedbackColor = _openingModeButtonColor(_openingMode);
+      _openingModeFeedbackLabel = feedbackLabel;
+      _openingModeFeedbackColor = feedbackColor;
     });
+
+    if (feedbackLabel != null && feedbackColor != null) {
+      _scheduleOpeningModeFeedbackDismiss();
+    }
   }
 
   Future<void> _showGameResultDialog(GameOutcome outcome);
@@ -5010,7 +5090,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     return InkWell(
                       onTap: () {
                         Navigator.of(context).pop();
-                        _activateGambit(opening);
+                        _activateGambit(opening, turnOffOpeningMode: true);
                       },
                       borderRadius: BorderRadius.circular(10),
                       child: Container(
@@ -5609,12 +5689,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  void _activateGambit(EcoLine gambit) {
+  void _activateGambit(EcoLine gambit, {bool turnOffOpeningMode = false}) {
     final preview = _buildGambitPreviewLines(gambit);
     _markGambitViewed(gambit.name);
     setState(() {
       _selectedGambit = gambit;
       _gambitPreviewLines = preview;
+      if (turnOffOpeningMode) {
+        _openingMode = OpeningMode.off;
+        _openingModeFeedbackLabel = null;
+        _openingModeFeedbackColor = null;
+      }
       _gambitSelectedFrom = null;
       _holdSelectedFrom = null;
       _legalTargets.clear();
@@ -10130,6 +10215,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!_playVsBot || _moveHistory.isEmpty) return;
 
     _send('stop');
+    final preserveSpentPowerCharge =
+        _vsBotOptimalLineRevealActive && _isHumanTurnInBotGame;
+    final chargeAtUndo = _vsBotCharge;
     int? restoredCharge;
     setState(() {
       _botThinking = false;
@@ -10175,9 +10263,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _analysisLinesFen = null;
       _currentDepth = 0;
       _currentEval = 0.0;
-      _vsBotCharge =
-          restoredCharge ??
-          (_moveHistory.isEmpty ? 0 : (_moveHistory.last.chargeAfter ?? 0));
+      _vsBotCharge = preserveSpentPowerCharge
+          ? chargeAtUndo
+          : restoredCharge ??
+                (_moveHistory.isEmpty
+                    ? 0
+                    : (_moveHistory.last.chargeAfter ?? 0));
     });
 
     _analyze();
@@ -10357,10 +10448,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       children: [
                         Text('END MATCH', style: titleStyle),
                         const SizedBox(height: 4),
-                        Text(
-                          'Study the final board as long as you want, then open the result screen.',
-                          style: subtitleStyle,
-                        ),
+                        Text('The game has concluded.', style: subtitleStyle),
                       ],
                     ),
                   ),
@@ -10649,80 +10737,111 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _marketplaceBtn(),
           _buildSuggestionTriggerButton(),
           if (!_playVsBot)
-            GestureDetector(
-              onTap: _toggleGambitMode,
-              child: AnimatedBuilder(
-                animation: _openingButtonFlashController,
-                builder: (context, child) {
-                  final flashProgress = _openingButtonFlashController.value;
-                  // Blink: visible for first half, invisible for second half
-                  final blink = (flashProgress * 4).floor().isEven;
-                  final Color activeColor = _openingButtonFlashRed
-                      ? Colors.redAccent
-                      : _openingMode == OpeningMode.violetGlow
-                      ? const Color(0xFFB16CFF)
-                      : _openingMode == OpeningMode.yellowGlow
-                      ? const Color(0xFFFFD166)
-                      : const Color(0xFF5AAEE8);
-                  final bool isOn =
-                      _openingButtonFlashRed || _openingMode != OpeningMode.off;
-                  final idleBackground = Color.alphaBlend(
-                    scheme.primary.withValues(alpha: isLight ? 0.10 : 0.05),
-                    scheme.surface,
-                  );
-                  final idleIconColor = scheme.onSurface.withValues(
-                    alpha: isLight ? 0.78 : 0.54,
-                  );
-
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isOn
-                          ? Color.alphaBlend(
-                              activeColor.withValues(
-                                alpha: isLight ? 0.18 : 0.10,
-                              ),
-                              scheme.surface,
-                            )
-                          : idleBackground,
-                      border: Border.all(
-                        color: isOn
-                            ? activeColor.withValues(
-                                alpha: isLight ? 0.56 : 0.36,
-                              )
-                            : scheme.outline.withValues(
-                                alpha: isLight ? 0.38 : 0.24,
-                              ),
+            SizedBox.square(
+              dimension: 40,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Positioned(
+                    top: -18,
+                    left: -20,
+                    right: -20,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: _openingModeFeedbackLabel == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        child: Text(
+                          _openingModeFeedbackLabel ?? '',
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                            color: _openingModeFeedbackColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
                       ),
-                      boxShadow: isOn
-                          ? [
-                              BoxShadow(
-                                color: activeColor.withValues(
-                                  alpha: _openingButtonFlashRed
-                                      ? (blink ? 0.7 : 0.0)
-                                      : 0.5,
-                                ),
-                                blurRadius: 15,
-                                spreadRadius: 2,
-                              ),
-                            ]
-                          : null,
                     ),
-                    child: Icon(
-                      Icons.auto_awesome,
-                      color: _openingButtonFlashRed
-                          ? (blink ? Colors.redAccent : idleIconColor)
-                          : _openingMode == OpeningMode.violetGlow
-                          ? const Color(0xFFB16CFF)
-                          : _openingMode == OpeningMode.yellowGlow
-                          ? const Color(0xFFFFD166)
-                          : _openingMode == OpeningMode.blueGlow
-                          ? const Color(0xFF5AAEE8)
-                          : idleIconColor,
+                  ),
+                  GestureDetector(
+                    onTap: _toggleGambitMode,
+                    child: AnimatedBuilder(
+                      animation: _openingButtonFlashController,
+                      builder: (context, child) {
+                        final flashProgress =
+                            _openingButtonFlashController.value;
+                        // Blink: visible for first half, invisible for second half
+                        final blink = (flashProgress * 4).floor().isEven;
+                        final Color activeColor = _openingButtonFlashRed
+                            ? Colors.redAccent
+                            : _openingModeButtonColor(_openingMode);
+                        final bool isOn =
+                            _openingButtonFlashRed ||
+                            _openingMode != OpeningMode.off;
+                        final idleBackground = Color.alphaBlend(
+                          scheme.primary.withValues(
+                            alpha: isLight ? 0.10 : 0.05,
+                          ),
+                          scheme.surface,
+                        );
+                        final idleIconColor = scheme.onSurface.withValues(
+                          alpha: isLight ? 0.78 : 0.54,
+                        );
+
+                        return Container(
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isOn
+                                ? Color.alphaBlend(
+                                    activeColor.withValues(
+                                      alpha: isLight ? 0.18 : 0.10,
+                                    ),
+                                    scheme.surface,
+                                  )
+                                : idleBackground,
+                            border: Border.all(
+                              color: isOn
+                                  ? activeColor.withValues(
+                                      alpha: isLight ? 0.56 : 0.36,
+                                    )
+                                  : scheme.outline.withValues(
+                                      alpha: isLight ? 0.38 : 0.24,
+                                    ),
+                            ),
+                            boxShadow: isOn
+                                ? [
+                                    BoxShadow(
+                                      color: activeColor.withValues(
+                                        alpha: _openingButtonFlashRed
+                                            ? (blink ? 0.7 : 0.0)
+                                            : 0.5,
+                                      ),
+                                      blurRadius: 15,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Icon(
+                            Icons.auto_awesome,
+                            color: _openingButtonFlashRed
+                                ? (blink ? Colors.redAccent : idleIconColor)
+                                : _openingMode == OpeningMode.off
+                                ? idleIconColor
+                                : _openingModeButtonColor(_openingMode),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
             )
           else
@@ -12604,9 +12723,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'historyIndex': _historyIndex,
       'moveHistory': _moveHistory.map(_moveRecordToMap).toList(),
       'topLines': _topLines.map((line) => line.toMap()).toList(),
-      'gambitPreviewLines': _gambitPreviewLines
-          .map((line) => line.toMap())
-          .toList(),
     };
     await prefs.setString(_savedDefaultSnapshotKey, jsonEncode(payload));
     if (logChange) {
@@ -14411,6 +14527,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _menuMusicFadeController.dispose();
     _sectionTransitionController.dispose();
     _menuExitAnimationController.dispose();
+    _openingModeFeedbackTimer?.cancel();
     _openingButtonFlashController.dispose();
     _storeCoinGainController.dispose();
     _botSetupPageController.dispose();

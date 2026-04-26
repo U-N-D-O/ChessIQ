@@ -1,0 +1,122 @@
+[
+  {
+    "PuzzleId": "7kzr3",
+    "FEN": "8/4k3/4p1K1/5n1P/5P2/5P2/8/8 b - - 4 52",
+    "Moves": "e7d6 h5h6 d6e7 h6h7",
+    "Rating": 751
+  },
+  {
+    "PuzzleId": "vGSYz",
+    "FEN": "8/8/3b4/1R6/2p1b3/2B5/1Pk2K2/8 w - - 6 73",
+    "Moves": "b5b6 d6c5 f2g3 c5b6",
+    "Rating": 888
+  },
+  {
+    "PuzzleId": "cvjpb",
+    "FEN": "8/5r1k/6q1/4Qp1p/8/2B5/P6P/7K b - - 2 46",
+    "Moves": "f5f4 e5h8",
+    "Rating": 839
+  },
+  {
+    "PuzzleId": "b7DZ3",
+    "FEN": "2r1r1k1/Q4p2/2p3p1/3p3p/3Rb1qb/P1N3B1/1P3PP1/2R3K1 w - - 2 29",
+    "Moves": "g3h4 g4g2",
+    "Rating": 872
+  },
+  {
+    "PuzzleId": "KZBke",
+    "FEN": "8/p3Q3/4p1rk/3pPr2/8/8/PP4PK/8 w - - 6 37",
+    "Moves": "e7h4 f5h5 h4h5 h6h5",
+    "Rating": 889
+  },
+  {
+    "PuzzleId": "rNfyS",
+    "FEN": "7k/p4rQ1/2p2N1p/1p2pP2/1q2P3/n3P3/2P3R1/2K4R b - - 0 39",
+    "Moves": "f7g7 h1h6 g7h7 h6h7",
+    "Rating": 1202
+  },
+  {
+    "PuzzleId": "1fCPl",
+    "FEN": "r4r2/p1p2ppk/2ppb3/3q4/5Q1N/2P1p1RP/PP4P1/R5K1 b - - 0 25",
+    "Moves": "g7g5 g3g5 d5g5 f4g5",
+    "Rating": 1174
+  },
+  {
+    "PuzzleId": "jtU4a",
+    "FEN": "6k1/ppp2pp1/3p2Pp/6NQ/8/1P2q2P/P4RPK/4r3 b - - 0 33",
+    "Moves": "e3f2 g6f7 g8f8 g5h7 f8e7 f7f8q",
+    "Rating": 1365
+  },
+  {
+    "PuzzleId": "9p8lz",
+    "FEN": "R6k/3q2pp/5p2/2b1p2Q/2P5/6BP/3r1PPK/1q6 b - - 3 38",
+    "Moves": "d7d8 h5e8 c5f8 e8f8 d8f8 a8f8",
+    "Rating": 1498
+  },
+  {
+    "PuzzleId": "ikrN4",
+    "FEN": "r2q1r2/1bp3kp/p4pp1/1p6/1Pn2N2/P1Q2N2/2B2PPP/5RK1 b - - 1 23",
+    "Moves": "b7f3 f4e6 g7h8 e6d8",
+    "Rating": 1177
+  },
+  {
+    "PuzzleId": "wKa0I",
+    "FEN": "8/p2br1k1/3N1p2/7p/5NpP/4pp2/P5P1/4R1K1 w - - 2 37",
+    "Moves": "f4h5 g7h6 h5f6 f3f2",
+    "Rating": 1972
+  },
+  {
+    "PuzzleId": "KPCxK",
+    "FEN": "r2qkb1r/pp3p1p/8/2pNPn2/5B2/5N2/PPP3P1/2KR2R1 b kq - 0 16",
+    "Moves": "d8a5 d5f6 e8e7 d1d7 e7e6 f3g5",
+    "Rating": 1505
+  },
+  {
+    "PuzzleId": "4t4bh",
+    "FEN": "2r5/2qk1Q2/pp3p1p/5N2/2P2P2/8/P4P1P/6K1 b - - 0 39",
+    "Moves": "d7c6 f7d5",
+    "Rating": 1550
+  },
+  {
+    "PuzzleId": "nkpQq",
+    "FEN": "5Q2/pp1k1p2/2p1p1p1/8/4R3/3PK1q1/PP6/3R3r w - - 3 36",
+    "Moves": "e3d2 h1d1 d2d1 g3d3 d1c1 d3e4",
+    "Rating": 1890
+  },
+  {
+    "PuzzleId": "tx8AB",
+    "FEN": "3r2k1/6pp/8/p2bP3/3P2p1/P2QP1q1/5R2/2R1K3 w - - 0 32",
+    "Moves": "d3f5 g3e3 f2e2 e3c1",
+    "Rating": 1961
+  },
+  {
+    "PuzzleId": "XTbAD",
+    "FEN": "r2q3k/ppp1n1rp/3pbN2/1B5Q/4PR1N/4b3/PPP3PP/R6K w - - 1 17",
+    "Moves": "f4f3 e6f7 f3e3 f7h5",
+    "Rating": 2159
+  },
+  {
+    "PuzzleId": "eScTf",
+    "FEN": "3b3k/6pp/2Q5/3N1p2/2p5/5P1P/6PK/4q3 b - - 7 45",
+    "Moves": "e1e5 f3f4 e5e4 c6d7 h7h6 d7d8",
+    "Rating": 2146
+  },
+  {
+    "PuzzleId": "mGEj4",
+    "FEN": "8/8/R2p3k/3P4/4BPKp/P5rP/3b2P1/8 w - - 7 46",
+    "Moves": "g4h4 d2e1 a6d6 g3g6 g2g3 e1g3",
+    "Rating": 2337
+  },
+  {
+    "PuzzleId": "Z5CBy",
+    "FEN": "6k1/pq2b1p1/1p2p1R1/n3Pr1p/3P4/P2Q1N2/1P1BK3/8 b - - 0 29",
+    "Moves": "a5b3 d3b3 b7e4 b3e3",
+    "Rating": 2008
+  },
+  {
+    "PuzzleId": "nMMtP",
+    "FEN": "8/3k4/p1p2K2/P3P1P1/3n4/4N3/3p4/8 b - - 0 56",
+    "Moves": "d4c2 e5e6 d7e8 e3f5 d2d1q f5g7 e8d8 e6e7 d8c7 e7e8q",
+    "Rating": 2406
+  }
+]
