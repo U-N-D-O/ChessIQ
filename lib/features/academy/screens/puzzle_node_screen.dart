@@ -1785,35 +1785,44 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                               ],
                             ),
                           )
-                        : Column(
-                            children: [
-                              Expanded(
-                                flex: 6,
-                                child: _buildBoardCard(
-                                  themeProvider,
-                                  monochrome: useMonochrome,
-                                  layout: layout,
-                                ),
-                              ),
-                              Expanded(
-                                flex: 4,
-                                child: _nonBoardChromeFilter(
-                                  useMonochrome,
-                                  AnimatedOpacity(
-                                    opacity: _focusModeActive ? 0.5 : 1.0,
-                                    duration: const Duration(milliseconds: 220),
-                                    child: _buildIntelPanel(
-                                      provider,
-                                      layout: layout,
-                                    ),
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      _buildBoardCard(
+                                        themeProvider,
+                                        monochrome: useMonochrome,
+                                        layout: layout,
+                                      ),
+                                      _nonBoardChromeFilter(
+                                        useMonochrome,
+                                        AnimatedOpacity(
+                                          opacity: _focusModeActive ? 0.5 : 1.0,
+                                          duration: const Duration(
+                                            milliseconds: 220,
+                                          ),
+                                          child: _buildIntelPanel(
+                                            provider,
+                                            layout: layout,
+                                          ),
+                                        ),
+                                      ),
+                                      _buildBottomActions(
+                                        provider,
+                                        layout: layout,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                            ],
+                              );
+                            },
                           ),
                   ),
-                  if (!layout.isLandscape)
-                    _buildBottomActions(provider, layout: layout),
                 ],
               ),
           ],
@@ -2413,6 +2422,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     final boardContent = layout.useHorizontalEvalStrip
         ? Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 key: const ValueKey<String>('puzzle_node_compact_eval_strip'),
@@ -2453,7 +2463,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 ),
               ),
               const SizedBox(height: 8),
-              Expanded(child: board),
+              board,
             ],
           )
         : Row(
@@ -2763,6 +2773,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     return Padding(
       padding: layout.intelOuterPadding,
       child: Container(
+        key: const ValueKey<String>('puzzle_node_intel_panel'),
         padding: layout.intelInnerPadding,
         decoration: puzzleAcademyPanelDecoration(
           palette: palette,
@@ -2771,6 +2782,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
           radius: 10,
         ),
         child: Column(
+          mainAxisSize: layout.isLandscape
+              ? MainAxisSize.max
+              : MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -2821,13 +2835,30 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 compact: layout.compactLandscape,
               ),
             SizedBox(height: layout.intelDetailGap),
-            Expanded(
-              child: Text(
+            if (layout.isLandscape)
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    _status,
+                    key: const ValueKey<String>('puzzle_node_intel_status'),
+                    maxLines: layout.compactLandscape ? 4 : null,
+                    overflow: layout.compactLandscape
+                        ? TextOverflow.ellipsis
+                        : TextOverflow.visible,
+                    style: puzzleAcademyHudStyle(
+                      palette: palette,
+                      size: layout.intelStatusSize,
+                      weight: FontWeight.w600,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              )
+            else
+              Text(
                 _status,
-                maxLines: layout.compactLandscape ? 4 : null,
-                overflow: layout.compactLandscape
-                    ? TextOverflow.ellipsis
-                    : TextOverflow.visible,
+                key: const ValueKey<String>('puzzle_node_intel_status'),
                 style: puzzleAcademyHudStyle(
                   palette: palette,
                   size: layout.intelStatusSize,
@@ -2835,7 +2866,6 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                   height: 1.45,
                 ),
               ),
-            ),
           ],
         ),
       ),

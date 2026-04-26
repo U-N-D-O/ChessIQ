@@ -45,6 +45,20 @@ Future<void> _pumpCreditsDialog(
   await tester.pump(const Duration(milliseconds: 450));
 }
 
+ScrollController _creditsDialogScrollController(WidgetTester tester) {
+  final scrollView = tester.widget<SingleChildScrollView>(
+    find.byKey(const ValueKey<String>('credits_dialog_scroll_view')),
+  );
+  return scrollView.controller!;
+}
+
+double _normalizedScrollOffset(ScrollController controller) {
+  if (!controller.hasClients || controller.position.maxScrollExtent <= 0) {
+    return 0.0;
+  }
+  return controller.offset / controller.position.maxScrollExtent;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -90,6 +104,36 @@ void main() {
       );
 
       await tester.pump(const Duration(milliseconds: 700));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'credits dialog keeps scroll position through the glitch style swap',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpCreditsDialog(tester, size: const Size(390, 844));
+
+      final controller = _creditsDialogScrollController(tester);
+      expect(controller.hasClients, isTrue);
+
+      controller.jumpTo(controller.position.maxScrollExtent);
+      await tester.pump();
+
+      final before = _normalizedScrollOffset(controller);
+      expect(before, greaterThan(0.9));
+
+      await tester.pump(const Duration(milliseconds: 4300));
+      await tester.pump();
+
+      final after = _normalizedScrollOffset(controller);
+      expect(after, greaterThan(0.78));
+      expect(after, closeTo(before, 0.16));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

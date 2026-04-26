@@ -160,12 +160,19 @@ void main() {
       final boardCardRect = tester.getRect(
         find.byKey(const ValueKey<String>('puzzle_node_board_card')),
       );
+      final intelPanelRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_intel_panel')),
+      );
+      final intelStatusRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_intel_status')),
+      );
       final regretLabel = tester.widget<Text>(
         find.byKey(const ValueKey<String>('puzzle_node_regret_button_label')),
       );
 
       expect(evalStripRect.bottom, lessThanOrEqualTo(boardRect.top));
-      expect(boardRect.width, greaterThan(boardCardRect.width - 60));
+      expect(boardRect.width, greaterThan(boardCardRect.width - 30));
+      expect(intelPanelRect.bottom - intelStatusRect.bottom, lessThan(40));
       expect(regretLabel.maxLines, 1);
     },
   );

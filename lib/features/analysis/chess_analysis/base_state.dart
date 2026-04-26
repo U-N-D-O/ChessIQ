@@ -1563,6 +1563,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  double? _captureScrollAnchor(ScrollController controller) {
+    if (!controller.hasClients) {
+      return null;
+    }
+
+    final position = controller.position;
+    final totalExtent = position.maxScrollExtent + position.viewportDimension;
+    if (totalExtent <= 0) {
+      return 0.0;
+    }
+
+    return ((position.pixels + position.viewportDimension * 0.5) / totalExtent)
+        .clamp(0.0, 1.0);
+  }
+
+  void _restoreScrollAnchor(ScrollController controller, double? anchor) {
+    if (anchor == null || !controller.hasClients) {
+      return;
+    }
+
+    final position = controller.position;
+    final totalExtent = position.maxScrollExtent + position.viewportDimension;
+    if (totalExtent <= 0) {
+      return;
+    }
+
+    final target = (anchor * totalExtent - position.viewportDimension * 0.5)
+        .clamp(0.0, position.maxScrollExtent);
+
+    if ((position.pixels - target).abs() > 0.5) {
+      controller.jumpTo(target);
+    }
+  }
+
   _CreditsDialogVisuals _buildCreditsDialogVisuals(BuildContext context) {
     final appTheme = context.watch<AppThemeProvider>();
     final theme = Theme.of(context);
@@ -1804,11 +1838,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final phase = _pulseController.value * 2 * pi;
-    final tintOpacity = 0.08 + strength * 0.14;
     final baseJitter = Offset(
-      sin(phase * 9.5) * strength * 1.3,
-      cos(phase * 7.0) * strength * 0.25,
+      sin(phase * 9.5) * strength * 1.15,
+      cos(phase * 6.8) * strength * 0.36,
     );
+    final shellSkew = sin(phase * 1.9) * strength * 0.0036;
     final fragmentSpecs =
         <
           ({
@@ -1824,82 +1858,77 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             top: 0.08 + (sin(phase * 0.8) + 1.0) * 0.015,
             height: 0.07,
             inset: 0.02,
-            offset: -34 * strength,
-            opacity: 0.18 + strength * 0.12,
+            offset: -26 * strength,
+            opacity: 0.16 + strength * 0.14,
             tint: visuals.primaryAccent,
           ),
           (
             top: 0.23 + (cos(phase * 1.1) + 1.0) * 0.018,
             height: 0.05,
             inset: 0.10,
-            offset: 42 * strength,
-            opacity: 0.14 + strength * 0.10,
+            offset: 30 * strength,
+            opacity: 0.14 + strength * 0.12,
             tint: visuals.secondaryAccent,
           ),
           (
             top: 0.36 + (sin(phase * 1.6) + 1.0) * 0.012,
             height: 0.09,
             inset: 0.04,
-            offset: -22 * strength,
-            opacity: 0.16 + strength * 0.11,
+            offset: -16 * strength,
+            opacity: 0.18 + strength * 0.12,
             tint: Colors.white,
           ),
           (
             top: 0.55 + (cos(phase * 1.9) + 1.0) * 0.02,
             height: 0.06,
             inset: 0.14,
-            offset: 28 * strength,
-            opacity: 0.12 + strength * 0.10,
+            offset: 22 * strength,
+            opacity: 0.12 + strength * 0.11,
             tint: visuals.primaryAccent,
           ),
           (
             top: 0.72 + (sin(phase * 1.3) + 1.0) * 0.018,
             height: 0.07,
             inset: 0.03,
-            offset: -30 * strength,
-            opacity: 0.15 + strength * 0.12,
+            offset: -24 * strength,
+            opacity: 0.16 + strength * 0.13,
             tint: visuals.secondaryAccent,
           ),
         ];
 
-    Widget tintedShiftedLayer({
-      required Color tint,
-      required Offset offset,
-      required double opacity,
-    }) {
-      return IgnorePointer(
-        child: Transform.translate(
-          offset: offset,
-          child: Opacity(
-            opacity: opacity,
-            child: ColorFiltered(
-              colorFilter: ColorFilter.mode(
-                tint.withValues(alpha: 0.92),
-                BlendMode.srcATop,
-              ),
-              child: child,
-            ),
-          ),
-        ),
-      );
-    }
-
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        Transform.translate(
-          offset: baseJitter,
-          child: Opacity(opacity: 0.96 - strength * 0.08, child: child),
+        Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.translationValues(baseJitter.dx, baseJitter.dy, 0)
+            ..setEntry(0, 1, shellSkew),
+          child: ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: 0.12 + strength * 0.34,
+              sigmaY: 0.04 + strength * 0.10,
+            ),
+            child: child,
+          ),
         ),
-        tintedShiftedLayer(
-          tint: visuals.primaryAccent,
-          offset: Offset(-10 * strength, 0),
-          opacity: tintOpacity,
-        ),
-        tintedShiftedLayer(
-          tint: visuals.secondaryAccent,
-          offset: Offset(9 * strength, 0),
-          opacity: tintOpacity * 0.92,
+        IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[
+                  visuals.primaryAccent.withValues(alpha: 0.012),
+                  Colors.transparent,
+                  visuals.secondaryAccent.withValues(alpha: 0.018),
+                  Colors.transparent,
+                  visuals.primaryAccent.withValues(alpha: 0.014),
+                ],
+                stops: const <double>[0.0, 0.16, 0.52, 0.82, 1.0],
+              ),
+            ),
+            child: const SizedBox.expand(),
+          ),
         ),
         for (final fragment in fragmentSpecs)
           IgnorePointer(
@@ -1912,17 +1941,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               child: Transform.translate(
                 offset: Offset(
                   fragment.offset,
-                  sin(phase * 4.0 + fragment.top * 10) * strength * 0.8,
+                  sin(phase * 4.0 + fragment.top * 10) * strength * 0.85,
                 ),
-                child: Opacity(
-                  opacity: fragment.opacity,
-                  child: ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                      fragment.tint.withValues(alpha: 0.95),
-                      BlendMode.srcATop,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: <Color>[
+                        fragment.tint.withValues(alpha: 0.0),
+                        fragment.tint.withValues(
+                          alpha: fragment.opacity * 0.54,
+                        ),
+                        Colors.white.withValues(alpha: fragment.opacity * 0.32),
+                        fragment.tint.withValues(
+                          alpha: fragment.opacity * 0.18,
+                        ),
+                        fragment.tint.withValues(alpha: 0.0),
+                      ],
+                      stops: const <double>[0.0, 0.18, 0.5, 0.82, 1.0],
                     ),
-                    child: child,
+                    border: Border(
+                      top: BorderSide(
+                        color: fragment.tint.withValues(alpha: 0.24),
+                      ),
+                      bottom: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
                   ),
+                  child: const SizedBox.expand(),
                 ),
               ),
             ),
@@ -11543,6 +11591,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Future<void> _showCreditsDialog() async {
     final scrollController = ScrollController();
+    var lastRenderedCreditsMode = _creditsVisualMode;
+    double? pendingCreditsScrollAnchor;
+    var creditsScrollRestoreQueued = false;
+
+    void queueCreditsScrollRestore() {
+      if (creditsScrollRestoreQueued) {
+        return;
+      }
+
+      creditsScrollRestoreQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        creditsScrollRestoreQueued = false;
+        final anchor = pendingCreditsScrollAnchor;
+        pendingCreditsScrollAnchor = null;
+        _restoreScrollAnchor(scrollController, anchor);
+      });
+    }
+
     setState(() {
       _creditsDialogOpen = true;
       _resetCreditsVisualLoop();
@@ -11558,6 +11624,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             animation: _pulseController,
             builder: (context, child) {
               final visuals = _buildCreditsDialogVisuals(context);
+              if (lastRenderedCreditsMode != visuals.mode) {
+                pendingCreditsScrollAnchor = _captureScrollAnchor(
+                  scrollController,
+                );
+                lastRenderedCreditsMode = visuals.mode;
+                queueCreditsScrollRestore();
+              }
               final media = MediaQuery.of(context);
               final isShortViewport = media.size.height < 480;
               final motionDuration = puzzleAcademyMotionDuration(
@@ -11683,6 +11756,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                           controller: scrollController,
                                           thumbVisibility: true,
                                           child: SingleChildScrollView(
+                                            key: const ValueKey<String>(
+                                              'credits_dialog_scroll_view',
+                                            ),
                                             controller: scrollController,
                                             padding: const EdgeInsets.only(
                                               right: 4,

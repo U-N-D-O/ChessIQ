@@ -4521,7 +4521,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                         infoMessage: _academyQuizModeInfoMessage(
                           GambitQuizMode.guessName,
                         ),
-                        icon: _academyQuizModeIcon(GambitQuizMode.guessName),
                         accent: palette.cyan,
                         selected:
                             !_quizStudyMode &&
@@ -4546,7 +4545,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                         infoMessage: _academyQuizModeInfoMessage(
                           GambitQuizMode.guessLine,
                         ),
-                        icon: _academyQuizModeIcon(GambitQuizMode.guessLine),
                         accent: palette.amber,
                         selected:
                             !_quizStudyMode &&
@@ -4635,7 +4633,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required String assetPath,
     required String title,
     required String infoMessage,
-    required IconData icon,
     required Color accent,
     required bool selected,
     required bool compact,
@@ -4646,21 +4643,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         : compact
         ? 12.0
         : 16.0;
-    final iconBoxSize = dense
-        ? 36.0
-        : compact
-        ? 40.0
-        : 46.0;
-    final iconSize = dense
-        ? 18.0
-        : compact
-        ? 20.0
-        : 22.0;
-    final titleGap = dense
-        ? 8.0
-        : compact
-        ? 10.0
-        : 12.0;
     final sectionGap = dense
         ? 8.0
         : compact
@@ -4677,10 +4659,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         ? 18.0
         : 24.0;
     final previewHeight = dense
-        ? 78.0
+        ? 92.0
         : compact
-        ? 118.0
-        : 178.0;
+        ? 132.0
+        : 192.0;
+    final previewInset = dense
+        ? 4.0
+        : compact
+        ? 6.0
+        : 8.0;
     final cardColor = selected
         ? Color.alphaBlend(accent.withValues(alpha: 0.18), palette.panelAlt)
         : palette.panelAlt;
@@ -4729,20 +4716,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Container(
-                    width: iconBoxSize,
-                    height: iconBoxSize,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.20),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: accent.withValues(alpha: 0.60),
-                        width: 2,
-                      ),
-                    ),
-                    child: Icon(icon, color: accent, size: iconSize),
-                  ),
-                  SizedBox(width: titleGap),
                   Expanded(
                     child: Text(
                       title,
@@ -4774,6 +4747,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               Container(
                 height: previewHeight,
                 decoration: BoxDecoration(
+                  color: palette.shell,
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: accent.withValues(alpha: 0.58),
@@ -4792,10 +4766,49 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   child: Stack(
                     fit: StackFit.expand,
                     children: <Widget>[
-                      Image.asset(
-                        assetPath,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: <Color>[
+                              Color.alphaBlend(
+                                accent.withValues(alpha: 0.16),
+                                palette.shell,
+                              ),
+                              palette.shell,
+                            ],
+                          ),
+                          image: DecorationImage(
+                            image: AssetImage(assetPath),
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            opacity: selected ? 0.24 : 0.18,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(previewInset),
+                        child: Image.asset(
+                          assetPath,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.center,
+                        ),
+                      ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: <Color>[
+                              palette.shell.withValues(alpha: 0.56),
+                              Colors.transparent,
+                              Colors.transparent,
+                              palette.shell.withValues(alpha: 0.44),
+                            ],
+                            stops: const <double>[0.0, 0.16, 0.84, 1.0],
+                          ),
+                        ),
                       ),
                       DecoratedBox(
                         decoration: BoxDecoration(
@@ -4803,11 +4816,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: <Color>[
+                              accent.withValues(alpha: 0.10),
                               Colors.transparent,
-                              palette.shell.withValues(alpha: 0.12),
-                              palette.shell.withValues(alpha: 0.5),
+                              palette.shell.withValues(alpha: 0.54),
                             ],
-                            stops: const <double>[0.0, 0.58, 1.0],
+                            stops: const <double>[0.0, 0.48, 1.0],
                           ),
                         ),
                       ),
@@ -5686,16 +5699,16 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         isLandscape && hasQuizBoard && media.size.width >= 920;
     final pageHorizontalPadding = compactLandscapePlayLayout
         ? 6.0
-      : compactPortraitPlayLayout
-      ? 8.0
-      : compactPlayLayout
+        : compactPortraitPlayLayout
+        ? 8.0
+        : compactPlayLayout
         ? 12.0
         : 16.0;
     final pageTopPadding = compactLandscapePlayLayout
-      ? 6.0
-      : compactPortraitPlayLayout
-      ? 4.0
-      : 12.0;
+        ? 6.0
+        : compactPortraitPlayLayout
+        ? 4.0
+        : 12.0;
     final pageBottomPadding = compactLandscapePlayLayout ? 8.0 : 16.0;
     final quizPadding = EdgeInsets.fromLTRB(
       pageHorizontalPadding + media.padding.left,
@@ -5705,22 +5718,22 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
     final routeAccent = _academyQuizModeAccent(palette, displayedQuizMode);
     final topToContentGap = compactLandscapePlayLayout
-      ? 6.0
-      : compactPortraitPlayLayout
-      ? 8.0
-      : 12.0;
+        ? 6.0
+        : compactPortraitPlayLayout
+        ? 8.0
+        : 12.0;
     final contentGap = compactLandscapePlayLayout
         ? 8.0
-      : compactPortraitPlayLayout
-      ? 8.0
-      : compactPlayLayout
+        : compactPortraitPlayLayout
+        ? 8.0
+        : compactPlayLayout
         ? 10.0
         : 12.0;
     final densePanelPadding = compactLandscapePlayLayout
         ? 4.0
-      : compactPortraitPlayLayout
-      ? 8.0
-      : compactPlayLayout
+        : compactPortraitPlayLayout
+        ? 8.0
+        : compactPlayLayout
         ? 10.0
         : 12.0;
     final compactOptionSpacing = compactLandscapePlayLayout
@@ -5730,9 +5743,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         : 10.0;
     final topPanelPadding = compactLandscapePlayLayout
         ? const EdgeInsets.symmetric(horizontal: 4, vertical: 4)
-      : compactPortraitPlayLayout
-      ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
-      : compactPlayLayout
+        : compactPortraitPlayLayout
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+        : compactPlayLayout
         ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
         : const EdgeInsets.all(10);
     final topPanelGap = compactLandscapePlayLayout ? 4.0 : 8.0;
@@ -6779,24 +6792,24 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           : displayedOptions.length;
                       final optionHeight =
                           displayedQuizMode == GambitQuizMode.guessLine
-                        ? 66.0
+                          ? 66.0
                           : 48.0;
                       final promptHeight = displayedPrompt.isEmpty
-                        ? 0.0
-                        : displayedQuizMode == GambitQuizMode.guessLine
-                        ? 40.0
-                        : 32.0;
+                          ? 0.0
+                          : displayedQuizMode == GambitQuizMode.guessLine
+                          ? 40.0
+                          : 32.0;
                       final footerAllowance =
-                        displayedQuizMode == GambitQuizMode.guessLine
-                        ? 100.0
-                        : 88.0;
+                          displayedQuizMode == GambitQuizMode.guessLine
+                          ? 100.0
+                          : 88.0;
                       final estimatedQuestionHeight =
                           (densePanelPadding * 2) +
                           promptHeight +
                           (displayedPrompt.isEmpty ? 0.0 : 10.0) +
                           (optionCount * optionHeight) +
                           (max(0, optionCount - 1) * compactOptionSpacing) +
-                        footerAllowance;
+                          footerAllowance;
                       final maxQuestionHeight = max(
                         220.0,
                         constraints.maxHeight - 120.0,

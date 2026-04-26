@@ -501,6 +501,34 @@ void main() {
       );
       expect(_assetImageFinder('assets/academy/quiz_name.png'), findsOneWidget);
       expect(_assetImageFinder('assets/academy/quiz_line.png'), findsOneWidget);
+      final identifyPreviewImage = tester.widget<Image>(
+        find.descendant(
+          of: identifyCard,
+          matching: _assetImageFinder('assets/academy/quiz_name.png'),
+        ),
+      );
+      final completePreviewImage = tester.widget<Image>(
+        find.descendant(
+          of: completeCard,
+          matching: _assetImageFinder('assets/academy/quiz_line.png'),
+        ),
+      );
+      expect(identifyPreviewImage.fit, BoxFit.contain);
+      expect(completePreviewImage.fit, BoxFit.contain);
+      expect(
+        find.descendant(
+          of: identifyCard,
+          matching: find.byIcon(Icons.badge_outlined),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: completeCard,
+          matching: find.byIcon(Icons.route_outlined),
+        ),
+        findsNothing,
+      );
 
       await tester.dragUntilVisible(
         identifyCard,
@@ -674,6 +702,34 @@ void main() {
       );
       expect(
         find.text('Review the selected mode and level, then begin.'),
+        findsNothing,
+      );
+      final identifyPreviewImage = tester.widget<Image>(
+        find.descendant(
+          of: identifyCard,
+          matching: _assetImageFinder('assets/academy/quiz_name.png'),
+        ),
+      );
+      final completePreviewImage = tester.widget<Image>(
+        find.descendant(
+          of: completeCard,
+          matching: _assetImageFinder('assets/academy/quiz_line.png'),
+        ),
+      );
+      expect(identifyPreviewImage.fit, BoxFit.contain);
+      expect(completePreviewImage.fit, BoxFit.contain);
+      expect(
+        find.descendant(
+          of: identifyCard,
+          matching: find.byIcon(Icons.badge_outlined),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: completeCard,
+          matching: find.byIcon(Icons.route_outlined),
+        ),
         findsNothing,
       );
 
