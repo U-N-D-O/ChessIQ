@@ -212,11 +212,7 @@ class AppThemeProvider extends ChangeNotifier {
         isWhitePiece
             ? Color.lerp(
                 Color.lerp(
-                  Color.lerp(
-                    const Color(0xFFF3F3F3),
-                    Colors.white,
-                    0.15,
-                  )!,
+                  Color.lerp(const Color(0xFFF3F3F3), Colors.white, 0.15)!,
                   Colors.white,
                   0.05,
                 )!,
