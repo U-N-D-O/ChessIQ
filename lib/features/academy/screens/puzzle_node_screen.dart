@@ -98,9 +98,8 @@ class _PuzzleNodeLayoutSpec {
       ? const EdgeInsets.fromLTRB(10, 6, 10, 6)
       : const EdgeInsets.fromLTRB(12, 8, 12, 8);
 
-  EdgeInsets get boardInnerPadding => compactPhoneLayout
-      ? const EdgeInsets.all(8)
-      : const EdgeInsets.all(10);
+  EdgeInsets get boardInnerPadding =>
+      compactPhoneLayout ? const EdgeInsets.all(8) : const EdgeInsets.all(10);
 
   EdgeInsets get topBarOuterPadding => compactPortrait
       ? const EdgeInsets.fromLTRB(10, 6, 10, 4)
@@ -135,24 +134,35 @@ class _PuzzleNodeLayoutSpec {
       ? EdgeInsets.zero
       : const EdgeInsets.fromLTRB(8, 8, 12, 8);
 
-  EdgeInsets get intelInnerPadding => compactLandscape
-      ? const EdgeInsets.all(10)
-      : const EdgeInsets.all(14);
+  EdgeInsets get intelInnerPadding =>
+      compactLandscape ? const EdgeInsets.all(10) : const EdgeInsets.all(14);
 
   double get intelTitleSize => compactLandscape ? 13.6 : 15;
   double get intelStatusSize => compactLandscape ? 11.1 : 12.1;
   double get intelSectionGap => compactLandscape ? 6 : 12;
   double get intelDetailGap => compactLandscape ? 4 : 8;
 
-  double get actionButtonHeight => compactLandscape ? 36 : compactPortrait ? 40 : 44;
+  double get actionButtonHeight => compactLandscape
+      ? 36
+      : compactPortrait
+      ? 40
+      : 44;
   double get actionGap => compactPhoneLayout ? 8 : 10;
   EdgeInsets get actionPadding => compactLandscape
       ? const EdgeInsets.symmetric(horizontal: 8, vertical: 7)
       : compactPortrait
       ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
       : const EdgeInsets.symmetric(horizontal: 14, vertical: 12);
-  double get actionTextSize => compactLandscape ? 10.1 : compactPortrait ? 10.6 : 11.8;
-  double get actionLetterSpacing => compactLandscape ? 0.55 : compactPortrait ? 0.7 : 0.9;
+  double get actionTextSize => compactLandscape
+      ? 10.1
+      : compactPortrait
+      ? 10.6
+      : 11.8;
+  double get actionLetterSpacing => compactLandscape
+      ? 0.55
+      : compactPortrait
+      ? 0.7
+      : 0.9;
   double get actionIconSize => compactPhoneLayout ? 16 : 18;
   double get actionRadius => compactPhoneLayout ? 7 : 8;
 
@@ -525,7 +535,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         );
         return PuzzleAcademyDialogShell(
           title: heading,
-          subtitle: 'Bracket ${widget.node.title} archived to the academy board.',
+          subtitle:
+              'Bracket ${widget.node.title} archived to the academy board.',
           accent: palette.amber,
           icon: Icons.workspace_premium_outlined,
           monochromeOverride: monochrome,
@@ -1812,10 +1823,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   }
 
   PuzzleAcademyPalette _academyPalette(bool monochrome) {
-    return puzzleAcademyPalette(
-      context,
-      monochromeOverride: monochrome,
-    );
+    return puzzleAcademyPalette(context, monochromeOverride: monochrome);
   }
 
   Color _modeAccent(PuzzleAcademyPalette palette) {
@@ -2016,15 +2024,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final leadGlow = _modeAccent(palette);
     final altGlow = _isExamMode ? palette.signal : palette.amber;
     final topColor = Color.alphaBlend(
-      leadGlow.withValues(
-        alpha: palette.isDark ? 0.14 : 0.06,
-      ),
+      leadGlow.withValues(alpha: palette.isDark ? 0.14 : 0.06),
       palette.backdrop,
     );
     final bottomColor = Color.alphaBlend(
-      altGlow.withValues(
-        alpha: palette.isDark ? 0.10 : 0.05,
-      ),
+      altGlow.withValues(alpha: palette.isDark ? 0.10 : 0.05),
       palette.backdrop,
     );
 
@@ -2071,7 +2075,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     AppThemeProvider themeProvider,
     _PuzzleNodeLayoutSpec layout,
   ) {
-    final monochrome = themeProvider.isMonochrome || widget.cinematicThemeEnabled;
+    final monochrome =
+        themeProvider.isMonochrome || widget.cinematicThemeEnabled;
     final palette = _academyPalette(monochrome);
     final accent = _modeAccent(palette);
     final header = _headerCopy(provider, compactLandscape: false);
@@ -2128,7 +2133,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                     SizedBox(height: layout.topBarTitleGap),
                     Text(
                       header.subtitle,
-                      key: const ValueKey<String>('puzzle_node_header_subtitle'),
+                      key: const ValueKey<String>(
+                        'puzzle_node_header_subtitle',
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: puzzleAcademyHudStyle(
@@ -2151,7 +2158,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                         bottom: layout.compactPortrait ? 6 : 8,
                       ),
                       child: KeyedSubtree(
-                        key: const ValueKey<String>('puzzle_node_exam_progress_tag'),
+                        key: const ValueKey<String>(
+                          'puzzle_node_exam_progress_tag',
+                        ),
                         child: PuzzleAcademyTag(
                           label: '$_examCorrectCount/${_activeSequence.length}',
                           accent: palette.amber,
@@ -2172,7 +2181,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                       ),
                       SizedBox(width: layout.compactPortrait ? 6 : 8),
                       _buildHeaderActionButton(
-                        key: const ValueKey<String>('puzzle_node_settings_button'),
+                        key: const ValueKey<String>(
+                          'puzzle_node_settings_button',
+                        ),
                         size: layout.topBarActionButtonSize,
                         iconSize: layout.topBarIconSize,
                         accent: accent,
@@ -2237,7 +2248,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                       const SizedBox(height: 4),
                       Text(
                         header.subtitle,
-                        key: const ValueKey<String>('puzzle_node_header_subtitle'),
+                        key: const ValueKey<String>(
+                          'puzzle_node_header_subtitle',
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: puzzleAcademyHudStyle(
@@ -2280,7 +2293,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: KeyedSubtree(
-                        key: const ValueKey<String>('puzzle_node_exam_progress_tag'),
+                        key: const ValueKey<String>(
+                          'puzzle_node_exam_progress_tag',
+                        ),
                         child: PuzzleAcademyTag(
                           label: '$_examCorrectCount/${_activeSequence.length}',
                           accent: palette.amber,
@@ -2377,11 +2392,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                 child: AnimatedBuilder(
                   animation: _arrowFadeController,
                   builder: (context, _) {
-                    final opacity =
-                        (1.0 - (_arrowFadeController.value * 0.75)).clamp(
-                          0.25,
-                          1.0,
-                        );
+                    final opacity = (1.0 - (_arrowFadeController.value * 0.75))
+                        .clamp(0.25, 1.0);
                     return CustomPaint(
                       painter: _GreyArrowPainter(
                         fromSquare: _greyArrowFrom,
@@ -2404,7 +2416,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             children: [
               Container(
                 key: const ValueKey<String>('puzzle_node_compact_eval_strip'),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: monochrome ? 0.10 : 0.08),
                   borderRadius: BorderRadius.circular(8),
@@ -2792,9 +2807,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                   ? 'Solved'
                   : (_busy
                         ? 'Engine Response'
-                        : (_coachingOffScript
-                              ? 'Coach Review'
-                              : 'Solving')),
+                        : (_coachingOffScript ? 'Coach Review' : 'Solving')),
               monochrome: monochrome,
               compact: layout.compactLandscape,
             ),
@@ -3031,7 +3044,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       Color? disabledBackgroundColor,
       Color? disabledForegroundColor,
     }) {
-      final resolvedForeground = foregroundColor ??
+      final resolvedForeground =
+          foregroundColor ??
           (color.computeLuminance() > 0.55
               ? const Color(0xFF08131F)
               : Colors.white);

@@ -25,10 +25,8 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
 
   static final List<PuzzleItem> trainingPuzzles = List<PuzzleItem>.generate(
     12,
-    (index) => _buildPuzzle(
-      id: 'training_${index + 1}',
-      rating: 450 + (index * 5),
-    ),
+    (index) =>
+        _buildPuzzle(id: 'training_${index + 1}', rating: 450 + (index * 5)),
   );
 
   final PuzzleProgressModel _progress;
@@ -120,50 +118,56 @@ String _textForKey(WidgetTester tester, String key) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('training compact portrait uses eval strip and keeps board wide', (
-    tester,
-  ) async {
-    final provider = _TestPuzzleAcademyProvider();
+  testWidgets(
+    'training compact portrait uses eval strip and keeps board wide',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
 
-    await _pumpPuzzleNodeScreen(
-      tester,
-      size: const Size(390, 844),
-      provider: provider,
-      screen: PuzzleNodeScreen(
-        node: _TestPuzzleAcademyProvider.testNode,
-        heroTag: 'training-portrait',
-        initialPuzzle: _TestPuzzleAcademyProvider.trainingPuzzles.first,
-        initialPuzzleIndex: 0,
-      ),
-    );
+      await _pumpPuzzleNodeScreen(
+        tester,
+        size: const Size(390, 844),
+        provider: provider,
+        screen: PuzzleNodeScreen(
+          node: _TestPuzzleAcademyProvider.testNode,
+          heroTag: 'training-portrait',
+          initialPuzzle: _TestPuzzleAcademyProvider.trainingPuzzles.first,
+          initialPuzzleIndex: 0,
+        ),
+      );
 
-    expect(find.byKey(const ValueKey<String>('puzzle_node_top_bar')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey<String>('puzzle_node_compact_landscape_header')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('puzzle_node_compact_eval_strip')),
-      findsOneWidget,
-    );
+      expect(
+        find.byKey(const ValueKey<String>('puzzle_node_top_bar')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('puzzle_node_compact_landscape_header'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('puzzle_node_compact_eval_strip')),
+        findsOneWidget,
+      );
 
-    final evalStripRect = tester.getRect(
-      find.byKey(const ValueKey<String>('puzzle_node_compact_eval_strip')),
-    );
-    final boardRect = tester.getRect(
-      find.byKey(const ValueKey<String>('puzzle_node_board_square')),
-    );
-    final boardCardRect = tester.getRect(
-      find.byKey(const ValueKey<String>('puzzle_node_board_card')),
-    );
-    final regretLabel = tester.widget<Text>(
-      find.byKey(const ValueKey<String>('puzzle_node_regret_button_label')),
-    );
+      final evalStripRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_compact_eval_strip')),
+      );
+      final boardRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_board_square')),
+      );
+      final boardCardRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_board_card')),
+      );
+      final regretLabel = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('puzzle_node_regret_button_label')),
+      );
 
-    expect(evalStripRect.bottom, lessThanOrEqualTo(boardRect.top));
-    expect(boardRect.width, greaterThan(boardCardRect.width - 60));
-    expect(regretLabel.maxLines, 1);
-  });
+      expect(evalStripRect.bottom, lessThanOrEqualTo(boardRect.top));
+      expect(boardRect.width, greaterThan(boardCardRect.width - 60));
+      expect(regretLabel.maxLines, 1);
+    },
+  );
 
   testWidgets('daily compact portrait keeps the shared top bar wording', (
     tester,
@@ -184,7 +188,10 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey<String>('puzzle_node_top_bar')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('puzzle_node_top_bar')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey<String>('puzzle_node_compact_eval_strip')),
       findsOneWidget,
@@ -219,12 +226,18 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey<String>('puzzle_node_top_bar')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('puzzle_node_top_bar')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey<String>('puzzle_node_exam_progress_tag')),
       findsOneWidget,
     );
-    expect(_textForKey(tester, 'puzzle_node_header_title'), 'Bracket 450-500 Exam');
+    expect(
+      _textForKey(tester, 'puzzle_node_header_title'),
+      'Bracket 450-500 Exam',
+    );
     expect(
       _textForKey(tester, 'puzzle_node_header_subtitle'),
       'Puzzle #1 of 50 • 10m 00s left',
@@ -248,20 +261,33 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey<String>('puzzle_node_top_bar')), findsNothing);
     expect(
-      find.byKey(const ValueKey<String>('puzzle_node_compact_landscape_header')),
+      find.byKey(const ValueKey<String>('puzzle_node_top_bar')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('puzzle_node_compact_landscape_header'),
+      ),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey<String>('puzzle_node_rating_tile')), findsNothing);
-    expect(find.byKey(const ValueKey<String>('puzzle_node_close_button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('puzzle_node_rating_tile')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('puzzle_node_close_button')),
+      findsOneWidget,
+    );
     expect(_textForKey(tester, 'puzzle_node_header_title'), '450-500');
     expect(_textForKey(tester, 'puzzle_node_header_subtitle'), '#1/12');
     expect(find.text('Elo Bracket 450-500'), findsNothing);
     expect(find.text('Puzzle #1 of 12'), findsNothing);
 
     final headerRect = tester.getRect(
-      find.byKey(const ValueKey<String>('puzzle_node_compact_landscape_header')),
+      find.byKey(
+        const ValueKey<String>('puzzle_node_compact_landscape_header'),
+      ),
     );
     final boardRect = tester.getRect(
       find.byKey(const ValueKey<String>('puzzle_node_board_square')),
@@ -289,49 +315,63 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey<String>('puzzle_node_top_bar')), findsNothing);
     expect(
-      find.byKey(const ValueKey<String>('puzzle_node_compact_landscape_header')),
+      find.byKey(const ValueKey<String>('puzzle_node_top_bar')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('puzzle_node_compact_landscape_header'),
+      ),
       findsOneWidget,
     );
     expect(_textForKey(tester, 'puzzle_node_header_title'), 'Daily');
     expect(_textForKey(tester, 'puzzle_node_header_subtitle'), '#1/3');
   });
 
-  testWidgets('exam compact landscape keeps timer, tag, and bracket tile in rail', (
-    tester,
-  ) async {
-    final provider = _TestPuzzleAcademyProvider();
+  testWidgets(
+    'exam compact landscape keeps timer, tag, and bracket tile in rail',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
 
-    await _pumpPuzzleNodeScreen(
-      tester,
-      size: const Size(844, 390),
-      provider: provider,
-      screen: PuzzleNodeScreen(
-        node: _TestPuzzleAcademyProvider.testNode,
-        heroTag: 'exam-landscape',
-        initialPuzzle: _examSequence.first,
-        initialPuzzleIndex: 0,
-        puzzleSequence: _examSequence,
-        examMode: true,
-        examDuration: const Duration(minutes: 10),
-      ),
-    );
+      await _pumpPuzzleNodeScreen(
+        tester,
+        size: const Size(844, 390),
+        provider: provider,
+        screen: PuzzleNodeScreen(
+          node: _TestPuzzleAcademyProvider.testNode,
+          heroTag: 'exam-landscape',
+          initialPuzzle: _examSequence.first,
+          initialPuzzleIndex: 0,
+          puzzleSequence: _examSequence,
+          examMode: true,
+          examDuration: const Duration(minutes: 10),
+        ),
+      );
 
-    expect(find.byKey(const ValueKey<String>('puzzle_node_top_bar')), findsNothing);
-    expect(
-      find.byKey(const ValueKey<String>('puzzle_node_compact_landscape_header')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const ValueKey<String>('puzzle_node_rating_tile')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey<String>('puzzle_node_exam_progress_tag')),
-      findsOneWidget,
-    );
-    expect(_textForKey(tester, 'puzzle_node_header_title'), 'Exam');
-    expect(_textForKey(tester, 'puzzle_node_header_subtitle'), '10m 00s');
-    expect(find.text('0/50'), findsOneWidget);
-    expect(find.text('Bracket 450-500 Exam'), findsNothing);
-    expect(find.text('Puzzle #1 of 50'), findsNothing);
-  });
+      expect(
+        find.byKey(const ValueKey<String>('puzzle_node_top_bar')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('puzzle_node_compact_landscape_header'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('puzzle_node_rating_tile')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('puzzle_node_exam_progress_tag')),
+        findsOneWidget,
+      );
+      expect(_textForKey(tester, 'puzzle_node_header_title'), 'Exam');
+      expect(_textForKey(tester, 'puzzle_node_header_subtitle'), '10m 00s');
+      expect(find.text('0/50'), findsOneWidget);
+      expect(find.text('Bracket 450-500 Exam'), findsNothing);
+      expect(find.text('Puzzle #1 of 50'), findsNothing);
+    },
+  );
 }

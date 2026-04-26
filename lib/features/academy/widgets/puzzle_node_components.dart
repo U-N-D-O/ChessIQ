@@ -39,12 +39,24 @@ class _PerspectiveEvalBar extends StatelessWidget {
 
     final segments = axis == Axis.vertical
         ? <Widget>[
-            Expanded(flex: topFlex, child: Container(color: opponentFill)),
-            Expanded(flex: bottomFlex, child: Container(color: playerFill)),
+            Expanded(
+              flex: topFlex,
+              child: Container(color: opponentFill),
+            ),
+            Expanded(
+              flex: bottomFlex,
+              child: Container(color: playerFill),
+            ),
           ]
         : <Widget>[
-            Expanded(flex: bottomFlex, child: Container(color: playerFill)),
-            Expanded(flex: topFlex, child: Container(color: opponentFill)),
+            Expanded(
+              flex: bottomFlex,
+              child: Container(color: playerFill),
+            ),
+            Expanded(
+              flex: topFlex,
+              child: Container(color: opponentFill),
+            ),
           ];
 
     return Container(
@@ -60,10 +72,7 @@ class _PerspectiveEvalBar extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(999),
-        child: Flex(
-          direction: axis,
-          children: segments,
-        ),
+        child: Flex(direction: axis, children: segments),
       ),
     );
   }
