@@ -611,128 +611,119 @@ class _LeaderboardCard extends StatelessWidget {
                   monochrome: monochrome,
                 )
               : Column(
-                  children: entries
-                      .map(
-                        (entry) {
-                          final countryFlag =
-                              showFlags && entry.country != null
-                              ? countryFlagEmoji(entry.country!)
-                              : null;
+                  children: entries.map((entry) {
+                    final countryFlag = showFlags && entry.country != null
+                        ? countryFlagEmoji(entry.country!)
+                        : null;
 
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Row(
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 34,
+                            child: Text(
+                              '${entry.rank}',
+                              style: puzzleAcademyIdentityStyle(
+                                palette: puzzleAcademyPalette(
+                                  context,
+                                  monochromeOverride: monochrome,
+                                ),
+                                color: _accentGold(context),
+                                size: 11.2,
+                                height: 1.18,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SizedBox(
-                                  width: 34,
-                                  child: Text(
-                                    '${entry.rank}',
-                                    style: puzzleAcademyIdentityStyle(
-                                      palette: puzzleAcademyPalette(
-                                        context,
-                                        monochromeOverride: monochrome,
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        entry.handle,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: _academyCompactTextStyle(
+                                          context,
+                                          color: scheme.onSurface,
+                                          monochrome: monochrome,
+                                          size: 13.8,
+                                          weight: FontWeight.w700,
+                                          height: 1.18,
+                                        ),
                                       ),
-                                      color: _accentGold(context),
-                                      size: 11.2,
-                                      height: 1.18,
                                     ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              entry.handle,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: _academyCompactTextStyle(
-                                                context,
-                                                color: scheme.onSurface,
-                                                monochrome: monochrome,
-                                                size: 13.8,
-                                                weight: FontWeight.w700,
-                                                height: 1.18,
-                                              ),
-                                            ),
-                                          ),
-                                          if (countryFlag != null)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                left: 6,
-                                              ),
-                                              child: Tooltip(
-                                                message: entry.country!,
-                                                child: Text(
-                                                  countryFlag,
-                                                  style: const TextStyle(
-                                                    fontSize: 15.5,
-                                                    height: 1.0,
-                                                    fontFamilyFallback:
-                                                        <String>[
-                                                          'Segoe UI Emoji',
-                                                          'Apple Color Emoji',
-                                                          'Noto Color Emoji',
-                                                        ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                      if (entry.title.isNotEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 2),
+                                    if (countryFlag != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 6),
+                                        child: Tooltip(
+                                          message: entry.country!,
                                           child: Text(
-                                            entry.title,
-                                            style: _academyCompactTextStyle(
-                                              context,
-                                              color: scheme.onSurface.withValues(
-                                                alpha: 0.68,
-                                              ),
-                                              monochrome: monochrome,
-                                              size: 12.2,
-                                              height: 1.16,
+                                            countryFlag,
+                                            style: const TextStyle(
+                                              fontSize: 15.5,
+                                              height: 1.0,
+                                              fontFamilyFallback: <String>[
+                                                'Segoe UI Emoji',
+                                                'Apple Color Emoji',
+                                                'Noto Color Emoji',
+                                              ],
                                             ),
                                           ),
                                         ),
-                                    ],
-                                  ),
+                                      ),
+                                  ],
                                 ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  fit: FlexFit.loose,
-                                  child: Align(
-                                    alignment: Alignment.topRight,
+                                if (entry.title.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
                                     child: Text(
-                                      entry.score.toString(),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.fade,
-                                      softWrap: false,
-                                      textAlign: TextAlign.right,
+                                      entry.title,
                                       style: _academyCompactTextStyle(
                                         context,
                                         color: scheme.onSurface.withValues(
-                                          alpha: 0.78,
+                                          alpha: 0.68,
                                         ),
                                         monochrome: monochrome,
-                                        size: 13.2,
-                                        weight: FontWeight.w700,
-                                        height: 1.12,
+                                        size: 12.2,
+                                        height: 1.16,
                                       ),
                                     ),
                                   ),
-                                ),
                               ],
                             ),
-                          );
-                        },
-                      )
-                      .toList(),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            fit: FlexFit.loose,
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: Text(
+                                entry.score.toString(),
+                                maxLines: 1,
+                                overflow: TextOverflow.fade,
+                                softWrap: false,
+                                textAlign: TextAlign.right,
+                                style: _academyCompactTextStyle(
+                                  context,
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.78,
+                                  ),
+                                  monochrome: monochrome,
+                                  size: 13.2,
+                                  weight: FontWeight.w700,
+                                  height: 1.12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
         ),
       ),
