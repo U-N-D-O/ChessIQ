@@ -84,12 +84,19 @@ Future<void> _pumpPuzzleNodeScreen(
   required Size size,
   required PuzzleAcademyProvider provider,
   required PuzzleNodeScreen screen,
+  TargetPlatform platform = TargetPlatform.android,
+  FakeViewPadding padding = FakeViewPadding.zero,
+  FakeViewPadding viewPadding = FakeViewPadding.zero,
 }) async {
   SharedPreferences.setMockInitialValues(const <String, Object>{});
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
+  tester.view.padding = padding;
+  tester.view.viewPadding = viewPadding;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  addTearDown(tester.view.resetPadding);
+  addTearDown(tester.view.resetViewPadding);
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -104,7 +111,10 @@ Future<void> _pumpPuzzleNodeScreen(
           create: (_) => AppThemeProvider(),
         ),
       ],
-      child: MaterialApp(home: screen),
+      child: MaterialApp(
+        theme: ThemeData(platform: platform),
+        home: screen,
+      ),
     ),
   );
 
@@ -177,6 +187,42 @@ void main() {
     },
   );
 
+  testWidgets(
+    'iOS compact portrait removes progress and eval from intel and keeps nav near bottom',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
+
+      await _pumpPuzzleNodeScreen(
+        tester,
+        size: const Size(390, 844),
+        provider: provider,
+        platform: TargetPlatform.iOS,
+        padding: const FakeViewPadding(top: 47, bottom: 34),
+        viewPadding: const FakeViewPadding(top: 47, bottom: 34),
+        screen: PuzzleNodeScreen(
+          node: _TestPuzzleAcademyProvider.testNode,
+          heroTag: 'training-portrait-ios',
+          initialPuzzle: _TestPuzzleAcademyProvider.trainingPuzzles.first,
+          initialPuzzleIndex: 0,
+        ),
+      );
+
+      expect(find.text('Progress'), findsNothing);
+      expect(find.text('Eval'), findsNothing);
+
+      final previousRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_previous_button')),
+      );
+      final nextRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_next_button')),
+      );
+      final bottomInset = tester.view.padding.bottom;
+
+      expect(844 - previousRect.bottom - bottomInset, lessThanOrEqualTo(20));
+      expect(844 - nextRect.bottom - bottomInset, lessThanOrEqualTo(20));
+    },
+  );
+
   testWidgets('daily compact portrait keeps the shared top bar wording', (
     tester,
   ) async {
@@ -212,6 +258,32 @@ void main() {
       _textForKey(tester, 'puzzle_node_header_subtitle'),
       'Puzzle #1 of 3',
     );
+  });
+
+  testWidgets('daily compact portrait on iOS also hides progress and eval', (
+    tester,
+  ) async {
+    final provider = _TestPuzzleAcademyProvider();
+
+    await _pumpPuzzleNodeScreen(
+      tester,
+      size: const Size(390, 844),
+      provider: provider,
+      platform: TargetPlatform.iOS,
+      padding: const FakeViewPadding(top: 47, bottom: 34),
+      viewPadding: const FakeViewPadding(top: 47, bottom: 34),
+      screen: PuzzleNodeScreen(
+        node: _TestPuzzleAcademyProvider.testNode,
+        heroTag: 'daily-portrait-ios',
+        initialPuzzle: _dailySequence.first,
+        initialPuzzleIndex: 0,
+        puzzleSequence: _dailySequence,
+        sequenceTitle: 'Daily Challenge',
+      ),
+    );
+
+    expect(find.text('Progress'), findsNothing);
+    expect(find.text('Eval'), findsNothing);
   });
 
   testWidgets('exam compact portrait keeps the full header treatment', (

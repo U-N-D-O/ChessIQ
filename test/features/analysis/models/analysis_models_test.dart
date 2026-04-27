@@ -72,6 +72,21 @@ void main() {
 
       expect(request.goCommand, 'go depth 12 searchmoves e2e4 d2d4');
     });
+
+    test('builds go infinite command for oracle endless analysis', () {
+      const request = EngineRequestSpec(
+        requestId: 'live-infinite',
+        role: EngineRequestRole.liveAnalysis,
+        fen: 'fen infinite',
+        whiteToMove: true,
+        multiPv: 3,
+        depth: 30,
+        infinite: true,
+        timeout: Duration(minutes: 5),
+      );
+
+      expect(request.goCommand, 'go infinite');
+    });
   });
 
   group('Position analysis cache', () {

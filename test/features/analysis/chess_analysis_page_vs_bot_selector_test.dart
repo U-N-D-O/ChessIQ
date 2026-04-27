@@ -11,6 +11,8 @@ Future<void> _pumpVsBotSelector(
   required Size size,
   bool monochrome = false,
   Map<String, Object> initialPrefs = const <String, Object>{},
+  FakeViewPadding padding = FakeViewPadding.zero,
+  FakeViewPadding viewPadding = FakeViewPadding.zero,
 }) async {
   SharedPreferences.setMockInitialValues(<String, Object>{
     'mute_sounds_v1': true,
@@ -20,6 +22,8 @@ Future<void> _pumpVsBotSelector(
 
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
+  tester.view.padding = padding;
+  tester.view.viewPadding = viewPadding;
 
   final economy = EconomyProvider();
   await economy.refresh(notify: false);
@@ -61,8 +65,15 @@ void main() {
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
 
-      await _pumpVsBotSelector(tester, size: const Size(390, 844));
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(390, 844),
+        padding: const FakeViewPadding(top: 47, bottom: 34),
+        viewPadding: const FakeViewPadding(top: 47, bottom: 34),
+      );
 
       expect(find.text('YOU OPEN'), findsOneWidget);
       expect(find.text('MIXED START'), findsOneWidget);
@@ -88,10 +99,11 @@ void main() {
         find.byIcon(Icons.arrow_back_rounded),
       );
       final startButtonRect = tester.getRect(startButtonFinder);
+      final statusBarInset = tester.view.padding.top;
 
       final avatarSize = tester.getSize(avatarFinder);
       expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
-      expect(backButtonRect.top, lessThanOrEqualTo(28));
+      expect(backButtonRect.top - statusBarInset, lessThanOrEqualTo(20));
       expect(startButtonRect.bottom, lessThanOrEqualTo(844));
       expect(tester.takeException(), isNull);
 
@@ -105,6 +117,8 @@ void main() {
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
 
       await _pumpVsBotSelector(
         tester,
@@ -149,6 +163,8 @@ void main() {
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
 
       await _pumpVsBotSelector(tester, size: const Size(844, 390));
 
@@ -214,6 +230,8 @@ void main() {
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
 
       await _pumpVsBotSelector(
         tester,
@@ -250,6 +268,8 @@ void main() {
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
 
       await _pumpVsBotSelector(tester, size: const Size(667, 375));
 

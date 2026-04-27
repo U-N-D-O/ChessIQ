@@ -12,7 +12,8 @@ class AdService {
       'ca-app-pub-3940256099942544/4411468910';
   static const String rewardedAdUnitId =
       'ca-app-pub-3940256099942544/1712485313';
-  static const Duration _boardResetCooldown = Duration(minutes: 1);
+  static const Duration _boardResetCooldown = Duration(seconds: 90);
+  static const Duration _interstitialRepeatGrace = Duration(seconds: 10);
 
   Future<void>? _initializationFuture;
   InterstitialAd? _interstitialAd;
@@ -22,6 +23,7 @@ class AdService {
   bool _showingInterstitial = false;
   bool _showingRewarded = false;
   DateTime? _lastBoardResetInterstitialAt;
+  DateTime? _lastInterstitialPresentedAt;
 
   bool get isSupportedPlatform =>
       !kIsWeb &&
@@ -42,6 +44,20 @@ class AdService {
     return remaining;
   }
 
+  Duration get interstitialRepeatGraceRemaining {
+    final lastPresentedAt = _lastInterstitialPresentedAt;
+    if (lastPresentedAt == null) {
+      return Duration.zero;
+    }
+    final remaining = lastPresentedAt
+        .add(_interstitialRepeatGrace)
+        .difference(DateTime.now());
+    if (remaining.isNegative) {
+      return Duration.zero;
+    }
+    return remaining;
+  }
+
   Future<void> initialize() {
     if (!isSupportedPlatform) {
       return Future<void>.value();
@@ -50,7 +66,8 @@ class AdService {
   }
 
   Future<bool> maybeShowBoardResetInterstitial() async {
-    if (boardResetCooldownRemaining > Duration.zero) {
+    if (boardResetCooldownRemaining > Duration.zero ||
+        interstitialRepeatGraceRemaining > Duration.zero) {
       return false;
     }
 
@@ -59,6 +76,13 @@ class AdService {
       _lastBoardResetInterstitialAt = DateTime.now();
     }
     return shown;
+  }
+
+  Future<bool> maybeShowInterstitialAvoidingBackToBack() async {
+    if (interstitialRepeatGraceRemaining > Duration.zero) {
+      return false;
+    }
+    return showInterstitialAd();
   }
 
   Future<bool> showInterstitialAd() async {
@@ -81,9 +105,11 @@ class AdService {
     ad.fullScreenContentCallback = FullScreenContentCallback<InterstitialAd>(
       onAdShowedFullScreenContent: (_) {
         wasPresented = true;
+        _lastInterstitialPresentedAt = DateTime.now();
       },
       onAdImpression: (_) {
         wasPresented = true;
+        _lastInterstitialPresentedAt = DateTime.now();
       },
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();

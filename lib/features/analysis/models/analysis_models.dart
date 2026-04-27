@@ -41,10 +41,12 @@ class EngineRequestSpec {
     this.firstInfoTimeout,
     this.depth,
     this.moveTime,
+    this.infinite = false,
     this.preCommands = const <String>[],
     this.cleanupCommands = const <String>[],
     this.searchMoves = const <String>[],
-  }) : assert(depth != null || moveTime != null);
+  }) : assert(depth != null || moveTime != null || infinite),
+       assert(!infinite || moveTime == null);
 
   final String requestId;
   final EngineRequestRole role;
@@ -55,6 +57,7 @@ class EngineRequestSpec {
   final Duration? firstInfoTimeout;
   final int? depth;
   final Duration? moveTime;
+  final bool infinite;
   final List<String> preCommands;
   final List<String> cleanupCommands;
   final List<String> searchMoves;
@@ -63,7 +66,9 @@ class EngineRequestSpec {
 
   String get goCommand {
     final parts = <String>['go'];
-    if (moveTime != null) {
+    if (infinite) {
+      parts.add('infinite');
+    } else if (moveTime != null) {
       parts.addAll(<String>['movetime', '${moveTime!.inMilliseconds}']);
     } else {
       parts.addAll(<String>['depth', '${depth ?? 1}']);

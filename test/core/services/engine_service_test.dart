@@ -136,6 +136,57 @@ void main() {
     expect(secondResult.bestMove, 'g8f6');
     expect(secondResult.lines.single.move, 'g8f6');
   });
+
+  test(
+    'sends go infinite for endless live analysis and can cancel it',
+    () async {
+      late _FakeEngineTransport transport;
+      final commands = <String>[];
+      final service = CoordinatedEngineService.debug(
+        owner: 'analysis.infinite',
+        transportFactory: () => transport = _FakeEngineTransport((cmd, fake) {
+          commands.add(cmd);
+          if (cmd == 'uci') {
+            fake.emit('uciok');
+            return;
+          }
+          if (cmd == 'isready') {
+            fake.emit('readyok');
+          }
+        }),
+      );
+      await service.startScheduler();
+
+      final live = service.scheduleSearch(
+        const EngineRequestSpec(
+          requestId: 'live-infinite',
+          role: EngineRequestRole.liveAnalysis,
+          fen: 'fen-infinite',
+          whiteToMove: true,
+          multiPv: 2,
+          depth: 30,
+          infinite: true,
+          timeout: Duration(minutes: 5),
+          firstInfoTimeout: Duration(milliseconds: 250),
+        ),
+      );
+
+      await _flushMicrotasks();
+      await _flushMicrotasks();
+
+      expect(commands.contains('go infinite'), isTrue);
+
+      service.cancelSearches(
+        roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
+        reason: 'test cancel',
+      );
+
+      final liveResult = await live.result;
+      expect(liveResult.cancelled, isTrue);
+      expect(liveResult.cancelReason, 'test cancel');
+      expect(transport.isRunning, isTrue);
+    },
+  );
 }
 
 Future<void> _flushMicrotasks() {

@@ -107,21 +107,24 @@ class _GradingSearchSnapshot {
 }
 
 abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin {
   static const String _lastBotIndexKey = 'last_bot_index_v1';
   static const String _vsBotCompletedTiersKey = 'vs_bot_completed_tiers_v1';
   static const BoardPerspective _defaultPerspective = BoardPerspective.white;
   static const BoardThemeMode _defaultBoardTheme = BoardThemeMode.dark;
   static const PieceThemeMode _defaultPieceTheme = PieceThemeMode.classic;
   static const int _defaultEngineDepth = 20;
+  static const int _oracleInfiniteDepth = 30;
   static const int _defaultMultiPvCount = 1;
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
   static const String _storeStateKey = 'store_state_v1';
+  static const String _storeVsBotMatchStartCountKey = 'vsBotMatchStartCount';
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
   static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
+  static const int _vsBotInterstitialMatchInterval = 3;
   static const int _moveQualityGradingMultiPv = 4;
   static const int _moveQualityGradingDepth = 10;
   static const int _positionAnalysisCacheLimit = 24;
@@ -180,8 +183,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   double _blueDotScrollVelocity = 0.0;
   double _blueDotScrollOffset = 0.0;
   Timer? _idleInterstitialTimer;
-  bool _screenActive = true;
-  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   DateTime? _menuSparkLastUpdate;
   DateTime? _creditsBackdropLastUpdate;
   late final Future<String> _creditsVersionFuture = _loadCreditsVersionLabel();
@@ -435,6 +436,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _vsBotEvalEnabled = false;
   bool _vsBotOptimalLineRevealActive = false;
   int _vsBotCharge = 0;
+  int _vsBotMatchStartCount = 0;
   int _vsBotChargeEpoch = 0;
   bool _suggestionLaunchInProgress = false;
   bool _suggestionBurstActive = false;
@@ -585,21 +587,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _startIdleInterstitialTimer() {
     _cancelIdleInterstitialTimer();
-    if (!_screenActive || _lifecycleState != AppLifecycleState.resumed) {
-      return;
-    }
-    _idleInterstitialTimer = Timer(const Duration(minutes: 3), () async {
-      if (!mounted ||
-          !_screenActive ||
-          _lifecycleState != AppLifecycleState.resumed) {
-        return;
-      }
-      final shown = await AdService.instance.showInterstitialAd();
-      if (shown && mounted) {
-        await _handleAnalysisInterstitialShown();
-        _resetIdleTimer();
-      }
-    });
   }
 
   void _cancelIdleInterstitialTimer() {
@@ -612,21 +599,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    _lifecycleState = state;
-    if (state == AppLifecycleState.resumed) {
-      _screenActive = true;
-      _resetIdleTimer();
-    } else {
-      _screenActive = false;
-      _cancelIdleInterstitialTimer();
-    }
-  }
-
-  @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _loadVsBotSetupPrefs();
     _pulseController = AnimationController(
       vsync: this,
@@ -2715,17 +2689,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int get _maxDepthAllowed {
     switch (_depthTier) {
       case 1:
-        return 24;
+        return 20;
       case 2:
-        return 27;
-      case 3:
-        return 29;
-      case 4:
-        return 35;
-      default:
         return 24;
+      case 3:
+        return 28;
+      case 4:
+        return _oracleInfiniteDepth;
+      default:
+        return 20;
     }
   }
+
+  bool get _showsOracleDepthPlus =>
+      _depthTier >= 4 && _engineDepth >= _oracleInfiniteDepth;
+
+  bool get _usesInfiniteAnalysisDepth => !_playVsBot && _showsOracleDepthPlus;
+
+  String _engineDepthSettingLabel(int depth) {
+    if (_depthTier >= 4 && depth >= _oracleInfiniteDepth) {
+      return '$_oracleInfiniteDepth+';
+    }
+    return '$depth';
+  }
+
+  String get _maxDepthAllowedLabel =>
+      _depthTier >= 4 ? '$_oracleInfiniteDepth+' : '$_maxDepthAllowed';
 
   int get _maxSuggestionsAllowed =>
       (2 + _extraSuggestionPurchases).clamp(2, 10);
@@ -3222,6 +3211,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final monochromePieces = decoded['monochromePiecesOwned'];
       final adFree = decoded['adFreeOwned'];
       final academyTuitionPass = decoded['academyTuitionPassOwned'];
+      final vsBotMatchStartCount = decoded[_storeVsBotMatchStartCountKey];
 
       if (tier is int) _depthTier = max(1, tier.clamp(1, 4));
       if (extraSuggestions is int) {
@@ -3239,6 +3229,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (adFree is bool) _adFreeOwned = adFree;
       if (academyTuitionPass is bool) {
         _academyTuitionPassOwned = academyTuitionPass;
+      }
+      if (vsBotMatchStartCount is int) {
+        _vsBotMatchStartCount = max(0, vsBotMatchStartCount);
       }
 
       _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
@@ -3273,6 +3266,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'piecePackOwned': _piecePackOwned,
       'adFreeOwned': _adFreeOwned,
       'academyTuitionPassOwned': _academyTuitionPassOwned,
+      _storeVsBotMatchStartCountKey: _vsBotMatchStartCount,
     };
     await prefs.setString(_storeStateKey, jsonEncode(payload));
   }
@@ -3663,14 +3657,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required int depth,
     required int multiPv,
   }) {
-    final extraDepth = max(0, depth - 10);
-    final extraMultiPv = max(0, multiPv - 1);
+    final normalizedDepth = max(10, depth);
+    final normalizedMultiPv = max(1, multiPv);
+    final extraDepth = normalizedDepth - 10;
+    final extraMultiPv = normalizedMultiPv - 1;
+    // `go depth` still stops the engine at the requested depth; this timeout is
+    // only a safety rail and needs to leave headroom for expensive MultiPV
+    // searches instead of truncating them in the high 20s/low 30s.
     final totalMs =
-        4000 +
-        (extraDepth * 900) +
-        (extraMultiPv * 1200) +
-        (extraDepth * extraMultiPv * 180);
-    return Duration(milliseconds: min(totalMs, 45000));
+        8000 +
+        (extraDepth * 1400) +
+        (extraDepth * extraDepth * 40) +
+        (extraMultiPv * 4000) +
+        (extraDepth * extraMultiPv * 600);
+    return Duration(milliseconds: min(totalMs, 120000));
   }
 
   String _nextEngineRequestId(EngineRequestRole role) {
@@ -3687,6 +3687,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
     final budget = request.moveTime != null
         ? '${request.moveTime!.inMilliseconds}ms'
+        : request.infinite
+        ? 'depth${request.depth ?? _oracleInfiniteDepth}+'
         : 'depth${request.depth ?? 0}';
     _addLog(
       '[engine] ${event.type.name} id=${request.requestId} role=${request.role.name} fen=${request.fenHash} mpv=${request.multiPv} budget=$budget$detail',
@@ -3983,7 +3985,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         whiteToMove: _isWhiteTurn,
         multiPv: analysisMultiPvCount,
         depth: _engineDepth,
-        timeout: _playVsBot
+        infinite: _usesInfiniteAnalysisDepth,
+        timeout: _usesInfiniteAnalysisDepth
+            ? const Duration(days: 1)
+            : _playVsBot
             ? const Duration(milliseconds: 1800)
             : _analysisLiveCompletionTimeout(
                 depth: _engineDepth,
@@ -7143,11 +7148,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<void> _handleAnalysisInterstitialShown() async {
-    if (!mounted || _activeSection != AppSection.analysis) return;
+    if (!mounted) return;
     final economy = context.read<EconomyProvider>();
     await economy.addCoins(10);
     await _saveStoreState();
-    if (!mounted) return;
+    if (!mounted || _activeSection != AppSection.analysis) return;
 
     final center = _storeButtonCenterInScene();
     if (center == null) return;
@@ -7160,6 +7165,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     setState(() {
       _storeCoinGainCenter = null;
     });
+  }
+
+  Future<void> _handleVsBotMatchStarted({
+    required bool startedFromReplay,
+  }) async {
+    _vsBotMatchStartCount += 1;
+    await _saveStoreState();
+
+    if (_vsBotMatchStartCount % _vsBotInterstitialMatchInterval != 0) {
+      return;
+    }
+    if (startedFromReplay && _adFreeOwned) {
+      return;
+    }
+
+    final adService = AdService.instance;
+    if (adService.interstitialRepeatGraceRemaining > Duration.zero) {
+      return;
+    }
+
+    final shown = await adService.maybeShowInterstitialAvoidingBackToBack();
+    if (!shown) {
+      _addLog(
+        'Vs Bot match-start interstitial unavailable; continuing without ad',
+      );
+      return;
+    }
+    await _handleAnalysisInterstitialShown();
   }
 
   Widget _buildStoreCoinGainOverlay() {
@@ -12929,6 +12962,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       showEngineControlsSection: showEngineControlsSection,
       engineDepth: _engineDepth,
       maxEngineDepth: _maxDepthAllowed,
+      engineDepthLabelBuilder: _engineDepthSettingLabel,
       suggestedMoves: _multiPvCount,
       maxSuggestedMoves: _maxSuggestionsAllowed,
       onEngineDepthChanged: (value) {
@@ -13078,7 +13112,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     await _saveStoreState();
     _analyze();
     _addLog(
-      'Depth tier unlocked: ${_depthTierLabel()} (max depth $_maxDepthAllowed)',
+      'Depth tier unlocked: ${_depthTierLabel()} (max depth $_maxDepthAllowedLabel)',
     );
   }
 
@@ -13217,6 +13251,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       } else {
         await _handleAnalysisInterstitialShown();
       }
+    }
+    if (_playVsBot) {
+      await _handleVsBotMatchStarted(startedFromReplay: true);
     }
     if (!mounted) return;
     setState(() {
@@ -13576,8 +13613,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       icon: Icons.block_outlined,
                       title: 'Reset Board No-Ad Pass',
                       subtitle: _adFreeOwned
-                          ? 'Owned (skips ad after tapping board resets)'
-                          : 'Skips the ad that plays after board resets',
+                          ? 'Owned (analysis resets and bot rematches stay ad-free)'
+                          : 'Skips ads after analysis resets and same-bot rematches',
                       priceLabel: '\$6.99',
                       enabled: !_adFreeOwned,
                       actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
@@ -13763,7 +13800,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     _storeItemCard(
                       icon: Icons.auto_graph,
                       title: 'Pro Mode',
-                      subtitle: 'Default mode (max ply depth 24)',
+                      subtitle: 'Default mode (max ply depth 20)',
                       priceLabel: 'Included',
                       enabled: false,
                       actionLabel: 'Owned',
@@ -13774,8 +13811,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       icon: Icons.psychology_alt_outlined,
                       title: 'Expert Mode',
                       subtitle: _depthTier >= 2
-                          ? 'Unlocked (max ply depth 27)'
-                          : 'Unlock ply depth 25-27',
+                          ? 'Unlocked (max ply depth 24)'
+                          : 'Unlock ply depth 21-24',
                       priceLabel: '2600 c',
                       enabled: _depthTier == 1,
                       actionLabel: _depthTier >= 2
@@ -13791,8 +13828,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       icon: Icons.workspace_premium_outlined,
                       title: 'Grandmaster Mode',
                       subtitle: _depthTier >= 3
-                          ? 'Unlocked (max ply depth 29)'
-                          : 'Unlock ply depth 28-29',
+                          ? 'Unlocked (max ply depth 28)'
+                          : 'Unlock ply depth 25-28',
                       priceLabel: '4200 c',
                       enabled: _depthTier == 2,
                       actionLabel: _depthTier >= 3
@@ -13808,8 +13845,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       icon: Icons.whatshot_outlined,
                       title: 'Oracle Mode',
                       subtitle: _depthTier >= 4
-                          ? 'Unlocked (max ply depth 35)'
-                          : 'Unlock ply depth 33-35',
+                          ? 'Unlocked (max ply depth 30+)'
+                          : 'Unlock ply depth 29-30+',
                       priceLabel: '6200 c',
                       enabled: _depthTier == 3,
                       actionLabel: _depthTier >= 4
@@ -13857,7 +13894,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowed',
+                      'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowedLabel',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: scheme.onSurface.withValues(alpha: 0.64),
@@ -14859,7 +14896,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void dispose() {
     _cancelGameResultReveal();
     _cancelIdleInterstitialTimer();
-    WidgetsBinding.instance.removeObserver(this);
     _editModeHintTimer?.cancel();
     _moveQualityOverlayTimer?.cancel();
     _quizFeedbackOverlayTimer?.cancel();
@@ -14867,7 +14903,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _clearBotGhostArrows();
     unawaited(_engine?.stop());
     _cancelIdleInterstitialTimer();
-    WidgetsBinding.instance.removeObserver(this);
     _pulseController.removeListener(_updateBotSetupBlueDotScrollOffset);
     _pulseController.dispose();
     _introController.dispose();

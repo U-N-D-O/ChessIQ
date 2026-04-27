@@ -20,6 +20,7 @@ Future<void> showUniversalSettingsSheet({
   String title = 'Settings',
   int engineDepth = 20,
   int maxEngineDepth = 24,
+  String Function(int value)? engineDepthLabelBuilder,
   int suggestedMoves = 3,
   int maxSuggestedMoves = 5,
   ValueChanged<int>? onEngineDepthChanged,
@@ -39,8 +40,8 @@ Future<void> showUniversalSettingsSheet({
 }) async {
   var selectedThemeMode = themeMode;
   var selectedThemeStyle = themeStyle;
-  var draftDepth = engineDepth.clamp(10, max(10, maxEngineDepth));
-  var draftSuggestions = suggestedMoves.clamp(0, max(0, maxSuggestedMoves));
+  int draftDepth = engineDepth.clamp(10, max(10, maxEngineDepth));
+  int draftSuggestions = suggestedMoves.clamp(0, max(0, maxSuggestedMoves));
   var draftSound = soundEnabled ?? false;
   var draftHaptics = hapticsEnabled ?? false;
   final showFeedbackToggles =
@@ -361,7 +362,8 @@ Future<void> showUniversalSettingsSheet({
                               ),
                               const Spacer(),
                               Text(
-                                '$draftDepth',
+                                engineDepthLabelBuilder?.call(draftDepth) ??
+                                    '$draftDepth',
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   color: scheme.primary,
                                   fontWeight: FontWeight.w800,

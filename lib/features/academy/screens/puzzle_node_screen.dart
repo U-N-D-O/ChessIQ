@@ -1793,24 +1793,33 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                     minHeight: constraints.maxHeight,
                                   ),
                                   child: Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      _buildBoardCard(
-                                        themeProvider,
-                                        monochrome: useMonochrome,
-                                        layout: layout,
-                                      ),
-                                      _nonBoardChromeFilter(
-                                        useMonochrome,
-                                        AnimatedOpacity(
-                                          opacity: _focusModeActive ? 0.5 : 1.0,
-                                          duration: const Duration(
-                                            milliseconds: 220,
-                                          ),
-                                          child: _buildIntelPanel(
-                                            provider,
+                                      Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _buildBoardCard(
+                                            themeProvider,
+                                            monochrome: useMonochrome,
                                             layout: layout,
                                           ),
-                                        ),
+                                          _nonBoardChromeFilter(
+                                            useMonochrome,
+                                            AnimatedOpacity(
+                                              opacity: _focusModeActive
+                                                  ? 0.5
+                                                  : 1.0,
+                                              duration: const Duration(
+                                                milliseconds: 220,
+                                              ),
+                                              child: _buildIntelPanel(
+                                                provider,
+                                                layout: layout,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                       _buildBottomActions(
                                         provider,
@@ -2769,6 +2778,10 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         : widget.initialReviewMode
         ? 'Review'
         : 'Training';
+    final hideCompactIosMetrics =
+        layout.compactPortrait &&
+        !_isExamMode &&
+        Theme.of(context).platform == TargetPlatform.iOS;
 
     return Padding(
       padding: layout.intelOuterPadding,
@@ -2812,20 +2825,22 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               monochrome: monochrome,
               compact: layout.compactLandscape,
             ),
-            _InfoLine(
-              label: 'Progress',
-              value: '${_puzzleIndex + 1}/$total',
-              monochrome: monochrome,
-              compact: layout.compactLandscape,
-            ),
-            _InfoLine(
-              label: 'Eval',
-              value: _formatEval(
-                _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
+            if (!hideCompactIosMetrics)
+              _InfoLine(
+                label: 'Progress',
+                value: '${_puzzleIndex + 1}/$total',
+                monochrome: monochrome,
+                compact: layout.compactLandscape,
               ),
-              monochrome: monochrome,
-              compact: layout.compactLandscape,
-            ),
+            if (!hideCompactIosMetrics)
+              _InfoLine(
+                label: 'Eval',
+                value: _formatEval(
+                  _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
+                ),
+                monochrome: monochrome,
+                compact: layout.compactLandscape,
+              ),
             if (_lastMistakeFromEval != null && _lastMistakeToEval != null)
               _InfoLine(
                 label: 'Swing',
@@ -3103,6 +3118,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     final previousButton = OutlinedButton.icon(
+      key: const ValueKey<String>('puzzle_node_previous_button'),
       onPressed: hasPrevious ? _openPreviousPuzzle : null,
       style: outlinedAccentStyle(palette.cyan),
       icon: const Icon(Icons.skip_previous_rounded),
@@ -3147,6 +3163,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             child: buttonLabel('Back to Academy'),
           )
         : FilledButton.icon(
+            key: const ValueKey<String>('puzzle_node_next_button'),
             onPressed: canAdvanceToNext ? _openNextPuzzle : null,
             style: filledAccentStyle(
               canAdvanceToNext ? nextEnabledColor : nextDisabledColor,
