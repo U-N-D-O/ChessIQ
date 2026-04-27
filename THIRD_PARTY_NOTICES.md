@@ -115,3 +115,9 @@ This project includes third-party audio assets used chess sound effects, coin so
 - Title: `Wood Surface Single Coin Payout 4`
 - Creator: floraphonic
 - Description / usage note: Coin, Toss, Flip sound effect. Free for use.
+
+- Asset: `assets/sounds/kaching.mp3`
+- Title: `Cash Register (Kaching)`
+- Creator: Modestas123123
+- Source platform: Pixabay
+- Description / usage note: Free for use.

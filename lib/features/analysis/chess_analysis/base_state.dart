@@ -2599,6 +2599,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  Future<void> _playStorePurchaseSound() async {
+    if (_muteSounds) return;
+    final playerMode = _useReducedMenuWindowsVisualEffects
+        ? PlayerMode.mediaPlayer
+        : PlayerMode.lowLatency;
+    try {
+      await _sfxAudioPlayer.stop();
+      await _sfxAudioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _sfxAudioPlayer.play(
+        AssetSource('sounds/kaching.wav'),
+        mode: playerMode,
+        volume: 1.0,
+      );
+    } catch (e) {
+      debugPrint('Store purchase sound failed: $e');
+      _addLog('Store purchase sound failed: $e');
+    }
+  }
+
   Future<void> _playBoardMoveSound({required bool isCapture}) async {
     if (_muteSounds) return;
     final assetPath = isCapture
@@ -13137,6 +13156,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _analyze();
     _addLog(
       'Depth tier unlocked: ${_depthTierLabel()} (max depth $_maxDepthAllowedLabel)',
@@ -13159,6 +13179,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _extraSuggestionPurchases += 1;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Suggestions increased to $_maxSuggestionsAllowed');
   }
 
@@ -13174,6 +13195,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _themePackOwned = true;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Theme Pack unlocked');
   }
 
@@ -13189,6 +13211,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _piecePackOwned = true;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Piece Set Pack unlocked (Ember and Frost styles available)');
   }
 
@@ -13204,6 +13227,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _spectralOwned = true;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Spectral pieces unlocked');
   }
 
@@ -13219,6 +13243,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _tuttiFruttiOwned = true;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Tutti Frutti pieces unlocked');
   }
 
@@ -13234,6 +13259,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _monochromePiecesOwned = true;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Monochrome pieces unlocked');
   }
 
@@ -13249,6 +13275,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _sakuraBoardOwned = true;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Sakura board unlocked');
   }
 
@@ -13264,6 +13291,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _tropicalBoardOwned = true;
     });
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Tropical board unlocked');
   }
 
@@ -13330,12 +13358,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!success || !mounted) return;
 
     // EconomyProvider was already credited by PurchaseService._deliver().
-    if (label == 'Coin Pack L') {
-      unawaited(_playCoinBagSoundL());
-    } else {
-      unawaited(_playCoinBagSound());
-    }
     await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
     _addLog('Purchased $label (+$amount coins)');
   }
 
@@ -13349,6 +13373,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _adFreeOwned = true;
     await _saveStoreState();
+  unawaited(_playStorePurchaseSound());
     _addLog('Reset Board No-Ad Pass activated');
     if (!mounted) return;
     await showDialog<void>(
@@ -13374,6 +13399,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _academyTuitionPassOwned = true;
     await _saveStoreState();
+  unawaited(_playStorePurchaseSound());
     _addLog('Academy Tuition Pass activated');
     if (!mounted) return;
     await showDialog<void>(
