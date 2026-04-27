@@ -168,10 +168,21 @@ void main() {
       final before = _normalizedScrollOffset(controller);
       expect(before, greaterThan(0.9));
 
-      await tester.pump(const Duration(milliseconds: 4300));
+      await tester.pump(const Duration(milliseconds: 3500));
+
+      var minObserved = before;
+      for (var index = 0; index < 60; index++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        minObserved = minObserved < _normalizedScrollOffset(controller)
+            ? minObserved
+            : _normalizedScrollOffset(controller);
+      }
+
+      await tester.pump(const Duration(milliseconds: 180));
       await tester.pump();
 
       final after = _normalizedScrollOffset(controller);
+      expect(minObserved, greaterThan(0.72));
       expect(after, greaterThan(0.78));
       expect(after, closeTo(before, 0.16));
       expect(tester.takeException(), isNull);

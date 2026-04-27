@@ -1831,9 +1831,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required Widget child,
   }) {
     final strength = visuals.glitchStrength;
-    if (strength <= 0.01 || visuals.reducedEffects) {
-      return child;
-    }
+    final effectEnabled = strength > 0.01 && !visuals.reducedEffects;
 
     final phase = _pulseController.value * 2 * pi;
     final baseJitter = Offset(
@@ -1899,80 +1897,87 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       children: <Widget>[
         Transform(
           alignment: Alignment.center,
-          transform: Matrix4.translationValues(baseJitter.dx, baseJitter.dy, 0)
-            ..setEntry(0, 1, shellSkew),
+          transform: Matrix4.translationValues(
+            effectEnabled ? baseJitter.dx : 0,
+            effectEnabled ? baseJitter.dy : 0,
+            0,
+          )..setEntry(0, 1, effectEnabled ? shellSkew : 0),
           child: ImageFiltered(
             imageFilter: ui.ImageFilter.blur(
-              sigmaX: 0.12 + strength * 0.34,
-              sigmaY: 0.04 + strength * 0.10,
+              sigmaX: effectEnabled ? 0.12 + strength * 0.34 : 0.0,
+              sigmaY: effectEnabled ? 0.04 + strength * 0.10 : 0.0,
             ),
             child: child,
           ),
         ),
-        IgnorePointer(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: <Color>[
-                  visuals.primaryAccent.withValues(alpha: 0.012),
-                  Colors.transparent,
-                  visuals.secondaryAccent.withValues(alpha: 0.018),
-                  Colors.transparent,
-                  visuals.primaryAccent.withValues(alpha: 0.014),
-                ],
-                stops: const <double>[0.0, 0.16, 0.52, 0.82, 1.0],
-              ),
-            ),
-            child: const SizedBox.expand(),
-          ),
-        ),
-        for (final fragment in fragmentSpecs)
+        if (effectEnabled)
           IgnorePointer(
-            child: ClipRect(
-              clipper: _CreditsGlitchBandClipper(
-                topFraction: fragment.top,
-                heightFraction: fragment.height,
-                horizontalInsetFraction: fragment.inset,
-              ),
-              child: Transform.translate(
-                offset: Offset(
-                  fragment.offset,
-                  sin(phase * 4.0 + fragment.top * 10) * strength * 0.85,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    visuals.primaryAccent.withValues(alpha: 0.012),
+                    Colors.transparent,
+                    visuals.secondaryAccent.withValues(alpha: 0.018),
+                    Colors.transparent,
+                    visuals.primaryAccent.withValues(alpha: 0.014),
+                  ],
+                  stops: const <double>[0.0, 0.16, 0.52, 0.82, 1.0],
                 ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: <Color>[
-                        fragment.tint.withValues(alpha: 0.0),
-                        fragment.tint.withValues(
-                          alpha: fragment.opacity * 0.54,
-                        ),
-                        Colors.white.withValues(alpha: fragment.opacity * 0.32),
-                        fragment.tint.withValues(
-                          alpha: fragment.opacity * 0.18,
-                        ),
-                        fragment.tint.withValues(alpha: 0.0),
-                      ],
-                      stops: const <double>[0.0, 0.18, 0.5, 0.82, 1.0],
-                    ),
-                    border: Border(
-                      top: BorderSide(
-                        color: fragment.tint.withValues(alpha: 0.24),
-                      ),
-                      bottom: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        if (effectEnabled)
+          for (final fragment in fragmentSpecs)
+            IgnorePointer(
+              child: ClipRect(
+                clipper: _CreditsGlitchBandClipper(
+                  topFraction: fragment.top,
+                  heightFraction: fragment.height,
+                  horizontalInsetFraction: fragment.inset,
+                ),
+                child: Transform.translate(
+                  offset: Offset(
+                    fragment.offset,
+                    sin(phase * 4.0 + fragment.top * 10) * strength * 0.85,
                   ),
-                  child: const SizedBox.expand(),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: <Color>[
+                          fragment.tint.withValues(alpha: 0.0),
+                          fragment.tint.withValues(
+                            alpha: fragment.opacity * 0.54,
+                          ),
+                          Colors.white.withValues(
+                            alpha: fragment.opacity * 0.32,
+                          ),
+                          fragment.tint.withValues(
+                            alpha: fragment.opacity * 0.18,
+                          ),
+                          fragment.tint.withValues(alpha: 0.0),
+                        ],
+                        stops: const <double>[0.0, 0.18, 0.5, 0.82, 1.0],
+                      ),
+                      border: Border(
+                        top: BorderSide(
+                          color: fragment.tint.withValues(alpha: 0.24),
+                        ),
+                        bottom: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.08),
+                        ),
+                      ),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
                 ),
               ),
             ),
-          ),
       ],
     );
   }
