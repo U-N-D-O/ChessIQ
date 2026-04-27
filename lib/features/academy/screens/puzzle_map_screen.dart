@@ -19,6 +19,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -253,6 +254,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   bool _didPrimeUi = false;
   bool _didShowAcademyProfilePrompt = false;
+  bool _startupModalFlowInFlight = false;
   bool _pendingEducationInFlight = false;
   bool _postFrameWorkQueued = false;
   bool _dismissedProfileSetupToMenu = false;
@@ -341,26 +343,53 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     _didPrimeUi = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      if (_dismissedProfileSetupToMenu) return;
-      final provider = context.read<PuzzleAcademyProvider>();
       try {
-        await provider.initialize();
-      } catch (_) {
+        _startupModalFlowInFlight = true;
         if (!mounted) return;
-        return;
-      }
-      if (!mounted) return;
-      if (_dismissedProfileSetupToMenu) return;
-      _didShowAcademyProfilePrompt = true;
-      try {
-        await _ensureAcademyProfile(provider);
+        if (_dismissedProfileSetupToMenu) return;
+        final provider = context.read<PuzzleAcademyProvider>();
+        try {
+          await provider.initialize();
+        } catch (_) {
+          if (!mounted) return;
+          return;
+        }
+        if (!mounted) return;
+        if (_dismissedProfileSetupToMenu) return;
+        _didShowAcademyProfilePrompt = true;
+        try {
+          await _ensureAcademyProfile(provider);
+        } finally {
+          _didShowAcademyProfilePrompt = false;
+        }
+        if (!mounted) return;
+        await _showPendingEducation(provider);
       } finally {
-        _didShowAcademyProfilePrompt = false;
+        _startupModalFlowInFlight = false;
       }
-      if (!mounted) return;
-      await _showPendingEducation(provider);
     });
+  }
+
+  bool get _shouldLockAcademyProfileDialogToPortrait =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  Future<T?> _runWithPortraitProfileDialogLock<T>(
+    Future<T?> Function() action,
+  ) async {
+    if (!_shouldLockAcademyProfileDialogToPortrait) {
+      return action();
+    }
+    await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    try {
+      return await action();
+    } finally {
+      await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
+    }
   }
 
   Future<void> _ensureAcademyProfile(PuzzleAcademyProvider provider) async {
@@ -384,21 +413,33 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required bool lockHandle,
     required bool lockCountry,
     bool allowExitToMenu = false,
-  }) {
-    return showDialog<Map<String, String>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return _AcademyProfileDialog(
-          initialHandle: initialHandle,
-          initialCountry: initialCountry,
-          lockHandle: lockHandle,
-          lockCountry: lockCountry,
-          allowExitToMenu: allowExitToMenu,
-          cinematicThemeEnabled: widget.cinematicThemeEnabled,
-        );
-      },
-    );
+  }) async {
+    final handleController = TextEditingController(text: initialHandle);
+    final countryController = TextEditingController(text: initialCountry);
+    final countryFocusNode = FocusNode();
+    try {
+      return await _runWithPortraitProfileDialogLock(
+        () => showDialog<Map<String, String>>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return AcademyProfileDialog(
+              handleController: handleController,
+              countryController: countryController,
+              countryFocusNode: countryFocusNode,
+              lockHandle: lockHandle,
+              lockCountry: lockCountry,
+              allowExitToMenu: allowExitToMenu,
+              cinematicThemeEnabled: widget.cinematicThemeEnabled,
+            );
+          },
+        ),
+      );
+    } finally {
+      handleController.dispose();
+      countryController.dispose();
+      countryFocusNode.dispose();
+    }
   }
 
   Future<void> _showAcademyProfileDialog(
@@ -732,6 +773,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       _postFrameWorkQueued = false;
       if (!mounted) return;
       if (_dismissedProfileSetupToMenu) return;
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) return;
+      if (_startupModalFlowInFlight || _pendingEducationInFlight) return;
 
       if (provider.initialized && provider.shouldAskForProfile) {
         if (!_didShowAcademyProfilePrompt) {
@@ -4575,43 +4619,33 @@ class _AcademyHubBackdropPainter extends CustomPainter {
   }
 }
 
-class _AcademyProfileDialog extends StatefulWidget {
-  const _AcademyProfileDialog({
-    required this.initialHandle,
-    required this.initialCountry,
+@visibleForTesting
+class AcademyProfileDialog extends StatefulWidget {
+  const AcademyProfileDialog({
+    super.key,
+    required this.handleController,
+    required this.countryController,
+    required this.countryFocusNode,
     this.lockHandle = false,
     this.lockCountry = false,
     this.allowExitToMenu = false,
     this.cinematicThemeEnabled = false,
   });
 
-  final String initialHandle;
-  final String initialCountry;
+  final TextEditingController handleController;
+  final TextEditingController countryController;
+  final FocusNode countryFocusNode;
   final bool lockHandle;
   final bool lockCountry;
   final bool allowExitToMenu;
   final bool cinematicThemeEnabled;
 
   @override
-  State<_AcademyProfileDialog> createState() => _AcademyProfileDialogState();
+  State<AcademyProfileDialog> createState() => _AcademyProfileDialogState();
 }
 
-class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
-  late final TextEditingController _handleController;
-  TextEditingController? _countryController;
+class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
   final _formKey = GlobalKey<FormState>();
-
-  @override
-  void initState() {
-    super.initState();
-    _handleController = TextEditingController(text: widget.initialHandle);
-  }
-
-  @override
-  void dispose() {
-    _handleController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -4641,8 +4675,8 @@ class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
         FilledButton(
           onPressed: () {
             if (_formKey.currentState?.validate() != true) return;
-            final handle = _handleController.text.trim();
-            final countryText = _countryController?.text.trim() ?? '';
+            final handle = widget.handleController.text.trim();
+            final countryText = widget.countryController.text.trim();
             final country = canonicalCountryName(countryText) ?? countryText;
             Navigator.of(
               context,
@@ -4656,121 +4690,119 @@ class _AcademyProfileDialogState extends State<_AcademyProfileDialog> {
           child: const Text('SAVE'),
         ),
       ],
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'This information is only used for leaderboard display. No email, account details, or precise location are collected.',
-                style: puzzleAcademyHudStyle(
-                  palette: palette,
-                  size: 12.0,
-                  weight: FontWeight.w600,
-                  height: 1.45,
-                ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This information is only used for leaderboard display. No email, account details, or precise location are collected.',
+              style: puzzleAcademyHudStyle(
+                palette: palette,
+                size: 12.0,
+                weight: FontWeight.w600,
+                height: 1.45,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _handleController,
-                enabled: !widget.lockHandle,
-                decoration: InputDecoration(
-                  labelText: 'Nickname',
-                  hintText: 'e.g. TacticTiger',
-                  counterText: '',
-                  suffixIcon: widget.lockHandle ? const Icon(Icons.lock) : null,
-                ),
-                maxLength: 20,
-                validator: (value) {
-                  final text = value?.trim() ?? '';
-                  if (text.isEmpty) {
-                    return 'Please enter a nickname.';
-                  }
-                  if (text.length < 3) {
-                    return 'Nickname needs at least 3 characters.';
-                  }
-                  if (containsProfanity(text)) {
-                    return 'Nickname contains inappropriate language.';
-                  }
-                  return null;
-                },
-                textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: widget.handleController,
+              enabled: !widget.lockHandle,
+              decoration: InputDecoration(
+                labelText: 'Nickname',
+                hintText: 'e.g. TacticTiger',
+                counterText: '',
+                suffixIcon: widget.lockHandle ? const Icon(Icons.lock) : null,
               ),
-              const SizedBox(height: 12),
-              Autocomplete<String>(
-                initialValue: TextEditingValue(text: widget.initialCountry),
-                optionsBuilder: (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.trim().isEmpty) {
-                    return const Iterable<String>.empty();
-                  }
-                  return countrySuggestions(textEditingValue.text.trim());
-                },
-                onSelected: (selection) {},
-                fieldViewBuilder:
-                    (
-                      BuildContext context,
-                      TextEditingController countryController,
-                      FocusNode focusNode,
-                      VoidCallback onFieldSubmitted,
-                    ) {
-                      _countryController = countryController;
-                      return TextFormField(
-                        controller: countryController,
-                        focusNode: focusNode,
-                        enabled: !widget.lockCountry,
-                        decoration: InputDecoration(
-                          labelText: 'Country / Region',
-                          hintText: 'e.g. Brazil',
-                          suffixIcon: widget.lockCountry
-                              ? const Icon(Icons.lock)
-                              : null,
-                        ),
-                        validator: (value) {
-                          final text = value?.trim() ?? '';
-                          if (text.isEmpty) {
-                            return 'Please enter a country or region.';
-                          }
-                          if (canonicalCountryName(text) == null) {
-                            return 'Please select a valid country from the list.';
-                          }
-                          return null;
-                        },
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => onFieldSubmitted(),
-                      );
-                    },
-                optionsViewBuilder:
-                    (
-                      BuildContext context,
-                      AutocompleteOnSelected<String> onSelected,
-                      Iterable<String> options,
-                    ) {
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 4.0,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 200),
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero,
-                              itemCount: options.length,
-                              itemBuilder: (BuildContext context, int index) {
-                                final option = options.elementAt(index);
-                                return ListTile(
-                                  title: Text(option),
-                                  onTap: () => onSelected(option),
-                                );
-                              },
-                            ),
+              maxLength: 20,
+              validator: (value) {
+                final text = value?.trim() ?? '';
+                if (text.isEmpty) {
+                  return 'Please enter a nickname.';
+                }
+                if (text.length < 3) {
+                  return 'Nickname needs at least 3 characters.';
+                }
+                if (containsProfanity(text)) {
+                  return 'Nickname contains inappropriate language.';
+                }
+                return null;
+              },
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            RawAutocomplete<String>(
+              textEditingController: widget.countryController,
+              focusNode: widget.countryFocusNode,
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                if (textEditingValue.text.trim().isEmpty) {
+                  return const Iterable<String>.empty();
+                }
+                return countrySuggestions(textEditingValue.text.trim());
+              },
+              onSelected: (selection) {},
+              fieldViewBuilder:
+                  (
+                    BuildContext context,
+                    TextEditingController countryController,
+                    FocusNode focusNode,
+                    VoidCallback onFieldSubmitted,
+                  ) {
+                    return TextFormField(
+                      controller: countryController,
+                      focusNode: focusNode,
+                      enabled: !widget.lockCountry,
+                      decoration: InputDecoration(
+                        labelText: 'Country / Region',
+                        hintText: 'e.g. Brazil',
+                        suffixIcon: widget.lockCountry
+                            ? const Icon(Icons.lock)
+                            : null,
+                      ),
+                      validator: (value) {
+                        final text = value?.trim() ?? '';
+                        if (text.isEmpty) {
+                          return 'Please enter a country or region.';
+                        }
+                        if (canonicalCountryName(text) == null) {
+                          return 'Please select a valid country from the list.';
+                        }
+                        return null;
+                      },
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => onFieldSubmitted(),
+                    );
+                  },
+              optionsViewBuilder:
+                  (
+                    BuildContext context,
+                    AutocompleteOnSelected<String> onSelected,
+                    Iterable<String> options,
+                  ) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4.0,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            itemCount: options.length,
+                            itemBuilder: (BuildContext context, int index) {
+                              final option = options.elementAt(index);
+                              return ListTile(
+                                title: Text(option),
+                                onTap: () => onSelected(option),
+                              );
+                            },
                           ),
                         ),
-                      );
-                    },
-              ),
-            ],
-          ),
+                      ),
+                    );
+                  },
+            ),
+          ],
         ),
       ),
     );

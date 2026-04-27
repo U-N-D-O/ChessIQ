@@ -35,7 +35,6 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
                  semester.id,
              },
            );
-
   static const List<EloNodeProgress> _defaultNodes = [
     EloNodeProgress(
       startElo: 450,
@@ -204,6 +203,41 @@ Future<void> _openExamsDashboard(WidgetTester tester) async {
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 700));
+}
+
+Future<void> _pumpAcademyProfileDialog(
+  WidgetTester tester, {
+  required Size size,
+  required TextEditingController handleController,
+  required TextEditingController countryController,
+  required FocusNode countryFocusNode,
+  EdgeInsets viewInsets = EdgeInsets.zero,
+}) async {
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = size;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    ChangeNotifierProvider<AppThemeProvider>(
+      create: (_) => AppThemeProvider(),
+      child: MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(size: size, viewInsets: viewInsets),
+          child: Scaffold(
+            body: AcademyProfileDialog(
+              handleController: handleController,
+              countryController: countryController,
+              countryFocusNode: countryFocusNode,
+              allowExitToMenu: true,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  await tester.pump();
 }
 
 void main() {
@@ -711,6 +745,133 @@ void main() {
 
     expect(find.text('Puzzle Academy Exams'), findsOneWidget);
     expect(find.text('NEXT EXAM GATE'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Academy profile dialog keeps draft text across viewport changes',
+    (tester) async {
+      final handleController = TextEditingController();
+      final countryController = TextEditingController();
+      final countryFocusNode = FocusNode();
+      addTearDown(handleController.dispose);
+      addTearDown(countryController.dispose);
+      addTearDown(countryFocusNode.dispose);
+
+      await _pumpAcademyProfileDialog(
+        tester,
+        size: const Size(390, 844),
+        handleController: handleController,
+        countryController: countryController,
+        countryFocusNode: countryFocusNode,
+      );
+
+      expect(find.byType(TextFormField), findsNWidgets(2));
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'TacticTiger');
+      await tester.enterText(find.byType(TextFormField).at(1), 'Brazil');
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller
+            ?.text,
+        'TacticTiger',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(1))
+            .controller
+            ?.text,
+        'Brazil',
+      );
+
+      await _pumpAcademyProfileDialog(
+        tester,
+        size: const Size(844, 390),
+        handleController: handleController,
+        countryController: countryController,
+        countryFocusNode: countryFocusNode,
+      );
+
+      expect(find.byType(TextFormField), findsNWidgets(2));
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller
+            ?.text,
+        'TacticTiger',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(1))
+            .controller
+            ?.text,
+        'Brazil',
+      );
+
+      await _pumpAcademyProfileDialog(
+        tester,
+        size: const Size(390, 844),
+        handleController: handleController,
+        countryController: countryController,
+        countryFocusNode: countryFocusNode,
+      );
+
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(0))
+            .controller
+            ?.text,
+        'TacticTiger',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byType(TextFormField).at(1))
+            .controller
+            ?.text,
+        'Brazil',
+      );
+    },
+  );
+
+  testWidgets('Academy profile dialog caps its height above the keyboard', (
+    tester,
+  ) async {
+    final handleController = TextEditingController(text: 'TacticTiger');
+    final countryController = TextEditingController(text: 'Brazil');
+    final countryFocusNode = FocusNode();
+    addTearDown(handleController.dispose);
+    addTearDown(countryController.dispose);
+    addTearDown(countryFocusNode.dispose);
+
+    const size = Size(844, 390);
+    const keyboardHeight = 220.0;
+    await _pumpAcademyProfileDialog(
+      tester,
+      size: size,
+      handleController: handleController,
+      countryController: countryController,
+      countryFocusNode: countryFocusNode,
+    );
+
+    final heightWithoutKeyboard = tester.getSize(find.byType(Dialog)).height;
+
+    await _pumpAcademyProfileDialog(
+      tester,
+      size: size,
+      handleController: handleController,
+      countryController: countryController,
+      countryFocusNode: countryFocusNode,
+      viewInsets: const EdgeInsets.only(bottom: keyboardHeight),
+    );
+
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(tester.getSize(find.byType(Dialog)).height, greaterThan(0));
+    expect(
+      tester.getSize(find.byType(Dialog)).height,
+      lessThan(heightWithoutKeyboard),
+    );
   });
 
   testWidgets(

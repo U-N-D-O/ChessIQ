@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:chessiq/core/theme/app_theme_provider.dart';
@@ -1041,7 +1042,15 @@ class PuzzleAcademyDialogShell extends StatelessWidget {
       monochromeOverride: monochromeOverride,
     );
     final effectiveAccent = accent ?? palette.cyan;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
+    final mediaQuery = MediaQuery.of(context);
+    final keyboardOpen = mediaQuery.viewInsets.bottom > 0;
+    final availableHeight = math.max(
+      0.0,
+      mediaQuery.size.height - mediaQuery.viewInsets.vertical - 48,
+    );
+    final maxHeight = keyboardOpen
+        ? availableHeight
+        : math.min(mediaQuery.size.height * 0.86, availableHeight);
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
