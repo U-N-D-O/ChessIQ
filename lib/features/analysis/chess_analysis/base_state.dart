@@ -13359,7 +13359,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     // EconomyProvider was already credited by PurchaseService._deliver().
     await _saveStoreState();
-    unawaited(_playStorePurchaseSound());
+    if (label == 'Coin Pack L') {
+      unawaited(_playCoinBagSoundL());
+    } else {
+      unawaited(_playCoinBagSound());
+    }
     _addLog('Purchased $label (+$amount coins)');
   }
 
@@ -13373,7 +13377,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _adFreeOwned = true;
     await _saveStoreState();
-  unawaited(_playStorePurchaseSound());
+    unawaited(_playStorePurchaseSound());
     _addLog('Reset Board No-Ad Pass activated');
     if (!mounted) return;
     await showDialog<void>(
@@ -13399,7 +13403,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _academyTuitionPassOwned = true;
     await _saveStoreState();
-  unawaited(_playStorePurchaseSound());
+    unawaited(_playStorePurchaseSound());
     _addLog('Academy Tuition Pass activated');
     if (!mounted) return;
     await showDialog<void>(
