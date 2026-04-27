@@ -159,6 +159,35 @@ void main() {
   );
 
   testWidgets(
+    'vs bot selector compresses short iPhone portrait before launch falls below fold',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(375, 812),
+        padding: const FakeViewPadding(top: 47, bottom: 34),
+        viewPadding: const FakeViewPadding(top: 47, bottom: 34),
+      );
+
+      final startButtonFinder = find.byKey(
+        const ValueKey<String>('bot_setup_start_button'),
+      );
+      final startButtonRect = tester.getRect(startButtonFinder);
+
+      expect(startButtonFinder.hitTestable(), findsOneWidget);
+      expect(startButtonRect.bottom, lessThanOrEqualTo(812));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
     'vs bot selector keeps avatar square on compact iPhone landscape',
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);

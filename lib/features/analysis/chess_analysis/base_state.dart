@@ -187,6 +187,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   DateTime? _creditsBackdropLastUpdate;
   late final Future<String> _creditsVersionFuture = _loadCreditsVersionLabel();
   double _menuDotTime = 0.0;
+  double _mainMenuSceneTime = 0.0;
   double _blueYellowContactTime = 0.0;
   late final double _blueDotPhase;
   late final double _yellowDotPhase;
@@ -575,6 +576,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
   }
 
+  bool get _shouldAnimateMainMenu =>
+      _activeSection == AppSection.menu && !_creditsDialogOpen;
+
+  @visibleForTesting
+  bool get debugMainMenuAnimationsActive => _shouldAnimateMainMenu;
+
   void _scheduleEditModeHintHide() {
     _editModeHintTimer?.cancel();
     _editModeHintTimer = Timer(const Duration(milliseconds: 1500), () {
@@ -634,6 +641,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _menuCenterLastCollision = null;
     _menuCenterCollisionStreakCount = 0;
     _menuDotTime = 0.0;
+    _mainMenuSceneTime = 0.0;
     _blueMenuDotPosition = Offset(
       cos(_blueDotPhase) * 0.58,
       sin(_blueDotPhase) * 0.56,
@@ -723,186 +731,200 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _menuDotTime %= 2 * pi;
     }
 
-    final centerTime = _menuCenterLastUpdate == null
-        ? 0.0
-        : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
-    _menuCenterLastUpdate = now;
-    _menuCenterImpact = max(0.0, _menuCenterImpact - centerTime * 1.5);
-    _menuCenterSpinSpeed = max(
-      _menuCenterBaseSpinSpeed,
-      _menuCenterSpinSpeed - _menuCenterSpinDecayRate * centerTime,
-    );
-    _menuCenterRotationA += centerTime * _menuCenterSpinSpeed;
-    _menuCenterRotationB += centerTime * _menuCenterSpinSpeed;
-
-    _menuCenterShapeChangeTimerA -= centerTime;
-    _menuCenterShapeChangeTimerB -= centerTime;
-
-    if (_menuCenterShapeChangeTimerA <= 0.0) {
-      final rollA = _creditsBackdropRandom.nextDouble();
-      _menuCenterShapeSidesA = rollA < (1.0 / 31.0)
-          ? 5
-          : rollA < (16.0 / 31.0)
-          ? 0
-          : 4;
-      _menuCenterShapeChangeTimerA =
-          2.4 + _creditsBackdropRandom.nextDouble() * 2.0;
-    }
-    if (_menuCenterShapeChangeTimerB <= 0.0) {
-      final rollB = _creditsBackdropRandom.nextDouble();
-      _menuCenterShapeSidesB = rollB < (1.0 / 31.0)
-          ? 5
-          : rollB < (16.0 / 31.0)
-          ? 0
-          : 4;
-      _menuCenterShapeChangeTimerB =
-          2.8 + _creditsBackdropRandom.nextDouble() * 1.8;
-    }
-
-    final pulse = _menuDotTime;
-    final blueTargetAlignment = _menuDotAlignment(
-      _blueDotPhase,
-      _blueDotSpeed,
-      _blueDotRadius,
-      pulse,
-      _blueDotTrajectoryNoise,
-      _blueDotShapeSeed,
-      false,
-    );
-    final yellowTargetAlignment = _menuDotAlignment(
-      _yellowDotPhase,
-      _yellowDotSpeed,
-      _yellowDotRadius,
-      pulse,
-      _yellowDotTrajectoryNoise,
-      _yellowDotShapeSeed,
-      true,
-    );
-    final blueTarget = Offset(blueTargetAlignment.x, blueTargetAlignment.y);
-    final yellowTarget = Offset(
-      yellowTargetAlignment.x * -1.0,
-      yellowTargetAlignment.y,
-    );
-
-    final separation = _blueMenuDotPosition - _yellowMenuDotPosition;
-    final collisionDistance = separation.distance;
-    final currentlyColliding = collisionDistance < 0.045;
-    final reducedEffects =
-        WidgetsBinding
-            .instance
-            .platformDispatcher
-            .accessibilityFeatures
-            .disableAnimations ||
-        _useReducedMenuWindowsVisualEffects;
-
-    if (currentlyColliding && !_menuDotsPreviouslyColliding) {
-      final collisionAge = _menuCenterLastCollision == null
-          ? double.infinity
-          : now.difference(_menuCenterLastCollision!).inMilliseconds / 1000.0;
-      if (collisionAge <= _menuCenterCollisionStreakWindow) {
-        _menuCenterCollisionStreakCount += 1;
-      } else {
-        _menuCenterCollisionStreakCount = 1;
+    if (_shouldAnimateMainMenu) {
+      _mainMenuSceneTime += dt;
+      if (_mainMenuSceneTime > 1e6) {
+        _mainMenuSceneTime %= 2 * pi;
       }
-      _menuCenterLastCollision = now;
 
-      final collisionBonus = 1.4 + _menuCenterCollisionStreakCount * 0.55;
-      _menuCenterSpinSpeed = min(
-        _menuCenterSpinSpeed + collisionBonus,
-        _menuCenterMaxSpinSpeed,
+      final centerTime = _menuCenterLastUpdate == null
+          ? 0.0
+          : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
+      _menuCenterLastUpdate = now;
+      _menuCenterImpact = max(0.0, _menuCenterImpact - centerTime * 1.5);
+      _menuCenterSpinSpeed = max(
+        _menuCenterBaseSpinSpeed,
+        _menuCenterSpinSpeed - _menuCenterSpinDecayRate * centerTime,
       );
-      _menuCenterImpact = min(
-        1.0,
-        _menuCenterImpact + 0.42 + _menuCenterCollisionStreakCount * 0.10,
+      _menuCenterRotationA += centerTime * _menuCenterSpinSpeed;
+      _menuCenterRotationB += centerTime * _menuCenterSpinSpeed;
+
+      _menuCenterShapeChangeTimerA -= centerTime;
+      _menuCenterShapeChangeTimerB -= centerTime;
+
+      if (_menuCenterShapeChangeTimerA <= 0.0) {
+        final rollA = _creditsBackdropRandom.nextDouble();
+        _menuCenterShapeSidesA = rollA < (1.0 / 31.0)
+            ? 5
+            : rollA < (16.0 / 31.0)
+            ? 0
+            : 4;
+        _menuCenterShapeChangeTimerA =
+            2.4 + _creditsBackdropRandom.nextDouble() * 2.0;
+      }
+      if (_menuCenterShapeChangeTimerB <= 0.0) {
+        final rollB = _creditsBackdropRandom.nextDouble();
+        _menuCenterShapeSidesB = rollB < (1.0 / 31.0)
+            ? 5
+            : rollB < (16.0 / 31.0)
+            ? 0
+            : 4;
+        _menuCenterShapeChangeTimerB =
+            2.8 + _creditsBackdropRandom.nextDouble() * 1.8;
+      }
+
+      final pulse = _mainMenuSceneTime;
+      final blueTargetAlignment = _menuDotAlignment(
+        _blueDotPhase,
+        _blueDotSpeed,
+        _blueDotRadius,
+        pulse,
+        _blueDotTrajectoryNoise,
+        _blueDotShapeSeed,
+        false,
+      );
+      final yellowTargetAlignment = _menuDotAlignment(
+        _yellowDotPhase,
+        _yellowDotSpeed,
+        _yellowDotRadius,
+        pulse,
+        _yellowDotTrajectoryNoise,
+        _yellowDotShapeSeed,
+        true,
+      );
+      final blueTarget = Offset(blueTargetAlignment.x, blueTargetAlignment.y);
+      final yellowTarget = Offset(
+        yellowTargetAlignment.x * -1.0,
+        yellowTargetAlignment.y,
       );
 
-      final origin = Offset(
-        (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
-        (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
+      final separation = _blueMenuDotPosition - _yellowMenuDotPosition;
+      final collisionDistance = separation.distance;
+      final currentlyColliding = collisionDistance < 0.045;
+      final reducedEffects =
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .accessibilityFeatures
+              .disableAnimations ||
+          _useReducedMenuWindowsVisualEffects;
+
+      if (currentlyColliding && !_menuDotsPreviouslyColliding) {
+        final collisionAge = _menuCenterLastCollision == null
+            ? double.infinity
+            : now.difference(_menuCenterLastCollision!).inMilliseconds / 1000.0;
+        if (collisionAge <= _menuCenterCollisionStreakWindow) {
+          _menuCenterCollisionStreakCount += 1;
+        } else {
+          _menuCenterCollisionStreakCount = 1;
+        }
+        _menuCenterLastCollision = now;
+
+        final collisionBonus = 1.4 + _menuCenterCollisionStreakCount * 0.55;
+        _menuCenterSpinSpeed = min(
+          _menuCenterSpinSpeed + collisionBonus,
+          _menuCenterMaxSpinSpeed,
+        );
+        _menuCenterImpact = min(
+          1.0,
+          _menuCenterImpact + 0.42 + _menuCenterCollisionStreakCount * 0.10,
+        );
+
+        final origin = Offset(
+          (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
+          (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
+        );
+        _spawnMenuCollisionParticles(origin, reducedEffects: reducedEffects);
+
+        unawaited(_lightHaptic());
+
+        final safeDistance = max(collisionDistance, 0.0001);
+        final direction = separation / safeDistance;
+        const repulsionStrength = 14.7;
+        final impulse =
+            direction * repulsionStrength +
+            Offset(-direction.dy, direction.dx) * 2.7;
+        _blueMenuDotVelocity += impulse;
+        _yellowMenuDotVelocity -= impulse;
+      }
+
+      _menuDotsPreviouslyColliding = currentlyColliding;
+
+      final blueCenter = _blueMenuDotPosition;
+      final yellowCenter = _yellowMenuDotPosition;
+      final blueSpring = (blueTarget - blueCenter) * 4.4;
+      final yellowSpring = (yellowTarget - yellowCenter) * 4.2;
+      final blueOrbit = Offset(-blueCenter.dy, blueCenter.dx) * 3.8;
+      final yellowOrbit = Offset(yellowCenter.dy, -yellowCenter.dx) * 3.7;
+      final blueTwist =
+          Offset(-_blueMenuDotVelocity.dy, _blueMenuDotVelocity.dx) * 2.4;
+      final yellowTwist =
+          Offset(_yellowMenuDotVelocity.dy, -_yellowMenuDotVelocity.dx) * 2.3;
+      final blueNoise = Offset(
+        sin(pulse * 3.1 + 1.7) * 0.28,
+        cos(pulse * 3.5 - 0.5) * 0.28,
       );
-      _spawnMenuCollisionParticles(origin, reducedEffects: reducedEffects);
+      final yellowNoise = Offset(
+        cos(pulse * 2.9 + 1.1) * 0.27,
+        sin(pulse * 3.2 - 1.0) * 0.27,
+      );
+      final blueChaos = Offset(
+        sin(pulse * 5.0 + _blueDotShapeSeed) * 0.14,
+        cos(pulse * 4.2 - _blueDotShapeSeed) * 0.13,
+      );
+      final yellowChaos = Offset(
+        cos(pulse * 4.7 + _yellowDotShapeSeed) * 0.15,
+        sin(pulse * 4.4 - _yellowDotShapeSeed) * 0.14,
+      );
+      final blueRadial = blueCenter * -0.18;
+      final yellowRadial = yellowCenter * -0.16;
 
-      unawaited(_lightHaptic());
+      final blueAcceleration =
+          blueSpring +
+          blueOrbit +
+          blueTwist +
+          blueNoise +
+          blueChaos +
+          blueRadial;
+      final yellowAcceleration =
+          yellowSpring +
+          yellowOrbit +
+          yellowTwist +
+          yellowNoise +
+          yellowChaos +
+          yellowRadial;
 
-      final safeDistance = max(collisionDistance, 0.0001);
-      final direction = separation / safeDistance;
-      const repulsionStrength = 14.7;
-      final impulse =
-          direction * repulsionStrength +
-          Offset(-direction.dy, direction.dx) * 2.7;
-      _blueMenuDotVelocity += impulse;
-      _yellowMenuDotVelocity -= impulse;
+      _blueMenuDotVelocity =
+          (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) * 0.78;
+      _yellowMenuDotVelocity =
+          (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) * 0.78;
+
+      _blueMenuDotPosition += _blueMenuDotVelocity * dt;
+      _yellowMenuDotPosition += _yellowMenuDotVelocity * dt;
+
+      if (_blueMenuDotPosition.distance > 0.96) {
+        _blueMenuDotPosition =
+            _blueMenuDotPosition / _blueMenuDotPosition.distance * 0.92;
+        _blueMenuDotVelocity *= 0.72;
+      }
+      if (_yellowMenuDotPosition.distance > 0.96) {
+        _yellowMenuDotPosition =
+            _yellowMenuDotPosition / _yellowMenuDotPosition.distance * 0.92;
+        _yellowMenuDotVelocity *= 0.72;
+      }
+
+      _menuSparkParticles.removeWhere((particle) {
+        particle.position += particle.velocity * dt;
+        particle.velocity *= max(0.78, 1.0 - dt * 2.2);
+        particle.rotation += particle.angularVelocity * dt;
+        particle.age += dt;
+        return particle.age >= particle.life ||
+            particle.position.dx.abs() > 1.24 ||
+            particle.position.dy.abs() > 1.24;
+      });
+    } else {
+      _menuCenterLastUpdate = now;
     }
-
-    _menuDotsPreviouslyColliding = currentlyColliding;
-
-    final blueCenter = _blueMenuDotPosition;
-    final yellowCenter = _yellowMenuDotPosition;
-    final blueSpring = (blueTarget - blueCenter) * 4.4;
-    final yellowSpring = (yellowTarget - yellowCenter) * 4.2;
-    final blueOrbit = Offset(-blueCenter.dy, blueCenter.dx) * 3.8;
-    final yellowOrbit = Offset(yellowCenter.dy, -yellowCenter.dx) * 3.7;
-    final blueTwist =
-        Offset(-_blueMenuDotVelocity.dy, _blueMenuDotVelocity.dx) * 2.4;
-    final yellowTwist =
-        Offset(_yellowMenuDotVelocity.dy, -_yellowMenuDotVelocity.dx) * 2.3;
-    final blueNoise = Offset(
-      sin(pulse * 3.1 + 1.7) * 0.28,
-      cos(pulse * 3.5 - 0.5) * 0.28,
-    );
-    final yellowNoise = Offset(
-      cos(pulse * 2.9 + 1.1) * 0.27,
-      sin(pulse * 3.2 - 1.0) * 0.27,
-    );
-    final blueChaos = Offset(
-      sin(pulse * 5.0 + _blueDotShapeSeed) * 0.14,
-      cos(pulse * 4.2 - _blueDotShapeSeed) * 0.13,
-    );
-    final yellowChaos = Offset(
-      cos(pulse * 4.7 + _yellowDotShapeSeed) * 0.15,
-      sin(pulse * 4.4 - _yellowDotShapeSeed) * 0.14,
-    );
-    final blueRadial = blueCenter * -0.18;
-    final yellowRadial = yellowCenter * -0.16;
-
-    final blueAcceleration =
-        blueSpring + blueOrbit + blueTwist + blueNoise + blueChaos + blueRadial;
-    final yellowAcceleration =
-        yellowSpring +
-        yellowOrbit +
-        yellowTwist +
-        yellowNoise +
-        yellowChaos +
-        yellowRadial;
-
-    _blueMenuDotVelocity =
-        (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) * 0.78;
-    _yellowMenuDotVelocity =
-        (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) * 0.78;
-
-    _blueMenuDotPosition += _blueMenuDotVelocity * dt;
-    _yellowMenuDotPosition += _yellowMenuDotVelocity * dt;
-
-    if (_blueMenuDotPosition.distance > 0.96) {
-      _blueMenuDotPosition =
-          _blueMenuDotPosition / _blueMenuDotPosition.distance * 0.92;
-      _blueMenuDotVelocity *= 0.72;
-    }
-    if (_yellowMenuDotPosition.distance > 0.96) {
-      _yellowMenuDotPosition =
-          _yellowMenuDotPosition / _yellowMenuDotPosition.distance * 0.92;
-      _yellowMenuDotVelocity *= 0.72;
-    }
-
-    _menuSparkParticles.removeWhere((particle) {
-      particle.position += particle.velocity * dt;
-      particle.velocity *= max(0.78, 1.0 - dt * 2.2);
-      particle.rotation += particle.angularVelocity * dt;
-      particle.age += dt;
-      return particle.age >= particle.life ||
-          particle.position.dx.abs() > 1.24 ||
-          particle.position.dy.abs() > 1.24;
-    });
 
     if (_creditsDialogOpen) {
       final creditsLast = _creditsBackdropLastUpdate ?? now;
@@ -1253,7 +1275,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           children: [
             CustomPaint(
               painter: _MenuBlastBackdropPainter(
-                time: _menuDotTime,
+                time: _mainMenuSceneTime,
                 impact: _menuCenterImpact,
                 blueAlignment: Offset(blueDotAlignment.x, blueDotAlignment.y),
                 yellowAlignment: Offset(
@@ -1270,7 +1292,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
             ..._menuBackdropMotifs.map((motif) {
               final driftAngle =
-                  _menuDotTime * motif.driftSpeed + motif.driftPhase;
+                  _mainMenuSceneTime * motif.driftSpeed + motif.driftPhase;
               final drift =
                   Offset(cos(driftAngle), sin(driftAngle * 1.18)) *
                   (motif.driftRadius * (reducedEffects ? 0.55 : 1.0));

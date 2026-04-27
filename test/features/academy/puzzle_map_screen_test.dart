@@ -747,6 +747,39 @@ void main() {
     expect(find.text('NEXT EXAM GATE'), findsOneWidget);
   });
 
+  testWidgets('Academy store sheet closes from the top-right close button', (
+    tester,
+  ) async {
+    final provider = _TestPuzzleAcademyProvider();
+
+    await _pumpPuzzleMapScreen(
+      tester,
+      provider: provider,
+      size: const Size(390, 844),
+    );
+
+    await _openExamsDashboard(tester);
+
+    await tester.tap(find.byIcon(Icons.storefront_outlined).first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('Academy Store'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('academy_store_close_button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('academy_store_close_button')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('Academy Store'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'Academy profile dialog keeps draft text across viewport changes',
     (tester) async {

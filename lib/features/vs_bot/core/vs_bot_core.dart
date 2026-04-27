@@ -49,8 +49,10 @@ class _VsBotSetupLayoutSpec {
     required this.isLandscape,
     required this.compactLandscape,
     required this.compactPortrait,
+    required this.shortPortrait,
     required this.tightPortrait,
     required this.compactPhoneLayout,
+    required this.portraitCompression,
     required this.cardViewportHeight,
     required this.sectionGap,
     required this.contentMaxWidth,
@@ -62,11 +64,15 @@ class _VsBotSetupLayoutSpec {
     final isLandscape = media.orientation == Orientation.landscape;
     final compactLandscape = isLandscape && safeHeight <= 430;
     final compactPortrait = !isLandscape && safeHeight <= 780;
+    final shortPortrait = !isLandscape && safeHeight <= 740;
     final tightPortrait = !isLandscape && media.size.width <= 390;
     final compactPhoneLayout =
         compactLandscape || compactPortrait || media.size.width <= 430;
+    final portraitCompression = !isLandscape && compactPortrait
+        ? ((780.0 - safeHeight).clamp(0.0, 64.0) / 64.0)
+        : 0.0;
 
-    final cardViewportHeight = compactLandscape
+    final baseCardViewportHeight = compactLandscape
         ? 262.0
         : isLandscape
         ? 308.0
@@ -75,6 +81,13 @@ class _VsBotSetupLayoutSpec {
         : compactPortrait
         ? 332.0
         : 426.0;
+    final cardViewportHeight = !isLandscape && compactPortrait
+        ? ui.lerpDouble(
+            baseCardViewportHeight,
+            tightPortrait ? 224.0 : 272.0,
+            portraitCompression,
+          )!
+        : baseCardViewportHeight;
 
     final viewportFraction = tightPortrait
         ? 0.78
@@ -90,10 +103,16 @@ class _VsBotSetupLayoutSpec {
       isLandscape: isLandscape,
       compactLandscape: compactLandscape,
       compactPortrait: compactPortrait,
+      shortPortrait: shortPortrait,
       tightPortrait: tightPortrait,
       compactPhoneLayout: compactPhoneLayout,
       cardViewportHeight: cardViewportHeight,
-      sectionGap: compactPhoneLayout ? 12.0 : 14.0,
+      portraitCompression: portraitCompression,
+      sectionGap: !isLandscape && compactPortrait
+          ? ui.lerpDouble(12.0, 6.0, portraitCompression)!
+          : compactPhoneLayout
+          ? 12.0
+          : 14.0,
       contentMaxWidth: isLandscape ? 1180.0 : 760.0,
       viewportFraction: viewportFraction,
     );
@@ -102,8 +121,10 @@ class _VsBotSetupLayoutSpec {
   final bool isLandscape;
   final bool compactLandscape;
   final bool compactPortrait;
+  final bool shortPortrait;
   final bool tightPortrait;
   final bool compactPhoneLayout;
+  final double portraitCompression;
   final double cardViewportHeight;
   final double sectionGap;
   final double contentMaxWidth;
@@ -3434,6 +3455,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   }
 
                   Widget buildSelectorPanel() {
+                    final compactSelectorVerticalPadding = layout.shortPortrait
+                        ? 6.0
+                        : 10.0;
+                    final selectorDotGap = layout.shortPortrait ? 6.0 : 12.0;
+
                     return Container(
                       key: const ValueKey<String>('bot_setup_selector_panel'),
                       decoration: _vsBotArcadePanelDecoration(
@@ -3448,13 +3474,13 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         splitLandscapeControls
                             ? 10
                             : compactPhoneLayout
-                            ? 10
+                            ? compactSelectorVerticalPadding
                             : 14,
                         compactPhoneLayout ? 12 : 14,
                         splitLandscapeControls
                             ? 10
                             : compactPhoneLayout
-                            ? 10
+                            ? compactSelectorVerticalPadding
                             : 14,
                       ),
                       child: Column(
@@ -3649,7 +3675,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                               ],
                             ),
                           ),
-                          SizedBox(height: splitLandscapeControls ? 8 : 12),
+                          SizedBox(
+                            height: splitLandscapeControls ? 8 : selectorDotGap,
+                          ),
                           Align(
                             alignment: Alignment.center,
                             child: Wrap(

@@ -147,6 +147,40 @@ Finder _findByValueKeyPrefix(String prefix) {
   });
 }
 
+Future<void> _pumpAnalysisMenu(
+  WidgetTester tester, {
+  required Size size,
+}) async {
+  SharedPreferences.setMockInitialValues(const <String, Object>{
+    'mute_sounds_v1': true,
+    'haptics_enabled_v1': false,
+  });
+
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = size;
+
+  final economy = EconomyProvider();
+  await economy.refresh(notify: false);
+  final academyProvider = _TestPuzzleAcademyProvider();
+  final theme = AppThemeProvider();
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppThemeProvider>.value(value: theme),
+        ChangeNotifierProvider<EconomyProvider>.value(value: economy),
+        ChangeNotifierProvider<PuzzleAcademyProvider>.value(
+          value: academyProvider,
+        ),
+      ],
+      child: const MaterialApp(home: ChessAnalysisPage()),
+    ),
+  );
+
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 1400));
+}
+
 Future<void> _pumpOpeningsStudyLibrary(
   WidgetTester tester, {
   required Size size,
@@ -249,6 +283,42 @@ void main() {
   tearDown(() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
   });
+
+  testWidgets(
+    'main menu animations pause away from menu and resume on return',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpAnalysisMenu(tester, size: const Size(390, 844));
+
+      final dynamic state = tester.state(find.byType(ChessAnalysisPage));
+      expect(state.debugMainMenuAnimationsActive, isTrue);
+
+      await tester.tap(find.text('ACADEMY'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 900));
+
+      expect(
+        find.byKey(const ValueKey<String>('academy_hub_card_exams')),
+        findsOneWidget,
+      );
+      expect(state.debugMainMenuAnimationsActive, isFalse);
+
+      await tester.pump(const Duration(seconds: 2));
+      expect(state.debugMainMenuAnimationsActive, isFalse);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('academy_hub_back_button')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 900));
+
+      expect(find.text('PLAY CHESS'), findsOneWidget);
+      expect(state.debugMainMenuAnimationsActive, isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'study library keeps compact portrait focused on category and browser panels',

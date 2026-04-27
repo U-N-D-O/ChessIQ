@@ -1026,20 +1026,47 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        'Academy Store',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 20,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Coins: ${liveProvider.progress.coins}',
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.82),
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Stack(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 48),
+                            child: Column(
+                              children: [
+                                const Text(
+                                  'Academy Store',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 20,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Coins: ${liveProvider.progress.coins}',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: scheme.onSurface.withValues(
+                                      alpha: 0.82,
+                                    ),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: IconButton(
+                              key: const ValueKey<String>(
+                                'academy_store_close_button',
+                              ),
+                              tooltip: 'Close store',
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       _StoreRow(
