@@ -216,6 +216,8 @@ void main() {
         find.byKey(const ValueKey<String>('puzzle_node_regret_button_label')),
       );
 
+      expect(find.text('Progress'), findsNothing);
+      expect(find.text('Eval'), findsNothing);
       expect(evalStripRect.bottom, lessThanOrEqualTo(boardRect.top));
       expect(boardRect.width, greaterThan(boardCardRect.width - 30));
       expect(intelPanelRect.bottom - intelStatusRect.bottom, lessThan(40));
@@ -330,6 +332,8 @@ void main() {
       _textForKey(tester, 'puzzle_node_header_subtitle'),
       'Puzzle #1 of 3',
     );
+    expect(find.text('Progress'), findsNothing);
+    expect(find.text('Eval'), findsNothing);
   });
 
   testWidgets('daily compact portrait on iOS also hides progress and eval', (
@@ -436,6 +440,8 @@ void main() {
       _textForKey(tester, 'puzzle_node_header_subtitle'),
       'Puzzle #1 of 50 • 10m 00s left',
     );
+    expect(find.text('Progress'), findsNothing);
+    expect(find.text('Eval'), findsNothing);
   });
 
   testWidgets('training compact landscape moves header into the right rail', (
