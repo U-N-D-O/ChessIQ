@@ -13629,7 +13629,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       title: 'Academy Tuition Pass',
                       subtitle: _academyTuitionPassOwned
                           ? 'Owned (academy progression without ads)'
-                          : 'Skips academy brain-break and daily reward ads',
+                          : 'Skips academy brain-break and daily challenge reward ads',
                       priceLabel: '\$6.99',
                       enabled: !_academyTuitionPassOwned,
                       actionLabel: _academyTuitionPassOwned ? 'Owned' : 'Buy',

@@ -1,3 +1,5 @@
+import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
@@ -9,8 +11,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
-  _TestPuzzleAcademyProvider()
-    : _progress = PuzzleProgressModel.initial(nodes: {testNode.key: testNode});
+  _TestPuzzleAcademyProvider({
+    Set<String> solvedPuzzleIds = const <String>{},
+    Set<String> claimedDailyChallengeRewardDates = const <String>{},
+  }) : _progress = PuzzleProgressModel.initial(nodes: {testNode.key: testNode})
+           .copyWith(
+             solvedPuzzleIds: solvedPuzzleIds,
+             claimedDailyChallengeRewardDates: claimedDailyChallengeRewardDates,
+           );
 
   static const EloNodeProgress testNode = EloNodeProgress(
     startElo: 450,
@@ -30,7 +38,7 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
         _buildPuzzle(id: 'training_${index + 1}', rating: 450 + (index * 5)),
   );
 
-  final PuzzleProgressModel _progress;
+  PuzzleProgressModel _progress;
 
   @override
   PuzzleProgressModel get progress => _progress;
@@ -40,6 +48,14 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
 
   @override
   bool get isLoading => false;
+
+  static String todayStampForTest() {
+    final now = DateTime.now().toUtc();
+    final year = now.year.toString().padLeft(4, '0');
+    final month = now.month.toString().padLeft(2, '0');
+    final day = now.day.toString().padLeft(2, '0');
+    return '$year$month$day';
+  }
 
   @override
   Future<void> initialize() async {}
@@ -55,6 +71,21 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
 
   @override
   bool canTakeExam(EloNodeProgress node) => false;
+
+  @override
+  Future<void> markTodayDailyChallengeRewardClaimed() async {
+    final stamp = todayStampForTest();
+    _progress = _progress.copyWith(
+      claimedDailyChallengeRewardDates: {
+        ..._progress.claimedDailyChallengeRewardDates,
+        stamp,
+      },
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> syncCoinsFromStoreState({bool notify = true}) async {}
 }
 
 PuzzleItem _buildPuzzle({required String id, required int rating}) {
@@ -84,15 +115,19 @@ Future<void> _pumpPuzzleNodeScreen(
   required Size size,
   required PuzzleAcademyProvider provider,
   required PuzzleNodeScreen screen,
+  EconomyProvider? economyProvider,
+  Map<String, Object> mockPrefs = const <String, Object>{},
   TargetPlatform platform = TargetPlatform.android,
   FakeViewPadding padding = FakeViewPadding.zero,
   FakeViewPadding viewPadding = FakeViewPadding.zero,
 }) async {
-  SharedPreferences.setMockInitialValues(const <String, Object>{});
+  SharedPreferences.setMockInitialValues(mockPrefs);
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
   tester.view.padding = padding;
   tester.view.viewPadding = viewPadding;
+  final resolvedEconomy = economyProvider ?? EconomyProvider();
+  await resolvedEconomy.load();
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPadding);
@@ -107,6 +142,7 @@ Future<void> _pumpPuzzleNodeScreen(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<PuzzleAcademyProvider>.value(value: provider),
+        ChangeNotifierProvider<EconomyProvider>.value(value: resolvedEconomy),
         ChangeNotifierProvider<AppThemeProvider>(
           create: (_) => AppThemeProvider(),
         ),
@@ -223,6 +259,42 @@ void main() {
     },
   );
 
+  testWidgets(
+    'iOS wider portrait also removes progress and eval when they would push nav off-screen',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider();
+
+      await _pumpPuzzleNodeScreen(
+        tester,
+        size: const Size(540, 920),
+        provider: provider,
+        platform: TargetPlatform.iOS,
+        padding: const FakeViewPadding(top: 24, bottom: 20),
+        viewPadding: const FakeViewPadding(top: 24, bottom: 20),
+        screen: PuzzleNodeScreen(
+          node: _TestPuzzleAcademyProvider.testNode,
+          heroTag: 'training-portrait-ios-wide',
+          initialPuzzle: _TestPuzzleAcademyProvider.trainingPuzzles.first,
+          initialPuzzleIndex: 0,
+        ),
+      );
+
+      expect(find.text('Progress'), findsNothing);
+      expect(find.text('Eval'), findsNothing);
+
+      final previousRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_previous_button')),
+      );
+      final nextRect = tester.getRect(
+        find.byKey(const ValueKey<String>('puzzle_node_next_button')),
+      );
+      final bottomInset = tester.view.padding.bottom;
+
+      expect(920 - previousRect.bottom - bottomInset, lessThanOrEqualTo(24));
+      expect(920 - nextRect.bottom - bottomInset, lessThanOrEqualTo(24));
+    },
+  );
+
   testWidgets('daily compact portrait keeps the shared top bar wording', (
     tester,
   ) async {
@@ -285,6 +357,48 @@ void main() {
     expect(find.text('Progress'), findsNothing);
     expect(find.text('Eval'), findsNothing);
   });
+
+  testWidgets(
+    'academy tuition pass still grants 200 coins for daily challenge reward',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider(
+        solvedPuzzleIds: <String>{_dailySequence.last.puzzleId},
+      );
+      final economy = EconomyProvider();
+
+      await _pumpPuzzleNodeScreen(
+        tester,
+        size: const Size(390, 844),
+        provider: provider,
+        economyProvider: economy,
+        mockPrefs: <String, Object>{
+          'iap_owned_${IapProducts.academyPass}': true,
+        },
+        screen: PuzzleNodeScreen(
+          node: _TestPuzzleAcademyProvider.testNode,
+          heroTag: 'daily-reward-pass',
+          initialPuzzle: _dailySequence.last,
+          initialPuzzleIndex: _dailySequence.length - 1,
+          puzzleSequence: _dailySequence,
+          sequenceTitle: 'Daily Challenge',
+        ),
+      );
+
+      expect(economy.coins, EconomyProvider.defaultCoins);
+
+      await tester.tap(find.text('Get Reward'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Daily Challenge Complete!'), findsOneWidget);
+      expect(find.textContaining('+200 coins awarded.'), findsOneWidget);
+
+      await tester.tap(find.text('CONFIRM'));
+      await tester.pumpAndSettle();
+
+      expect(economy.coins, EconomyProvider.defaultCoins + 200);
+      expect(provider.todayDailyChallengeRewardClaimed, isTrue);
+    },
+  );
 
   testWidgets('exam compact portrait keeps the full header treatment', (
     tester,

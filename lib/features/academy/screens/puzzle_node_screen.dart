@@ -1787,6 +1787,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                           )
                         : LayoutBuilder(
                             builder: (context, constraints) {
+                              final hideLowPriorityIntelMetrics =
+                                  _shouldHidePortraitLowPriorityIntelMetrics(
+                                    layout: layout,
+                                    constraints: constraints,
+                                    monochrome: useMonochrome,
+                                  );
+
                               return SingleChildScrollView(
                                 child: ConstrainedBox(
                                   constraints: BoxConstraints(
@@ -1816,6 +1823,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                                               child: _buildIntelPanel(
                                                 provider,
                                                 layout: layout,
+                                                hideLowPriorityMetrics:
+                                                    hideLowPriorityIntelMetrics,
                                               ),
                                             ),
                                           ),
@@ -1862,6 +1871,223 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return 'Review mode replays archived mistakes without changing progression. Use it to clean up weak spots and move back to the academy when the sequence is done.';
     }
     return 'Training mode tracks the current puzzle, eval swing, and action economy. Hints, skips, and regret remain available without changing the puzzle progression rules.';
+  }
+
+  bool _shouldHidePortraitLowPriorityIntelMetrics({
+    required _PuzzleNodeLayoutSpec layout,
+    required BoxConstraints constraints,
+    required bool monochrome,
+  }) {
+    const portraitActionSafetyMargin = 24.0;
+
+    if (layout.isLandscape || _isExamMode) {
+      return false;
+    }
+    if (Theme.of(context).platform != TargetPlatform.iOS) {
+      return false;
+    }
+
+    final requiredHeight = _estimatePortraitContentHeight(
+      layout: layout,
+      viewportWidth: constraints.maxWidth,
+      monochrome: monochrome,
+      includeLowPriorityMetrics: true,
+    );
+    return requiredHeight >
+        (constraints.maxHeight - portraitActionSafetyMargin);
+  }
+
+  double _estimatePortraitContentHeight({
+    required _PuzzleNodeLayoutSpec layout,
+    required double viewportWidth,
+    required bool monochrome,
+    required bool includeLowPriorityMetrics,
+  }) {
+    return _estimatePortraitBoardCardHeight(
+          layout: layout,
+          viewportWidth: viewportWidth,
+          monochrome: monochrome,
+        ) +
+        _estimatePortraitIntelPanelHeight(
+          layout: layout,
+          viewportWidth: viewportWidth,
+          monochrome: monochrome,
+          includeLowPriorityMetrics: includeLowPriorityMetrics,
+        ) +
+        _estimatePortraitBottomActionsHeight(layout: layout);
+  }
+
+  double _estimatePortraitBoardCardHeight({
+    required _PuzzleNodeLayoutSpec layout,
+    required double viewportWidth,
+    required bool monochrome,
+  }) {
+    final palette = _academyPalette(monochrome);
+    final effectiveWidth = max(
+      0.0,
+      viewportWidth - layout.boardOuterPadding.horizontal,
+    );
+    final contentWidth = max(
+      0.0,
+      effectiveWidth - layout.boardInnerPadding.horizontal - 6,
+    );
+    final boardHeight = layout.useHorizontalEvalStrip
+        ? contentWidth
+        : max(0.0, contentWidth - 48);
+
+    if (!layout.useHorizontalEvalStrip) {
+      return layout.boardOuterPadding.vertical +
+          layout.boardInnerPadding.vertical +
+          boardHeight;
+    }
+
+    final evalStripTextStyle = puzzleAcademyHudStyle(
+      palette: palette,
+      size: 10.4,
+      weight: FontWeight.w800,
+      letterSpacing: 0.8,
+      height: 1.0,
+      color: palette.text,
+    );
+    final evalStripHeight =
+        max(
+          _measureTextHeight(
+            _formatEval(
+              _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
+            ),
+            evalStripTextStyle,
+          ),
+          14.0,
+        ) +
+        14;
+
+    return layout.boardOuterPadding.vertical +
+        layout.boardInnerPadding.vertical +
+        evalStripHeight +
+        8 +
+        boardHeight;
+  }
+
+  double _estimatePortraitIntelPanelHeight({
+    required _PuzzleNodeLayoutSpec layout,
+    required double viewportWidth,
+    required bool monochrome,
+    required bool includeLowPriorityMetrics,
+  }) {
+    final palette = _academyPalette(monochrome);
+    final accent = _modeAccent(palette);
+    final total = _usesCustomSequence
+        ? _activeSequence.length
+        : context.read<PuzzleAcademyProvider>().gridPuzzleCountForNode(
+            widget.node,
+          );
+    final modeLabel = _isExamMode
+        ? 'Exam'
+        : _isDailySequence
+        ? 'Daily'
+        : widget.initialReviewMode
+        ? 'Review'
+        : 'Training';
+    final effectiveWidth = max(
+      0.0,
+      viewportWidth - layout.intelOuterPadding.horizontal,
+    );
+    final contentWidth = max(
+      0.0,
+      effectiveWidth - layout.intelInnerPadding.horizontal - 6,
+    );
+    final valueWidth = max(0.0, contentWidth - 96);
+
+    final titleStyle = puzzleAcademyDisplayStyle(
+      palette: palette,
+      size: layout.intelTitleSize,
+      color: accent,
+    );
+    final labelStyle = puzzleAcademyHudStyle(
+      palette: palette,
+      size: 10.6,
+      weight: FontWeight.w700,
+      letterSpacing: 0.85,
+      height: 1.0,
+      color: palette.textMuted,
+    );
+    final valueStyle = puzzleAcademyHudStyle(
+      palette: palette,
+      size: 11.2,
+      weight: FontWeight.w700,
+      color: palette.text,
+    );
+    final statusStyle = puzzleAcademyHudStyle(
+      palette: palette,
+      size: layout.intelStatusSize,
+      weight: FontWeight.w600,
+      height: 1.45,
+    );
+
+    double infoLineHeight(String label, String value) {
+      return max(
+            _measureTextHeight(label, labelStyle),
+            _measureTextHeight(value, valueStyle, maxWidth: valueWidth),
+          ) +
+          8;
+    }
+
+    var totalHeight =
+        layout.intelOuterPadding.vertical +
+        layout.intelInnerPadding.vertical +
+        _measureTextHeight('Puzzle Intel', titleStyle) +
+        layout.intelSectionGap +
+        infoLineHeight('Mode', modeLabel) +
+        infoLineHeight(
+          'State',
+          _solved
+              ? 'Solved'
+              : (_busy
+                    ? 'Engine Response'
+                    : (_coachingOffScript ? 'Coach Review' : 'Solving')),
+        );
+
+    if (includeLowPriorityMetrics) {
+      totalHeight += infoLineHeight('Progress', '${_puzzleIndex + 1}/$total');
+      totalHeight += infoLineHeight(
+        'Eval',
+        _formatEval(_evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns),
+      );
+    }
+
+    if (_lastMistakeFromEval != null && _lastMistakeToEval != null) {
+      totalHeight += infoLineHeight(
+        'Swing',
+        '${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeFromEval! : _lastMistakeFromEval!)} -> ${_formatEval(_evalBarPlayerIsBlack ? -_lastMistakeToEval! : _lastMistakeToEval!)}',
+      );
+    }
+
+    totalHeight +=
+        layout.intelDetailGap +
+        _measureTextHeight(_status, statusStyle, maxWidth: contentWidth);
+    return totalHeight;
+  }
+
+  double _estimatePortraitBottomActionsHeight({
+    required _PuzzleNodeLayoutSpec layout,
+  }) {
+    final padding = layout.bottomActionsOuterPadding(false);
+    return padding.vertical +
+        layout.actionButtonHeight +
+        layout.actionGap +
+        layout.actionButtonHeight;
+  }
+
+  double _measureTextHeight(String text, TextStyle style, {double? maxWidth}) {
+    final painter =
+        TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(
+          maxWidth: maxWidth == null ? double.infinity : max(0.0, maxWidth),
+        );
+    return painter.height;
   }
 
   _PuzzleNodeHeaderCopy _headerCopy(
@@ -2475,39 +2701,55 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               board,
             ],
           )
-        : Row(
-            children: [
-              SizedBox(
-                width: layout.compactLandscape ? 36 : 40,
-                child: Column(
+        : LayoutBuilder(
+            builder: (context, constraints) {
+              final evalColumnWidth = layout.compactLandscape ? 36.0 : 40.0;
+              final evalGap = layout.compactLandscape ? 6.0 : 8.0;
+              final boardSize = max(
+                0.0,
+                constraints.maxWidth - evalColumnWidth - evalGap,
+              );
+
+              return SizedBox(
+                height: boardSize,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      _formatEval(evalFromPlayerPerspective),
-                      style: puzzleAcademyHudStyle(
-                        palette: palette,
-                        size: 10.8,
-                        weight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                        height: 1.0,
-                        color: palette.text,
+                    SizedBox(
+                      width: evalColumnWidth,
+                      child: Column(
+                        children: [
+                          Text(
+                            _formatEval(evalFromPlayerPerspective),
+                            style: puzzleAcademyHudStyle(
+                              palette: palette,
+                              size: 10.8,
+                              weight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                              height: 1.0,
+                              color: palette.text,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: Center(
+                              child: _PerspectiveEvalBar(
+                                evalFromPlayerPerspective:
+                                    evalFromPlayerPerspective,
+                                playerIsBlack: _evalBarPlayerIsBlack,
+                                monochrome: monochrome,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Center(
-                        child: _PerspectiveEvalBar(
-                          evalFromPlayerPerspective: evalFromPlayerPerspective,
-                          playerIsBlack: _evalBarPlayerIsBlack,
-                          monochrome: monochrome,
-                        ),
-                      ),
-                    ),
+                    SizedBox(width: evalGap),
+                    Expanded(child: board),
                   ],
                 ),
-              ),
-              SizedBox(width: layout.compactLandscape ? 6 : 8),
-              Expanded(child: board),
-            ],
+              );
+            },
           );
 
     return Padding(
@@ -2762,6 +3004,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   Widget _buildIntelPanel(
     PuzzleAcademyProvider provider, {
     required _PuzzleNodeLayoutSpec layout,
+    bool hideLowPriorityMetrics = false,
   }) {
     final monochrome =
         context.read<AppThemeProvider>().isMonochrome ||
@@ -2778,10 +3021,6 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         : widget.initialReviewMode
         ? 'Review'
         : 'Training';
-    final hideCompactIosMetrics =
-        layout.compactPortrait &&
-        !_isExamMode &&
-        Theme.of(context).platform == TargetPlatform.iOS;
 
     return Padding(
       padding: layout.intelOuterPadding,
@@ -2825,14 +3064,14 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
               monochrome: monochrome,
               compact: layout.compactLandscape,
             ),
-            if (!hideCompactIosMetrics)
+            if (!hideLowPriorityMetrics)
               _InfoLine(
                 label: 'Progress',
                 value: '${_puzzleIndex + 1}/$total',
                 monochrome: monochrome,
                 compact: layout.compactLandscape,
               ),
-            if (!hideCompactIosMetrics)
+            if (!hideLowPriorityMetrics)
               _InfoLine(
                 label: 'Eval',
                 value: _formatEval(
@@ -2913,7 +3152,11 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
           Expanded(
             child: _nonBoardChromeFilter(
               monochrome,
-              _buildIntelPanel(provider, layout: layout),
+              _buildIntelPanel(
+                provider,
+                layout: layout,
+                hideLowPriorityMetrics: false,
+              ),
             ),
           ),
           SizedBox(height: layout.railGap),
