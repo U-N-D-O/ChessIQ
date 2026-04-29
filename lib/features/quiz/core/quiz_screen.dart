@@ -6704,198 +6704,196 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       );
     }
 
-        return Stack(
-          children: <Widget>[
-            Positioned.fill(child: ColoredBox(color: palette.backdrop)),
-            Positioned.fill(child: _academyBackdropLayer(palette: palette)),
-            Padding(
-              padding: quizPadding,
-              child: Column(
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(child: ColoredBox(color: palette.backdrop)),
+        Positioned.fill(child: _academyBackdropLayer(palette: palette)),
+        Padding(
+          padding: quizPadding,
+          child: Column(
+            children: <Widget>[
+              Stack(
                 children: <Widget>[
-                  Stack(
-                    children: <Widget>[
-                      buildQuizTopPanel(),
-                      if (showQuizFeedbackOverlay)
-                        buildQuizFeedbackOverlayPanel(),
-                    ],
-                  ),
-                  SizedBox(height: topToContentGap),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (wideSideBySideLayout) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: <Widget>[
-                              Expanded(
-                                flex: 5,
-                                child: LayoutBuilder(
-                                  builder: (context, leftConstraints) {
-                                    const boardCardChromeHeight = 168.0;
-                                    final boardSize = max(
-                                      0.0,
-                                      min(
-                                        leftConstraints.maxWidth - 24,
-                                        leftConstraints.maxHeight -
-                                            boardCardChromeHeight,
-                                      ),
-                                    );
-                                    return buildQuizBoardCard(
-                                      maxBoardSize: boardSize,
-                                    );
-                                  },
-                                ),
-                              ),
-                              SizedBox(width: contentGap),
-                              Expanded(
-                                flex: 6,
-                                child: buildQuizQuestionPanel(
-                                  useScrollableOptions: true,
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        if (compactLandscapePlayLayout && hasQuizBoard) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: <Widget>[
-                              Expanded(
-                                flex: 5,
-                                child: LayoutBuilder(
-                                  builder: (context, leftConstraints) {
-                                    final compactBoardChromeHeight =
-                                        6.0 + (densePanelPadding * 2);
-                                    final boardSize = max(
-                                      0.0,
-                                      min(
-                                        leftConstraints.maxWidth -
-                                            (densePanelPadding * 2) -
-                                            6.0,
-                                        leftConstraints.maxHeight -
-                                            compactBoardChromeHeight,
-                                      ),
-                                    );
-                                    return buildQuizBoardCard(
-                                      maxBoardSize: boardSize,
-                                    );
-                                  },
-                                ),
-                              ),
-                              SizedBox(width: contentGap),
-                              Expanded(
-                                flex: 6,
-                                child: buildQuizQuestionPanel(
-                                  useScrollableOptions: false,
-                                  pinFooter: true,
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        if (compactPortraitPlayLayout) {
-                          final optionCount = displayedOptions.isEmpty
-                              ? _quizOptionCountForDifficulty(_quizDifficulty)
-                              : displayedOptions.length;
-                          final optionHeight =
-                              displayedQuizMode == GambitQuizMode.guessLine
-                              ? 66.0
-                              : 48.0;
-                          final promptHeight = displayedPrompt.isEmpty
-                              ? 0.0
-                              : displayedQuizMode == GambitQuizMode.guessLine
-                              ? 40.0
-                              : 32.0;
-                          final footerAllowance =
-                              displayedQuizMode == GambitQuizMode.guessLine
-                              ? 100.0
-                              : 88.0;
-                          final estimatedQuestionHeight =
-                              (densePanelPadding * 2) +
-                              promptHeight +
-                              (displayedPrompt.isEmpty ? 0.0 : 10.0) +
-                              (optionCount * optionHeight) +
-                              (max(0, optionCount - 1) * compactOptionSpacing) +
-                              footerAllowance;
-                          final maxQuestionHeight = max(
-                            220.0,
-                            constraints.maxHeight - 120.0,
-                          );
-                          final questionHeight = hasQuizBoard
-                              ? estimatedQuestionHeight
-                                    .clamp(220.0, maxQuestionHeight)
-                                    .toDouble()
-                              : constraints.maxHeight;
-                          final boardAreaHeight = max(
-                            0.0,
-                            constraints.maxHeight -
-                                questionHeight -
-                                (hasQuizBoard ? contentGap : 0.0),
-                          );
-                          final compactBoardChromeHeight =
-                              6.0 + (densePanelPadding * 2);
-                          final boardSize = hasQuizBoard
-                              ? max(
-                                  0.0,
-                                  min(
-                                    constraints.maxWidth -
-                                        (densePanelPadding * 2),
-                                    boardAreaHeight - compactBoardChromeHeight,
-                                  ),
-                                )
-                              : null;
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: <Widget>[
-                              if (hasQuizBoard)
-                                SizedBox(
-                                  height: boardAreaHeight,
-                                  child: buildQuizBoardCard(
-                                    maxBoardSize: boardSize,
-                                  ),
-                                ),
-                              if (hasQuizBoard) SizedBox(height: contentGap),
-                              Expanded(
-                                child: buildQuizQuestionPanel(
-                                  useScrollableOptions: false,
-                                  pinFooter: true,
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        return ListView(
-                          children: <Widget>[
-                            if (hasQuizBoard) buildQuizBoardCard(),
-                            if (hasQuizBoard) SizedBox(height: contentGap),
-                            buildQuizQuestionPanel(useScrollableOptions: false),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
+                  buildQuizTopPanel(),
+                  if (showQuizFeedbackOverlay) buildQuizFeedbackOverlayPanel(),
                 ],
               ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Image.asset(
-                  'assets/quizcat.png',
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.contain,
-                  opacity: const AlwaysStoppedAnimation(0.82),
+              SizedBox(height: topToContentGap),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (wideSideBySideLayout) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Expanded(
+                            flex: 5,
+                            child: LayoutBuilder(
+                              builder: (context, leftConstraints) {
+                                const boardCardChromeHeight = 168.0;
+                                final boardSize = max(
+                                  0.0,
+                                  min(
+                                    leftConstraints.maxWidth - 24,
+                                    leftConstraints.maxHeight -
+                                        boardCardChromeHeight,
+                                  ),
+                                );
+                                return buildQuizBoardCard(
+                                  maxBoardSize: boardSize,
+                                );
+                              },
+                            ),
+                          ),
+                          SizedBox(width: contentGap),
+                          Expanded(
+                            flex: 6,
+                            child: buildQuizQuestionPanel(
+                              useScrollableOptions: true,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    if (compactLandscapePlayLayout && hasQuizBoard) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Expanded(
+                            flex: 5,
+                            child: LayoutBuilder(
+                              builder: (context, leftConstraints) {
+                                final compactBoardChromeHeight =
+                                    6.0 + (densePanelPadding * 2);
+                                final boardSize = max(
+                                  0.0,
+                                  min(
+                                    leftConstraints.maxWidth -
+                                        (densePanelPadding * 2) -
+                                        6.0,
+                                    leftConstraints.maxHeight -
+                                        compactBoardChromeHeight,
+                                  ),
+                                );
+                                return buildQuizBoardCard(
+                                  maxBoardSize: boardSize,
+                                );
+                              },
+                            ),
+                          ),
+                          SizedBox(width: contentGap),
+                          Expanded(
+                            flex: 6,
+                            child: buildQuizQuestionPanel(
+                              useScrollableOptions: false,
+                              pinFooter: true,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    if (compactPortraitPlayLayout) {
+                      final optionCount = displayedOptions.isEmpty
+                          ? _quizOptionCountForDifficulty(_quizDifficulty)
+                          : displayedOptions.length;
+                      final optionHeight =
+                          displayedQuizMode == GambitQuizMode.guessLine
+                          ? 66.0
+                          : 48.0;
+                      final promptHeight = displayedPrompt.isEmpty
+                          ? 0.0
+                          : displayedQuizMode == GambitQuizMode.guessLine
+                          ? 40.0
+                          : 32.0;
+                      final footerAllowance =
+                          displayedQuizMode == GambitQuizMode.guessLine
+                          ? 100.0
+                          : 88.0;
+                      final estimatedQuestionHeight =
+                          (densePanelPadding * 2) +
+                          promptHeight +
+                          (displayedPrompt.isEmpty ? 0.0 : 10.0) +
+                          (optionCount * optionHeight) +
+                          (max(0, optionCount - 1) * compactOptionSpacing) +
+                          footerAllowance;
+                      final maxQuestionHeight = max(
+                        220.0,
+                        constraints.maxHeight - 120.0,
+                      );
+                      final questionHeight = hasQuizBoard
+                          ? estimatedQuestionHeight
+                                .clamp(220.0, maxQuestionHeight)
+                                .toDouble()
+                          : constraints.maxHeight;
+                      final boardAreaHeight = max(
+                        0.0,
+                        constraints.maxHeight -
+                            questionHeight -
+                            (hasQuizBoard ? contentGap : 0.0),
+                      );
+                      final compactBoardChromeHeight =
+                          6.0 + (densePanelPadding * 2);
+                      final boardSize = hasQuizBoard
+                          ? max(
+                              0.0,
+                              min(
+                                constraints.maxWidth - (densePanelPadding * 2),
+                                boardAreaHeight - compactBoardChromeHeight,
+                              ),
+                            )
+                          : null;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          if (hasQuizBoard)
+                            SizedBox(
+                              height: boardAreaHeight,
+                              child: buildQuizBoardCard(
+                                maxBoardSize: boardSize,
+                              ),
+                            ),
+                          if (hasQuizBoard) SizedBox(height: contentGap),
+                          Expanded(
+                            child: buildQuizQuestionPanel(
+                              useScrollableOptions: false,
+                              pinFooter: true,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return ListView(
+                      children: <Widget>[
+                        if (hasQuizBoard) buildQuizBoardCard(),
+                        if (hasQuizBoard) SizedBox(height: contentGap),
+                        buildQuizQuestionPanel(useScrollableOptions: false),
+                      ],
+                    );
+                  },
                 ),
               ),
+            ],
+          ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: IgnorePointer(
+            child: Image.asset(
+              'assets/quizcat.png',
+              width: 120,
+              height: 120,
+              fit: BoxFit.contain,
+              opacity: const AlwaysStoppedAnimation(0.82),
             ),
-          ],
-        );
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildQuizStatsCard({
