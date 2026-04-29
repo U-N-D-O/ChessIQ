@@ -90,6 +90,17 @@ void main() {
       );
       expect(avatarFinder, findsOneWidget);
 
+      final cardFinder = find.byKey(
+        const ValueKey<String>('bot_setup_card_mochi-gearheart'),
+      );
+      expect(cardFinder, findsOneWidget);
+
+      final nameFinder = find.descendant(
+        of: cardFinder,
+        matching: find.text('Mochi Gearheart'),
+      );
+      expect(nameFinder, findsOneWidget);
+
       final startButtonFinder = find.byKey(
         const ValueKey<String>('bot_setup_start_button'),
       );
@@ -102,7 +113,12 @@ void main() {
       final statusBarInset = tester.view.padding.top;
 
       final avatarSize = tester.getSize(avatarFinder);
+      final cardRect = tester.getRect(cardFinder);
+      final nameRect = tester.getRect(nameFinder);
+      final bottomGapBelowName = cardRect.bottom - nameRect.bottom;
+
       expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
+      expect(bottomGapBelowName, lessThan(cardRect.height * 0.24));
       expect(backButtonRect.top - statusBarInset, lessThanOrEqualTo(20));
       expect(startButtonRect.bottom, lessThanOrEqualTo(844));
       expect(tester.takeException(), isNull);

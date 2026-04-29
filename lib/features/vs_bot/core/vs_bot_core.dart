@@ -77,7 +77,7 @@ class _VsBotSetupLayoutSpec {
         : isLandscape
         ? 308.0
         : tightPortrait
-        ? 304.0
+        ? 280.0
         : compactPortrait
         ? 332.0
         : 426.0;
@@ -1168,7 +1168,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               : const Color(0xFFE45C5C);
           final title = isDraw ? 'Draw' : 'Checkmate';
           final message = isDraw
-              ? 'No legal moves remain. Continue to explore or reset the board.'
+              ? _drawOutcomeDialogMessage(_gameDrawReason)
               : 'Checkmate has been reached. Continue to inspect, or reset to start over.';
           final icon = isDraw
               ? Icons.balance_rounded
@@ -1279,7 +1279,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                           ),
                         ),
                         icon: const Icon(Icons.replay_rounded, size: 18),
-                        label: const Text('Reset'),
+                        label: const Text('Reset Board'),
                       ),
                     ),
                   ],
@@ -1294,10 +1294,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       if (!mounted) return;
 
       if (result == 'reset') {
-        setState(() {
-          _resetBoard(initialLaunch: false, withIntro: false);
-        });
-        _analyze();
+        await Future<void>.delayed(Duration.zero);
+        await _performResetWithSponsoredBreak();
       }
       return;
     }
@@ -1351,7 +1349,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         final challengeAccent = challengeTone?.accent ?? arcade.cyan;
         final challengeGlowAccent = challengeTone?.aura ?? challengeAccent;
         final summaryText = isDraw
-            ? 'Evenly matched. This one stays on the board.'
+            ? _vsBotDrawSummaryText(_gameDrawReason)
             : isWin
             ? 'Excellent conversion. You closed it with style.'
             : 'Tough one. Reset and strike back.';

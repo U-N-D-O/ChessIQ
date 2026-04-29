@@ -20,6 +20,16 @@ class _GameResultReveal {
   final String? toSquare;
 }
 
+class _DetectedGameOutcome {
+  const _DetectedGameOutcome(this.outcome, {this.drawReason});
+
+  const _DetectedGameOutcome.draw(DrawReason? drawReason)
+    : this(GameOutcome.draw, drawReason: drawReason);
+
+  final GameOutcome outcome;
+  final DrawReason? drawReason;
+}
+
 class _PendingMoveQualityGrading {
   static const Object _sentinel = Object();
 
@@ -445,9 +455,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   List<Offset> _launchTargets = <Offset>[];
   bool _launchTargetsEvalBar = false;
   GameOutcome? _gameOutcome;
+  DrawReason? _gameDrawReason;
   bool _gameResultDialogVisible = false;
   _GameResultReveal? _gameResultReveal;
   int _gameResultRevealSequence = 0;
+  final List<String> _positionHistoryKeys = <String>[];
+  final List<int> _halfmoveClockHistory = <int>[];
   bool _quizLaunchedFromAcademy = false;
 
   AppSection _activeSection = AppSection.menu;
@@ -2841,7 +2854,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? (isWin ? 'VICTORY' : 'DEFEAT')
         : 'CHECKMATE';
     final subtitle = isDraw
-        ? 'No legal moves remain. The board settles here.'
+        ? _drawOutcomeRevealSubtitle(_gameDrawReason)
         : _playVsBot
         ? (isWin
               ? 'Checkmate lands. Take in the final position.'
@@ -3356,6 +3369,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedBoard = decoded['boardState'];
       final savedHistory = decoded['moveHistory'];
       final savedHistoryIndex = decoded['historyIndex'];
+      final savedPositionHistoryKeys = decoded['positionHistoryKeys'];
+      final savedHalfmoveClockHistory = decoded['halfmoveClockHistory'];
       final savedSuggestionsEnabled = decoded['suggestionsEnabled'];
       final savedTopLines = decoded['topLines'];
       final savedCurrentEval = decoded['currentEval'];
@@ -3458,6 +3473,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       } else {
         _historyIndex = _moveHistory.isEmpty ? -1 : _moveHistory.length - 1;
       }
+
+      _restoreDerivedDrawState(
+        savedPositionHistoryKeys: savedPositionHistoryKeys is List
+            ? savedPositionHistoryKeys
+            : null,
+        savedHalfmoveClockHistory: savedHalfmoveClockHistory is List
+            ? savedHalfmoveClockHistory
+            : null,
+      );
 
       _topLines = <EngineLine>[];
       if (savedTopLines is List) {
@@ -3595,6 +3619,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _resetSpecialMoveState();
     _moveHistory.clear();
     _historyIndex = -1;
+    _resetDerivedDrawState();
     _currentOpening = '';
     _openingMode = OpeningMode.off;
     _gambitSelectedFrom = null;
@@ -3610,7 +3635,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _suggestionLaunchInProgress = false;
     _suggestionBurstActive = false;
     _botThinking = false;
-    _gameOutcome = null;
+    _clearGameOutcomeState();
     _gameResultDialogVisible = false;
     _launchStart = null;
     _launchTargets = <Offset>[];
@@ -5080,26 +5105,254 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return false;
   }
 
-  GameOutcome? _detectCurrentGameOutcome() {
+  void _clearGameOutcomeState() {
+    _gameOutcome = null;
+    _gameDrawReason = null;
+  }
+
+  int get _halfmoveClock =>
+      _halfmoveClockHistory.isEmpty ? 0 : _halfmoveClockHistory.last;
+
+  String _initialPositionKey() {
+    return buildPositionKey(
+      boardState: _initialBoardState(),
+      isWhiteTurn: true,
+      whiteKingMoved: false,
+      blackKingMoved: false,
+      whiteKingsideRookMoved: false,
+      whiteQueensideRookMoved: false,
+      blackKingsideRookMoved: false,
+      blackQueensideRookMoved: false,
+      enPassantTarget: null,
+    );
+  }
+
+  String _currentPositionKey() {
+    return buildPositionKey(
+      boardState: boardState,
+      isWhiteTurn: _isWhiteTurn,
+      whiteKingMoved: _whiteKingMoved,
+      blackKingMoved: _blackKingMoved,
+      whiteKingsideRookMoved: _whiteKingsideRookMoved,
+      whiteQueensideRookMoved: _whiteQueensideRookMoved,
+      blackKingsideRookMoved: _blackKingsideRookMoved,
+      blackQueensideRookMoved: _blackQueensideRookMoved,
+      enPassantTarget: _enPassantTarget,
+    );
+  }
+
+  void _resetDerivedDrawState() {
+    _positionHistoryKeys
+      ..clear()
+      ..add(_currentPositionKey());
+    _halfmoveClockHistory
+      ..clear()
+      ..add(0);
+  }
+
+  void _truncateDerivedDrawStateToHistoryLength() {
+    final targetLength = _moveHistory.length + 1;
+    if (_positionHistoryKeys.length > targetLength) {
+      _positionHistoryKeys.removeRange(
+        targetLength,
+        _positionHistoryKeys.length,
+      );
+    }
+    if (_halfmoveClockHistory.length > targetLength) {
+      _halfmoveClockHistory.removeRange(
+        targetLength,
+        _halfmoveClockHistory.length,
+      );
+    }
+    if (_positionHistoryKeys.isEmpty) {
+      _positionHistoryKeys.add(_currentPositionKey());
+    }
+    if (_halfmoveClockHistory.isEmpty) {
+      _halfmoveClockHistory.add(0);
+    }
+  }
+
+  void _recordDerivedDrawStateAfterMove({
+    required String pieceMoved,
+    required String? pieceCaptured,
+  }) {
+    _halfmoveClockHistory.add(
+      advanceHalfmoveClock(
+        currentHalfmoveClock: _halfmoveClock,
+        pieceMoved: pieceMoved,
+        pieceCaptured: pieceCaptured,
+      ),
+    );
+    _positionHistoryKeys.add(_currentPositionKey());
+  }
+
+  void _popLastDerivedDrawState() {
+    if (_positionHistoryKeys.length > 1) {
+      _positionHistoryKeys.removeLast();
+    }
+    if (_halfmoveClockHistory.length > 1) {
+      _halfmoveClockHistory.removeLast();
+    }
+  }
+
+  void _restoreDerivedDrawState({
+    List<dynamic>? savedPositionHistoryKeys,
+    List<dynamic>? savedHalfmoveClockHistory,
+  }) {
+    final restoredKeys = savedPositionHistoryKeys
+        ?.map((entry) => entry?.toString() ?? '')
+        .where((entry) => entry.isNotEmpty)
+        .toList();
+    final restoredHalfmoveClocks = savedHalfmoveClockHistory
+        ?.map(
+          (entry) => entry is num
+              ? entry.toInt()
+              : int.tryParse(entry?.toString() ?? ''),
+        )
+        .whereType<int>()
+        .map((value) => max(0, value))
+        .toList();
+
+    final expectedLength = _moveHistory.length + 1;
+    final currentKey = _currentPositionKey();
+    if (restoredKeys != null &&
+        restoredHalfmoveClocks != null &&
+        restoredKeys.length == expectedLength &&
+        restoredHalfmoveClocks.length == expectedLength &&
+        restoredKeys.isNotEmpty &&
+        restoredKeys.last == currentKey) {
+      _positionHistoryKeys
+        ..clear()
+        ..addAll(restoredKeys);
+      _halfmoveClockHistory
+        ..clear()
+        ..addAll(restoredHalfmoveClocks);
+      return;
+    }
+
+    _positionHistoryKeys.clear();
+    _halfmoveClockHistory.clear();
+    _positionHistoryKeys.add(
+      _moveHistory.isEmpty ? currentKey : _initialPositionKey(),
+    );
+    _halfmoveClockHistory.add(0);
+    for (final move in _moveHistory) {
+      _halfmoveClockHistory.add(
+        advanceHalfmoveClock(
+          currentHalfmoveClock: _halfmoveClockHistory.last,
+          pieceMoved: move.pieceMoved,
+          pieceCaptured: move.pieceCaptured,
+        ),
+      );
+      _positionHistoryKeys.add(
+        buildPositionKey(
+          boardState: move.state,
+          isWhiteTurn: !move.isWhite,
+          whiteKingMoved: move.whiteKingMoved,
+          blackKingMoved: move.blackKingMoved,
+          whiteKingsideRookMoved: move.whiteKingsideRookMoved,
+          whiteQueensideRookMoved: move.whiteQueensideRookMoved,
+          blackKingsideRookMoved: move.blackKingsideRookMoved,
+          blackQueensideRookMoved: move.blackQueensideRookMoved,
+          enPassantTarget: move.enPassantTarget,
+        ),
+      );
+    }
+    _truncateDerivedDrawStateToHistoryLength();
+  }
+
+  int _currentPositionOccurrenceCount() {
+    final currentKey = _currentPositionKey();
+    var count = 0;
+    for (final positionKey in _positionHistoryKeys) {
+      if (positionKey == currentKey) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  bool _hasInsufficientMaterial() {
+    try {
+      return chess.Chess.fromFEN(_genFen()).insufficient_material;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _drawOutcomeRevealSubtitle(DrawReason? reason) {
+    return switch (reason) {
+      DrawReason.threefoldRepetition =>
+        'The same position repeated three times.',
+      DrawReason.fiftyMoveRule =>
+        'Fifty moves passed without a pawn move or capture.',
+      DrawReason.insufficientMaterial =>
+        'Neither side has enough material to force mate.',
+      DrawReason.stalemate ||
+      null => 'No legal moves remain. The board settles here.',
+    };
+  }
+
+  String _drawOutcomeDialogMessage(DrawReason? reason) {
+    return switch (reason) {
+      DrawReason.threefoldRepetition =>
+        'The same position occurred three times. Continue to explore or reset the board.',
+      DrawReason.fiftyMoveRule =>
+        'Fifty moves passed without a pawn move or capture. Continue to explore or reset the board.',
+      DrawReason.insufficientMaterial =>
+        'Neither side has enough material to force mate. Continue to explore or reset the board.',
+      DrawReason.stalemate ||
+      null => 'No legal moves remain. Continue to explore or reset the board.',
+    };
+  }
+
+  String _vsBotDrawSummaryText(DrawReason? reason) {
+    return switch (reason) {
+      DrawReason.threefoldRepetition =>
+        'Repeated position. Neither side finds the break.',
+      DrawReason.fiftyMoveRule => 'Fifty quiet moves. The game is drawn.',
+      DrawReason.insufficientMaterial =>
+        'Not enough material remains to force mate.',
+      DrawReason.stalemate ||
+      null => 'Evenly matched. This one stays on the board.',
+    };
+  }
+
+  _DetectedGameOutcome? _detectCurrentGameOutcome() {
     final whiteKingPresent = boardState.values.contains('k_w');
     final blackKingPresent = boardState.values.contains('k_b');
     if (!whiteKingPresent && !blackKingPresent) {
-      return GameOutcome.draw;
+      return const _DetectedGameOutcome(GameOutcome.draw);
     }
     if (!whiteKingPresent) {
-      return GameOutcome.blackWin;
+      return const _DetectedGameOutcome(GameOutcome.blackWin);
     }
     if (!blackKingPresent) {
-      return GameOutcome.whiteWin;
+      return const _DetectedGameOutcome(GameOutcome.whiteWin);
     }
 
-    if (_sideToMoveHasLegalMoves()) {
-      return null;
+    if (!_sideToMoveHasLegalMoves()) {
+      if (_isKingAttacked(boardState, _isWhiteTurn)) {
+        return _DetectedGameOutcome(
+          _isWhiteTurn ? GameOutcome.blackWin : GameOutcome.whiteWin,
+        );
+      }
+      return const _DetectedGameOutcome.draw(DrawReason.stalemate);
     }
-    if (_isKingAttacked(boardState, _isWhiteTurn)) {
-      return _isWhiteTurn ? GameOutcome.blackWin : GameOutcome.whiteWin;
+
+    if (_hasInsufficientMaterial()) {
+      return const _DetectedGameOutcome.draw(DrawReason.insufficientMaterial);
     }
-    return GameOutcome.draw;
+
+    if (_currentPositionOccurrenceCount() >= 3) {
+      return const _DetectedGameOutcome.draw(DrawReason.threefoldRepetition);
+    }
+
+    if (_halfmoveClock >= 100) {
+      return const _DetectedGameOutcome.draw(DrawReason.fiftyMoveRule);
+    }
+
+    return null;
   }
 
   Color _displayEvalColor(double eval) {
@@ -6081,7 +6334,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _vsBotSessionWins = 0;
       _vsBotSessionLosses = 0;
       _vsBotSessionDraws = 0;
-      _gameOutcome = null;
+      _clearGameOutcomeState();
       _quizLaunchedFromAcademy = false;
       _activeSection = AppSection.puzzleAcademy;
     });
@@ -6131,7 +6384,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionWins = 0;
         _vsBotSessionLosses = 0;
         _vsBotSessionDraws = 0;
-        _gameOutcome = null;
+        _clearGameOutcomeState();
         _resetQuizToSetupState();
         _quizLaunchedFromAcademy = false;
         _activeSection = returnToAcademy
@@ -6152,7 +6405,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionWins = 0;
         _vsBotSessionLosses = 0;
         _vsBotSessionDraws = 0;
-        _gameOutcome = null;
+        _clearGameOutcomeState();
         _clearBotGhostArrows();
         _quizLaunchedFromAcademy = false;
         _activeSection = AppSection.menu;
@@ -6168,7 +6421,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionWins = 0;
         _vsBotSessionLosses = 0;
         _vsBotSessionDraws = 0;
-        _gameOutcome = null;
+        _clearGameOutcomeState();
         _quizLaunchedFromAcademy = false;
         _activeSection = AppSection.menu;
       });
@@ -6203,7 +6456,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionWins = 0;
         _vsBotSessionLosses = 0;
         _vsBotSessionDraws = 0;
-        _gameOutcome = null;
+        _clearGameOutcomeState();
         _quizLaunchedFromAcademy = false;
         _activeSection = AppSection.menu;
       });
@@ -6940,6 +7193,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       // If we're not at the end of history, discard outdated future moves.
       if (_historyIndex < _moveHistory.length - 1) {
         _moveHistory.removeRange(_historyIndex + 1, _moveHistory.length);
+        _truncateDerivedDrawStateToHistoryLength();
       }
       boardState = nextBoardState;
 
@@ -7005,6 +7259,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _currentEvalSnapshot = null;
       }
       _isWhiteTurn = !_isWhiteTurn;
+      _recordDerivedDrawStateAfterMove(
+        pieceMoved: piece,
+        pieceCaptured: captured,
+      );
       _updateCurrentOpening();
       _refreshGambitPreview();
     });
@@ -7025,13 +7283,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     });
 
-    final gameOutcome = _detectCurrentGameOutcome();
-    if (gameOutcome != null) {
+    final detectedOutcome = _detectCurrentGameOutcome();
+    if (detectedOutcome != null) {
+      final gameOutcome = detectedOutcome.outcome;
       _send('stop');
       setState(() {
         _pendingMoveQualityGrading = null;
         _recordVsBotSessionResult(gameOutcome);
         _gameOutcome = gameOutcome;
+        _gameDrawReason = detectedOutcome.drawReason;
         _botThinking = false;
       });
       _persistAnalysisSnapshotIfNeeded();
@@ -7062,13 +7322,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       // Truncate any future moves so they don't interfere with opening/gambit lookups
       if (index < _moveHistory.length - 1) {
         _moveHistory.removeRange(index + 1, _moveHistory.length);
+        _truncateDerivedDrawStateToHistoryLength();
       }
       boardState = Map.from(_moveHistory[index].state);
       _isWhiteTurn = !_moveHistory[index].isWhite;
       _vsBotCharge = _moveHistory[index].chargeAfter ?? 0;
       _vsBotOptimalLineRevealActive = false;
       _restoreSpecialMoveStateFromRecord(_moveHistory[index]);
-      _gameOutcome = null;
+      _clearGameOutcomeState();
       _currentOpening = _findOpeningFromHistory();
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
@@ -7086,62 +7347,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   String _genFen() {
-    String fen = "";
-    for (int r = 8; r >= 1; r--) {
-      int e = 0;
-      for (int c = 0; c < 8; c++) {
-        String s = String.fromCharCode(97 + c) + r.toString();
-        if (boardState[s] == null) {
-          e++;
-        } else {
-          if (e > 0) {
-            fen += e.toString();
-            e = 0;
-          }
-          String p = boardState[s]![0];
-          if (boardState[s]!.endsWith('_w')) {
-            p = p.toUpperCase();
-          }
-          if (p.toLowerCase() == 't') {
-            p = boardState[s]!.endsWith('_w') ? 'R' : 'r';
-          }
-          fen += p;
-        }
-      }
-      if (e > 0) fen += e.toString();
-      if (r > 1) fen += "/";
-    }
-
-    final castling = StringBuffer();
-    if (!_whiteKingMoved &&
-        !_whiteKingsideRookMoved &&
-        boardState['e1'] == 'k_w' &&
-        boardState['h1'] == 't_w') {
-      castling.write('K');
-    }
-    if (!_whiteKingMoved &&
-        !_whiteQueensideRookMoved &&
-        boardState['e1'] == 'k_w' &&
-        boardState['a1'] == 't_w') {
-      castling.write('Q');
-    }
-    if (!_blackKingMoved &&
-        !_blackKingsideRookMoved &&
-        boardState['e8'] == 'k_b' &&
-        boardState['h8'] == 't_b') {
-      castling.write('k');
-    }
-    if (!_blackKingMoved &&
-        !_blackQueensideRookMoved &&
-        boardState['e8'] == 'k_b' &&
-        boardState['a8'] == 't_b') {
-      castling.write('q');
-    }
-
-    final castlingFen = castling.isEmpty ? '-' : castling.toString();
-    final enPassantFen = _enPassantTarget ?? '-';
     final fullmove = (_moveHistory.length ~/ 2) + 1;
-    return "$fen ${_isWhiteTurn ? 'w' : 'b'} $castlingFen $enPassantFen 0 $fullmove";
+    return '${_currentPositionKey()} $_halfmoveClock $fullmove';
   }
 
   double _boardIntroOpacity() {
@@ -10559,6 +10766,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       int safety = 4;
       do {
         final removed = _moveHistory.removeLast();
+        _popLastDerivedDrawState();
         if (removed.isWhite == _humanPlaysWhite) {
           restoredCharge = removed.chargeBefore;
         }
@@ -10587,6 +10795,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _topLines = [];
       _analysisLines = [];
       _analysisLinesFen = null;
+      _clearGameOutcomeState();
       _restoreCachedEvalForFen(_genFen());
       _vsBotCharge = preserveSpentPowerCharge
           ? chargeAtUndo
@@ -13110,6 +13319,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'boardState': boardState,
       'historyIndex': _historyIndex,
       'moveHistory': _moveHistory.map(_moveRecordToMap).toList(),
+      'positionHistoryKeys': List<String>.from(_positionHistoryKeys),
+      'halfmoveClockHistory': List<int>.from(_halfmoveClockHistory),
       'topLines': _topLines.map((line) => line.toMap()).toList(),
     };
     await prefs.setString(_savedDefaultSnapshotKey, jsonEncode(payload));
