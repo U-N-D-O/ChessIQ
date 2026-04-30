@@ -144,9 +144,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _gameResultRevealSkipDelay = Duration(
     milliseconds: 250,
   );
-  static const Duration _creditsModernDwell = Duration(milliseconds: 3600);
+  static const Duration _creditsModernDwell = Duration(seconds: 15);
   static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
-  static const Duration _creditsRetroDwell = Duration(milliseconds: 3400);
+  static const Duration _creditsRetroDwell = Duration(seconds: 15);
   static const bool _creditsDisableLoopForTests = bool.fromEnvironment(
     'FLUTTER_TEST',
   );
@@ -12623,7 +12623,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Future<String> _loadLegalNoticeText(String assetPath) async {
     try {
-      return await rootBundle.loadString(assetPath);
+      final text = await rootBundle.loadString(assetPath);
+      return _normalizeLegalNoticeTextForDisplay(assetPath, text);
     } catch (_) {
       if (!kIsWeb) {
         final candidates = <String>{
@@ -12633,12 +12634,127 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         for (final path in candidates) {
           final file = File(path);
           if (await file.exists()) {
-            return file.readAsString();
+            final text = await file.readAsString();
+            return _normalizeLegalNoticeTextForDisplay(assetPath, text);
           }
         }
       }
       throw Exception('Unable to load legal notice: $assetPath');
     }
+  }
+
+  String _normalizeLegalNoticeTextForDisplay(String assetPath, String text) {
+    final normalized = text.replaceAll('\r\n', '\n');
+    if (assetPath == 'LICENSE') {
+      return _normalizeLicenseTextForDisplay(normalized);
+    }
+    return normalized;
+  }
+
+  String _normalizeLicenseTextForDisplay(String text) {
+    final output = <String>[];
+    final paragraph = <String>[];
+
+    void flushParagraph() {
+      if (paragraph.isEmpty) {
+        return;
+      }
+      output.addAll(_formatLicenseParagraphForDisplay(paragraph));
+      paragraph.clear();
+    }
+
+    void pushBlankLine() {
+      if (output.isEmpty || output.last.isEmpty) {
+        return;
+      }
+      output.add('');
+    }
+
+    for (final line in text.split('\n')) {
+      if (line.trim().isEmpty) {
+        flushParagraph();
+        pushBlankLine();
+        continue;
+      }
+      paragraph.add(line);
+    }
+    flushParagraph();
+
+    while (output.isNotEmpty && output.last.isEmpty) {
+      output.removeLast();
+    }
+
+    return output.join('\n');
+  }
+
+  List<String> _formatLicenseParagraphForDisplay(List<String> rawLines) {
+    final trimmedLines = rawLines
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    if (trimmedLines.isEmpty) {
+      return const <String>[];
+    }
+
+    final firstTrimmedLine = trimmedLines.first;
+    if (_isLicenseHeadingParagraph(trimmedLines)) {
+      return trimmedLines;
+    }
+
+    if (_isLicenseIndentedExampleParagraph(rawLines, firstTrimmedLine)) {
+      return trimmedLines
+          .map((line) => '    $line')
+          .toList(growable: false);
+    }
+
+    final merged = trimmedLines.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return <String>[merged];
+  }
+
+  bool _isLicenseHeadingParagraph(List<String> trimmedLines) {
+    if (trimmedLines.length == 2 &&
+        trimmedLines.first == 'GNU GENERAL PUBLIC LICENSE' &&
+        trimmedLines.last.startsWith('Version ')) {
+      return true;
+    }
+
+    if (trimmedLines.length != 1) {
+      return false;
+    }
+
+    switch (trimmedLines.first) {
+      case 'Preamble':
+      case 'TERMS AND CONDITIONS':
+      case 'END OF TERMS AND CONDITIONS':
+      case 'How to Apply These Terms to Your New Programs':
+        return true;
+    }
+    return false;
+  }
+
+  bool _isLicenseIndentedExampleParagraph(
+    List<String> rawLines,
+    String firstTrimmedLine,
+  ) {
+    if (RegExp(r'^[a-z]\)').hasMatch(firstTrimmedLine)) {
+      return false;
+    }
+
+    return rawLines.every(
+      (line) => line.trim().isNotEmpty && _leadingWhitespaceCount(line) >= 8,
+    );
+  }
+
+  int _leadingWhitespaceCount(String line) {
+    var count = 0;
+    while (count < line.length) {
+      final codeUnit = line.codeUnitAt(count);
+      if (codeUnit != 0x20 && codeUnit != 0x09) {
+        break;
+      }
+      count += 1;
+    }
+    return count;
   }
 
   Widget _buildCreditsDynamicBackdrop({
