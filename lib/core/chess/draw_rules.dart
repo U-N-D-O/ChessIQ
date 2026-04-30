@@ -5,6 +5,21 @@ enum DrawReason {
   insufficientMaterial,
 }
 
+bool hasExactlyOneKingPerSide(Map<String, String> boardState) {
+  var whiteKingCount = 0;
+  var blackKingCount = 0;
+
+  for (final piece in boardState.values) {
+    if (piece == 'k_w') {
+      whiteKingCount += 1;
+    } else if (piece == 'k_b') {
+      blackKingCount += 1;
+    }
+  }
+
+  return whiteKingCount == 1 && blackKingCount == 1;
+}
+
 bool hasInsufficientMatingMaterial(Map<String, String> boardState) {
   final materialPieces = <_MaterialPieceOnBoard>[];
 

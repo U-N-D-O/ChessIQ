@@ -2,6 +2,37 @@ import 'package:chessiq/core/chess/draw_rules.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('hasExactlyOneKingPerSide', () {
+    test('returns true when both sides have one king', () {
+      expect(
+        hasExactlyOneKingPerSide(<String, String>{
+          'e1': 'k_w',
+          'e8': 'k_b',
+          'd4': 'q_w',
+        }),
+        isTrue,
+      );
+    });
+
+    test('returns false when a king is missing', () {
+      expect(
+        hasExactlyOneKingPerSide(<String, String>{'e1': 'k_w', 'd4': 'q_w'}),
+        isFalse,
+      );
+    });
+
+    test('returns false when one side has multiple kings', () {
+      expect(
+        hasExactlyOneKingPerSide(<String, String>{
+          'e1': 'k_w',
+          'd2': 'k_w',
+          'e8': 'k_b',
+        }),
+        isFalse,
+      );
+    });
+  });
+
   group('hasInsufficientMatingMaterial', () {
     test('detects king versus king as a dead position', () {
       expect(

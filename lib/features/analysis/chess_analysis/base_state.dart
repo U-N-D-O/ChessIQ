@@ -509,6 +509,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   );
   bool _analysisEditMode = false;
   String? _selectedEditToolboxPiece;
+  bool _editToolboxEraserSelected = false;
   Timer? _editModeHintTimer;
   String? _editModeHintText;
   Timer? _moveQualityOverlayTimer;
@@ -645,6 +646,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     setState(() {
       _analysisEditMode = enabled;
       _selectedEditToolboxPiece = null;
+      _editToolboxEraserSelected = false;
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
       _legalTargets.clear();
@@ -4130,6 +4132,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return _isWhiteTurn == _humanPlaysWhite;
   }
 
+  void _refreshAnalysisForCurrentPosition() {
+    if (_engine != null || kIsWeb) {
+      _analyze();
+      return;
+    }
+
+    unawaited(() async {
+      await _ensureEngineStarted();
+      if (!mounted) {
+        return;
+      }
+      _analyze();
+    }());
+  }
+
   void _analyze() {
     final engine = _engine;
     if (engine == null) {
@@ -6882,6 +6899,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _handleHoldTap(String square) {
     if (_playVsBot && !_isHumanTurnInBotGame) return;
     if (_analysisEditMode && !_isOpeningSelectionMode) {
+      if (_editToolboxEraserSelected) {
+        _eraseEditModePiece(square);
+        return;
+      }
       final selectedPalettePiece = _selectedEditToolboxPiece;
       if (selectedPalettePiece != null) {
         _placeEditModePiece(selectedPalettePiece, square);
@@ -6984,6 +7005,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _enPassantTarget = null;
   }
 
+  String get _editModeEngineKingsHint =>
+      'Keep one white king and one black king on the board for Stockfish analysis.';
+
+    String get _editModeKingsLockedHint =>
+      'Kings stay locked so the board remains analyzable.';
+
   String _editToolboxLabelForPiece(String piece) {
     for (final entry in _editToolboxPieces) {
       if (entry.piece == piece) {
@@ -7036,6 +7063,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _scheduleEditModeHintHide();
     }
 
+    if (!hasExactlyOneKingPerSide(normalizedBoardState)) {
+      setState(() {
+        _botThinking = false;
+        _gameResultDialogVisible = false;
+        _clearGameOutcomeState();
+        _editModeHintText = (hintText != null && hintText.isNotEmpty)
+            ? hintText
+            : _editModeEngineKingsHint;
+      });
+      _scheduleEditModeHintHide();
+      _persistAnalysisSnapshotIfNeeded();
+      return;
+    }
+
     final detectedOutcome = _detectCurrentGameOutcome();
     if (detectedOutcome != null) {
       final gameOutcome = detectedOutcome.outcome;
@@ -7050,7 +7091,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     _persistAnalysisSnapshotIfNeeded();
-    _analyze();
+    _refreshAnalysisForCurrentPosition();
   }
 
   void _placeEditModePiece(String piece, String square) {
@@ -7060,9 +7101,59 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (piece == 'k_w' || piece == 'k_b') {
       return;
     }
+    final existingPiece = boardState[square];
+    if (existingPiece == 'k_w' || existingPiece == 'k_b') {
+      setState(() {
+        _editModeHintText = _editModeKingsLockedHint;
+      });
+      _scheduleEditModeHintHide();
+      return;
+    }
     final nextBoardState = Map<String, String>.from(boardState);
     nextBoardState[square] = piece;
     _applyManualBoardEdit(nextBoardState);
+  }
+
+  void _eraseEditModePiece(String square) {
+    if (!_analysisEditMode || _isOpeningSelectionMode) {
+      return;
+    }
+
+    final existingPiece = boardState[square];
+    if (existingPiece == null) {
+      return;
+    }
+    if (existingPiece == 'k_w' || existingPiece == 'k_b') {
+      setState(() {
+        _editModeHintText = _editModeKingsLockedHint;
+        _holdSelectedFrom = null;
+        _gambitSelectedFrom = null;
+        _legalTargets.clear();
+        _gambitAvailableTargets.clear();
+      });
+      _scheduleEditModeHintHide();
+      return;
+    }
+
+    final nextBoardState = Map<String, String>.from(boardState);
+    nextBoardState.remove(square);
+    _applyManualBoardEdit(nextBoardState, hintText: 'Piece removed');
+  }
+
+  void _toggleEditToolboxEraser() {
+    if (!_analysisEditMode || _isOpeningSelectionMode) {
+      return;
+    }
+    setState(() {
+      _editToolboxEraserSelected = !_editToolboxEraserSelected;
+      if (_editToolboxEraserSelected) {
+        _selectedEditToolboxPiece = null;
+      }
+      _holdSelectedFrom = null;
+      _gambitSelectedFrom = null;
+      _legalTargets.clear();
+      _gambitAvailableTargets.clear();
+    });
   }
 
   void _toggleEditToolboxSelection(String piece) {
@@ -7073,6 +7164,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _selectedEditToolboxPiece = _selectedEditToolboxPiece == piece
           ? null
           : piece;
+      _editToolboxEraserSelected = false;
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
       _legalTargets.clear();
@@ -7527,6 +7619,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _analysisLinesFen = null;
         _currentDepth = 0;
         _currentEvalSnapshot = null;
+      } else if (!_playVsBot) {
+        _topLines = [];
+        _analysisLines = [];
+        _analysisLinesFen = null;
       }
       _isWhiteTurn = !_isWhiteTurn;
       _recordDerivedDrawStateAfterMove(
@@ -7535,6 +7631,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
       _updateCurrentOpening();
       _refreshGambitPreview();
+      if (!_playVsBot) {
+        _restoreCachedEvalForFen(_genFen());
+      }
     });
 
     unawaited(_playBoardMoveSound(isCapture: captured != null));
@@ -7577,13 +7676,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     _persistAnalysisSnapshotIfNeeded();
-    _analyze();
+    _refreshAnalysisForCurrentPosition();
     if (_playVsBot) {
       unawaited(_maybeTriggerBotMove());
     }
   }
 
   void _jumpToMove(int index) {
+    _cancelGameResultReveal();
     setState(() {
       _cancelPendingMoveQualityGrading();
       _clearMoveQualityOverlay();
@@ -7600,6 +7700,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _vsBotOptimalLineRevealActive = false;
       _restoreSpecialMoveStateFromRecord(_moveHistory[index]);
       _clearGameOutcomeState();
+      _gameResultDialogVisible = false;
       _currentOpening = _findOpeningFromHistory();
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
@@ -7613,7 +7714,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _restoreCachedEvalForFen(_genFen());
     });
     _persistAnalysisSnapshotIfNeeded();
-    _analyze();
+    _refreshAnalysisForCurrentPosition();
   }
 
   String _genFen() {
@@ -10664,9 +10765,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required double pieceSize,
     required double feedbackSize,
   }) {
+    final theme = Theme.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final isSelected = _selectedEditToolboxPiece == entry.piece;
     final borderRadius = tileSize >= 60 ? 16.0 : 12.0;
+    final accentColor = isDark
+        ? const Color(0xFFFFD166)
+        : const Color(0xFFB77912);
+    final feedbackBackgroundColor = Color.alphaBlend(
+      scheme.surface.withValues(alpha: isDark ? 0.82 : 0.96),
+      isDark ? const Color(0xFF101621) : Colors.white,
+    );
+    final tileBackgroundColor = Color.alphaBlend(
+      scheme.surface.withValues(alpha: isDark ? 0.74 : 0.90),
+      isDark ? const Color(0xFF11161F) : Colors.white,
+    );
 
     return Tooltip(
       message: entry.label,
@@ -10680,14 +10794,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             height: feedbackSize,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xFF101621).withValues(alpha: 0.94),
+              color: feedbackBackgroundColor,
               borderRadius: BorderRadius.circular(borderRadius + 2),
               border: Border.all(
-                color: const Color(0xFFFFD166).withValues(alpha: 0.55),
+                color: accentColor.withValues(alpha: isDark ? 0.55 : 0.42),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.28),
+                  color: scheme.shadow.withValues(alpha: isDark ? 0.28 : 0.16),
                   blurRadius: 14,
                   offset: const Offset(0, 6),
                 ),
@@ -10711,24 +10825,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             decoration: BoxDecoration(
               color: isSelected
                   ? Color.alphaBlend(
-                      const Color(0xFFFFD166).withValues(alpha: 0.18),
-                      const Color(0xFF11161F),
+                      accentColor.withValues(alpha: isDark ? 0.18 : 0.20),
+                      tileBackgroundColor,
                     )
-                  : Color.alphaBlend(
-                      scheme.surface.withValues(alpha: 0.78),
-                      const Color(0xFF11161F),
-                    ),
+                  : tileBackgroundColor,
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
                 color: isSelected
-                    ? const Color(0xFFFFD166).withValues(alpha: 0.88)
-                    : scheme.outline.withValues(alpha: 0.24),
+                    ? accentColor.withValues(alpha: isDark ? 0.88 : 0.70)
+                    : scheme.outline.withValues(alpha: isDark ? 0.24 : 0.32),
                 width: isSelected ? 1.4 : 1,
               ),
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: const Color(0xFFFFD166).withValues(alpha: 0.18),
+                        color: accentColor.withValues(
+                          alpha: isDark ? 0.18 : 0.14,
+                        ),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -10743,11 +10856,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildEditModeToolbox({required bool isLandscape}) {
+    final theme = Theme.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final accentColor = isDark
+        ? const Color(0xFFFFD166)
+        : const Color(0xFFB77912);
+    final panelBackgroundColor = Color.alphaBlend(
+      scheme.surface.withValues(alpha: isDark ? 0.82 : 0.96),
+      isDark ? const Color(0xFF0F141C) : Colors.white,
+    );
+    final panelBorderColor = accentColor.withValues(
+      alpha: isDark ? 0.38 : 0.28,
+    );
+    final actionButtonColor = Color.alphaBlend(
+      scheme.surface.withValues(alpha: isDark ? 0.70 : 0.92),
+      isDark ? const Color(0xFF121821) : Colors.white,
+    );
     final selectedPiece = _selectedEditToolboxPiece;
-    final selectedPieceMessage = selectedPiece == null
-      ? null
-      : '${_editToolboxLabelForPiece(selectedPiece)} selected. Tap squares to place it.';
+    final selectedPieceMessage = _editToolboxEraserSelected
+        ? 'Eraser selected. Tap squares to clear pieces.'
+        : selectedPiece == null
+        ? null
+        : '${_editToolboxLabelForPiece(selectedPiece)} selected. Tap squares to place it.';
     final whitePieces = _editToolboxPieces
         .where((entry) => entry.piece.endsWith('_w'))
         .toList(growable: false);
@@ -10755,19 +10886,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         .where((entry) => entry.piece.endsWith('_b'))
         .toList(growable: false);
     final headerStyle = TextStyle(
-      color: const Color(0xFFFFD166),
+      color: accentColor,
       fontSize: isLandscape ? 12.5 : 13.2,
       fontWeight: FontWeight.w800,
       letterSpacing: 0.18,
     );
     final subtitleStyle = TextStyle(
-      color: scheme.onSurface.withValues(alpha: 0.72),
+      color: scheme.onSurface.withValues(alpha: isDark ? 0.72 : 0.82),
       fontSize: isLandscape ? 10.2 : 10.6,
       fontWeight: FontWeight.w600,
       height: 1.1,
     );
     final sectionStyle = TextStyle(
-      color: scheme.onSurface.withValues(alpha: 0.78),
+      color: scheme.onSurface.withValues(alpha: isDark ? 0.78 : 0.88),
       fontSize: isLandscape ? 10.1 : 10.4,
       fontWeight: FontWeight.w800,
       letterSpacing: 0.32,
@@ -10783,15 +10914,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           isLandscape ? 10 : 12,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F141C).withValues(alpha: 0.96),
+          color: panelBackgroundColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFFFFD166).withValues(alpha: 0.38),
+            color: panelBorderColor,
             width: 1.2,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.30),
+              color: scheme.shadow.withValues(alpha: isDark ? 0.30 : 0.14),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -10801,25 +10932,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           builder: (context, toolboxConstraints) {
           final sectionSpacing = isLandscape ? 8.0 : 8.0;
             final columnsPerRow = isLandscape ? 3 : 5;
-          final widthBasedTileSize = ((toolboxConstraints.maxWidth -
+            final widthBasedTileSize = ((toolboxConstraints.maxWidth -
                 (sectionSpacing * (columnsPerRow - 1))) /
               columnsPerRow)
-            .clamp(isLandscape ? 48.0 : 48.0, isLandscape ? 60.0 : 68.0)
-            .toDouble();
-          final maxHeight = toolboxConstraints.maxHeight;
-          final fixedHeightBudget =
-            (selectedPieceMessage == null ? 74.0 : 92.0) +
-            18.0 +
-            18.0 +
-            8.0 +
-            (isLandscape ? sectionSpacing * 3 : sectionSpacing) +
-            (isLandscape ? 20.0 : 0.0);
-          final heightBasedTileSize = maxHeight.isFinite
-            ? ((maxHeight - fixedHeightBudget) / (isLandscape ? 4 : 2))
-                .clamp(isLandscape ? 44.0 : 48.0, isLandscape ? 60.0 : 68.0)
+                .clamp(isLandscape ? 48.0 : 48.0, isLandscape ? 60.0 : 68.0)
                 .toDouble()
-            : widthBasedTileSize;
-          final tileSize = min(widthBasedTileSize, heightBasedTileSize)
+            ;
+            final maxHeight = toolboxConstraints.maxHeight;
+            final fixedHeightBudget =
+                (selectedPieceMessage == null ? 74.0 : 92.0) +
+                18.0 +
+                18.0 +
+                8.0 +
+                (isLandscape ? sectionSpacing * 3 : sectionSpacing) +
+                (isLandscape ? 20.0 : 0.0);
+            final heightBasedTileSize = maxHeight.isFinite
+                ? ((maxHeight - fixedHeightBudget) / (isLandscape ? 4 : 2))
+                      .clamp(
+                        isLandscape ? 44.0 : 48.0,
+                        isLandscape ? 60.0 : 68.0,
+                      )
+                      .toDouble()
+                : widthBasedTileSize;
+            final tileSize = min(widthBasedTileSize, heightBasedTileSize)
                 .toDouble();
             final pieceSize = (tileSize * (isLandscape ? 0.62 : 0.60))
                 .clamp(30.0, 42.0)
@@ -10827,6 +10962,59 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             final feedbackSize = (tileSize + (isLandscape ? 10.0 : 8.0))
                 .clamp(56.0, 78.0)
                 .toDouble();
+
+            Widget buildActionButton({
+              required IconData icon,
+              required String tooltip,
+              required VoidCallback onPressed,
+              bool selected = false,
+            }) {
+              return Tooltip(
+                message: tooltip,
+                waitDuration: const Duration(milliseconds: 300),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onPressed,
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? Color.alphaBlend(
+                                accentColor.withValues(
+                                  alpha: isDark ? 0.18 : 0.16,
+                                ),
+                                actionButtonColor,
+                              )
+                            : actionButtonColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selected
+                              ? accentColor.withValues(
+                                  alpha: isDark ? 0.88 : 0.68,
+                                )
+                              : scheme.outline.withValues(
+                                  alpha: isDark ? 0.22 : 0.30,
+                                ),
+                        ),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: selected
+                            ? accentColor
+                            : scheme.onSurface.withValues(
+                                alpha: isDark ? 0.82 : 0.74,
+                              ),
+                        size: 19,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
 
             List<List<_EditToolboxPiece>> buildRows(
               List<_EditToolboxPiece> pieces,
@@ -10895,7 +11083,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             child: TextButton(
                               onPressed: _confirmCleanEditBoard,
                               style: TextButton.styleFrom(
-                                foregroundColor: const Color(0xFFFFD166),
+                                foregroundColor: accentColor,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
                                   vertical: 8,
@@ -10920,21 +11108,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => _setAnalysisEditMode(false),
+                    const SizedBox(width: 8),
+                    buildActionButton(
+                      icon: Icons.backspace_rounded,
+                      tooltip: 'Erase pieces',
+                      onPressed: _toggleEditToolboxEraser,
+                      selected: _editToolboxEraserSelected,
+                    ),
+                    const SizedBox(width: 6),
+                    buildActionButton(
+                      icon: Icons.close_rounded,
                       tooltip: 'Close edit toolbox',
-                      splashRadius: 18,
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.only(left: 4),
-                      constraints: const BoxConstraints.tightFor(
-                        width: 32,
-                        height: 32,
-                      ),
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: const Color(0xFFFFD166),
-                        size: 20,
-                      ),
+                      onPressed: () => _setAnalysisEditMode(false),
                     ),
                   ],
                 ),
@@ -11297,6 +11482,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!_playVsBot || _moveHistory.isEmpty) return;
 
     _send('stop');
+    _cancelGameResultReveal();
     final preserveSpentPowerCharge =
         _vsBotOptimalLineRevealActive && _isHumanTurnInBotGame;
     final chargeAtUndo = _vsBotCharge;
@@ -11343,6 +11529,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _analysisLines = [];
       _analysisLinesFen = null;
       _clearGameOutcomeState();
+      _gameResultDialogVisible = false;
       _restoreCachedEvalForFen(_genFen());
       _vsBotCharge = preserveSpentPowerCharge
           ? chargeAtUndo
@@ -11352,7 +11539,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     : (_moveHistory.last.chargeAfter ?? 0));
     });
 
-    _analyze();
+    _refreshAnalysisForCurrentPosition();
   }
 
   Widget _buildVsBotControlButton({
