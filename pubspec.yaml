@@ -45,6 +45,7 @@ dependencies:
   http: ^1.2.0
   in_app_purchase: ^3.2.0
   package_info_plus: ^8.0.2
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -87,11 +88,9 @@ flutter:
     - openings/
     - COPYRIGHT.md
     - THIRD_PARTY_NOTICES.md
+    - PRIVACY.md
     - LICENSE
   fonts:
-    - family: PixgamerRegular
-      fonts:
-        - asset: assets/fonts/PixgamerRegular.ttf
     - family: PixelatedElegance
       fonts:
         - asset: assets/fonts/PixelatedEleganceRegular.ttf

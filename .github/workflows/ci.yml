@@ -14,6 +14,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify release guard
+        run: python3 tool/release_guard.py
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:

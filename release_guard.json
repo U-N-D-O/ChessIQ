@@ -1,0 +1,28 @@
+{
+    "privacy_notice_url": "https://modus.qila.gl/ChessIQ/privacy-notice",
+    "ios_bundle_identifier": "com.qila.chessiq",
+    "stockfish": {
+        "repo": "https://github.com/official-stockfish/Stockfish.git",
+        "tag_ref": "refs/tags/sf_18",
+        "commit": "cb3d4ee9b47d0c5aae855b12379378ea1439675c"
+    },
+    "required_documents": [
+        "LICENSE",
+        "COPYRIGHT.md",
+        "THIRD_PARTY_NOTICES.md",
+        "PRIVACY.md",
+        "CORRESPONDING_SOURCE.md",
+        "APPLE_APP_STORE_RELEASE.md"
+    ],
+    "bundled_legal_assets": [
+        "COPYRIGHT.md",
+        "THIRD_PARTY_NOTICES.md",
+        "PRIVACY.md",
+        "LICENSE"
+    ],
+    "build_workflows": [
+        ".github/workflows/build_ios_ipa.yml",
+        ".github/workflows/build_stockfish_ios.yml",
+        ".github/workflows/build_android_aab.yml"
+    ]
+}

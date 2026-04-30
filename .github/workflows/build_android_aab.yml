@@ -11,6 +11,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Load release guard values
+        run: python3 tool/release_guard.py --emit-github-env >> "$GITHUB_ENV"
+
+      - name: Verify release guard
+        run: python3 tool/release_guard.py
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -44,8 +50,14 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Clone Stockfish 18
-        run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
+      - name: Fetch pinned Stockfish 18 source
+        run: |
+          set -euo pipefail
+          git init Stockfish
+          git -C Stockfish remote add origin "$STOCKFISH_REPO"
+          git -C Stockfish fetch --depth 1 origin "$STOCKFISH_TAG"
+          git -C Stockfish checkout --detach "$STOCKFISH_COMMIT"
+          test "$(git -C Stockfish rev-parse HEAD)" = "$STOCKFISH_COMMIT"
 
       - name: Build Stockfish Android executables
         env:

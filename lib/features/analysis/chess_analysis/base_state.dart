@@ -2240,6 +2240,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildCreditsOwnershipPanel({required _CreditsDialogVisuals visuals}) {
+    Future<void> openPrivacyNotice() async {
+      final launched = await launchUrl(chessIqPrivacyNoticeUri);
+      if (launched || !mounted) return;
+      await Clipboard.setData(
+        const ClipboardData(text: chessIqPrivacyNoticeUrl),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the privacy notice. The URL has been copied instead.',
+          ),
+        ),
+      );
+    }
+
     return Container(
       key: const ValueKey<String>('credits_ownership_copy'),
       width: double.infinity,
@@ -2276,7 +2292,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
               const SizedBox(width: 8),
               Text(
-                'OWNERSHIP / LEGAL',
+                'GPL / LEGAL',
                 style: _creditsLabelStyle(
                   visuals,
                   color: visuals.primaryAccent,
@@ -2286,7 +2302,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 10),
           Text(
-            'ChessIQ is developed by QILA modus, a division of Qila. Original code, product design, and project-specific assets remain under Qila ownership, while the linked documents below carry the full copyright, license, and third-party notice record.',
+            'ChessIQ is presented here with a GPLv3-focused release posture. The linked records below cover the project license, third-party notices, hosted privacy notice, and supporting legal documents.',
             style: _creditsBodyStyle(
               visuals,
               size: 12.4,
@@ -2300,7 +2316,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             children: <Widget>[
               _buildLegalNoticeLink(
                 key: const ValueKey<String>('credits_legal_link_copyright'),
-                label: 'Copyright Notice',
+                label: 'Project Record',
                 icon: Icons.copyright_rounded,
                 accent: visuals.primaryAccent,
                 visuals: visuals,
@@ -2334,11 +2350,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   accent: visuals.secondaryAccent,
                 ),
               ),
+              _buildLegalNoticeLink(
+                key: const ValueKey<String>('credits_legal_link_privacy'),
+                label: 'Privacy Notice',
+                icon: Icons.open_in_new_rounded,
+                accent: visuals.primaryAccent,
+                visuals: visuals,
+                onTap: () {
+                  unawaited(openPrivacyNotice());
+                },
+              ),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            'Company identifiers remain in the legal documents rather than the main credits panel.',
+            'Leaderboard privacy: the nickname and country or region you choose may be displayed publicly with your score and title. ChessIQ also sends an anonymous Firebase ID and update metadata to the backend to manage the entry. Email, real name, and precise location are not requested, and network metadata such as IP addresses is not shown on the public leaderboard.',
+            style: _creditsBodyStyle(
+              visuals,
+              size: 11.6,
+              color: visuals.palette.text.withValues(alpha: 0.88),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'The hosted privacy notice opens in your browser, while the other buttons open the bundled legal records.',
             style: _creditsLabelStyle(
               visuals,
               size: 10.9,
@@ -12141,7 +12176,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                 ),
                                                 _buildCreditRow(
                                                   'Chess Engine',
-                                                  'Stockfish (GPL-3.0)',
+                                                  'Stockfish (GPLv3)',
                                                   visuals: visuals,
                                                 ),
                                                 _buildCreditRow(
@@ -12156,7 +12191,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                 ),
                                                 _buildCreditRow(
                                                   'Audio',
-                                                  'Freesound and Floraphonic effects',
+                                                  'Retained free-use sound effects',
                                                   visuals: visuals,
                                                 ),
                                                 _buildCreditRow(

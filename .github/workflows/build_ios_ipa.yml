@@ -1,26 +1,157 @@
-name: Build iOS IPA (No Sign)
+name: Build iOS Signed IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Git tag to build and sign.
+        required: true
+        type: string
+      build_name:
+        description: Optional version name override.
+        required: false
+        type: string
+      build_number:
+        description: Optional build number override.
+        required: false
+        type: string
+      upload_to_app_store:
+        description: Upload directly to App Store Connect after signing.
+        required: false
+        default: true
+        type: boolean
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Git tag to build and sign.
+        required: true
+        type: string
+      build_name:
+        description: Optional version name override.
+        required: false
+        type: string
+      build_number:
+        description: Optional build number override.
+        required: false
+        type: string
+      upload_to_app_store:
+        description: Upload directly to App Store Connect after signing.
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      APPLE_TEAM_ID:
+        required: true
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64:
+        required: true
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:
+        required: true
+      APPLE_PROVISIONING_PROFILE_BASE64:
+        required: true
+      APP_STORE_CONNECT_API_KEY_ID:
+        required: false
+      APP_STORE_CONNECT_API_ISSUER_ID:
+        required: false
+      APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64:
+        required: false
 
 jobs:
-  build-ios-ipa:
+  build-ios-signed-ipa:
     runs-on: macos-latest
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout
+      - name: Checkout tagged source
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          fetch-depth: 0
+
+      - name: Load release guard values
+        run: python3 tool/release_guard.py --emit-github-env >> "$GITHUB_ENV"
+
+      - name: Verify release guard
+        run: python3 tool/release_guard.py --expected-tag "${{ inputs.release_tag }}"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Clone Stockfish 18
-        run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
+      - name: Install Apple signing assets
+        env:
+          APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          : "${APPLE_DISTRIBUTION_CERTIFICATE_BASE64:?Missing secret APPLE_DISTRIBUTION_CERTIFICATE_BASE64}"
+          : "${APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:?Missing secret APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD}"
+          : "${APPLE_PROVISIONING_PROFILE_BASE64:?Missing secret APPLE_PROVISIONING_PROFILE_BASE64}"
+          : "${APPLE_TEAM_ID:?Missing secret APPLE_TEAM_ID}"
+
+          CERT_PATH="$RUNNER_TEMP/apple_distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/chessiq_app_store.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/chessiq_profile.plist"
+          KEYCHAIN_PASSWORD="${RUNNER_TEMP##*/}-chessiq-signing"
+          KEYCHAIN_PATH="$RUNNER_TEMP/chessiq-signing.keychain-db"
+
+          echo "$APPLE_DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -P "$APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PROFILE_PLIST")
+          EXPECTED_APP_ID="$APPLE_TEAM_ID.$CHESSIQ_IOS_BUNDLE_ID"
+
+          case "$PROFILE_APP_ID" in
+            "$EXPECTED_APP_ID"|"$APPLE_TEAM_ID".*) ;;
+            *)
+              echo "Provisioning profile application-identifier '$PROFILE_APP_ID' does not match '$EXPECTED_APP_ID'" >&2
+              exit 1
+              ;;
+          esac
+
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+          {
+            echo "APPLE_PROFILE_NAME=$PROFILE_NAME"
+            echo "APPLE_PROFILE_UUID=$PROFILE_UUID"
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Fetch pinned Stockfish 18 source
+        run: |
+          set -euo pipefail
+          git init Stockfish
+          git -C Stockfish remote add origin "$STOCKFISH_REPO"
+          git -C Stockfish fetch --depth 1 origin "$STOCKFISH_TAG"
+          git -C Stockfish checkout --detach "$STOCKFISH_COMMIT"
+          test "$(git -C Stockfish rev-parse HEAD)" = "$STOCKFISH_COMMIT"
+
+      - name: Prepare Stockfish iOS entrypoint source
+        run: ./tool/prepare_stockfish_ios_entrypoint.sh Stockfish/src/main.cpp Stockfish/src/main_stockfish.cpp
 
       - name: Build Stockfish objects (iOS device arm64)
         working-directory: Stockfish/src
@@ -52,9 +183,6 @@ jobs:
           set -euo pipefail
           cd Stockfish/src
 
-          # Deterministic symbol rename path: compile a renamed copy of main.cpp
-          # and force C linkage so the symbol is exactly _stockfish_main.
-          perl -0777 -pe 's/\bint\s+main\s*\(/extern "C" int stockfish_main(/' main.cpp > main_stockfish.cpp
           /tmp/ios-device-cxx.sh \
             -arch arm64 \
             -Wall -Wcast-qual -fno-exceptions -std=c++17 -pedantic -Wextra -Wshadow -Wmissing-declarations \
@@ -89,27 +217,104 @@ jobs:
           OTHER_LDFLAGS=$(inherited) -lstockfish_ios -lc++
           EOF
 
-      - name: Build Flutter iOS app (no codesign)
-        run: flutter build ios --release --no-codesign
-
-      - name: Package IPA
+      - name: Prepare Flutter iOS build settings
+        env:
+          BUILD_NAME_INPUT: ${{ inputs.build_name }}
+          BUILD_NUMBER_INPUT: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
-          APP_PATH="build/ios/iphoneos/Runner.app"
-          IPA_DIR="build/ios/ipa"
+          cmd=(flutter build ios --release --config-only)
+          if [ -n "${BUILD_NAME_INPUT:-}" ]; then
+            cmd+=(--build-name "$BUILD_NAME_INPUT")
+          fi
+          if [ -n "${BUILD_NUMBER_INPUT:-}" ]; then
+            cmd+=(--build-number "$BUILD_NUMBER_INPUT")
+          fi
+          "${cmd[@]}"
 
-          test -d "$APP_PATH"
+      - name: Write App Store export options
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          sed \
+            -e "s#__TEAM_ID__#${APPLE_TEAM_ID}#g" \
+            -e "s#__BUNDLE_IDENTIFIER__#${CHESSIQ_IOS_BUNDLE_ID}#g" \
+            -e "s#__PROFILE_NAME__#${APPLE_PROFILE_NAME}#g" \
+            ios/ExportOptions-AppStore.plist.template > "$RUNNER_TEMP/ExportOptions.plist"
 
-          rm -rf "$IPA_DIR"
-          mkdir -p "$IPA_DIR/Payload"
-          cp -R "$APP_PATH" "$IPA_DIR/Payload/"
+      - name: Archive signed Runner app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -archivePath build/ios/archive/ChessIQ.xcarchive \
+            PRODUCT_BUNDLE_IDENTIFIER="$CHESSIQ_IOS_BUNDLE_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROFILE_NAME" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            archive
 
-          cd "$IPA_DIR"
-          /usr/bin/zip -qry ChessIQ.ipa Payload
+      - name: Export signed IPA
+        run: |
+          set -euo pipefail
+          rm -rf build/ios/ipa
+          xcodebuild \
+            -exportArchive \
+            -archivePath build/ios/archive/ChessIQ.xcarchive \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath build/ios/ipa
 
-      - name: Upload IPA artifact
+          IPA_PATH="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+
+          if [ "$(basename "$IPA_PATH")" != "ChessIQ-signed.ipa" ]; then
+            mv "$IPA_PATH" build/ios/ipa/ChessIQ-signed.ipa
+          fi
+
+          cp "$RUNNER_TEMP/ExportOptions.plist" build/ios/ipa/ExportOptions-used.plist
+
+      - name: Upload IPA to App Store Connect
+        if: ${{ inputs.upload_to_app_store }}
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          : "${APP_STORE_CONNECT_API_KEY_ID:?Missing secret APP_STORE_CONNECT_API_KEY_ID}"
+          : "${APP_STORE_CONNECT_API_ISSUER_ID:?Missing secret APP_STORE_CONNECT_API_ISSUER_ID}"
+          : "${APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64:?Missing secret APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64}"
+
+          APP_STORE_CONNECT_KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          APP_STORE_CONNECT_KEY_PATH="$APP_STORE_CONNECT_KEY_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+
+          mkdir -p "$APP_STORE_CONNECT_KEY_DIR"
+          echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode > "$APP_STORE_CONNECT_KEY_PATH"
+
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            --file build/ios/ipa/ChessIQ-signed.ipa \
+            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID" \
+            --verbose
+
+      - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ChessIQ-ipa-no-sign
-          path: build/ios/ipa/ChessIQ.ipa
+          name: ChessIQ-ios-signed-ipa
+          path: |
+            build/ios/ipa/ChessIQ-signed.ipa
+            build/ios/ipa/ExportOptions-used.plist
+            build/ios/archive/ChessIQ.xcarchive
           retention-days: 90

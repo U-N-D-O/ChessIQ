@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:chessiq/core/constants/legal_links.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
@@ -22,6 +23,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/country_names.dart';
 import '../data/profanity_filter.dart';
@@ -4674,6 +4676,20 @@ class AcademyProfileDialog extends StatefulWidget {
 class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
   final _formKey = GlobalKey<FormState>();
 
+  Future<void> _openPrivacyNotice() async {
+    final launched = await launchUrl(chessIqPrivacyNoticeUri);
+    if (launched || !mounted) return;
+    await Clipboard.setData(const ClipboardData(text: chessIqPrivacyNoticeUrl));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not open the privacy notice. The URL has been copied instead.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final monochrome =
@@ -4724,12 +4740,29 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'This information is only used for leaderboard display. No email, account details, or precise location are collected.',
+              'If you join the Academy leaderboard, your chosen nickname and country or region may be shown publicly with your score and title. ChessIQ also sends an anonymous Firebase ID and update metadata to the backend to manage the entry. No email, real name, or precise location is requested, and network metadata such as IP addresses is not shown on the public leaderboard.',
               style: puzzleAcademyHudStyle(
                 palette: palette,
                 size: 12.0,
                 weight: FontWeight.w600,
                 height: 1.45,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () {
+                  unawaited(_openPrivacyNotice());
+                },
+                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                label: const Text('READ PRIVACY NOTICE'),
+                style: TextButton.styleFrom(
+                  foregroundColor: palette.cyan,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 8,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),

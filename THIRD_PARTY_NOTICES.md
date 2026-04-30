@@ -6,15 +6,13 @@ This project incorporates, references, or relies on third-party software, data, 
 
 ## 1. Chess Engine
 
-This project is designed to support the Stockfish chess engine for local analysis.
+This project integrates the Stockfish chess engine for local analysis and native gameplay workflows.
 
 - Component: Stockfish chess engine
 - Website: https://stockfishchess.org/
 - Source code: https://github.com/official-stockfish/Stockfish
-- License: GNU General Public License v3.0 (GPL-3.0)
-- Project integration: Optional local Stockfish mechanism may be used for native analysis workflows (for example, platform-specific integrations/build artifacts).
-
-This repository does not distribute the Stockfish mechanism/binaries.
+- License: GNU General Public License v3.0 (GPLv3)
+- Project integration: Current native mobile build workflows package Stockfish for local analysis, including platform-specific binaries and the iOS static library path used by the app.
 
 ## 2. Opening Database Files
 
@@ -67,12 +65,6 @@ Each third-party package remains licensed under its own terms. For complete and 
 
 This project bundles third-party pixel font assets used by the Opening Academy retro interface.
 
-- Asset: `assets/fonts/PixgamerRegular.ttf`
-- Font name: `PixgamerRegular`
-- Source page: https://www.fontspace.com/pixgamer-font-f85447
-- License note supplied with the downloaded font package: Creative Commons Attribution No Derivatives (CC BY-ND)
-- Compliance note: Attribution is provided here, but release use should continue to be reviewed against the upstream license terms for bundled font redistribution and modification constraints.
-
 - Asset: `assets/fonts/PixelatedEleganceRegular.ttf`
 - Font name: `Pixelated Elegance`
 - Source page: https://ggbot.itch.io/pixelated-elegance-font
@@ -91,9 +83,11 @@ This project bundles third-party pixel font assets used by the Opening Academy r
 
 ## 6. Audio Asset Attribution
 
-This project includes third-party audio assets used chess sound effects, coin sound effects and rewards feedback.
+This project retains bundled sound effects on the project owner's stated basis that the included audio assets are cleared for free use.
 
-- Assets: `assets/sounds/move1.mp3` – `move8.mp3`, `assets/sounds/take1.mp3`
+The provenance notes below reflect the source records currently tracked in this repository for the shipped sound bundle.
+
+- Assets: `assets/sounds/move1.wav` – `move8.wav`, `assets/sounds/take1.wav`
 - Title: `Chess-pieces, Owi, Boardgames`
 - Creator: simone_ds
 - Source platform: Freesound
@@ -111,13 +105,26 @@ This project includes third-party audio assets used chess sound effects, coin so
 - License / usage note: Free for use. Royalty Free Audio
 - Source website: https://www.floraphonic.com/
 
+- Asset: `assets/sounds/coinbag2.mp3`
+- Creator: Floraphonic
+- License / usage note: Retained on the same asserted free-use / royalty-free basis as the other bundled Floraphonic coin bag effect.
+- Source website: https://www.floraphonic.com/
+
 - Asset: `assets/sounds/academybuy.mp3`
 - Title: `Wood Surface Single Coin Payout 4`
-- Creator: floraphonic
+- Creator: Floraphonic
 - Description / usage note: Coin, Toss, Flip sound effect. Free for use.
 
-- Asset: `assets/sounds/kaching.mp3`
+- Asset: `assets/sounds/kaching.wav`
 - Title: `Cash Register (Kaching)`
 - Creator: Modestas123123
 - Source platform: Pixabay
 - Description / usage note: Free for use.
+
+The following bundled audio files are original project-created assets and are not third-party sound effects:
+
+- `assets/sounds/intro.mp3`
+- `assets/sounds/main.mp3`
+- `assets/sounds/vs.mp3`
+
+The app also references `assets/sounds/wrongmove.wav` in Academy puzzle flows. No third-party provenance record is currently listed here for that file.
