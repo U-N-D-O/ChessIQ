@@ -12702,12 +12702,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     if (_isLicenseIndentedExampleParagraph(rawLines, firstTrimmedLine)) {
-      return trimmedLines
-          .map((line) => '    $line')
-          .toList(growable: false);
+      return trimmedLines.map((line) => '    $line').toList(growable: false);
     }
 
-    final merged = trimmedLines.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final merged = trimmedLines
+        .join(' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     return <String>[merged];
   }
 
