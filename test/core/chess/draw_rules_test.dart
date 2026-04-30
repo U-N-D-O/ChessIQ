@@ -2,6 +2,87 @@ import 'package:chessiq/core/chess/draw_rules.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('hasInsufficientMatingMaterial', () {
+    test('detects king versus king as a dead position', () {
+      expect(
+        hasInsufficientMatingMaterial(<String, String>{
+          'e1': 'k_w',
+          'e8': 'k_b',
+        }),
+        isTrue,
+      );
+    });
+
+    test('detects king and bishop versus king as a dead position', () {
+      expect(
+        hasInsufficientMatingMaterial(<String, String>{
+          'e1': 'k_w',
+          'c1': 'b_w',
+          'e8': 'k_b',
+        }),
+        isTrue,
+      );
+    });
+
+    test('detects king and knight versus king as a dead position', () {
+      expect(
+        hasInsufficientMatingMaterial(<String, String>{
+          'e1': 'k_w',
+          'g1': 'n_w',
+          'e8': 'k_b',
+        }),
+        isTrue,
+      );
+    });
+
+    test('detects same-colored bishops as a dead position', () {
+      expect(
+        hasInsufficientMatingMaterial(<String, String>{
+          'e1': 'k_w',
+          'c1': 'b_w',
+          'e8': 'k_b',
+          'f8': 'b_b',
+        }),
+        isTrue,
+      );
+    });
+
+    test('does not flag opposite-colored bishops as dead position', () {
+      expect(
+        hasInsufficientMatingMaterial(<String, String>{
+          'e1': 'k_w',
+          'c1': 'b_w',
+          'e8': 'k_b',
+          'c8': 'b_b',
+        }),
+        isFalse,
+      );
+    });
+
+    test('does not flag bishop and knight versus king as dead position', () {
+      expect(
+        hasInsufficientMatingMaterial(<String, String>{
+          'e1': 'k_w',
+          'c1': 'b_w',
+          'g1': 'n_w',
+          'e8': 'k_b',
+        }),
+        isFalse,
+      );
+    });
+
+    test('does not flag rook versus king as dead position', () {
+      expect(
+        hasInsufficientMatingMaterial(<String, String>{
+          'e1': 'k_w',
+          'h1': 't_w',
+          'e8': 'k_b',
+        }),
+        isFalse,
+      );
+    });
+  });
+
   group('advanceHalfmoveClock', () {
     test('increments after a quiet non-pawn move', () {
       expect(

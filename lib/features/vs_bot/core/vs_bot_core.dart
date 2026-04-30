@@ -972,6 +972,19 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   }
 
   @override
+  List<BotMoveCandidate> _botMoveCandidates(List<EngineLine> lines) {
+    return lines
+        .map(
+          (line) => BotMoveCandidate(
+            line: line,
+            isCapture: _isCaptureMove(line.move),
+            isCheck: _isCheckingMove(line.move),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
   int _uncleComplexityScore(EngineLine line, int bestEval) {
     final evalGap = (bestEval - line.eval).abs();
     var score = 0;
@@ -982,8 +995,21 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   }
 
   @override
-  String? _chooseBotMove(BotCharacter bot, List<EngineLine> lines) {
+  String? _chooseBotMove(
+    BotCharacter bot,
+    BotDifficultySettings settings,
+    List<EngineLine> lines,
+  ) {
     if (lines.isEmpty) return null;
+
+    final moveSelectionPolicy = settings.moveSelectionPolicy;
+    if (moveSelectionPolicy != null) {
+      return BotMoveSelector.pickMove(
+        _botMoveCandidates(lines),
+        moveSelectionPolicy,
+        _rng,
+      );
+    }
 
     switch (bot.profile) {
       case BotSkillProfile.baby:
@@ -1079,11 +1105,13 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
 
     try {
       final bot = _selectedBot!;
+      final settings = bot.settingsFor(_selectedBotDifficulty);
       final candidates = await _requestBotCandidates(
         bot,
         _selectedBotDifficulty,
       );
-      final chosen = _chooseBotMove(bot, candidates) ?? _fallbackBotMove();
+      final chosen =
+          _chooseBotMove(bot, settings, candidates) ?? _fallbackBotMove();
       if (!mounted || chosen == null) return;
       if (!_isLegalUciMove(chosen)) {
         _addLog('Rejected illegal bot move: $chosen');

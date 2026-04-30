@@ -5,6 +5,87 @@ enum DrawReason {
   insufficientMaterial,
 }
 
+bool hasInsufficientMatingMaterial(Map<String, String> boardState) {
+  final materialPieces = <_MaterialPieceOnBoard>[];
+
+  for (final entry in boardState.entries) {
+    final piece = entry.value;
+    if (piece.isEmpty || piece.startsWith('k')) {
+      continue;
+    }
+    materialPieces.add(
+      _MaterialPieceOnBoard(square: entry.key, pieceType: piece[0]),
+    );
+  }
+
+  if (materialPieces.any(
+    (piece) => piece.isPawn || piece.isRook || piece.isQueen,
+  )) {
+    return false;
+  }
+
+  if (materialPieces.isEmpty) {
+    return true;
+  }
+
+  if (materialPieces.length == 1) {
+    final piece = materialPieces.single;
+    return piece.isBishop || piece.isKnight;
+  }
+
+  if (materialPieces.every((piece) => piece.isBishop)) {
+    return _allBishopsShareSquareColor(materialPieces);
+  }
+
+  return false;
+}
+
+bool _allBishopsShareSquareColor(List<_MaterialPieceOnBoard> bishops) {
+  if (bishops.isEmpty) {
+    return false;
+  }
+
+  final firstColorParity = _squareColorParity(bishops.first.square);
+  if (firstColorParity == null) {
+    return false;
+  }
+
+  for (final bishop in bishops.skip(1)) {
+    if (_squareColorParity(bishop.square) != firstColorParity) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+int? _squareColorParity(String square) {
+  if (square.length != 2) {
+    return null;
+  }
+
+  final file = square.codeUnitAt(0) - 97;
+  final rank = int.tryParse(square.substring(1));
+  if (file < 0 || file > 7 || rank == null || rank < 1 || rank > 8) {
+    return null;
+  }
+
+  return (file + rank - 1) & 1;
+}
+
+class _MaterialPieceOnBoard {
+  const _MaterialPieceOnBoard({required this.square, required this.pieceType});
+
+  final String square;
+  final String pieceType;
+
+  bool get isBishop => pieceType == 'b';
+  bool get isKnight => pieceType == 'n';
+  bool get isPawn => pieceType == 'p';
+  bool get isQueen => pieceType == 'q';
+  bool get isRook => pieceType == 't';
+}
+
 String buildBoardFen(Map<String, String> boardState) {
   final buffer = StringBuffer();
   for (var rank = 8; rank >= 1; rank--) {

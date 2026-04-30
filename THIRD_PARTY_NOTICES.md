@@ -83,48 +83,13 @@ This project bundles third-party pixel font assets used by the Opening Academy r
 
 ## 6. Audio Asset Attribution
 
-This project retains bundled sound effects on the project owner's stated basis that the included audio assets are cleared for free use.
+The following assets are used under royalty-free or free-use licenses:
 
-The provenance notes below reflect the source records currently tracked in this repository for the shipped sound bundle.
+- move1-8.wav, take1.wav: simone_ds (Freesound)
+- coin.mp3: VSokorelos (Freesound)
+- coinbag.mp3, coinbag2.mp3, academybuy.mp3: Floraphonic (floraphonic.com)
+- kaching.wav: Modestas123123 (Pixabay)
+- vs.mp3: Universfield (Freesound)
 
-- Assets: `assets/sounds/move1.wav` – `move8.wav`, `assets/sounds/take1.wav`
-- Title: `Chess-pieces, Owi, Boardgames`
-- Creator: simone_ds
-- Source platform: Freesound
-- Description / usage note: Chess pieces sound effects. Free for use.
-
-- Asset: `assets/sounds/coin.mp3`
-- Title: `Coin Drop`
-- Creator: VSokorelos
-- Source platform: Freesound
-- Description / usage note: Iekdelta, Drop, Coin sound effect. Free for use.
-
-- Asset: `assets/sounds/coinbag.mp3`
-- Title: `Coin and Money Bag 3`
-- Creator: Floraphonic
-- License / usage note: Free for use. Royalty Free Audio
-- Source website: https://www.floraphonic.com/
-
-- Asset: `assets/sounds/coinbag2.mp3`
-- Creator: Floraphonic
-- License / usage note: Retained on the same asserted free-use / royalty-free basis as the other bundled Floraphonic coin bag effect.
-- Source website: https://www.floraphonic.com/
-
-- Asset: `assets/sounds/academybuy.mp3`
-- Title: `Wood Surface Single Coin Payout 4`
-- Creator: Floraphonic
-- Description / usage note: Coin, Toss, Flip sound effect. Free for use.
-
-- Asset: `assets/sounds/kaching.wav`
-- Title: `Cash Register (Kaching)`
-- Creator: Modestas123123
-- Source platform: Pixabay
-- Description / usage note: Free for use.
-
-The following bundled audio files are original project-created assets and are not third-party sound effects:
-
-- `assets/sounds/intro.mp3`
-- `assets/sounds/main.mp3`
-- `assets/sounds/vs.mp3`
-
-The app also references `assets/sounds/wrongmove.wav` in Academy puzzle flows. No third-party provenance record is currently listed here for that file.
+Proprietary Assets (All Rights Reserved):
+- intro.mp3, main.mp3

@@ -116,6 +116,43 @@ class _GradingSearchSnapshot {
   final bool whiteToMove;
 }
 
+class _BoardDragPayload {
+  const _BoardDragPayload._({required this.piece, this.fromSquare});
+
+  const _BoardDragPayload.fromBoard({
+    required String fromSquare,
+    required String piece,
+  }) : this._(piece: piece, fromSquare: fromSquare);
+
+  const _BoardDragPayload.palette({required String piece})
+    : this._(piece: piece);
+
+  final String piece;
+  final String? fromSquare;
+}
+
+class _EditToolboxPiece {
+  const _EditToolboxPiece({required this.piece, required this.label});
+
+  final String piece;
+  final String label;
+}
+
+const List<_EditToolboxPiece> _editToolboxPieces = <_EditToolboxPiece>[
+  _EditToolboxPiece(piece: 'k_w', label: 'White king'),
+  _EditToolboxPiece(piece: 'q_w', label: 'White queen'),
+  _EditToolboxPiece(piece: 't_w', label: 'White rook'),
+  _EditToolboxPiece(piece: 'b_w', label: 'White bishop'),
+  _EditToolboxPiece(piece: 'n_w', label: 'White knight'),
+  _EditToolboxPiece(piece: 'p_w', label: 'White pawn'),
+  _EditToolboxPiece(piece: 'k_b', label: 'Black king'),
+  _EditToolboxPiece(piece: 'q_b', label: 'Black queen'),
+  _EditToolboxPiece(piece: 't_b', label: 'Black rook'),
+  _EditToolboxPiece(piece: 'b_b', label: 'Black bishop'),
+  _EditToolboxPiece(piece: 'n_b', label: 'Black knight'),
+  _EditToolboxPiece(piece: 'p_b', label: 'Black pawn'),
+];
+
 abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     with TickerProviderStateMixin {
   static const String _lastBotIndexKey = 'last_bot_index_v1';
@@ -179,7 +216,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   final List<_CreditsBackdropDot> _creditsBackdropDots =
       <_CreditsBackdropDot>[];
   final Random _creditsBackdropRandom = Random();
-  bool _creditsDialogOpen = false;
+  final bool _creditsDialogOpen = false;
   _CreditsVisualMode _creditsVisualMode = _CreditsVisualMode.modern;
   double _creditsVisualElapsed = 0.0;
   bool _menuDotsPreviouslyColliding = false;
@@ -5308,6 +5345,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool _hasInsufficientMaterial() {
+    if (hasInsufficientMatingMaterial(boardState)) {
+      return true;
+    }
     try {
       return chess.Chess.fromFEN(_genFen()).insufficient_material;
     } catch (_) {
@@ -6044,7 +6084,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     String to, {
     String? forcedPromotion,
   }) async {
-    if (_gameOutcome != null) return;
+    if (_gameOutcome != null && !_analysisEditMode) return;
     final piece = boardState[from];
     if (piece == null) return;
     if (!_canHumanInteractWithBoardPiece(piece)) return;
@@ -6883,6 +6923,142 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
   }
 
+  void _syncSpecialMoveStateForEditedBoard(Map<String, String> nextBoardState) {
+    _whiteKingMoved = nextBoardState['e1'] != 'k_w';
+    _blackKingMoved = nextBoardState['e8'] != 'k_b';
+    _whiteKingsideRookMoved = nextBoardState['h1'] != 't_w';
+    _whiteQueensideRookMoved = nextBoardState['a1'] != 't_w';
+    _blackKingsideRookMoved = nextBoardState['h8'] != 't_b';
+    _blackQueensideRookMoved = nextBoardState['a8'] != 't_b';
+    _enPassantTarget = null;
+  }
+
+  String _editToolboxLabelForPiece(String piece) {
+    for (final entry in _editToolboxPieces) {
+      if (entry.piece == piece) {
+        return entry.label;
+      }
+    }
+    return piece;
+  }
+
+  void _applyManualBoardEdit(
+    Map<String, String> nextBoardState, {
+    String? hintText,
+  }) {
+    _send('stop');
+    _cancelGameResultReveal();
+    _cancelPendingMoveQualityGrading();
+    _clearPositionAnalysisCache();
+
+    final normalizedBoardState = Map<String, String>.from(nextBoardState);
+
+    setState(() {
+      boardState = normalizedBoardState;
+      _syncSpecialMoveStateForEditedBoard(normalizedBoardState);
+      _moveHistory.clear();
+      _historyIndex = -1;
+      _resetDerivedDrawState();
+      _currentOpening = '';
+      _openingMode = OpeningMode.off;
+      _selectedGambit = null;
+      _gambitPreviewLines = [];
+      _holdSelectedFrom = null;
+      _gambitSelectedFrom = null;
+      _legalTargets.clear();
+      _gambitAvailableTargets.clear();
+      _pendingMoveQualityGrading = null;
+      _clearMoveQualityOverlay();
+      _clearMoveQualityBadge();
+      _topLines = [];
+      _analysisLines = [];
+      _analysisLinesFen = null;
+      _gameResultDialogVisible = false;
+      _clearGameOutcomeState();
+      _restoreCachedEvalForFen(_genFen());
+      if (hintText != null && hintText.isNotEmpty) {
+        _editModeHintText = hintText;
+      }
+    });
+
+    if (hintText != null && hintText.isNotEmpty) {
+      _scheduleEditModeHintHide();
+    }
+
+    final detectedOutcome = _detectCurrentGameOutcome();
+    if (detectedOutcome != null) {
+      final gameOutcome = detectedOutcome.outcome;
+      setState(() {
+        _gameOutcome = gameOutcome;
+        _gameDrawReason = detectedOutcome.drawReason;
+        _botThinking = false;
+      });
+      _persistAnalysisSnapshotIfNeeded();
+      unawaited(_startGameResultReveal(gameOutcome));
+      return;
+    }
+
+    _persistAnalysisSnapshotIfNeeded();
+    _analyze();
+  }
+
+  void _placeEditModePiece(String piece, String square) {
+    if (!_analysisEditMode || _isOpeningSelectionMode) {
+      return;
+    }
+    final nextBoardState = Map<String, String>.from(boardState);
+    nextBoardState[square] = piece;
+    _applyManualBoardEdit(
+      nextBoardState,
+      hintText:
+          '${_editToolboxLabelForPiece(piece)} placed on ${square.toUpperCase()}',
+    );
+  }
+
+  Future<void> _confirmCleanEditBoard() async {
+    if (!_analysisEditMode) return;
+
+    final shouldClean = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Clean board?'),
+          content: const Text(
+            'This removes every piece except the kings. Continue?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFFD166),
+                foregroundColor: const Color(0xFF14181D),
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Yes'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldClean != true) {
+      return;
+    }
+
+    final nextBoardState = <String, String>{
+      for (final entry in boardState.entries)
+        if (entry.value.startsWith('k')) entry.key: entry.value,
+    };
+
+    _applyManualBoardEdit(
+      nextBoardState,
+      hintText: 'Board cleaned to kings only',
+    );
+  }
+
   void _refreshGambitPreview() {
     if (_selectedGambit == null) return;
     final preview = _buildGambitPreviewLines(_selectedGambit!);
@@ -7163,7 +7339,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   // --- Move Handling ---
   void _onMove(String from, String to, {String? promotion}) {
-    if (_gameOutcome != null) return;
+    if (_gameOutcome != null && !_analysisEditMode) return;
     if (_playVsBot && !_isHumanTurnInBotGame && !_botThinking) {
       return;
     }
@@ -9005,81 +9181,105 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                     220.0,
                                                     360.0,
                                                   );
-                                              return Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
+                                              const double evalBarW = 22.0;
+                                              final boardSectionWidth = max(
+                                                0.0,
+                                                inner.maxWidth - sideWidth - 12,
+                                              );
+                                              final boardSize = max(
+                                                0.0,
+                                                min(
+                                                  boardSectionWidth - evalBarW,
+                                                  inner.maxHeight,
+                                                ),
+                                              );
+                                              const double toolboxWidth = 184.0;
+                                              const double estimatedToolboxHeight =
+                                                  208.0;
+                                              final boardLeft =
+                                                  evalBarW +
+                                                  max(
+                                                    0.0,
+                                                    (boardSectionWidth -
+                                                                evalBarW -
+                                                                boardSize) /
+                                                            2,
+                                                  );
+                                              final boardTop = max(
+                                                0.0,
+                                                (inner.maxHeight - boardSize) / 2,
+                                              );
+                                              final toolboxLeft = max(
+                                                0.0,
+                                                min(
+                                                  boardLeft + boardSize + 12,
+                                                  inner.maxWidth - toolboxWidth,
+                                                ),
+                                              );
+                                              final toolboxTop = max(
+                                                0.0,
+                                                min(
+                                                  boardTop,
+                                                  inner.maxHeight -
+                                                      estimatedToolboxHeight,
+                                                ),
+                                              );
+                                              return Stack(
+                                                clipBehavior: Clip.none,
                                                 children: [
-                                                  Expanded(
-                                                    flex: 7,
-                                                    child: LayoutBuilder(
-                                                      builder: (context, boardBox) {
-                                                        const double evalBarW =
-                                                            22.0;
-                                                        final boardSize = max(
-                                                          0.0,
-                                                          min(
-                                                            boardBox.maxWidth -
-                                                                evalBarW,
-                                                            boardBox.maxHeight,
-                                                          ),
-                                                        );
-                                                        return Row(
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .center,
-                                                          children: [
-                                                            SizedBox(
-                                                              key:
-                                                                  _evalBarVerticalKey,
-                                                              width: evalBarW,
-                                                              height: boardSize,
-                                                              child: Center(
-                                                                child:
-                                                                    _buildEvalBarVertical(
-                                                                      scale,
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                            Expanded(
-                                                              child: Center(
-                                                                child: SizedBox(
+                                                  Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.stretch,
+                                                    children: [
+                                                      Expanded(
+                                                        flex: 7,
+                                                        child: LayoutBuilder(
+                                                          builder: (context, boardBox) {
+                                                            return Row(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .center,
+                                                              children: [
+                                                                SizedBox(
                                                                   key:
-                                                                      _boardKey,
-                                                                  width:
-                                                                      boardSize,
+                                                                      _evalBarVerticalKey,
+                                                                  width: evalBarW,
                                                                   height:
                                                                       boardSize,
-                                                                  child: Stack(
-                                                                    children: [
-                                                                      Opacity(
-                                                                        opacity:
-                                                                            _boardIntroOpacity(),
-                                                                        child: _buildBoard(
-                                                                          reverse,
+                                                                  child: Center(
+                                                                    child:
+                                                                        _buildEvalBarVertical(
+                                                                          scale,
                                                                         ),
-                                                                      ),
-                                                                      Opacity(
-                                                                        opacity:
-                                                                            _boardIntroOpacity(),
-                                                                        child: _buildAnimatedArrows(
-                                                                          reverse,
-                                                                        ),
-                                                                      ),
-                                                                    ],
                                                                   ),
                                                                 ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        );
-                                                      },
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  SizedBox(
-                                                    width: sideWidth,
-                                                    child: LayoutBuilder(
-                                                      builder: (context, sideConstraints) {
+                                                                Expanded(
+                                                                  child: Center(
+                                                                    child:
+                                                                        SizedBox(
+                                                                          key:
+                                                                              _boardKey,
+                                                                          width:
+                                                                              boardSize,
+                                                                          height:
+                                                                              boardSize,
+                                                                          child:
+                                                                              _buildBoardScene(
+                                                                                reverse,
+                                                                              ),
+                                                                        ),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      SizedBox(
+                                                        width: sideWidth,
+                                                        child: LayoutBuilder(
+                                                          builder: (context, sideConstraints) {
                                                         final suggestionsHeight =
                                                             (sideConstraints
                                                                         .maxHeight *
@@ -9088,134 +9288,143 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                   96.0,
                                                                   250.0,
                                                                 );
-                                                        final historyHeight =
-                                                            (sideConstraints
-                                                                        .maxHeight *
-                                                                    0.16)
-                                                                .clamp(
-                                                                  46.0,
-                                                                  72.0,
-                                                                );
-                                                        final hasLandscapeTitle =
-                                                            !_playVsBot &&
-                                                            (_selectedGambit !=
-                                                                    null ||
-                                                                _currentOpening
-                                                                    .isNotEmpty);
-                                                        final landscapeBannerTop =
-                                                            _playVsBot
-                                                            ? 10.0
-                                                            : hasLandscapeTitle
-                                                            ? 54.0
-                                                            : 30.0;
-                                                        return Stack(
-                                                          clipBehavior:
-                                                              Clip.none,
-                                                          children: [
-                                                            SizedBox.expand(
-                                                              child: Column(
-                                                                crossAxisAlignment:
-                                                                    CrossAxisAlignment
-                                                                        .start,
-                                                                children: [
-                                                                  Padding(
-                                                                    padding:
-                                                                        const EdgeInsets.only(
-                                                                          bottom:
-                                                                              10,
-                                                                        ),
-                                                                    child: Align(
-                                                                      alignment:
-                                                                          Alignment
-                                                                              .center,
-                                                                      child: _buildEditModeDepthCluster(
-                                                                        scale,
-                                                                        scheme,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                  if (!_playVsBot &&
-                                                                      _selectedGambit !=
-                                                                          null)
-                                                                    Align(
-                                                                      alignment:
-                                                                          Alignment
-                                                                              .center,
-                                                                      child: Padding(
-                                                                        padding: const EdgeInsets.only(
-                                                                          bottom:
-                                                                              6,
-                                                                        ),
-                                                                        child: Text(
-                                                                          _selectedGambit!
-                                                                              .name,
-                                                                          style: TextStyle(
-                                                                            fontSize:
-                                                                                13,
-                                                                            fontWeight:
-                                                                                FontWeight.w700,
-                                                                            color:
-                                                                                useMonochrome
-                                                                                ? scheme.onSurface.withValues(
-                                                                                    alpha: 0.86,
-                                                                                  )
-                                                                                : const Color(
-                                                                                    0xFFD8B640,
-                                                                                  ),
+                                                            return Stack(
+                                                              clipBehavior:
+                                                                  Clip.none,
+                                                              children: [
+                                                                SizedBox.expand(
+                                                                  child: Column(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .start,
+                                                                    children: [
+                                                                      Padding(
+                                                                        padding:
+                                                                            const EdgeInsets.only(
+                                                                              bottom:
+                                                                                  10,
+                                                                            ),
+                                                                        child: Align(
+                                                                          alignment:
+                                                                              Alignment.center,
+                                                                          child: _buildEditModeDepthCluster(
+                                                                            scale,
+                                                                            scheme,
                                                                           ),
-                                                                          maxLines:
-                                                                              2,
-                                                                          overflow:
-                                                                              TextOverflow.ellipsis,
                                                                         ),
                                                                       ),
-                                                                    )
-                                                                  else if (!_playVsBot &&
-                                                                      _currentOpening
-                                                                          .isNotEmpty)
-                                                                    Align(
-                                                                      alignment:
-                                                                          Alignment
-                                                                              .center,
-                                                                      child: Padding(
-                                                                        padding: const EdgeInsets.only(
-                                                                          bottom:
-                                                                              6,
-                                                                        ),
-                                                                        child: Text(
-                                                                          _currentOpening,
-                                                                          style: TextStyle(
-                                                                            fontSize:
-                                                                                13,
-                                                                            fontWeight:
-                                                                                FontWeight.w700,
-                                                                            color: scheme.onSurface.withValues(
-                                                                              alpha: 0.72,
+                                                                      if (!_playVsBot &&
+                                                                          _selectedGambit !=
+                                                                              null)
+                                                                        Align(
+                                                                          alignment:
+                                                                              Alignment.center,
+                                                                          child: Padding(
+                                                                            padding: const EdgeInsets.only(
+                                                                              bottom:
+                                                                                  6,
+                                                                            ),
+                                                                            child: Text(
+                                                                              _selectedGambit!
+                                                                                  .name,
+                                                                              style: TextStyle(
+                                                                                fontSize:
+                                                                                    13,
+                                                                                fontWeight:
+                                                                                    FontWeight.w700,
+                                                                                color:
+                                                                                    useMonochrome
+                                                                                    ? scheme.onSurface.withValues(
+                                                                                        alpha: 0.86,
+                                                                                      )
+                                                                                    : const Color(
+                                                                                        0xFFD8B640,
+                                                                                      ),
+                                                                              ),
+                                                                              maxLines:
+                                                                                  2,
+                                                                              overflow:
+                                                                                  TextOverflow.ellipsis,
                                                                             ),
                                                                           ),
-                                                                          maxLines:
-                                                                              2,
-                                                                          overflow:
-                                                                              TextOverflow.ellipsis,
+                                                                        )
+                                                                      else if (!_playVsBot &&
+                                                                          _currentOpening
+                                                                              .isNotEmpty)
+                                                                        Align(
+                                                                          alignment:
+                                                                              Alignment.center,
+                                                                          child: Padding(
+                                                                            padding: const EdgeInsets.only(
+                                                                              bottom:
+                                                                                  6,
+                                                                            ),
+                                                                            child: _buildOpeningLabel(
+                                                                              scale,
+                                                                            ),
+                                                                          ),
                                                                         ),
-                                                                      ),
-                                                                    ),
-                                                                  _buildSuggestedMovesList(
-                                                                    height:
-                                                                        suggestionsHeight,
-                                                                    padding:
-                                                                        _playVsBot
-                                                                        ? const EdgeInsets.fromLTRB(
-                                                                            16,
-                                                                            2,
-                                                                            16,
-                                                                            8,
-                                                                          )
-                                                                        : const EdgeInsets.symmetric(
+                                                                      if (!_playVsBot)
+                                                                        _buildSuggestedMovesList(
+                                                                          height:
+                                                                              suggestionsHeight,
+                                                                          padding:
+                                                                              const EdgeInsets.symmetric(
+                                                                                horizontal:
+                                                                                    0,
+                                                                                vertical:
+                                                                                    8,
+                                                                              ),
+                                                                        ),
+                                                                      if (!_playVsBot)
+                                                                        _buildHistoryBar(
+                                                                          height:
+                                                                              historyHeight,
+                                                                          margin: const EdgeInsets.symmetric(
                                                                             vertical:
-                                                                                10,
-                                                                            horizontal:
-                                                                                20,
+                                                                                6,
+                                                                          ),
+                                                                        ),
+                                                                      const Spacer(),
+                                                                      _buildActionArea(
+                                                                        compactBottom:
+                                                                            8,
+                                                                        horizontal:
+                                                                            0,
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                                if (_hasMoveQualityBanner)
+                                                                  Positioned(
+                                                                    left: 0,
+                                                                    right: 0,
+                                                                    top:
+                                                                        landscapeBannerTop,
+                                                                    child:
+                                                                        _buildMoveQualityBannerOverlay(
+                                                                          isLandscape:
+                                                                              true,
+                                                                        ),
+                                                                  ),
+                                                              ],
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  if (_analysisEditMode)
+                                                    Positioned(
+                                                      left: toolboxLeft,
+                                                      top: toolboxTop,
+                                                      width: toolboxWidth,
+                                                      child:
+                                                          _buildEditModeToolbox(
+                                                            isLandscape: true,
+                                                          ),
+                                                    ),
+                                                ],
                                                                           ),
                                                                   ),
                                                                   if (!_playVsBot)
@@ -9283,7 +9492,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                 inner.maxWidth,
                                                 inner.maxHeight,
                                               );
+                                              final toolboxWidth = min(
+                                                boardSize,
+                                                420.0,
+                                              );
+                                              const double estimatedToolboxHeight =
+                                                  152.0;
+                                              final toolboxTop = max(
+                                                0.0,
+                                                min(
+                                                  boardSize + 12,
+                                                  inner.maxHeight -
+                                                      estimatedToolboxHeight,
+                                                ),
+                                              );
                                               return Stack(
+                                                clipBehavior: Clip.none,
                                                 children: [
                                                   Align(
                                                     alignment:
@@ -9292,27 +9516,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                       key: _boardKey,
                                                       width: boardSize,
                                                       height: boardSize,
-                                                      child: Stack(
-                                                        children: [
-                                                          Opacity(
-                                                            opacity:
-                                                                _boardIntroOpacity(),
-                                                            child: _buildBoard(
-                                                              reverse,
-                                                            ),
-                                                          ),
-                                                          Opacity(
-                                                            opacity:
-                                                                _boardIntroOpacity(),
-                                                            child:
-                                                                _buildAnimatedArrows(
-                                                                  reverse,
-                                                                ),
-                                                          ),
-                                                        ],
+                                                      child: _buildBoardScene(
+                                                        reverse,
                                                       ),
                                                     ),
                                                   ),
+                                                  if (_analysisEditMode)
+                                                    Positioned(
+                                                      left:
+                                                          (inner.maxWidth -
+                                                                      toolboxWidth) /
+                                                                  2,
+                                                      top: toolboxTop,
+                                                      width: toolboxWidth,
+                                                      child:
+                                                          _buildEditModeToolbox(
+                                                            isLandscape: false,
+                                                          ),
+                                                    ),
                                                 ],
                                               );
                                             },
@@ -9393,7 +9614,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         _buildTopMostOverlay(Size(width, height), scale),
                       ],
                     ),
-                  );
+                  )
                 },
               ),
             ),
@@ -10227,13 +10448,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             final canHumanDragPiece = _canHumanInteractWithBoardPiece(p);
             const legalDotBase = Color(0xFF9EA8BA);
 
-            return DragTarget<String>(
+            return DragTarget<_BoardDragPayload>(
               onAcceptWithDetails: (d) {
                 if (_isOpeningSelectionMode && _selectedGambit == null) {
-                  _handleGambitDragDrop(d.data, sq);
+                  final fromSquare = d.data.fromSquare;
+                  if (fromSquare != null) {
+                    _handleGambitDragDrop(fromSquare, sq);
+                  }
                   return;
                 }
-                unawaited(_attemptMove(d.data, sq));
+                final fromSquare = d.data.fromSquare;
+                if (fromSquare != null) {
+                  unawaited(_attemptMove(fromSquare, sq));
+                  return;
+                }
+                if (_analysisEditMode && !_isOpeningSelectionMode) {
+                  _placeEditModePiece(d.data.piece, sq);
+                }
               },
               builder: (context, candidateData, rejectedData) => Container(
                 decoration: BoxDecoration(
@@ -10371,9 +10602,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       if (p != null)
                         Center(
-                          child: Draggable<String>(
+                          child: Draggable<_BoardDragPayload>(
                             maxSimultaneousDrags: canHumanDragPiece ? 1 : 0,
-                            data: sq,
+                            data: _BoardDragPayload.fromBoard(
+                              fromSquare: sq,
+                              piece: p,
+                            ),
                             feedback: _buildPieceGlow(p),
                             onDragStarted: () {
                               if (!canHumanDragPiece) {
@@ -10433,6 +10667,155 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardScene(bool reverse) {
+    return Stack(
+      children: [
+        Opacity(opacity: _boardIntroOpacity(), child: _buildBoard(reverse)),
+        Opacity(
+          opacity: _boardIntroOpacity(),
+          child: _buildAnimatedArrows(reverse),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditToolboxPieceTile(_EditToolboxPiece entry) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: entry.label,
+      waitDuration: const Duration(milliseconds: 400),
+      child: Draggable<_BoardDragPayload>(
+        data: _BoardDragPayload.palette(piece: entry.piece),
+        feedback: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 54,
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFF101621).withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFFFD166).withValues(alpha: 0.55),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: _pieceImage(entry.piece, width: 34, height: 34),
+          ),
+        ),
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              scheme.surface.withValues(alpha: 0.78),
+              const Color(0xFF11161F),
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: scheme.outline.withValues(alpha: 0.24),
+            ),
+          ),
+          child: _pieceImage(entry.piece, width: 30, height: 30),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditModeToolbox({required bool isLandscape}) {
+    final scheme = Theme.of(context).colorScheme;
+    final headerStyle = TextStyle(
+      color: const Color(0xFFFFD166),
+      fontSize: isLandscape ? 12.5 : 13.2,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.18,
+    );
+    final subtitleStyle = TextStyle(
+      color: scheme.onSurface.withValues(alpha: 0.72),
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      height: 1.25,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          isLandscape ? 12 : 14,
+          12,
+          isLandscape ? 12 : 14,
+          12,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F141C).withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFFFD166).withValues(alpha: 0.38),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.30),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Edit toolbox', style: headerStyle),
+                      const SizedBox(height: 2),
+                      Text('Drag any piece onto the board.', style: subtitleStyle),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _confirmCleanEditBoard,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFFFD166),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('Clean'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in _editToolboxPieces)
+                  _buildEditToolboxPieceTile(entry),
+              ],
+            ),
+          ],
         ),
       ),
     );
