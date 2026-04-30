@@ -5,7 +5,7 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-const String puzzleAcademyDisplayFontFamily = 'PixgamerRegular';
+const String puzzleAcademyDisplayFontFamily = 'PixelatedElegance';
 const String puzzleAcademyHudFontFamily = 'PixelatedElegance';
 const String puzzleAcademyCompactFontFamily = 'Cairopixel';
 const String puzzleAcademyIdentityFontFamily = 'PressStart2P';

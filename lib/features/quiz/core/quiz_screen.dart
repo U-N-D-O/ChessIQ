@@ -23,7 +23,7 @@ class _QuizStudyPreview {
   });
 }
 
-const String _quizAcademyDisplayFontFamily = 'PixgamerRegular';
+const String _quizAcademyDisplayFontFamily = 'PixelatedElegance';
 const String _quizAcademyHudFontFamily = 'PixelatedElegance';
 
 class _QuizAcademyPalette {

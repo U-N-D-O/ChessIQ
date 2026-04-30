@@ -37,15 +37,36 @@ The UCI protocol is identical to the desktop version — all analysis logic in `
 
 ---
 
-## Build Test IPA via GitHub (No Apple Login in CI)
+## Build Signed IPA via GitHub
 
-1. Go to GitHub **Actions** → **Build iOS IPA (No Sign)**
-2. Click **Run workflow**
-3. Wait for completion, then download artifact **ChessIQ-ipa-no-sign**
-4. Open Sideloadly and select `ChessIQ.ipa`
-5. Sign with your Apple ID locally in Sideloadly and install to your iPhone
+1. Add the required Apple signing secrets described in
+    [APPLE_APP_STORE_RELEASE.md](../APPLE_APP_STORE_RELEASE.md)
+2. Go to GitHub **Actions** → **Build iOS Signed IPA**
+3. Run it with the exact release tag you want to ship
+4. Wait for completion, then download artifact **ChessIQ-ios-signed-ipa**
+5. Upload `ChessIQ-signed.ipa` to App Store Connect
 
 Notes:
-- This IPA is unsigned by GitHub on purpose; Sideloadly handles local signing.
-- Rebuild whenever you change app code or Stockfish integration.
-- The workflow now compiles and links `libstockfish_ios.a` automatically.
+- The workflow compiles and links `libstockfish_ios.a` automatically.
+- The workflow signs the archive with the Apple Distribution certificate and
+   provisioning profile you supply through GitHub secrets.
+- The build is pinned to the tagged repo commit plus the pinned Stockfish
+   revision recorded in the release guard and corresponding-source files.
+
+---
+
+## Source Pinning
+
+- The mobile Stockfish workflows are pinned to the Stockfish 18 tag `sf_18`
+   at commit `cb3d4ee9b47d0c5aae855b12379378ea1439675c`.
+- The iOS static-library workflow now prepares the renamed
+   `stockfish_main` entrypoint through the committed helper script
+   `tool/prepare_stockfish_ios_entrypoint.sh` instead of hiding the rewrite in
+   an inline one-liner.
+
+---
+
+## App Store Release (Signed)
+
+Use the signed GitHub workflow and release process described in
+[APPLE_APP_STORE_RELEASE.md](../APPLE_APP_STORE_RELEASE.md).

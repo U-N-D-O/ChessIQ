@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/chess/draw_rules.dart';
+import 'package:chessiq/core/constants/legal_links.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/services/engine_service.dart';
@@ -33,6 +34,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 part '../../quiz/core/quiz_academy_surface.dart';
 part '../../quiz/core/quiz_components.dart';
