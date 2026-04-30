@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'move_quality.dart';
 
 enum BoardPerspective { white, black, auto }
@@ -294,6 +296,8 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
   required List<EngineLine> capturedPreMoveLines,
   required double? capturedPreMoveMoverWinProbability,
   required double? capturedPreMoveMoverEvalPawns,
+  String? playedMoveUci,
+  int? requiredPreMoveLineCount,
   PositionAnalysisCacheEntry? preMoveCacheEntry,
   EngineLine? livePostMoveLine,
   bool? livePostMoveWhiteToMove,
@@ -324,6 +328,16 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
   final hasMaturePreMovePrimaryLine =
       resolvedPreMovePrimaryLine != null &&
       resolvedPreMovePrimaryLine.depth >= minimumDepth;
+  final hasDirectPreMoveComparison =
+      playedMoveUci != null &&
+      preMoveLines.any((line) => line.move == playedMoveUci);
+  final normalizedRequiredPreMoveLineCount = requiredPreMoveLineCount == null
+      ? null
+      : math.max(1, requiredPreMoveLineCount);
+  final needsCoveredPreMoveComparison =
+      normalizedRequiredPreMoveLineCount != null &&
+      !hasDirectPreMoveComparison &&
+      preMoveLines.length < normalizedRequiredPreMoveLineCount;
 
   double? preMoveMoverWinProbability;
   double? preMoveMoverEvalPawns;
@@ -379,7 +393,8 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
     postMoveWhiteToMove: resolvedPostMoveWhiteToMove,
     usedPreMoveFallback: usedPreMoveFallback,
     needsPreMoveConfirmation:
-        !hasMaturePreMoveSnapshot && !hasMaturePreMovePrimaryLine,
+        (!hasMaturePreMoveSnapshot && !hasMaturePreMovePrimaryLine) ||
+        needsCoveredPreMoveComparison,
     needsPostMoveConfirmation: !hasMaturePostMoveLine,
   );
 }

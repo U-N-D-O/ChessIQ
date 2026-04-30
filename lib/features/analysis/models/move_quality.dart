@@ -9,7 +9,6 @@ const double moveQualityOversightCaptureThreshold = 0.35;
 const double moveQualityMasterstrokeEvalCapPawns = 4.0;
 const int moveQualityOpeningEquivalentCpGap = 35;
 const int moveQualityEqualPositionEquivalentCpGap = 25;
-const int moveQualityObviousBestMoveCpGap = 10;
 const int moveQualityReasonableAlternativeCpGap = 35;
 const int moveQualityRelativeTieCpGap = 15;
 const double moveQualityNearEqualEvalBandPawns = 0.9;
@@ -196,16 +195,7 @@ class MoveQualityClassificationContext {
   bool get allowSpecialLabels =>
       !insideOpeningExemption && confidence != MoveQualityConfidence.low;
 
-  bool get isObviousBestMove =>
-      !insideOpeningExemption &&
-      !isMateriallyUnbalanced &&
-      isNearEqualPosition &&
-      ((cpGapFromBest != null &&
-              cpGapFromBest! <= moveQualityObviousBestMoveCpGap) ||
-          (playedMoveRank != null &&
-              playedMoveRank == 1 &&
-              cpGapFromBest != null &&
-              cpGapFromBest! <= moveQualityEqualPositionEquivalentCpGap));
+  bool get isObviousBestMove => false;
 
   bool get isMasterstrokeCandidate =>
       allowSpecialLabels &&
@@ -482,9 +472,6 @@ String _equivalenceExplanation(MoveQualityClassificationContext context) {
     final opening = context.currentOpening.trim();
     return opening.isEmpty ? 'Opening theory' : 'Opening: $opening';
   }
-  if (context.isObviousBestMove) {
-    return 'Obvious equal-position move. It keeps the game on track, but simple top-line moves do not build charge.';
-  }
   if (context.playedMoveRank == 1) {
     return 'Near-best move in an equal position.';
   }
@@ -522,11 +509,8 @@ MoveQualityAssessment? _engineLineAssessment(
     return _assessment(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.optimal,
       context,
-      explanation: context.insideOpeningExemption || context.isObviousBestMove
+      explanation: context.insideOpeningExemption
           ? _equivalenceExplanation(context)
-          : null,
-      scoringSuppressedReason: context.isObviousBestMove
-          ? MoveQualityScoringSuppressionReason.obviousMove
           : null,
     );
   }
@@ -621,9 +605,6 @@ MoveQualityAssessment classifyMoveQuality(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.solid,
       context,
       explanation: _equivalenceExplanation(context),
-      scoringSuppressedReason: context.isObviousBestMove
-          ? MoveQualityScoringSuppressionReason.obviousMove
-          : null,
     );
   }
 

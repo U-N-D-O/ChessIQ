@@ -205,6 +205,110 @@ void main() {
         expect(resolved.postMoveWhiteToMove, isFalse);
       },
     );
+
+    test(
+      'defers publication when the played move is missing from a thin pre-move line set',
+      () {
+        final preMoveCache = const PositionAnalysisCacheEntry(fen: 'fen pre')
+            .mergedWithPrimaryUpdate(
+              _engineUpdate(
+                requestId: 'pre-thin-1',
+                fen: 'fen pre',
+                whiteToMove: true,
+                depth: 12,
+                evalCp: 55,
+                move: 'd2d4',
+                role: EngineRequestRole.backgroundConfirmation,
+              ),
+            )
+            .mergedWithAnalysisLines(<EngineLine>[
+              EngineLine('d2d4', 55, 12, 1),
+            ]);
+        final postMoveCache = const PositionAnalysisCacheEntry(fen: 'fen post')
+            .mergedWithPrimaryUpdate(
+              _engineUpdate(
+                requestId: 'post-thin-1',
+                fen: 'fen post',
+                whiteToMove: false,
+                depth: 12,
+                evalCp: 20,
+                move: 'd7d5',
+                role: EngineRequestRole.backgroundConfirmation,
+              ),
+            );
+
+        final unresolved = resolveMoveQualityEvidence(
+          moverIsWhite: true,
+          capturedPreMoveLines: <EngineLine>[EngineLine('d2d4', 55, 12, 1)],
+          capturedPreMoveMoverWinProbability: 0.55,
+          capturedPreMoveMoverEvalPawns: 0.55,
+          playedMoveUci: 'e2e4',
+          requiredPreMoveLineCount: 4,
+          preMoveCacheEntry: preMoveCache,
+          livePostMoveLine: null,
+          livePostMoveWhiteToMove: null,
+          postMoveCacheEntry: postMoveCache,
+          minimumDepth: 10,
+        );
+
+        expect(unresolved.needsPreMoveConfirmation, isTrue);
+        expect(unresolved.isReadyToPublish, isFalse);
+      },
+    );
+
+    test(
+      'publishes once the played move is covered by the pre-move comparison set',
+      () {
+        final preMoveCache = const PositionAnalysisCacheEntry(fen: 'fen pre')
+            .mergedWithPrimaryUpdate(
+              _engineUpdate(
+                requestId: 'pre-covered-1',
+                fen: 'fen pre',
+                whiteToMove: true,
+                depth: 12,
+                evalCp: 55,
+                move: 'e2e4',
+                role: EngineRequestRole.backgroundConfirmation,
+              ),
+            )
+            .mergedWithAnalysisLines(<EngineLine>[
+              EngineLine('e2e4', 55, 12, 1),
+              EngineLine('d2d4', 48, 12, 2),
+            ]);
+        final postMoveCache = const PositionAnalysisCacheEntry(fen: 'fen post')
+            .mergedWithPrimaryUpdate(
+              _engineUpdate(
+                requestId: 'post-covered-1',
+                fen: 'fen post',
+                whiteToMove: false,
+                depth: 12,
+                evalCp: 20,
+                move: 'd7d5',
+                role: EngineRequestRole.backgroundConfirmation,
+              ),
+            );
+
+        final resolved = resolveMoveQualityEvidence(
+          moverIsWhite: true,
+          capturedPreMoveLines: <EngineLine>[
+            EngineLine('e2e4', 55, 12, 1),
+            EngineLine('d2d4', 48, 12, 2),
+          ],
+          capturedPreMoveMoverWinProbability: 0.55,
+          capturedPreMoveMoverEvalPawns: 0.55,
+          playedMoveUci: 'e2e4',
+          requiredPreMoveLineCount: 4,
+          preMoveCacheEntry: preMoveCache,
+          livePostMoveLine: null,
+          livePostMoveWhiteToMove: null,
+          postMoveCacheEntry: postMoveCache,
+          minimumDepth: 10,
+        );
+
+        expect(resolved.needsPreMoveConfirmation, isFalse);
+        expect(resolved.isReadyToPublish, isTrue);
+      },
+    );
   });
 
   group('MoveRecord session grading metadata', () {

@@ -139,13 +139,11 @@ class _EditToolboxPiece {
 }
 
 const List<_EditToolboxPiece> _editToolboxPieces = <_EditToolboxPiece>[
-  _EditToolboxPiece(piece: 'k_w', label: 'White king'),
   _EditToolboxPiece(piece: 'q_w', label: 'White queen'),
   _EditToolboxPiece(piece: 't_w', label: 'White rook'),
   _EditToolboxPiece(piece: 'b_w', label: 'White bishop'),
   _EditToolboxPiece(piece: 'n_w', label: 'White knight'),
   _EditToolboxPiece(piece: 'p_w', label: 'White pawn'),
-  _EditToolboxPiece(piece: 'k_b', label: 'Black king'),
   _EditToolboxPiece(piece: 'q_b', label: 'Black queen'),
   _EditToolboxPiece(piece: 't_b', label: 'Black rook'),
   _EditToolboxPiece(piece: 'b_b', label: 'Black bishop'),
@@ -216,7 +214,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   final List<_CreditsBackdropDot> _creditsBackdropDots =
       <_CreditsBackdropDot>[];
   final Random _creditsBackdropRandom = Random();
-  final bool _creditsDialogOpen = false;
+  bool _creditsDialogOpen = false;
   _CreditsVisualMode _creditsVisualMode = _CreditsVisualMode.modern;
   double _creditsVisualElapsed = 0.0;
   bool _menuDotsPreviouslyColliding = false;
@@ -510,6 +508,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     false,
   );
   bool _analysisEditMode = false;
+  String? _selectedEditToolboxPiece;
   Timer? _editModeHintTimer;
   String? _editModeHintText;
   Timer? _moveQualityOverlayTimer;
@@ -640,6 +639,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _editModeHintText = null;
       });
     });
+  }
+
+  void _setAnalysisEditMode(bool enabled) {
+    setState(() {
+      _analysisEditMode = enabled;
+      _selectedEditToolboxPiece = null;
+      _holdSelectedFrom = null;
+      _gambitSelectedFrom = null;
+      _legalTargets.clear();
+      _gambitAvailableTargets.clear();
+      _editModeHintText = enabled ? 'Edit mode on' : 'Edit mode off';
+    });
+    _scheduleEditModeHintHide();
   }
 
   void _startIdleInterstitialTimer() {
@@ -3280,6 +3292,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return MoveQualityConfidence.low;
   }
 
+  int _requiredPreMoveComparisonLineCount(int? totalLegalMoveCount) {
+    final legalMoveCount = totalLegalMoveCount ?? _moveQualityGradingMultiPv;
+    return max(1, min(legalMoveCount, _moveQualityGradingMultiPv));
+  }
+
   bool _isBoardThemeUnlocked(BoardThemeMode mode) {
     return AppThemeProvider.isBoardThemeIndexUnlocked(
       mode.index,
@@ -4034,7 +4051,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final targetWhiteToMove =
         whiteToMove ?? pending.postMoveWhiteToMove ?? !pending.moverIsWhite;
+    final isPreMoveConfirmation = targetFen == pending.preMoveFen;
+    final confirmationMultiPv = isPreMoveConfirmation
+        ? _requiredPreMoveComparisonLineCount(pending.totalLegalMoveCount)
+        : 1;
     late final EngineSearchHandle confirmationHandle;
+    final confirmationLines = <int, EngineLine>{};
     var consumedPrimaryLine = false;
     confirmationHandle = engine.scheduleSearch(
       EngineRequestSpec(
@@ -4044,13 +4066,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         role: EngineRequestRole.backgroundConfirmation,
         fen: targetFen,
         whiteToMove: targetWhiteToMove,
-        multiPv: 1,
+        multiPv: confirmationMultiPv,
         depth: _moveQualityGradingDepth,
         timeout: Duration(milliseconds: _playVsBot ? 900 : 1400),
         preCommands: _analysisEngineRequestCommands,
       ),
       onUpdate: (update) {
         _recordPrimaryEngineUpdate(update);
+        confirmationLines[update.line.multiPv] = update.line;
+        final orderedConfirmationLines = confirmationLines.values.toList()
+          ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+        _recordPositionAnalysisLines(update.request.fen, orderedConfirmationLines);
+        if (isPreMoveConfirmation) {
+          return;
+        }
         if (!update.isPrimaryVariation || consumedPrimaryLine) {
           return;
         }
@@ -4072,7 +4101,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     _backgroundMoveQualityConfirmationsByFen[targetFen] = confirmationHandle;
     unawaited(
-      confirmationHandle.result.whenComplete(() {
+      confirmationHandle.result.then((result) {
+        if (!isPreMoveConfirmation) {
+          return;
+        }
+        if (result.lines.isNotEmpty) {
+          _recordPositionAnalysisLines(targetFen, result.lines);
+        }
+        final activePending = _pendingMoveQualityGrading;
+        if (activePending?.moveIndex != pending.moveIndex ||
+            activePending?.uci != pending.uci) {
+          return;
+        }
+        _scheduleMoveQualityGrading(pending);
+      }).whenComplete(() {
         if (identical(
           _backgroundMoveQualityConfirmationsByFen[targetFen],
           confirmationHandle,
@@ -4276,6 +4318,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       capturedPreMoveLines: pending.preMoveLines,
       capturedPreMoveMoverWinProbability: pending.preMoveMoverWinProbability,
       capturedPreMoveMoverEvalPawns: pending.preMoveMoverEvalPawns,
+      playedMoveUci: pending.uci,
+      requiredPreMoveLineCount: _requiredPreMoveComparisonLineCount(
+        pending.totalLegalMoveCount,
+      ),
       preMoveCacheEntry: _cachedPositionAnalysisForFen(pending.preMoveFen),
       livePostMoveLine: livePostMoveLine,
       livePostMoveWhiteToMove: livePostMoveWhiteToMove,
@@ -6836,6 +6882,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _handleHoldTap(String square) {
     if (_playVsBot && !_isHumanTurnInBotGame) return;
     if (_analysisEditMode && !_isOpeningSelectionMode) {
+      final selectedPalettePiece = _selectedEditToolboxPiece;
+      if (selectedPalettePiece != null) {
+        _placeEditModePiece(selectedPalettePiece, square);
+        return;
+      }
       final tappedPiece = boardState[square];
       if (_holdSelectedFrom == null) {
         if (tappedPiece != null) {
@@ -7006,13 +7057,27 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!_analysisEditMode || _isOpeningSelectionMode) {
       return;
     }
+    if (piece == 'k_w' || piece == 'k_b') {
+      return;
+    }
     final nextBoardState = Map<String, String>.from(boardState);
     nextBoardState[square] = piece;
-    _applyManualBoardEdit(
-      nextBoardState,
-      hintText:
-          '${_editToolboxLabelForPiece(piece)} placed on ${square.toUpperCase()}',
-    );
+    _applyManualBoardEdit(nextBoardState);
+  }
+
+  void _toggleEditToolboxSelection(String piece) {
+    if (!_analysisEditMode || _isOpeningSelectionMode) {
+      return;
+    }
+    setState(() {
+      _selectedEditToolboxPiece = _selectedEditToolboxPiece == piece
+          ? null
+          : piece;
+      _holdSelectedFrom = null;
+      _gambitSelectedFrom = null;
+      _legalTargets.clear();
+      _gambitAvailableTargets.clear();
+    });
   }
 
   Future<void> _confirmCleanEditBoard() async {
@@ -7022,9 +7087,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Clean board?'),
+          title: const Text('Clear board?'),
           content: const Text(
-            'This removes every piece except the kings. Continue?',
+            'This clears the board so only the kings stand on e1 and e8. Continue?',
           ),
           actions: [
             TextButton(
@@ -7048,15 +7113,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    final nextBoardState = <String, String>{
-      for (final entry in boardState.entries)
-        if (entry.value.startsWith('k')) entry.key: entry.value,
-    };
+    const nextBoardState = <String, String>{'e1': 'k_w', 'e8': 'k_b'};
 
-    _applyManualBoardEdit(
-      nextBoardState,
-      hintText: 'Board cleaned to kings only',
-    );
+    _applyManualBoardEdit(nextBoardState);
   }
 
   void _refreshGambitPreview() {
@@ -9152,6 +9211,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   final double height = maxHeight;
 
                   final double scale = (width / 430.0).clamp(0.8, 1.4);
+                    const double portraitToolboxGap = 12.0;
+                    final portraitBoardRect =
+                      !isLandscape && _analysisEditMode
+                      ? _boardRectInScene()
+                      : null;
+                    final portraitToolboxWidth = portraitBoardRect == null
+                      ? null
+                      : min(portraitBoardRect.width, 420.0);
 
                   return SizedBox(
                     key: _sceneKey,
@@ -9193,43 +9260,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                   inner.maxHeight,
                                                 ),
                                               );
-                                              const double toolboxWidth = 184.0;
-                                              const double estimatedToolboxHeight =
-                                                  208.0;
-                                              final boardLeft =
-                                                  evalBarW +
-                                                  max(
-                                                    0.0,
-                                                    (boardSectionWidth -
-                                                                evalBarW -
-                                                                boardSize) /
-                                                            2,
-                                                  );
-                                              final boardTop = max(
-                                                0.0,
-                                                (inner.maxHeight - boardSize) / 2,
-                                              );
-                                              final toolboxLeft = max(
-                                                0.0,
-                                                min(
-                                                  boardLeft + boardSize + 12,
-                                                  inner.maxWidth - toolboxWidth,
-                                                ),
-                                              );
-                                              final toolboxTop = max(
-                                                0.0,
-                                                min(
-                                                  boardTop,
-                                                  inner.maxHeight -
-                                                      estimatedToolboxHeight,
-                                                ),
-                                              );
                                               return Stack(
                                                 clipBehavior: Clip.none,
                                                 children: [
                                                   Row(
                                                     crossAxisAlignment:
-                                                        CrossAxisAlignment.stretch,
+                                                        CrossAxisAlignment
+                                                            .stretch,
                                                     children: [
                                                       Expanded(
                                                         flex: 7,
@@ -9243,7 +9280,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                 SizedBox(
                                                                   key:
                                                                       _evalBarVerticalKey,
-                                                                  width: evalBarW,
+                                                                  width:
+                                                                      evalBarW,
                                                                   height:
                                                                       boardSize,
                                                                   child: Center(
@@ -9255,19 +9293,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                 ),
                                                                 Expanded(
                                                                   child: Center(
-                                                                    child:
-                                                                        SizedBox(
-                                                                          key:
-                                                                              _boardKey,
-                                                                          width:
-                                                                              boardSize,
-                                                                          height:
-                                                                              boardSize,
-                                                                          child:
-                                                                              _buildBoardScene(
-                                                                                reverse,
-                                                                              ),
-                                                                        ),
+                                                                    child: SizedBox(
+                                                                      key:
+                                                                          _boardKey,
+                                                                      width:
+                                                                          boardSize,
+                                                                      height:
+                                                                          boardSize,
+                                                                      child: _buildBoardScene(
+                                                                        reverse,
+                                                                      ),
+                                                                    ),
                                                                   ),
                                                                 ),
                                                               ],
@@ -9279,189 +9315,155 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                       SizedBox(
                                                         width: sideWidth,
                                                         child: LayoutBuilder(
-                                                          builder: (context, sideConstraints) {
-                                                        final suggestionsHeight =
-                                                            (sideConstraints
-                                                                        .maxHeight *
-                                                                    0.46)
-                                                                .clamp(
-                                                                  96.0,
-                                                                  250.0,
-                                                                );
-                                                            return Stack(
-                                                              clipBehavior:
-                                                                  Clip.none,
-                                                              children: [
-                                                                SizedBox.expand(
-                                                                  child: Column(
-                                                                    crossAxisAlignment:
-                                                                        CrossAxisAlignment
-                                                                            .start,
-                                                                    children: [
-                                                                      Padding(
-                                                                        padding:
-                                                                            const EdgeInsets.only(
-                                                                              bottom:
-                                                                                  10,
+                                                          builder:
+                                                              (
+                                                                context,
+                                                                sideConstraints,
+                                                              ) {
+                                                                final suggestionsHeight =
+                                                                    (sideConstraints.maxHeight *
+                                                                            0.46)
+                                                                        .clamp(
+                                                                          96.0,
+                                                                          250.0,
+                                                                        );
+                                                                final historyHeight =
+                                                                    (sideConstraints.maxHeight *
+                                                                            0.16)
+                                                                        .clamp(
+                                                                          46.0,
+                                                                          72.0,
+                                                                        );
+                                                                final hasLandscapeTitle =
+                                                                    !_playVsBot &&
+                                                                    (_selectedGambit !=
+                                                                            null ||
+                                                                        _currentOpening
+                                                                            .isNotEmpty);
+                                                                final landscapeBannerTop =
+                                                                    _playVsBot
+                                                                    ? 10.0
+                                                                    : hasLandscapeTitle
+                                                                    ? 54.0
+                                                                    : 30.0;
+                                                                return Stack(
+                                                                  clipBehavior:
+                                                                      Clip.none,
+                                                                  children: [
+                                                                    SizedBox.expand(
+                                                                      child: Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          Padding(
+                                                                            padding: const EdgeInsets.only(
+                                                                              bottom: 10,
                                                                             ),
-                                                                        child: Align(
-                                                                          alignment:
-                                                                              Alignment.center,
-                                                                          child: _buildEditModeDepthCluster(
-                                                                            scale,
-                                                                            scheme,
+                                                                            child: Align(
+                                                                              alignment: Alignment.center,
+                                                                              child: _buildEditModeDepthCluster(
+                                                                                scale,
+                                                                                scheme,
+                                                                              ),
+                                                                            ),
                                                                           ),
+                                                                          if (!_playVsBot &&
+                                                                              _selectedGambit !=
+                                                                                  null)
+                                                                            Align(
+                                                                              alignment: Alignment.center,
+                                                                              child: Padding(
+                                                                                padding: const EdgeInsets.only(
+                                                                                  bottom: 6,
+                                                                                ),
+                                                                                child: Text(
+                                                                                  _selectedGambit!.name,
+                                                                                  style: TextStyle(
+                                                                                    fontSize: 13,
+                                                                                    fontWeight: FontWeight.w700,
+                                                                                    color: useMonochrome
+                                                                                        ? scheme.onSurface.withValues(
+                                                                                            alpha: 0.86,
+                                                                                          )
+                                                                                        : const Color(
+                                                                                            0xFFD8B640,
+                                                                                          ),
+                                                                                  ),
+                                                                                  maxLines: 2,
+                                                                                  overflow: TextOverflow.ellipsis,
+                                                                                ),
+                                                                              ),
+                                                                            )
+                                                                          else if (!_playVsBot &&
+                                                                              _currentOpening.isNotEmpty)
+                                                                            Align(
+                                                                              alignment: Alignment.center,
+                                                                              child: Padding(
+                                                                                padding: const EdgeInsets.only(
+                                                                                  bottom: 6,
+                                                                                ),
+                                                                                child: _buildOpeningLabel(
+                                                                                  scale,
+                                                                                ),
+                                                                              ),
+                                                                            ),
+                                                                          if (!_playVsBot)
+                                                                            _buildSuggestedMovesList(
+                                                                              height: suggestionsHeight,
+                                                                              padding: const EdgeInsets.symmetric(
+                                                                                horizontal: 0,
+                                                                                vertical: 8,
+                                                                              ),
+                                                                            ),
+                                                                          if (!_playVsBot)
+                                                                            _buildHistoryBar(
+                                                                              height: historyHeight,
+                                                                              margin: const EdgeInsets.symmetric(
+                                                                                vertical: 6,
+                                                                              ),
+                                                                            ),
+                                                                          const Spacer(),
+                                                                          _buildActionArea(
+                                                                            compactBottom:
+                                                                                8,
+                                                                            horizontal:
+                                                                                0,
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+                                                                    if (_analysisEditMode)
+                                                                      Align(
+                                                                        alignment: Alignment.center,
+                                                                        child: SizedBox(
+                                                                          width: min(
+                                                                            sideConstraints.maxWidth,
+                                                                            220.0,
+                                                                          ),
+                                                                          child:
+                                                                              _buildEditModeToolbox(
+                                                                                isLandscape: true,
+                                                                              ),
                                                                         ),
                                                                       ),
-                                                                      if (!_playVsBot &&
-                                                                          _selectedGambit !=
-                                                                              null)
-                                                                        Align(
-                                                                          alignment:
-                                                                              Alignment.center,
-                                                                          child: Padding(
-                                                                            padding: const EdgeInsets.only(
-                                                                              bottom:
-                                                                                  6,
-                                                                            ),
-                                                                            child: Text(
-                                                                              _selectedGambit!
-                                                                                  .name,
-                                                                              style: TextStyle(
-                                                                                fontSize:
-                                                                                    13,
-                                                                                fontWeight:
-                                                                                    FontWeight.w700,
-                                                                                color:
-                                                                                    useMonochrome
-                                                                                    ? scheme.onSurface.withValues(
-                                                                                        alpha: 0.86,
-                                                                                      )
-                                                                                    : const Color(
-                                                                                        0xFFD8B640,
-                                                                                      ),
-                                                                              ),
-                                                                              maxLines:
-                                                                                  2,
-                                                                              overflow:
-                                                                                  TextOverflow.ellipsis,
-                                                                            ),
-                                                                          ),
-                                                                        )
-                                                                      else if (!_playVsBot &&
-                                                                          _currentOpening
-                                                                              .isNotEmpty)
-                                                                        Align(
-                                                                          alignment:
-                                                                              Alignment.center,
-                                                                          child: Padding(
-                                                                            padding: const EdgeInsets.only(
-                                                                              bottom:
-                                                                                  6,
-                                                                            ),
-                                                                            child: _buildOpeningLabel(
-                                                                              scale,
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      if (!_playVsBot)
-                                                                        _buildSuggestedMovesList(
-                                                                          height:
-                                                                              suggestionsHeight,
-                                                                          padding:
-                                                                              const EdgeInsets.symmetric(
-                                                                                horizontal:
-                                                                                    0,
-                                                                                vertical:
-                                                                                    8,
-                                                                              ),
-                                                                        ),
-                                                                      if (!_playVsBot)
-                                                                        _buildHistoryBar(
-                                                                          height:
-                                                                              historyHeight,
-                                                                          margin: const EdgeInsets.symmetric(
-                                                                            vertical:
-                                                                                6,
-                                                                          ),
-                                                                        ),
-                                                                      const Spacer(),
-                                                                      _buildActionArea(
-                                                                        compactBottom:
-                                                                            8,
-                                                                        horizontal:
+                                                                    if (_hasMoveQualityBanner)
+                                                                      Positioned(
+                                                                        left: 0,
+                                                                        right:
                                                                             0,
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                ),
-                                                                if (_hasMoveQualityBanner)
-                                                                  Positioned(
-                                                                    left: 0,
-                                                                    right: 0,
-                                                                    top:
-                                                                        landscapeBannerTop,
-                                                                    child:
-                                                                        _buildMoveQualityBannerOverlay(
+                                                                        top:
+                                                                            landscapeBannerTop,
+                                                                        child: _buildMoveQualityBannerOverlay(
                                                                           isLandscape:
                                                                               true,
                                                                         ),
-                                                                  ),
-                                                              ],
-                                                            );
-                                                          },
+                                                                      ),
+                                                                  ],
+                                                                );
+                                                              },
                                                         ),
                                                       ),
                                                     ],
-                                                  ),
-                                                  if (_analysisEditMode)
-                                                    Positioned(
-                                                      left: toolboxLeft,
-                                                      top: toolboxTop,
-                                                      width: toolboxWidth,
-                                                      child:
-                                                          _buildEditModeToolbox(
-                                                            isLandscape: true,
-                                                          ),
-                                                    ),
-                                                ],
-                                                                          ),
-                                                                  ),
-                                                                  if (!_playVsBot)
-                                                                    _buildHistoryBar(
-                                                                      height:
-                                                                          historyHeight,
-                                                                      margin: const EdgeInsets.symmetric(
-                                                                        vertical:
-                                                                            6,
-                                                                      ),
-                                                                    ),
-                                                                  const Spacer(),
-                                                                  _buildActionArea(
-                                                                    compactBottom:
-                                                                        8,
-                                                                    horizontal:
-                                                                        0,
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                            if (_hasMoveQualityBanner)
-                                                              Positioned(
-                                                                left: 0,
-                                                                right: 0,
-                                                                top:
-                                                                    landscapeBannerTop,
-                                                                child:
-                                                                    _buildMoveQualityBannerOverlay(
-                                                                      isLandscape:
-                                                                          true,
-                                                                    ),
-                                                              ),
-                                                          ],
-                                                        );
-                                                      },
-                                                    ),
                                                   ),
                                                 ],
                                               );
@@ -9492,49 +9494,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                 inner.maxWidth,
                                                 inner.maxHeight,
                                               );
-                                              final toolboxWidth = min(
-                                                boardSize,
-                                                420.0,
-                                              );
-                                              const double estimatedToolboxHeight =
-                                                  152.0;
-                                              final toolboxTop = max(
-                                                0.0,
-                                                min(
-                                                  boardSize + 12,
-                                                  inner.maxHeight -
-                                                      estimatedToolboxHeight,
-                                                ),
-                                              );
-                                              return Stack(
-                                                clipBehavior: Clip.none,
-                                                children: [
-                                                  Align(
-                                                    alignment:
-                                                        Alignment.topCenter,
-                                                    child: SizedBox(
-                                                      key: _boardKey,
-                                                      width: boardSize,
-                                                      height: boardSize,
-                                                      child: _buildBoardScene(
-                                                        reverse,
-                                                      ),
-                                                    ),
+                                              return Align(
+                                                alignment: Alignment.topCenter,
+                                                child: SizedBox(
+                                                  key: _boardKey,
+                                                  width: boardSize,
+                                                  height: boardSize,
+                                                  child: _buildBoardScene(
+                                                    reverse,
                                                   ),
-                                                  if (_analysisEditMode)
-                                                    Positioned(
-                                                      left:
-                                                          (inner.maxWidth -
-                                                                      toolboxWidth) /
-                                                                  2,
-                                                      top: toolboxTop,
-                                                      width: toolboxWidth,
-                                                      child:
-                                                          _buildEditModeToolbox(
-                                                            isLandscape: false,
-                                                          ),
-                                                    ),
-                                                ],
+                                                ),
                                               );
                                             },
                                           ),
@@ -9604,6 +9573,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               ),
                             ),
                           ),
+                        if (!isLandscape &&
+                            _analysisEditMode &&
+                            portraitBoardRect != null &&
+                            portraitToolboxWidth != null)
+                          Positioned(
+                            left:
+                                portraitBoardRect.center.dx -
+                                (portraitToolboxWidth / 2),
+                            top: portraitBoardRect.bottom +
+                                portraitToolboxGap,
+                            width: portraitToolboxWidth,
+                            child: _buildEditModeToolbox(
+                              isLandscape: false,
+                            ),
+                          ),
                         _buildSuggestionLaunchOverlay(),
                         _buildButtonRippleOverlay(),
                         _buildStoreCoinGainOverlay(),
@@ -9614,7 +9598,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         _buildTopMostOverlay(Size(width, height), scale),
                       ],
                     ),
-                  )
+                  );
                 },
               ),
             ),
@@ -10079,17 +10063,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 height: 20 * scale,
                 child: IconButton(
                   onPressed: () {
-                    setState(() {
-                      _analysisEditMode = !_analysisEditMode;
-                      _holdSelectedFrom = null;
-                      _gambitSelectedFrom = null;
-                      _legalTargets.clear();
-                      _gambitAvailableTargets.clear();
-                      _editModeHintText = _analysisEditMode
-                          ? 'Edit mode on'
-                          : 'Edit mode off';
-                    });
-                    _scheduleEditModeHintHide();
+                    _setAnalysisEditMode(!_analysisEditMode);
                   },
                   icon: Text(
                     _analysisEditMode ? '🛠️' : '🔒',
@@ -10684,8 +10658,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildEditToolboxPieceTile(_EditToolboxPiece entry) {
+  Widget _buildEditToolboxPieceTile(
+    _EditToolboxPiece entry, {
+    required double tileSize,
+    required double pieceSize,
+    required double feedbackSize,
+  }) {
     final scheme = Theme.of(context).colorScheme;
+    final isSelected = _selectedEditToolboxPiece == entry.piece;
+    final borderRadius = tileSize >= 60 ? 16.0 : 12.0;
 
     return Tooltip(
       message: entry.label,
@@ -10695,12 +10676,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         feedback: Material(
           color: Colors.transparent,
           child: Container(
-            width: 54,
-            height: 54,
+            width: feedbackSize,
+            height: feedbackSize,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: const Color(0xFF101621).withValues(alpha: 0.94),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(borderRadius + 2),
               border: Border.all(
                 color: const Color(0xFFFFD166).withValues(alpha: 0.55),
               ),
@@ -10712,24 +10693,50 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 ),
               ],
             ),
-            child: _pieceImage(entry.piece, width: 34, height: 34),
+            child: _pieceImage(
+              entry.piece,
+              width: pieceSize + 6,
+              height: pieceSize + 6,
+            ),
           ),
         ),
-        child: Container(
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              scheme.surface.withValues(alpha: 0.78),
-              const Color(0xFF11161F),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _toggleEditToolboxSelection(entry.piece),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            width: tileSize,
+            height: tileSize,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Color.alphaBlend(
+                      const Color(0xFFFFD166).withValues(alpha: 0.18),
+                      const Color(0xFF11161F),
+                    )
+                  : Color.alphaBlend(
+                      scheme.surface.withValues(alpha: 0.78),
+                      const Color(0xFF11161F),
+                    ),
+              borderRadius: BorderRadius.circular(borderRadius),
+              border: Border.all(
+                color: isSelected
+                    ? const Color(0xFFFFD166).withValues(alpha: 0.88)
+                    : scheme.outline.withValues(alpha: 0.24),
+                width: isSelected ? 1.4 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFFFD166).withValues(alpha: 0.18),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : const <BoxShadow>[],
             ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: scheme.outline.withValues(alpha: 0.24),
-            ),
+            child: _pieceImage(entry.piece, width: pieceSize, height: pieceSize),
           ),
-          child: _pieceImage(entry.piece, width: 30, height: 30),
         ),
       ),
     );
@@ -10737,6 +10744,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Widget _buildEditModeToolbox({required bool isLandscape}) {
     final scheme = Theme.of(context).colorScheme;
+    final selectedPiece = _selectedEditToolboxPiece;
+    final selectedPieceMessage = selectedPiece == null
+      ? null
+      : '${_editToolboxLabelForPiece(selectedPiece)} selected. Tap squares to place it.';
+    final whitePieces = _editToolboxPieces
+        .where((entry) => entry.piece.endsWith('_w'))
+        .toList(growable: false);
+    final blackPieces = _editToolboxPieces
+        .where((entry) => entry.piece.endsWith('_b'))
+        .toList(growable: false);
     final headerStyle = TextStyle(
       color: const Color(0xFFFFD166),
       fontSize: isLandscape ? 12.5 : 13.2,
@@ -10745,9 +10762,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     final subtitleStyle = TextStyle(
       color: scheme.onSurface.withValues(alpha: 0.72),
-      fontSize: 11,
+      fontSize: isLandscape ? 10.2 : 10.6,
       fontWeight: FontWeight.w600,
-      height: 1.25,
+      height: 1.1,
+    );
+    final sectionStyle = TextStyle(
+      color: scheme.onSurface.withValues(alpha: 0.78),
+      fontSize: isLandscape ? 10.1 : 10.4,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.32,
     );
 
     return Material(
@@ -10755,9 +10778,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       child: Container(
         padding: EdgeInsets.fromLTRB(
           isLandscape ? 12 : 14,
-          12,
+          isLandscape ? 10 : 12,
           isLandscape ? 12 : 14,
-          12,
+          isLandscape ? 10 : 12,
         ),
         decoration: BoxDecoration(
           color: const Color(0xFF0F141C).withValues(alpha: 0.96),
@@ -10774,48 +10797,154 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Edit toolbox', style: headerStyle),
-                      const SizedBox(height: 2),
-                      Text('Drag any piece onto the board.', style: subtitleStyle),
-                    ],
-                  ),
-                ),
-                TextButton(
-                  onPressed: _confirmCleanEditBoard,
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFFFD166),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
+        child: LayoutBuilder(
+          builder: (context, toolboxConstraints) {
+          final sectionSpacing = isLandscape ? 8.0 : 8.0;
+            final columnsPerRow = isLandscape ? 3 : 5;
+          final widthBasedTileSize = ((toolboxConstraints.maxWidth -
+                (sectionSpacing * (columnsPerRow - 1))) /
+              columnsPerRow)
+            .clamp(isLandscape ? 48.0 : 48.0, isLandscape ? 60.0 : 68.0)
+            .toDouble();
+          final maxHeight = toolboxConstraints.maxHeight;
+          final fixedHeightBudget =
+            (selectedPieceMessage == null ? 74.0 : 92.0) +
+            18.0 +
+            18.0 +
+            8.0 +
+            (isLandscape ? sectionSpacing * 3 : sectionSpacing) +
+            (isLandscape ? 20.0 : 0.0);
+          final heightBasedTileSize = maxHeight.isFinite
+            ? ((maxHeight - fixedHeightBudget) / (isLandscape ? 4 : 2))
+                .clamp(isLandscape ? 44.0 : 48.0, isLandscape ? 60.0 : 68.0)
+                .toDouble()
+            : widthBasedTileSize;
+          final tileSize = min(widthBasedTileSize, heightBasedTileSize)
+                .toDouble();
+            final pieceSize = (tileSize * (isLandscape ? 0.62 : 0.60))
+                .clamp(30.0, 42.0)
+                .toDouble();
+            final feedbackSize = (tileSize + (isLandscape ? 10.0 : 8.0))
+                .clamp(56.0, 78.0)
+                .toDouble();
+
+            List<List<_EditToolboxPiece>> buildRows(
+              List<_EditToolboxPiece> pieces,
+            ) {
+              if (!isLandscape) {
+                return <List<_EditToolboxPiece>>[pieces];
+              }
+              return <List<_EditToolboxPiece>>[
+                pieces.take(3).toList(growable: false),
+                pieces.skip(3).toList(growable: false),
+              ];
+            }
+
+            Widget buildPieceSection(
+              String label,
+              List<_EditToolboxPiece> pieces,
+            ) {
+              final rows = buildRows(pieces);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label, style: sectionStyle),
+                  const SizedBox(height: 8),
+                  for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (int pieceIndex = 0;
+                            pieceIndex < rows[rowIndex].length;
+                            pieceIndex++) ...[
+                          _buildEditToolboxPieceTile(
+                            rows[rowIndex][pieceIndex],
+                            tileSize: tileSize,
+                            pieceSize: pieceSize,
+                            feedbackSize: feedbackSize,
+                          ),
+                          if (pieceIndex < rows[rowIndex].length - 1)
+                            SizedBox(width: sectionSpacing),
+                        ],
+                      ],
                     ),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: const Text('Clean'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+                    if (rowIndex < rows.length - 1)
+                      SizedBox(height: sectionSpacing),
+                  ],
+                ],
+              );
+            }
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final entry in _editToolboxPieces)
-                  _buildEditToolboxPieceTile(entry),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Edit toolbox', style: headerStyle),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: _confirmCleanEditBoard,
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFFFFD166),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              child: const Text('Clear'),
+                            ),
+                          ),
+                          if (selectedPieceMessage != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              selectedPieceMessage,
+                              style: subtitleStyle,
+                              maxLines: isLandscape ? 2 : 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _setAnalysisEditMode(false),
+                      tooltip: 'Close edit toolbox',
+                      splashRadius: 18,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.only(left: 4),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 32,
+                        height: 32,
+                      ),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: const Color(0xFFFFD166),
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                buildPieceSection('White pieces', whitePieces),
+                const SizedBox(height: 10),
+                buildPieceSection('Black pieces', blackPieces),
               ],
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

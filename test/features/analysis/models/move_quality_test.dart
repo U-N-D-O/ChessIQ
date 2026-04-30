@@ -162,7 +162,7 @@ void main() {
       },
     );
 
-    test('suppresses charge for obvious equal-position best moves', () {
+    test('still awards charge for equal-position best moves', () {
       final assessment = classifyMoveQuality(
         const MoveQualityClassificationContext(
           deltaWpLoss: 0.0,
@@ -175,11 +175,8 @@ void main() {
       );
 
       expect(assessment.quality, MoveQuality.optimal);
-      expect(
-        assessment.scoringSuppressedReason,
-        MoveQualityScoringSuppressionReason.obviousMove,
-      );
-      expect(assessment.explanation, contains('do not build charge'));
+      expect(assessment.scoringSuppressedReason, isNull);
+      expect(updatedMoveQualityCharge(current: 40, assessment: assessment), 55);
     });
 
     test('keeps the engine best move optimal despite post-move drift', () {
