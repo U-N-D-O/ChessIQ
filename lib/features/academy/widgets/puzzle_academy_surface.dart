@@ -187,6 +187,51 @@ WidgetStateProperty<Color?> puzzleAcademyInteractiveOverlay({
   });
 }
 
+Widget puzzleAcademyDecoratedInkWell({
+  Key? inkKey,
+  required BoxDecoration decoration,
+  required BorderRadius borderRadius,
+  required Widget child,
+  VoidCallback? onTap,
+  ValueChanged<bool>? onHighlightChanged,
+  WidgetStateProperty<Color?>? overlayColor,
+}) {
+  return DecoratedBox(
+    decoration: decoration,
+    child: ClipRRect(
+      borderRadius: borderRadius,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: inkKey,
+          onTap: onTap,
+          onHighlightChanged: onHighlightChanged,
+          borderRadius: borderRadius,
+          overlayColor: overlayColor,
+          child: child,
+        ),
+      ),
+    ),
+  );
+}
+
+List<BoxShadow> puzzleAcademyRoundedDropShadow(
+  Color color, {
+  double blurRadius = 12,
+  double spreadRadius = 0,
+  double offsetX = 0,
+  double offsetY = 5,
+}) {
+  return <BoxShadow>[
+    BoxShadow(
+      color: color,
+      blurRadius: blurRadius,
+      spreadRadius: spreadRadius,
+      offset: Offset(offsetX, offsetY),
+    ),
+  ];
+}
+
 List<BoxShadow> puzzleAcademySurfaceGlow(
   Color color, {
   required bool monochrome,
@@ -438,10 +483,10 @@ BoxDecoration puzzleAcademyPanelDecoration({
     border: Border.all(color: borderColor ?? palette.line, width: borderWidth),
     boxShadow: elevated
         ? <BoxShadow>[
-            BoxShadow(
-              color: palette.shadow,
-              offset: const Offset(6, 6),
-              blurRadius: 0,
+            ...puzzleAcademyRoundedDropShadow(
+              palette.shadow,
+              blurRadius: palette.monochrome ? 13 : 11,
+              offsetY: palette.monochrome ? 5.5 : 4.5,
             ),
             ...puzzleAcademySurfaceGlow(
               effectiveAccent,

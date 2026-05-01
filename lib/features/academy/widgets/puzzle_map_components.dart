@@ -803,10 +803,10 @@ class _SemesterHeader extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: headerEdge, width: 3.4),
           boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: palette.shadow,
-              offset: const Offset(7, 7),
-              blurRadius: 0,
+            ...puzzleAcademyRoundedDropShadow(
+              palette.shadow,
+              blurRadius: 12,
+              offsetY: 5.5,
             ),
             ...puzzleAcademySurfaceGlow(
               headerEdge,

@@ -192,6 +192,7 @@ class _AcademyHubCardModel {
     required this.inlineDetails,
     required this.artLabel,
     required this.imageAsset,
+    this.shineAsset,
     required this.imageAlignment,
     required this.imagePadding,
     required this.accent,
@@ -213,6 +214,7 @@ class _AcademyHubCardModel {
   final List<String> inlineDetails;
   final String artLabel;
   final String imageAsset;
+  final String? shineAsset;
   final Alignment imageAlignment;
   final EdgeInsets imagePadding;
   final Color accent;
@@ -224,6 +226,19 @@ class _AcademyHubCardModel {
   final double progress;
   final List<_AcademyHubCardBadge> badges;
   final VoidCallback onTap;
+}
+
+class _AcademyHubCardShineState {
+  _AcademyHubCardShineState({required this.controller});
+
+  final AnimationController controller;
+  Timer? timer;
+  bool hoverActive = false;
+
+  void dispose() {
+    timer?.cancel();
+    controller.dispose();
+  }
 }
 
 class PuzzleMapScreen extends StatefulWidget {
@@ -253,6 +268,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   static const String _storeStateKey = 'store_state_v1';
   static const String _academyTuitionPassKey = 'academyTuitionPassOwned';
   static const String _quizStatsStorageKey = 'quiz_stats_v1';
+  static const Set<String> _academyHubShinyCardIds = <String>{'quiz', 'exams'};
+
+  final Random _academyHubShineRandom = Random();
 
   bool _didPrimeUi = false;
   bool _didShowAcademyProfilePrompt = false;
@@ -280,6 +298,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   final GlobalKey _academyRootContentKey = GlobalKey();
   final GlobalKey _academyHubExamsCardKey = GlobalKey();
   final GlobalKey _academyHubQuizCardKey = GlobalKey();
+  late final Map<String, _AcademyHubCardShineState> _academyHubShineStates;
   final Set<String> _expandedSemesterTitles = <String>{};
   bool _expandedSemesterInitialized = false;
   _AcademyEntryView _activeView = _AcademyEntryView.hub;
@@ -316,6 +335,15 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       vsync: this,
       duration: const Duration(milliseconds: 480),
     );
+    _academyHubShineStates = {
+      for (final cardId in _academyHubShinyCardIds)
+        cardId: _AcademyHubCardShineState(
+          controller: AnimationController(
+            vsync: this,
+            duration: const Duration(milliseconds: 1680),
+          ),
+        ),
+    };
 
     _academyBlueDotTime = ValueNotifier<double>(0.0);
     _academyBlueDotTicker = createTicker((elapsed) {
@@ -325,6 +353,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           (_academyBlueDotTime.value + delta.inMilliseconds / 1000.0) % 1024.0;
       _academyBlueDotTime.value = nextTime;
     })..start();
+    for (final cardId in _academyHubShineStates.keys) {
+      _scheduleAcademyHubIdleShine(
+        cardId,
+        delay: Duration(
+          milliseconds: 1500 + _academyHubShineRandom.nextInt(1400),
+        ),
+      );
+    }
     unawaited(_loadAcademyHubQuizSnapshot());
   }
 
@@ -332,6 +368,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   void dispose() {
     _confettiController.dispose();
     _academyHubFlightController.dispose();
+    for (final shineState in _academyHubShineStates.values) {
+      shineState.dispose();
+    }
     _academyBlueDotTicker.dispose();
     _academyBlueDotTime.dispose();
     _academyStoreSfxPlayer?.dispose();
@@ -1302,10 +1341,79 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     return cardId == 'quiz' ? _academyHubQuizCardKey : _academyHubExamsCardKey;
   }
 
+  void _scheduleAcademyHubIdleShine(String cardId, {Duration? delay}) {
+    final shineState = _academyHubShineStates[cardId];
+    if (shineState == null) {
+      return;
+    }
+
+    shineState.timer?.cancel();
+    if (shineState.hoverActive || _academyHubLaunchInFlight) {
+      return;
+    }
+
+    final nextDelay =
+        delay ??
+        Duration(milliseconds: 4200 + _academyHubShineRandom.nextInt(2200));
+    shineState.timer = Timer(nextDelay, () {
+      if (!mounted || shineState.hoverActive || _academyHubLaunchInFlight) {
+        return;
+      }
+      shineState.controller.forward(from: 0.0);
+      _scheduleAcademyHubIdleShine(cardId);
+    });
+  }
+
+  void _startAcademyHubHoverShine(String cardId) {
+    final shineState = _academyHubShineStates[cardId];
+    if (shineState == null) {
+      return;
+    }
+
+    shineState.timer?.cancel();
+    shineState.hoverActive = true;
+    shineState.controller.repeat(period: const Duration(milliseconds: 1450));
+  }
+
+  void _stopAcademyHubHoverShine(String cardId, {bool scheduleIdle = true}) {
+    final shineState = _academyHubShineStates[cardId];
+    if (shineState == null) {
+      return;
+    }
+
+    shineState.timer?.cancel();
+    if (shineState.controller.isAnimating) {
+      shineState.controller.stop();
+    }
+    shineState.hoverActive = false;
+    shineState.controller.value = 0.0;
+    if (scheduleIdle) {
+      _scheduleAcademyHubIdleShine(
+        cardId,
+        delay: Duration(
+          milliseconds: 1600 + _academyHubShineRandom.nextInt(800),
+        ),
+      );
+    }
+  }
+
   void _setAcademyHubHoveredCard(String? cardId) {
     if (_academyHubLaunchInFlight || _academyHubHoveredCardId == cardId) {
       return;
     }
+
+    for (final shinyCardId in _academyHubShineStates.keys) {
+      final wasHovered = _academyHubHoveredCardId == shinyCardId;
+      final willHover = cardId == shinyCardId;
+      if (wasHovered != willHover) {
+        if (willHover) {
+          _startAcademyHubHoverShine(shinyCardId);
+        } else {
+          _stopAcademyHubHoverShine(shinyCardId);
+        }
+      }
+    }
+
     setState(() {
       _academyHubHoveredCardId = cardId;
     });
@@ -1370,6 +1478,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       return;
     }
 
+    for (final cardId in _academyHubShineStates.keys) {
+      _stopAcademyHubHoverShine(cardId, scheduleIdle: false);
+    }
+
     final flight = _captureAcademyHubFlight(
       cardId: cardId,
       title: title,
@@ -1405,6 +1517,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           _academyHubFlight = null;
           _academyHubPressedCardId = null;
         });
+        for (final cardId in _academyHubShineStates.keys) {
+          _scheduleAcademyHubIdleShine(
+            cardId,
+            delay: Duration(
+              milliseconds: 1600 + _academyHubShineRandom.nextInt(800),
+            ),
+          );
+        }
       }
     }
   }
@@ -1973,6 +2093,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       inlineDetails: inlineDetails,
       artLabel: examReady ? 'LIVE BOARD' : 'PROMOTION GATE',
       imageAsset: 'assets/academy/exam.png',
+      shineAsset: 'assets/academy/exam_shine.png',
       imageAlignment: Alignment.center,
       imagePadding: const EdgeInsets.all(4),
       accent: accent,
@@ -2070,6 +2191,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       inlineDetails: inlineDetails,
       artLabel: usesAccuracy ? 'QUIZ LADDER' : 'STUDY FILES',
       imageAsset: 'assets/academy/openings_study.png',
+      shineAsset: 'assets/academy/openings_study_shine.png',
       imageAlignment: Alignment.center,
       imagePadding: const EdgeInsets.all(4),
       accent: accent,
@@ -2186,6 +2308,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required _AcademyHubCardModel model,
     required bool monochrome,
     required bool horizontal,
+    required bool isHovered,
     required bool isLaunching,
     required double imageScale,
     required Offset imageOffset,
@@ -2210,22 +2333,32 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
                   offset: imageOffset,
-                  child: Image.asset(
-                    model.imageAsset,
-                    fit: BoxFit.contain,
-                    alignment: model.imageAlignment,
-                    filterQuality: _useReducedWindowsVisualEffects
-                        ? FilterQuality.medium
-                        : FilterQuality.high,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Center(
-                        child: Icon(
-                          Icons.image_not_supported,
-                          size: horizontal ? 34 : 42,
-                          color: palette.textMuted,
-                        ),
-                      );
-                    },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        model.imageAsset,
+                        fit: BoxFit.contain,
+                        alignment: model.imageAlignment,
+                        filterQuality: _useReducedWindowsVisualEffects
+                            ? FilterQuality.medium
+                            : FilterQuality.high,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Icon(
+                              Icons.image_not_supported,
+                              size: horizontal ? 34 : 42,
+                              color: palette.textMuted,
+                            ),
+                          );
+                        },
+                      ),
+                      _buildAcademyHubCardShineOverlay(
+                        model: model,
+                        monochrome: monochrome,
+                        isHighlighted: isHovered || isLaunching,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -2252,10 +2385,117 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
+  Widget _buildAcademyHubCardShineOverlay({
+    required _AcademyHubCardModel model,
+    required bool monochrome,
+    required bool isHighlighted,
+  }) {
+    final shineAsset = model.shineAsset;
+    final shineState = _academyHubShineStates[model.cardId];
+    if (shineAsset == null || shineState == null) {
+      return const SizedBox.shrink();
+    }
+
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: shineState.controller,
+        builder: (context, child) {
+          final shineActive =
+              isHighlighted || shineState.controller.isAnimating;
+          if (!shineActive) {
+            return const SizedBox.shrink();
+          }
+
+          final sweep = Curves.easeInOutCubic.transform(
+            shineState.controller.value,
+          );
+          final pulse = Curves.easeInOutCubic.transform(
+            (1.0 - ((sweep - 0.5).abs() / 0.5).clamp(0.0, 1.0)).toDouble(),
+          );
+          final bandCenter = -0.24 + sweep * 1.48;
+          final lead = bandCenter.clamp(0.0, 1.0);
+          final innerLead = max(lead, (bandCenter + 0.08).clamp(0.0, 1.0));
+          final center = max(innerLead, (bandCenter + 0.16).clamp(0.0, 1.0));
+          final innerTrail = max(center, (bandCenter + 0.24).clamp(0.0, 1.0));
+          final trail = max(innerTrail, (bandCenter + 0.34).clamp(0.0, 1.0));
+          final baseOpacity = isHighlighted ? (monochrome ? 0.10 : 0.12) : 0.0;
+          final sweepOpacity = isHighlighted
+              ? (monochrome ? 0.58 : 0.66)
+              : (monochrome ? 0.72 : 0.82) * pulse;
+          final highlightColor = monochrome
+              ? const Color(0xFFFFF4C7)
+              : const Color(0xFF9EF6FF);
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (baseOpacity > 0)
+                Opacity(
+                  opacity: baseOpacity,
+                  child: Image.asset(
+                    shineAsset,
+                    fit: BoxFit.contain,
+                    alignment: model.imageAlignment,
+                    filterQuality: FilterQuality.none,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              if (sweepOpacity > 0)
+                Opacity(
+                  opacity: sweepOpacity,
+                  child: ShaderMask(
+                    blendMode: BlendMode.srcATop,
+                    shaderCallback: (bounds) {
+                      return LinearGradient(
+                        begin: const Alignment(-1.0, -0.85),
+                        end: const Alignment(1.0, 0.95),
+                        colors: [
+                          Colors.transparent,
+                          Colors.transparent,
+                          highlightColor.withValues(alpha: 0.18),
+                          Colors.white.withValues(alpha: 0.98),
+                          highlightColor.withValues(
+                            alpha: monochrome ? 0.72 : 0.84,
+                          ),
+                          Colors.transparent,
+                          Colors.transparent,
+                        ],
+                        stops: [
+                          0.0,
+                          lead,
+                          innerLead,
+                          center,
+                          innerTrail,
+                          trail,
+                          1.0,
+                        ],
+                      ).createShader(bounds);
+                    },
+                    child: Image.asset(
+                      shineAsset,
+                      fit: BoxFit.contain,
+                      alignment: model.imageAlignment,
+                      filterQuality: FilterQuality.none,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildAcademyHubCardBody({
     required _AcademyHubCardModel model,
     required _AcademyHubSelectorLayoutSpec layout,
     required bool monochrome,
+    required bool isHovered,
     required bool isLaunching,
     required double imageScale,
     required Offset imageOffset,
@@ -2321,6 +2561,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 model: model,
                 monochrome: monochrome,
                 horizontal: layout.usesRail,
+                isHovered: isHovered,
                 isLaunching: isLaunching,
                 imageScale: imageScale,
                 imageOffset: imageOffset,
@@ -2460,6 +2701,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                           model: model,
                           layout: layout,
                           monochrome: monochrome,
+                          isHovered: isHovered,
                           isLaunching: isLaunching,
                           imageScale: imageScale,
                           imageOffset: imageOffset,

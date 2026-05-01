@@ -293,12 +293,13 @@ BoxDecoration _vsBotArcadePanelDecoration({
     ),
     boxShadow: <BoxShadow>[
       if (elevated)
-        BoxShadow(
-          color: useSoftInsetShadow
+        ...puzzleAcademyRoundedDropShadow(
+          useSoftInsetShadow
               ? glow.withValues(alpha: palette.monochrome ? 0.08 : 0.16)
               : palette.shadow,
-          blurRadius: useSoftInsetShadow ? 18 : 0,
-          offset: useSoftInsetShadow ? const Offset(0, 5) : const Offset(7, 7),
+          blurRadius: useSoftInsetShadow ? 14 : 11,
+          spreadRadius: useSoftInsetShadow ? -0.2 : 0,
+          offsetY: useSoftInsetShadow ? 4.5 : 5.0,
         ),
       ...puzzleAcademySurfaceGlow(
         glow,
@@ -2718,12 +2719,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     ],
                   ),
                   boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: arcade.shadow.withValues(
-                        alpha: 0.20 + (0.18 * focus),
-                      ),
-                      blurRadius: 0,
-                      offset: const Offset(8, 10),
+                    ...puzzleAcademyRoundedDropShadow(
+                      arcade.shadow.withValues(alpha: 0.20 + (0.18 * focus)),
+                      blurRadius: 15,
+                      offsetY: 7,
                     ),
                     ...puzzleAcademySurfaceGlow(
                       shellGlowAccent,
@@ -2829,73 +2828,69 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     final readableAccent = _vsBotReadableAccentColor(accent, arcade);
     final resolvedCaptionMaxLines = captionMaxLines ?? (compact ? 1 : 2);
     final resolvedLabelMaxLines = labelMaxLines ?? (compact ? 1 : 2);
+    final panelRadius = BorderRadius.circular(16);
 
     return Opacity(
       opacity: enabled ? 1.0 : 0.46,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(16),
-          overlayColor: puzzleAcademyInteractiveOverlay(
-            palette: arcade.base,
-            accent: accent,
+      child: puzzleAcademyDecoratedInkWell(
+        decoration: _vsBotArcadePanelDecoration(
+          palette: arcade,
+          accent: selected ? accent : arcade.line,
+          glowAccent: selected ? (glowAccent ?? accent) : arcade.line,
+          fillColor: fillColor,
+          radius: 16,
+          borderWidth: selected ? 2.8 : 2.0,
+          inset: true,
+          elevated: selected,
+        ),
+        borderRadius: panelRadius,
+        onTap: enabled ? onTap : null,
+        overlayColor: puzzleAcademyInteractiveOverlay(
+          palette: arcade.base,
+          accent: accent,
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            compact ? 10 : 12,
+            compact ? 9 : 10,
+            compact ? 10 : 12,
+            compact ? 10 : 12,
           ),
-          child: Ink(
-            decoration: _vsBotArcadePanelDecoration(
-              palette: arcade,
-              accent: selected ? accent : arcade.line,
-              glowAccent: selected ? (glowAccent ?? accent) : arcade.line,
-              fillColor: fillColor,
-              radius: 16,
-              borderWidth: selected ? 2.8 : 2.0,
-              inset: true,
-              elevated: selected,
-            ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                compact ? 10 : 12,
-                compact ? 9 : 10,
-                compact ? 10 : 12,
-                compact ? 10 : 12,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      leading,
-                      SizedBox(width: compact ? 6 : 8),
-                      Expanded(
-                        child: Text(
-                          caption.toUpperCase(),
-                          maxLines: resolvedCaptionMaxLines,
-                          overflow: TextOverflow.ellipsis,
-                          style: puzzleAcademyIdentityStyle(
-                            palette: arcade.base,
-                            size: compact ? 7.2 : 7.8,
-                            color: selected ? readableAccent : arcade.textMuted,
-                          ),
-                        ),
+                  leading,
+                  SizedBox(width: compact ? 6 : 8),
+                  Expanded(
+                    child: Text(
+                      caption.toUpperCase(),
+                      maxLines: resolvedCaptionMaxLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: puzzleAcademyIdentityStyle(
+                        palette: arcade.base,
+                        size: compact ? 7.2 : 7.8,
+                        color: selected ? readableAccent : arcade.textMuted,
                       ),
-                    ],
-                  ),
-                  SizedBox(height: compact ? 6 : 8),
-                  Text(
-                    label,
-                    maxLines: resolvedLabelMaxLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: puzzleAcademyDisplayStyle(
-                      palette: arcade.base,
-                      size: compact ? 14.0 : 15.5,
-                      color: enabled ? arcade.text : arcade.textMuted,
-                      withGlow: selected,
                     ),
                   ),
                 ],
               ),
-            ),
+              SizedBox(height: compact ? 6 : 8),
+              Text(
+                label,
+                maxLines: resolvedLabelMaxLines,
+                overflow: TextOverflow.ellipsis,
+                style: puzzleAcademyDisplayStyle(
+                  palette: arcade.base,
+                  size: compact ? 14.0 : 15.5,
+                  color: enabled ? arcade.text : arcade.textMuted,
+                  withGlow: selected,
+                ),
+              ),
+            ],
           ),
         ),
       ),

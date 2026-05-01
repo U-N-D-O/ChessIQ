@@ -173,6 +173,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
+  static const int _bookOpeningPlyLimit = 6;
   static const int _moveQualityGradingMultiPv = 4;
   static const int _moveQualityInitialPublishDepth = 2;
   static const int _moveQualityGradingDepth = 10;
@@ -378,6 +379,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int _historyIndex = -1;
   late ScrollController _historyScrollController;
   late ScrollController _quizStudyLibraryScrollController;
+  late ScrollController _quizQuestionOptionsScrollController;
   final Map<String, String> _ecoOpenings = {};
   final List<EcoLine> _ecoLines = [];
   int _quizEligibleCount = 0;
@@ -779,6 +781,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     _historyScrollController = ScrollController();
     _quizStudyLibraryScrollController = ScrollController();
+    _quizQuestionOptionsScrollController = ScrollController();
     _resetBoard(withIntro: false);
     _loadEcoOpenings();
     _restoreSnapshotAndStart();
@@ -3263,10 +3266,62 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return false;
     }
 
-    return matchesRegisteredOpeningPrefix(
-      _ecoLines,
-      _openingMoveTokensThrough(moveIndex),
+    return moveIndex < _bookOpeningPlyLimit &&
+        matchesRegisteredOpeningPrefix(
+          _ecoLines,
+          _openingMoveTokensThrough(moveIndex),
+        );
+  }
+
+  void _publishBookFastPath(_PendingMoveQualityGrading pending) {
+    if (!_openingFeedbackOnlyApplies(pending.moveIndex) ||
+        pending.moveIndex < 0 ||
+        pending.moveIndex >= _moveHistory.length) {
+      return;
+    }
+
+    final currentMove = _moveHistory[pending.moveIndex];
+    if (currentMove.uci != pending.uci) {
+      return;
+    }
+
+    final isHumanVsBotMove =
+        _playVsBot && pending.moverIsWhite == _humanPlaysWhite;
+    final badgeSquare = pending.uci.length >= 4
+        ? pending.uci.substring(2, 4)
+        : null;
+    var overlayMove = currentMove.copyWith(
+      quality: MoveQuality.book,
+      qualityExplanation: MoveQuality.book.explanation,
+      chargeBefore: pending.chargeBefore,
+      chargeAfter: pending.chargeBefore,
+      scoringSuppressedReason:
+          MoveQualityScoringSuppressionReason.openingFeedbackOnly,
     );
+
+    setState(() {
+      if (isHumanVsBotMove) {
+        final recalculatedHistory = _recalculateVsBotChargeHistory(
+          startIndex: pending.moveIndex,
+          firstUpdatedMove: overlayMove,
+        );
+        _moveHistory
+          ..clear()
+          ..addAll(recalculatedHistory);
+        overlayMove = _moveHistory[pending.moveIndex];
+        if (pending.chargeEpoch == _vsBotChargeEpoch) {
+          _vsBotCharge = _visibleVsBotChargeForHistory(recalculatedHistory);
+        }
+      } else {
+        _moveHistory[pending.moveIndex] = overlayMove;
+      }
+
+      if (!_playVsBot || isHumanVsBotMove) {
+        _lastMoveQualityBadgeQuality = MoveQuality.book;
+        _lastMoveQualityBadgeSquare = badgeSquare;
+        _showMoveQualityOverlay(overlayMove, 0);
+      }
+    });
   }
 
   MoveQualityConfidence _moveQualityConfidence({
@@ -4203,7 +4258,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               );
               return;
             }
-            _scheduleMoveQualityGrading(pending);
+            _scheduleMoveQualityGrading(
+              pending,
+              livePostMoveRole: EngineRequestRole.backgroundConfirmation,
+            );
           })
           .whenComplete(() {
             if (identical(
@@ -4223,7 +4281,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return false;
     }
     final record = _moveHistory[pending.moveIndex];
-    return record.uci == pending.uci && record.isWhite == pending.moverIsWhite;
+    if (record.uci != pending.uci || record.isWhite != pending.moverIsWhite) {
+      return false;
+    }
+    if (!_playVsBot || pending.moverIsWhite != _humanPlaysWhite) {
+      return true;
+    }
+    return pending.moveIndex == _latestHumanVsBotMoveIndex();
+  }
+
+  int _latestHumanVsBotMoveIndex() {
+    if (!_playVsBot || _moveHistory.isEmpty) {
+      return -1;
+    }
+    final maxIndex = min(_historyIndex, _moveHistory.length - 1);
+    for (var index = maxIndex; index >= 0; index--) {
+      if (_moveHistory[index].isWhite == _humanPlaysWhite) {
+        return index;
+      }
+    }
+    return -1;
   }
 
   List<MoveRecord> _recalculateVsBotChargeHistory({
@@ -4235,9 +4312,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return updatedHistory;
     }
 
-    var runningCharge = startIndex > 0
-        ? (updatedHistory[startIndex - 1].chargeAfter ?? 0)
-        : 0;
+    var runningCharge =
+        firstUpdatedMove.chargeBefore ??
+        (startIndex > 0
+            ? (updatedHistory[startIndex - 1].chargeAfter ?? 0)
+            : 0);
 
     for (var index = startIndex; index < updatedHistory.length; index++) {
       var move = index == startIndex ? firstUpdatedMove : updatedHistory[index];
@@ -4528,7 +4607,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    if (!mounted || pending.moveIndex >= _moveHistory.length) {
+    if (!mounted || !_moveQualityPendingStillMatchesHistory(pending)) {
       return;
     }
     final currentMove = _moveHistory[pending.moveIndex];
@@ -4654,7 +4733,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         previousPublishedChargeAfter != chargeAfter;
     final canShowBackgroundCorrection =
         livePostMoveRole != EngineRequestRole.backgroundConfirmation ||
-        pending.moveIndex == _historyIndex;
+        _moveQualityPendingStillMatchesHistory(pending);
     var overlayMove = updatedMove;
     var overlayChargeDelta = chargeAfter - pending.chargeBefore;
 
@@ -7920,6 +7999,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _restoreCachedEvalForFen(_genFen());
       }
     });
+
+    if (pendingMoveQuality != null &&
+        _openingFeedbackOnlyApplies(pendingMoveQuality.moveIndex)) {
+      _publishBookFastPath(pendingMoveQuality);
+    }
 
     unawaited(_playBoardMoveSound(isCapture: captured != null));
 
@@ -11882,6 +11966,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final controlSize = compactControl ? 52.0 : 56.0;
     final controlRadius = compactControl ? 16.0 : 18.0;
     final readableAccent = _vsBotReadableAccentColor(accent, arcade);
+    final panelRadius = BorderRadius.circular(controlRadius);
 
     return AnimatedOpacity(
       opacity: onTap == null ? 0.42 : 1.0,
@@ -11890,25 +11975,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         key: controlKey,
         width: controlSize,
         height: controlSize,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(controlRadius),
-            overlayColor: puzzleAcademyInteractiveOverlay(
-              palette: arcade.base,
-              accent: accent,
-            ),
-            child: Ink(
-              decoration: _vsBotArcadePanelDecoration(
-                palette: arcade,
-                accent: accent,
-                radius: controlRadius,
-                borderWidth: 2.4,
-                inset: true,
-                elevated: onTap != null,
-                fillColor: arcade.panelAlt,
-              ),
+        child: puzzleAcademyDecoratedInkWell(
+          decoration: _vsBotArcadePanelDecoration(
+            palette: arcade,
+            accent: accent,
+            radius: controlRadius,
+            borderWidth: 2.4,
+            inset: true,
+            elevated: onTap != null,
+            fillColor: arcade.panelAlt,
+          ),
+          borderRadius: panelRadius,
+          onTap: onTap,
+          overlayColor: puzzleAcademyInteractiveOverlay(
+            palette: arcade.base,
+            accent: accent,
+          ),
+          child: SizedBox.expand(
+            child: Center(
               child: Icon(
                 icon,
                 color: onTap == null ? arcade.textMuted : readableAccent,
@@ -11995,61 +12079,59 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       required TextStyle subtitleStyle,
       required IconData icon,
     }) {
+      final buttonRadius = BorderRadius.circular(18);
       return SizedBox(
         width: double.infinity,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: _gameResultDialogVisible || endedOutcome == null
-                ? null
-                : () => unawaited(_showGameResultDialog(endedOutcome)),
-            child: Ink(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: borderColor, width: 2.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: accent.withValues(alpha: 0.18),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+        child: puzzleAcademyDecoratedInkWell(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: buttonRadius,
+            border: Border.all(color: borderColor, width: 2.2),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: 0.18),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: accent.withValues(alpha: 0.14),
-                      border: Border.all(color: accent.withValues(alpha: 0.45)),
-                    ),
-                    child: Icon(icon, color: accent, size: 24),
+            ],
+          ),
+          borderRadius: buttonRadius,
+          onTap: _gameResultDialogVisible || endedOutcome == null
+              ? null
+              : () => unawaited(_showGameResultDialog(endedOutcome)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accent.withValues(alpha: 0.14),
+                    border: Border.all(color: accent.withValues(alpha: 0.45)),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('END MATCH', style: titleStyle),
-                        const SizedBox(height: 4),
-                        Text('The game has concluded.', style: subtitleStyle),
-                      ],
-                    ),
+                  child: Icon(icon, color: accent, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('END MATCH', style: titleStyle),
+                      const SizedBox(height: 4),
+                      Text('The game has concluded.', style: subtitleStyle),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: foreground.withValues(alpha: 0.86),
-                    size: 28,
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: foreground.withValues(alpha: 0.86),
+                  size: 28,
+                ),
+              ],
             ),
           ),
         ),
@@ -12828,16 +12910,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : _vsBotCharge >= 100
         ? 'READY'
         : '${_vsBotCharge.clamp(0, 100)}%';
+    final buttonRadius = BorderRadius.circular(18);
 
-    return GestureDetector(
+    return SizedBox(
       key: _suggestionButtonKey,
-      onTap: canActivate ? _activateVsBotOptimalLineReveal : null,
+      width: 56,
+      height: 56,
       child: AnimatedOpacity(
         opacity: locked ? 0.52 : 1.0,
         duration: const Duration(milliseconds: 160),
-        child: Container(
-          width: 56,
-          height: 56,
+        child: puzzleAcademyDecoratedInkWell(
           decoration: _vsBotArcadePanelDecoration(
             palette: arcade,
             accent: fillColor,
@@ -12847,63 +12929,64 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             elevated: !locked,
             fillColor: arcade.panelAlt,
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: ColoredBox(
-                    color: arcade.shell.withValues(alpha: 0.96),
-                  ),
-                ),
-                Positioned.fill(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: FractionallySizedBox(
-                      heightFactor: progress.clamp(0.0, 1.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              fillColor.withValues(alpha: 0.96),
-                              fillColor.withValues(alpha: 0.62),
-                            ],
-                          ),
+          borderRadius: buttonRadius,
+          onTap: canActivate ? _activateVsBotOptimalLineReveal : null,
+          overlayColor: puzzleAcademyInteractiveOverlay(
+            palette: arcade.base,
+            accent: fillColor,
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ColoredBox(color: arcade.shell.withValues(alpha: 0.96)),
+              ),
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: FractionallySizedBox(
+                    heightFactor: progress.clamp(0.0, 1.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            fillColor.withValues(alpha: 0.96),
+                            fillColor.withValues(alpha: 0.62),
+                          ],
                         ),
                       ),
                     ),
                   ),
                 ),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _vsBotOptimalLineRevealActive
-                            ? Icons.visibility_rounded
-                            : locked
-                            ? Icons.lock_outline_rounded
-                            : Icons.bolt_rounded,
+              ),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _vsBotOptimalLineRevealActive
+                          ? Icons.visibility_rounded
+                          : locked
+                          ? Icons.lock_outline_rounded
+                          : Icons.bolt_rounded,
+                      color: locked ? arcade.textMuted : arcade.text,
+                      size: 18,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      statusText,
+                      style: puzzleAcademyIdentityStyle(
+                        palette: arcade.base,
+                        size: 5.9,
                         color: locked ? arcade.textMuted : arcade.text,
-                        size: 18,
+                        withGlow: !locked,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        statusText,
-                        style: puzzleAcademyIdentityStyle(
-                          palette: arcade.base,
-                          size: 5.9,
-                          color: locked ? arcade.textMuted : arcade.text,
-                          withGlow: !locked,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -16368,6 +16451,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _botSetupPageController.dispose();
     _historyScrollController.dispose();
     _quizStudyLibraryScrollController.dispose();
+    _quizQuestionOptionsScrollController.dispose();
     _introAudioPlayer.dispose();
     _menuAudioPlayer.dispose();
     _sfxAudioPlayer.dispose();

@@ -112,6 +112,22 @@ String _quizStudyLineInfoMessage(
   return infoLines.join('\n');
 }
 
+bool _quizStudyNeedsLightContrastBoost(_QuizAcademyPalette palette) {
+  return palette.panel.computeLuminance() > 0.55;
+}
+
+Color _quizStudyContrastAccent(_QuizAcademyPalette palette, Color accent) {
+  return _quizStudyNeedsLightContrastBoost(palette)
+      ? accent.withValues(alpha: 1)
+      : accent;
+}
+
+Color _quizStudyFilledForeground(Color background) {
+  return background.computeLuminance() > 0.55
+      ? const Color(0xFF081015)
+      : Colors.white;
+}
+
 Widget _buildQuizStudySummaryChip({
   required String label,
   required String value,
@@ -275,7 +291,9 @@ Widget _buildQuizStudyScreen(_QuizScreen state) {
           ),
         ),
       ),
-      Positioned.fill(child: state._academyBackdropLayer(palette: palette)),
+      Positioned.fill(
+        child: state._academyBackdropLayer(palette: palette, animated: false),
+      ),
       Positioned.fill(
         child: SafeArea(
           bottom: false,
@@ -529,10 +547,10 @@ Widget _buildQuizStudyTopIconButton(
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: accent.withValues(alpha: 0.48), width: 2),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: palette.shadow.withValues(alpha: 0.22),
-                offset: const Offset(4, 4),
-                blurRadius: 0,
+              ...puzzleAcademyRoundedDropShadow(
+                palette.shadow.withValues(alpha: 0.22),
+                blurRadius: 7,
+                offsetY: 3,
               ),
             ],
           ),
@@ -568,10 +586,10 @@ Widget _buildQuizStudySearchControls(
               width: 2,
             ),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: palette.shadow.withValues(alpha: 0.16),
-                offset: const Offset(4, 4),
-                blurRadius: 0,
+              ...puzzleAcademyRoundedDropShadow(
+                palette.shadow.withValues(alpha: 0.16),
+                blurRadius: 7,
+                offsetY: 3,
               ),
             ],
           ),
@@ -884,12 +902,12 @@ Widget _buildQuizStudyCategoryCard(
               width: selected ? 3 : 2,
             ),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: (selected ? accent : palette.shadow).withValues(
+              ...puzzleAcademyRoundedDropShadow(
+                (selected ? accent : palette.shadow).withValues(
                   alpha: selected ? 0.18 : 0.10,
                 ),
-                offset: const Offset(4, 4),
-                blurRadius: 0,
+                blurRadius: 7,
+                offsetY: 3,
               ),
             ],
           ),
@@ -953,12 +971,12 @@ Widget _buildQuizStudyCategoryCard(
             width: selected ? 3 : 2,
           ),
           boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: (selected ? accent : palette.shadow).withValues(
+            ...puzzleAcademyRoundedDropShadow(
+              (selected ? accent : palette.shadow).withValues(
                 alpha: selected ? 0.18 : 0.12,
               ),
-              offset: const Offset(4, 4),
-              blurRadius: 0,
+              blurRadius: 8,
+              offsetY: 3,
             ),
           ],
         ),
@@ -1214,10 +1232,10 @@ Widget _buildQuizStudyFamilyListPane(
       borderRadius: BorderRadius.circular(4),
       border: Border.all(color: palette.line, width: 2),
       boxShadow: <BoxShadow>[
-        BoxShadow(
-          color: palette.shadow.withValues(alpha: 0.16),
-          offset: const Offset(4, 4),
-          blurRadius: 0,
+        ...puzzleAcademyRoundedDropShadow(
+          palette.shadow.withValues(alpha: 0.16),
+          blurRadius: 7,
+          offsetY: 3,
         ),
       ],
     ),
@@ -1313,10 +1331,10 @@ Widget _buildQuizStudyFamilyProgressRing(
       shape: BoxShape.circle,
       border: Border.all(color: palette.line, width: 2),
       boxShadow: <BoxShadow>[
-        BoxShadow(
-          color: palette.shadow.withValues(alpha: 0.14),
-          offset: const Offset(3, 3),
-          blurRadius: 0,
+        ...puzzleAcademyRoundedDropShadow(
+          palette.shadow.withValues(alpha: 0.14),
+          blurRadius: 6,
+          offsetY: 2.5,
         ),
       ],
     ),
@@ -1386,10 +1404,10 @@ Widget _buildQuizStudyFamilyCard(
         width: familyHasSelection ? 3 : 2,
       ),
       boxShadow: <BoxShadow>[
-        BoxShadow(
-          color: palette.shadow.withValues(alpha: 0.14),
-          offset: const Offset(4, 4),
-          blurRadius: 0,
+        ...puzzleAcademyRoundedDropShadow(
+          palette.shadow.withValues(alpha: 0.14),
+          blurRadius: 8,
+          offsetY: 3,
         ),
       ],
     ),
@@ -1549,10 +1567,10 @@ Widget _buildQuizStudyVariationTile(
             width: selected ? 3 : 2,
           ),
           boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: palette.shadow.withValues(alpha: 0.12),
-              offset: const Offset(4, 4),
-              blurRadius: 0,
+            ...puzzleAcademyRoundedDropShadow(
+              palette.shadow.withValues(alpha: 0.12),
+              blurRadius: 7,
+              offsetY: 3,
             ),
           ],
         ),
@@ -2036,10 +2054,10 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: palette.line, width: 3),
                       boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: palette.shadow.withValues(alpha: 0.18),
-                          offset: const Offset(6, 6),
-                          blurRadius: 0,
+                        ...puzzleAcademyRoundedDropShadow(
+                          palette.shadow.withValues(alpha: 0.18),
+                          blurRadius: 11,
+                          offsetY: 5,
                         ),
                       ],
                     ),
@@ -2058,22 +2076,19 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                               whiteToMove: preview.whiteToMove,
                             ),
                             if (preview.continuation.isNotEmpty)
-                              AnimatedBuilder(
-                                animation: state._pulseController,
-                                builder: (context, child) => IgnorePointer(
-                                  child: CustomPaint(
-                                    size: Size.infinite,
-                                    painter: EnergyArrowPainter(
-                                      lines: preview.continuation,
-                                      bestEval: 0,
-                                      progress: state._pulseController.value,
-                                      reverse: reverse,
-                                      showSequenceNumbers: true,
-                                      overrideColor: palette.cyan.withValues(
-                                        alpha: 0.88,
-                                      ),
-                                      staticArrowStyle: true,
+                              IgnorePointer(
+                                child: CustomPaint(
+                                  size: Size.infinite,
+                                  painter: EnergyArrowPainter(
+                                    lines: preview.continuation,
+                                    bestEval: 0,
+                                    progress: 0,
+                                    reverse: reverse,
+                                    showSequenceNumbers: true,
+                                    overrideColor: palette.cyan.withValues(
+                                      alpha: 0.88,
                                     ),
+                                    staticArrowStyle: true,
                                   ),
                                 ),
                               ),
@@ -2360,6 +2375,18 @@ Widget _buildQuizStudyFamilyChoiceChip(
   required VoidCallback onTap,
   required Color accent,
 }) {
+  final highContrast = _quizStudyNeedsLightContrastBoost(palette);
+  final selectedAccent = _quizStudyContrastAccent(palette, accent);
+  final selectedBackground = highContrast
+      ? selectedAccent
+      : selectedAccent.withValues(alpha: 0.18);
+  final selectedForeground = highContrast
+      ? _quizStudyFilledForeground(selectedBackground)
+      : selectedAccent;
+  final studiedIconColor = selected && highContrast
+      ? selectedForeground.withValues(alpha: 0.92)
+      : palette.emerald;
+
   return Material(
     color: Colors.transparent,
     child: InkWell(
@@ -2368,14 +2395,17 @@ Widget _buildQuizStudyFamilyChoiceChip(
       child: Ink(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: 0.18) : palette.shell,
+          color: selected ? selectedBackground : palette.shell,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: selected ? accent : palette.line, width: 2),
+          border: Border.all(
+            color: selected ? selectedAccent : palette.line,
+            width: selected ? 3 : 2,
+          ),
           boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: palette.shadow.withValues(alpha: selected ? 0.18 : 0.10),
-              offset: const Offset(4, 4),
-              blurRadius: 0,
+            ...puzzleAcademyRoundedDropShadow(
+              palette.shadow.withValues(alpha: selected ? 0.18 : 0.10),
+              blurRadius: 7,
+              offsetY: 3,
             ),
           ],
         ),
@@ -2387,7 +2417,7 @@ Widget _buildQuizStudyFamilyChoiceChip(
               style: state._academyHudStyle(
                 palette: palette,
                 size: 11.8,
-                color: selected ? accent : palette.text,
+                color: selected ? selectedForeground : palette.text,
                 weight: FontWeight.w800,
                 letterSpacing: 0.7,
                 height: 1.0,
@@ -2395,7 +2425,7 @@ Widget _buildQuizStudyFamilyChoiceChip(
             ),
             if (studied) ...<Widget>[
               const SizedBox(width: 6),
-              Icon(Icons.check_rounded, size: 14, color: palette.emerald),
+              Icon(Icons.check_rounded, size: 14, color: studiedIconColor),
             ],
           ],
         ),
@@ -2413,14 +2443,17 @@ Widget _buildQuizStudyReplayButton(
   required VoidCallback? onPressed,
   required Color accent,
 }) {
+  final highContrast = _quizStudyNeedsLightContrastBoost(palette);
+
   return Tooltip(
     message: tooltip,
     child: state._academyHudButton(
       palette: palette,
       icon: icon,
       label: label,
-      accent: accent,
+      accent: _quizStudyContrastAccent(palette, accent),
       onTap: onPressed,
+      filled: highContrast,
     ),
   );
 }

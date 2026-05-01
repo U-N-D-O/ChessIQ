@@ -184,10 +184,10 @@ extension _QuizAcademySurface on _QuizScreen {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: borderColor ?? palette.line, width: 3),
         boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: palette.shadow,
-            offset: const Offset(6, 6),
-            blurRadius: 0,
+          ...puzzleAcademyRoundedDropShadow(
+            palette.shadow,
+            blurRadius: 11,
+            offsetY: 4.5,
           ),
           BoxShadow(
             color: effectiveAccent.withValues(alpha: 0.12),
@@ -257,6 +257,7 @@ extension _QuizAcademySurface on _QuizScreen {
     required String label,
     required Color accent,
     required VoidCallback? onTap,
+    Color? iconColorOverride,
     bool filled = false,
   }) {
     final background = filled
@@ -270,6 +271,9 @@ extension _QuizAcademySurface on _QuizScreen {
     final effectiveForeground = onTap == null
         ? foreground.withValues(alpha: 0.50)
         : foreground;
+    final effectiveIconColor = onTap == null
+        ? (iconColorOverride ?? foreground).withValues(alpha: 0.50)
+        : (iconColorOverride ?? effectiveForeground);
     final effectiveBorder = onTap == null
         ? accent.withValues(alpha: 0.24)
         : accent.withValues(alpha: filled ? 0.90 : 0.48);
@@ -290,19 +294,17 @@ extension _QuizAcademySurface on _QuizScreen {
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: effectiveBorder, width: 2),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: palette.shadow.withValues(
-                  alpha: onTap == null ? 0.14 : 0.22,
-                ),
-                offset: const Offset(4, 4),
-                blurRadius: 0,
+              ...puzzleAcademyRoundedDropShadow(
+                palette.shadow.withValues(alpha: onTap == null ? 0.14 : 0.22),
+                blurRadius: 7,
+                offsetY: 3,
               ),
             ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, size: 18, color: effectiveForeground),
+              Icon(icon, size: 18, color: effectiveIconColor),
               const SizedBox(width: 8),
               Text(
                 label,
@@ -348,22 +350,32 @@ extension _QuizAcademySurface on _QuizScreen {
     );
   }
 
-  Widget _academyBackdropLayer({required _QuizAcademyPalette palette}) {
+  Widget _academyBackdropLayer({
+    required _QuizAcademyPalette palette,
+    bool animated = true,
+  }) {
     return IgnorePointer(
       child: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: _QuizAcademyBackdropPainter(
-                    palette: palette,
-                    phase: _menuDotTime,
+            child: animated
+                ? AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      return CustomPaint(
+                        painter: _QuizAcademyBackdropPainter(
+                          palette: palette,
+                          phase: _menuDotTime,
+                        ),
+                      );
+                    },
+                  )
+                : CustomPaint(
+                    painter: _QuizAcademyBackdropPainter(
+                      palette: palette,
+                      phase: 0,
+                    ),
                   ),
-                );
-              },
-            ),
           ),
           Align(
             alignment: const Alignment(-0.82, -0.72),

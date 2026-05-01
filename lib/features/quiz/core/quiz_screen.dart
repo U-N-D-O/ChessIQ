@@ -1419,8 +1419,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
-  int _quizOptionCount() {
-    return _quizOptionCountForDifficulty(_quizDifficulty);
+  int _quizOptionCount({GambitQuizMode? mode}) {
+    return _quizOptionCountForMode(_quizDifficulty, mode ?? _quizMode);
   }
 
   int _quizOptionCountForDifficulty(QuizDifficulty difficulty) {
@@ -1428,12 +1428,16 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       case QuizDifficulty.easy:
         return 3;
       case QuizDifficulty.medium:
-        return 4;
+        return 3;
       case QuizDifficulty.hard:
-        return 4;
+        return 3;
       case QuizDifficulty.veryHard:
-        return 4;
+        return 3;
     }
+  }
+
+  int _quizOptionCountForMode(QuizDifficulty difficulty, GambitQuizMode mode) {
+    return _quizOptionCountForDifficulty(difficulty);
   }
 
   String _quizSetupDifficultyLabel(QuizDifficulty difficulty) {
@@ -1537,6 +1541,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   bool _quizDifficultyUnlocked(QuizDifficulty difficulty) {
+    if (difficulty == QuizDifficulty.veryHard) {
+      return true;
+    }
     return _quizAcademyProgress.isDifficultyUnlocked(difficulty);
   }
 
@@ -3688,13 +3695,19 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               )
               .toList()
             ..shuffle(random);
-      final targetLineOptions = min(_quizOptionCount(), linePool.length + 1);
+      final targetLineOptions = min(
+        _quizOptionCount(mode: activeMode),
+        linePool.length + 1,
+      );
       for (final candidate in linePool) {
         if (options.length >= targetLineOptions) break;
         options.add(candidate);
       }
     } else {
-      final targetOptions = min(_quizOptionCount(), gambits.length);
+      final targetOptions = min(
+        _quizOptionCount(mode: activeMode),
+        gambits.length,
+      );
       final namePool =
           gambits.where((entry) => entry.name != resolvedCorrect.name).toList()
             ..shuffle(random);
@@ -4241,10 +4254,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 width: 2,
               ),
               boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: palette.shadow.withValues(alpha: 0.22),
-                  offset: const Offset(4, 4),
-                  blurRadius: 0,
+                ...puzzleAcademyRoundedDropShadow(
+                  palette.shadow.withValues(alpha: 0.22),
+                  blurRadius: 7,
+                  offsetY: 3,
                 ),
               ],
             ),
@@ -4369,10 +4382,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: accent.withValues(alpha: 0.78), width: 3),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: palette.shadow,
-                offset: const Offset(6, 6),
-                blurRadius: 0,
+              ...puzzleAcademyRoundedDropShadow(
+                palette.shadow,
+                blurRadius: 11,
+                offsetY: 5,
               ),
             ],
           ),
@@ -4704,10 +4717,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: borderColor, width: 3),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: palette.shadow,
-                offset: const Offset(5, 5),
-                blurRadius: 0,
+              ...puzzleAcademyRoundedDropShadow(
+                palette.shadow,
+                blurRadius: 10,
+                offsetY: 4,
               ),
               if (selected)
                 BoxShadow(
@@ -4761,10 +4774,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                     width: 2,
                   ),
                   boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: palette.shadow.withValues(alpha: 0.18),
-                      offset: const Offset(4, 4),
-                      blurRadius: 0,
+                    ...puzzleAcademyRoundedDropShadow(
+                      palette.shadow.withValues(alpha: 0.18),
+                      blurRadius: 7,
+                      offsetY: 3,
                     ),
                   ],
                 ),
@@ -5140,10 +5153,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               width: 3,
             ),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: palette.shadow,
-                offset: const Offset(5, 5),
-                blurRadius: 0,
+              ...puzzleAcademyRoundedDropShadow(
+                palette.shadow,
+                blurRadius: 10,
+                offsetY: 4,
               ),
               if (selected)
                 BoxShadow(
@@ -5346,10 +5359,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               width: 3,
             ),
             boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: palette.shadow.withValues(alpha: enabled ? 0.34 : 0.14),
-                offset: const Offset(7, 7),
-                blurRadius: 0,
+              ...puzzleAcademyRoundedDropShadow(
+                palette.shadow.withValues(alpha: enabled ? 0.34 : 0.14),
+                blurRadius: 12,
+                offsetY: 5.5,
               ),
               if (enabled)
                 BoxShadow(
@@ -5629,10 +5642,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 width: 2,
               ),
               boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: palette.shadow.withValues(alpha: 0.14),
-                  offset: const Offset(2, 2),
-                  blurRadius: 0,
+                ...puzzleAcademyRoundedDropShadow(
+                  palette.shadow.withValues(alpha: 0.14),
+                  blurRadius: 5,
+                  offsetY: 2,
                 ),
               ],
             ),
@@ -5677,10 +5690,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 width: 2,
               ),
               boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: palette.shadow.withValues(alpha: 0.22),
-                  offset: const Offset(4, 4),
-                  blurRadius: 0,
+                ...puzzleAcademyRoundedDropShadow(
+                  palette.shadow.withValues(alpha: 0.22),
+                  blurRadius: 7,
+                  offsetY: 3,
                 ),
               ],
             ),
@@ -5772,6 +5785,37 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       pageBottomPadding + viewportPadding.bottom,
     );
     final routeAccent = _academyQuizModeAccent(palette, displayedQuizMode);
+    final correctFeedbackAccent = useMonochrome
+        ? const Color(0xFF34B86B)
+        : palette.emerald;
+    final wrongFeedbackAccent = useMonochrome
+        ? const Color(0xFFE35D5D)
+        : palette.signal;
+
+    bool isCorrectOption(int index) =>
+        answersLocked && index == displayedCorrectIndex;
+
+    bool isWrongSelectedOption(int index) =>
+        answersLocked &&
+        index == displayedSelectedIndex &&
+        index != displayedCorrectIndex;
+
+    bool isPreviewSelectedOption(int index) =>
+        !answersLocked && index == displayedSelectedIndex;
+
+    Color optionStateAccent(int index) {
+      if (isCorrectOption(index)) {
+        return correctFeedbackAccent;
+      }
+      if (isWrongSelectedOption(index)) {
+        return wrongFeedbackAccent;
+      }
+      if (isPreviewSelectedOption(index)) {
+        return routeAccent;
+      }
+      return palette.line;
+    }
+
     final topToContentGap = compactLandscapePlayLayout
         ? 6.0
         : compactPortraitPlayLayout
@@ -6055,15 +6099,16 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     Widget buildQuizFeedbackOverlayPanel() {
       final isCorrectOverlay = _quizFeedbackOverlayCorrect;
       final accent = isCorrectOverlay == true
-          ? palette.emerald
+          ? correctFeedbackAccent
           : isCorrectOverlay == false
-          ? palette.signal
+          ? wrongFeedbackAccent
           : routeAccent;
       final icon = isCorrectOverlay == true
           ? Icons.check_circle_rounded
           : Icons.info_outline_rounded;
 
-      return Positioned.fill(
+      return SizedBox(
+        width: double.infinity,
         child: _academyPixelPanel(
           panelKey: const ValueKey<String>('quiz_session_feedback_overlay'),
           palette: palette,
@@ -6074,16 +6119,20 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           ),
           padding: topPanelPadding,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: compactLandscapePlayLayout
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
             children: <Widget>[
               Icon(icon, size: compactPlayLayout ? 18 : 20, color: accent),
               SizedBox(width: compactPlayLayout ? 8 : 10),
               Expanded(
                 child: Text(
                   topFeedbackMessage!,
-                  maxLines: compactPlayLayout ? 1 : 2,
-                  softWrap: !compactPlayLayout,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: compactLandscapePlayLayout ? 1 : null,
+                  softWrap: !compactLandscapePlayLayout,
+                  overflow: compactLandscapePlayLayout
+                      ? TextOverflow.ellipsis
+                      : TextOverflow.visible,
                   style: _academyHudStyle(
                     palette: palette,
                     size: compactPlayLayout ? 11.2 : 11.8,
@@ -6125,9 +6174,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       final boardAccent = showingLivePreview
           ? palette.amber
           : reviewMode
-          ? palette.signal
+          ? wrongFeedbackAccent
           : answersLocked
-          ? (isCorrectAnswer ? palette.emerald : palette.signal)
+          ? (isCorrectAnswer ? correctFeedbackAccent : wrongFeedbackAccent)
           : routeAccent;
       final boardBadges = <Widget>[
         _academyTag(
@@ -6152,7 +6201,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           _academyTag(
             palette: palette,
             label: isCorrectAnswer ? 'CORRECT LOCK-IN' : 'ANSWER LOCKED',
-            accent: isCorrectAnswer ? palette.emerald : palette.signal,
+            accent: isCorrectAnswer
+                ? correctFeedbackAccent
+                : wrongFeedbackAccent,
           ),
       ];
       final compactBoardBadges = const <Widget>[];
@@ -6318,40 +6369,32 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                   padding: optionButtonPadding,
                   decoration: BoxDecoration(
                     color: Color.alphaBlend(
-                      (answersLocked
-                              ? (i == displayedCorrectIndex
-                                    ? palette.emerald
-                                    : (i == displayedSelectedIndex
-                                          ? palette.signal
-                                          : palette.line))
-                              : (i == displayedSelectedIndex
-                                    ? routeAccent
-                                    : palette.line))
-                          .withValues(
-                            alpha:
-                                (answersLocked && i == displayedCorrectIndex) ||
-                                    i == displayedSelectedIndex
-                                ? 0.18
-                                : 0.08,
-                          ),
+                      optionStateAccent(i).withValues(
+                        alpha:
+                            isCorrectOption(i) ||
+                                isWrongSelectedOption(i) ||
+                                isPreviewSelectedOption(i)
+                            ? 0.18
+                            : 0.08,
+                      ),
                       palette.panelAlt,
                     ),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                      color: answersLocked && i == displayedCorrectIndex
-                          ? palette.emerald.withValues(alpha: 0.94)
-                          : answersLocked && i == displayedSelectedIndex
-                          ? palette.signal.withValues(alpha: 0.86)
-                          : !answersLocked && i == displayedSelectedIndex
+                      color: isCorrectOption(i)
+                          ? correctFeedbackAccent.withValues(alpha: 0.94)
+                          : isWrongSelectedOption(i)
+                          ? wrongFeedbackAccent.withValues(alpha: 0.86)
+                          : isPreviewSelectedOption(i)
                           ? routeAccent.withValues(alpha: 0.94)
                           : palette.line,
                       width: 2,
                     ),
                     boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: palette.shadow.withValues(alpha: 0.18),
-                        offset: const Offset(4, 4),
-                        blurRadius: 0,
+                      ...puzzleAcademyRoundedDropShadow(
+                        palette.shadow.withValues(alpha: 0.18),
+                        blurRadius: 7,
+                        offsetY: 3,
                       ),
                     ],
                   ),
@@ -6364,13 +6407,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: Color.alphaBlend(
-                            (answersLocked && i == displayedCorrectIndex
-                                    ? palette.emerald
-                                    : answersLocked &&
-                                          i == displayedSelectedIndex
-                                    ? palette.signal
-                                    : !answersLocked &&
-                                          i == displayedSelectedIndex
+                            (isCorrectOption(i)
+                                    ? correctFeedbackAccent
+                                    : isWrongSelectedOption(i)
+                                    ? wrongFeedbackAccent
+                                    : isPreviewSelectedOption(i)
                                     ? routeAccent
                                     : palette.shell)
                                 .withValues(alpha: 0.22),
@@ -6378,11 +6419,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           ),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
-                            color: answersLocked && i == displayedCorrectIndex
-                                ? palette.emerald.withValues(alpha: 0.86)
-                                : answersLocked && i == displayedSelectedIndex
-                                ? palette.signal.withValues(alpha: 0.76)
-                                : !answersLocked && i == displayedSelectedIndex
+                            color: isCorrectOption(i)
+                                ? correctFeedbackAccent.withValues(alpha: 0.86)
+                                : isWrongSelectedOption(i)
+                                ? wrongFeedbackAccent.withValues(alpha: 0.76)
+                                : isPreviewSelectedOption(i)
                                 ? routeAccent.withValues(alpha: 0.86)
                                 : palette.line,
                             width: 2,
@@ -6392,11 +6433,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           String.fromCharCode(65 + i),
                           style: _academyHudStyle(
                             palette: palette,
-                            color: answersLocked && i == displayedCorrectIndex
-                                ? palette.emerald
-                                : answersLocked && i == displayedSelectedIndex
-                                ? palette.signal
-                                : !answersLocked && i == displayedSelectedIndex
+                            color: isCorrectOption(i)
+                                ? correctFeedbackAccent
+                                : isWrongSelectedOption(i)
+                                ? wrongFeedbackAccent
+                                : isPreviewSelectedOption(i)
                                 ? routeAccent
                                 : palette.text,
                             size: compactLandscapePlayLayout
@@ -6438,18 +6479,14 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                               i == displayedCorrectIndex
                                           ? FontWeight.w800
                                           : FontWeight.w700,
-                                      maxLines: compactLandscapePlayLayout
-                                          ? 2
-                                          : compactPlayLayout
-                                          ? 3
-                                          : 4,
-                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: null,
+                                      overflow: TextOverflow.visible,
                                     ),
                                   )
                                 : Text(
                                     displayedOptions[i],
-                                    maxLines: compactPlayLayout ? 2 : 3,
-                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: null,
+                                    overflow: TextOverflow.visible,
                                     style: _academyHudStyle(
                                       palette: palette,
                                       color: palette.text,
@@ -6493,15 +6530,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                 overflow: TextOverflow.ellipsis,
                                 style: _academyHudStyle(
                                   palette: palette,
-                                  color:
-                                      answersLocked &&
-                                          i == displayedCorrectIndex
-                                      ? palette.emerald
-                                      : answersLocked &&
-                                            i == displayedSelectedIndex
-                                      ? palette.signal
-                                      : !answersLocked &&
-                                            i == displayedSelectedIndex
+                                  color: isCorrectOption(i)
+                                      ? correctFeedbackAccent
+                                      : isWrongSelectedOption(i)
+                                      ? wrongFeedbackAccent
+                                      : isPreviewSelectedOption(i)
                                       ? routeAccent
                                       : palette.textMuted,
                                   size: compactLandscapePlayLayout
@@ -6527,12 +6560,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       ),
                       Icon(
                         answersLocked
-                            ? i == displayedCorrectIndex
+                            ? isCorrectOption(i)
                                   ? Icons.check_circle_rounded
-                                  : i == displayedSelectedIndex
+                                  : isWrongSelectedOption(i)
                                   ? Icons.cancel_rounded
                                   : Icons.circle_outlined
-                            : i == displayedSelectedIndex
+                            : isPreviewSelectedOption(i)
                             ? (displayedQuizMode == GambitQuizMode.guessLine
                                   ? Icons.play_circle_fill_rounded
                                   : Icons.radio_button_checked)
@@ -6542,11 +6575,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                             : compactPlayLayout
                             ? 18
                             : 20,
-                        color: answersLocked && i == displayedCorrectIndex
-                            ? palette.emerald
-                            : answersLocked && i == displayedSelectedIndex
-                            ? palette.signal
-                            : !answersLocked && i == displayedSelectedIndex
+                        color: isCorrectOption(i)
+                            ? correctFeedbackAccent
+                            : isWrongSelectedOption(i)
+                            ? wrongFeedbackAccent
+                            : isPreviewSelectedOption(i)
                             ? routeAccent
                             : palette.textMuted,
                       ),
@@ -6585,9 +6618,16 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             ? routeAccent
             : (_quizSessionAnswered >= _quizQuestionsTarget
                   ? palette.amber
-                  : palette.emerald),
+                  : (useMonochrome ? palette.emerald : correctFeedbackAccent)),
         onTap: reviewMode || _quizAnswered || canSubmitGuess
             ? _handleQuizPrimaryAction
+            : null,
+        iconColorOverride:
+            useMonochrome &&
+                !reviewMode &&
+                _quizAnswered &&
+                _quizSessionAnswered < _quizQuestionsTarget
+            ? correctFeedbackAccent
             : null,
         filled: true,
       );
@@ -6733,7 +6773,13 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 children: <Widget>[
                   ...header,
                   Expanded(
-                    child: Scrollbar(child: ListView(children: optionButtons)),
+                    child: Scrollbar(
+                      controller: _quizQuestionOptionsScrollController,
+                      child: ListView(
+                        controller: _quizQuestionOptionsScrollController,
+                        children: optionButtons,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ...footer,
@@ -6833,8 +6879,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           Expanded(
                             flex: 6,
                             child: buildQuizQuestionPanel(
-                              useScrollableOptions: false,
-                              pinFooter: true,
+                              useScrollableOptions: true,
                             ),
                           ),
                         ],
@@ -6842,62 +6887,52 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                     }
 
                     if (compactPortraitPlayLayout) {
-                      final optionCount = displayedOptions.isEmpty
-                          ? _quizOptionCountForDifficulty(_quizDifficulty)
-                          : displayedOptions.length;
-                      final optionHeight =
-                          displayedQuizMode == GambitQuizMode.guessLine
-                          ? 66.0
-                          : 48.0;
-                      final promptHeight = displayedPrompt.isEmpty
-                          ? 0.0
-                          : displayedQuizMode == GambitQuizMode.guessLine
-                          ? 40.0
-                          : 32.0;
-                      final footerAllowance =
-                          displayedQuizMode == GambitQuizMode.guessLine
-                          ? 100.0
-                          : 88.0;
-                      final estimatedQuestionHeight =
-                          (densePanelPadding * 2) +
-                          promptHeight +
-                          (displayedPrompt.isEmpty ? 0.0 : 10.0) +
-                          (optionCount * optionHeight) +
-                          (max(0, optionCount - 1) * compactOptionSpacing) +
-                          footerAllowance;
-                      final maxQuestionHeight = max(
-                        220.0,
-                        constraints.maxHeight - 120.0,
-                      );
-                      final questionHeight = hasQuizBoard
-                          ? estimatedQuestionHeight
-                                .clamp(220.0, maxQuestionHeight)
-                                .toDouble()
-                          : constraints.maxHeight;
-                      final boardAreaHeight = max(
-                        0.0,
-                        constraints.maxHeight -
-                            questionHeight -
-                            (hasQuizBoard ? contentGap : 0.0),
-                      );
                       final compactBoardChromeHeight =
                           6.0 + (densePanelPadding * 2);
+
+                      final reservedQuestionHeight =
+                          displayedQuizMode == GambitQuizMode.guessLine
+                          ? 320.0
+                          : 290.0;
+                      final targetBoardSize = hasQuizBoard
+                          ? min(
+                              constraints.maxWidth - (densePanelPadding * 2),
+                              constraints.maxHeight *
+                                  (displayedQuizMode == GambitQuizMode.guessLine
+                                      ? 0.42
+                                      : 0.46),
+                            )
+                          : 0.0;
+                      final maxAllowedBoardSize = hasQuizBoard
+                          ? max(
+                              0.0,
+                              constraints.maxHeight -
+                                  reservedQuestionHeight -
+                                  contentGap -
+                                  compactBoardChromeHeight,
+                            )
+                          : 0.0;
                       final boardSize = hasQuizBoard
+                          ? max(0.0, min(targetBoardSize, maxAllowedBoardSize))
+                          : null;
+                      final boardSectionHeight = hasQuizBoard
                           ? max(
                               0.0,
                               min(
-                                constraints.maxWidth - (densePanelPadding * 2),
-                                boardAreaHeight - compactBoardChromeHeight,
+                                constraints.maxHeight -
+                                    reservedQuestionHeight -
+                                    contentGap,
+                                (boardSize ?? 0.0) + compactBoardChromeHeight,
                               ),
                             )
-                          : null;
+                          : 0.0;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
                           if (hasQuizBoard)
                             SizedBox(
-                              height: boardAreaHeight,
+                              height: boardSectionHeight,
                               child: buildQuizBoardCard(
                                 maxBoardSize: boardSize,
                               ),
@@ -6905,8 +6940,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                           if (hasQuizBoard) SizedBox(height: contentGap),
                           Expanded(
                             child: buildQuizQuestionPanel(
-                              useScrollableOptions: false,
-                              pinFooter: true,
+                              useScrollableOptions: true,
                             ),
                           ),
                         ],

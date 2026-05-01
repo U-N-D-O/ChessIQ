@@ -117,10 +117,10 @@ abstract class _QuizComponents extends _QuizScreen {
                 width: 2,
               ),
               boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: palette.shadow.withValues(alpha: 0.16),
-                  offset: const Offset(4, 4),
-                  blurRadius: 0,
+                ...puzzleAcademyRoundedDropShadow(
+                  palette.shadow.withValues(alpha: 0.16),
+                  blurRadius: 7,
+                  offsetY: 3,
                 ),
               ],
             ),
