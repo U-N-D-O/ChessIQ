@@ -4136,6 +4136,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             update.line.depth < confirmationMinimumDepth) {
           return;
         }
+        if (!_moveQualityPendingStillMatchesHistory(pending)) {
+          if (identical(
+            _backgroundMoveQualityConfirmationsByFen[targetFen],
+            confirmationHandle,
+          )) {
+            _backgroundMoveQualityConfirmationsByFen.remove(targetFen);
+          }
+          confirmationHandle.cancel(reason: 'move no longer matches history');
+          return;
+        }
         consumedPrimaryLine = true;
         if (identical(
           _backgroundMoveQualityConfirmationsByFen[targetFen],
@@ -4171,9 +4181,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             )) {
               _backgroundMoveQualityConfirmationsByFen.remove(targetFen);
             }
-            final activePending = _pendingMoveQualityGrading;
-            if (activePending?.moveIndex != pending.moveIndex ||
-                activePending?.uci != pending.uci) {
+            if (!_moveQualityPendingStillMatchesHistory(pending)) {
               return;
             }
             if (!isPreMoveConfirmation) {
@@ -4206,6 +4214,63 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             }
           }),
     );
+  }
+
+  bool _moveQualityPendingStillMatchesHistory(
+    _PendingMoveQualityGrading pending,
+  ) {
+    if (pending.moveIndex < 0 || pending.moveIndex >= _moveHistory.length) {
+      return false;
+    }
+    final record = _moveHistory[pending.moveIndex];
+    return record.uci == pending.uci && record.isWhite == pending.moverIsWhite;
+  }
+
+  List<MoveRecord> _recalculateVsBotChargeHistory({
+    required int startIndex,
+    required MoveRecord firstUpdatedMove,
+  }) {
+    final updatedHistory = List<MoveRecord>.from(_moveHistory);
+    if (startIndex < 0 || startIndex >= updatedHistory.length) {
+      return updatedHistory;
+    }
+
+    var runningCharge = startIndex > 0
+        ? (updatedHistory[startIndex - 1].chargeAfter ?? 0)
+        : 0;
+
+    for (var index = startIndex; index < updatedHistory.length; index++) {
+      var move = index == startIndex ? firstUpdatedMove : updatedHistory[index];
+      final isHumanVsBotRecordedMove = move.isWhite == _humanPlaysWhite;
+      final chargeBefore = runningCharge;
+      final chargeAfter =
+          !isHumanVsBotRecordedMove ||
+              move.scoringSuppressedReason != null ||
+              move.quality == null
+          ? chargeBefore
+          : updatedMoveQualityCharge(
+              current: chargeBefore,
+              quality: move.quality,
+            );
+      move = move.copyWith(
+        chargeBefore: chargeBefore,
+        chargeAfter: chargeAfter,
+      );
+      updatedHistory[index] = move;
+      runningCharge = chargeAfter;
+    }
+
+    return updatedHistory;
+  }
+
+  int _visibleVsBotChargeForHistory(List<MoveRecord> history) {
+    if (history.isEmpty) {
+      return 0;
+    }
+    if (_historyIndex >= 0 && _historyIndex < history.length) {
+      return history[_historyIndex].chargeAfter ?? 0;
+    }
+    return history.last.chargeAfter ?? 0;
   }
 
   bool get _isHumanTurnInBotGame {
@@ -4468,6 +4533,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
     final currentMove = _moveHistory[pending.moveIndex];
     final previousPublishedQuality = currentMove.quality;
+    final previousPublishedChargeAfter =
+        currentMove.chargeAfter ?? pending.chargeBefore;
     if (currentMove.uci != pending.uci) {
       return;
     }
@@ -4581,6 +4648,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       chargeAfter: chargeAfter,
       scoringSuppressedReason: assessment.scoringSuppressedReason,
     );
+    final shouldShowAssessment =
+        livePostMoveRole != EngineRequestRole.backgroundConfirmation ||
+        previousPublishedQuality != quality ||
+        previousPublishedChargeAfter != chargeAfter;
+    final canShowBackgroundCorrection =
+        livePostMoveRole != EngineRequestRole.backgroundConfirmation ||
+        pending.moveIndex == _historyIndex;
+    var overlayMove = updatedMove;
+    var overlayChargeDelta = chargeAfter - pending.chargeBefore;
 
     setState(() {
       if (_pendingMoveQualityGrading?.moveIndex == pending.moveIndex &&
@@ -4589,21 +4665,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       if (pending.moveIndex < _moveHistory.length &&
           _moveHistory[pending.moveIndex].uci == pending.uci) {
-        _moveHistory[pending.moveIndex] = updatedMove;
+        if (isHumanVsBotMove) {
+          final recalculatedHistory = _recalculateVsBotChargeHistory(
+            startIndex: pending.moveIndex,
+            firstUpdatedMove: updatedMove,
+          );
+          _moveHistory
+            ..clear()
+            ..addAll(recalculatedHistory);
+          overlayMove = _moveHistory[pending.moveIndex];
+          overlayChargeDelta =
+              (overlayMove.chargeAfter ?? pending.chargeBefore) -
+              previousPublishedChargeAfter;
+          if (pending.chargeEpoch == _vsBotChargeEpoch) {
+            _vsBotCharge = _visibleVsBotChargeForHistory(recalculatedHistory);
+          }
+        } else {
+          _moveHistory[pending.moveIndex] = updatedMove;
+          overlayMove = updatedMove;
+        }
       }
-      if (isHumanVsBotMove && pending.chargeEpoch == _vsBotChargeEpoch) {
-        _vsBotCharge = chargeAfter;
-      }
-      final shouldShowAssessment =
-          livePostMoveRole != EngineRequestRole.backgroundConfirmation ||
-          previousPublishedQuality != quality;
-      if ((!_playVsBot || isHumanVsBotMove) && shouldShowAssessment) {
+      if ((!_playVsBot || isHumanVsBotMove) &&
+          shouldShowAssessment &&
+          canShowBackgroundCorrection) {
         _lastMoveQualityBadgeQuality = quality;
         _lastMoveQualityBadgeSquare = badgeSquare;
-        _showMoveQualityOverlay(
-          updatedMove,
-          chargeAfter - pending.chargeBefore,
-        );
+        _showMoveQualityOverlay(overlayMove, overlayChargeDelta);
       }
     });
 
@@ -5649,6 +5736,48 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     };
   }
 
+  void _flashOpeningButtonUnavailable({String? logMessage}) {
+    _openingModeFeedbackTimer?.cancel();
+    if (logMessage != null && logMessage.isNotEmpty) {
+      _addLog(logMessage);
+    }
+    setState(() {
+      _openingButtonFlashRed = true;
+      _openingMode = OpeningMode.off;
+      _openingModeFeedbackLabel = null;
+      _openingModeFeedbackColor = null;
+    });
+    _openingButtonFlashController.forward(from: 0).then((_) {
+      if (!mounted) return;
+      setState(() {
+        _openingButtonFlashRed = false;
+      });
+    });
+  }
+
+  Set<String> _sourceSquaresWithRegisteredOpenings({bool gambitsOnly = false}) {
+    final availableSources = <String>{};
+    for (final entry in boardState.entries) {
+      final square = entry.key;
+      final piece = entry.value;
+      if (!_isCurrentTurnPiece(piece)) {
+        continue;
+      }
+      final legalTargets = _legalMovesFrom(square);
+      if (legalTargets.isEmpty) {
+        continue;
+      }
+      if (_targetsWithRegisteredGambits(
+        square,
+        legalTargets,
+        gambitsOnly: gambitsOnly,
+      ).isNotEmpty) {
+        availableSources.add(square);
+      }
+    }
+    return availableSources;
+  }
+
   String? _openingModeFeedbackLabelFor(OpeningMode mode) {
     return switch (mode) {
       OpeningMode.yellowGlow => 'select',
@@ -5670,8 +5799,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _toggleGambitMode() {
+    final hasOpeningChoices = _sourceSquaresWithRegisteredOpenings(
+      gambitsOnly: false,
+    ).isNotEmpty;
     String? feedbackLabel;
     Color? feedbackColor;
+    if ((_openingMode == OpeningMode.off ||
+            _openingMode == OpeningMode.violetGlow) &&
+        !hasOpeningChoices) {
+      _flashOpeningButtonUnavailable(
+        logMessage:
+            'Opening select unavailable: no opening continuations remain in this position.',
+      );
+      return;
+    }
     setState(() {
       // Cycle: off -> yellow -> blue -> violet -> yellow
       if (_openingMode == OpeningMode.off) {
@@ -5729,48 +5870,39 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Future<void> _showGameResultDialog(GameOutcome outcome);
 
-  void _showAllPossibleOpenings() {
-    // Find all openings that could be played from the current position
+  List<EcoLine> _allPossibleOpeningsFromCurrentPosition() {
     final currentMoves = _currentMoveSequence();
     final allOpenings = <String, EcoLine>{};
 
-    // Find all openings that start with the current move sequence
     for (final line in _ecoLines) {
       final normalizedMoves = line.normalizedMoves.trim().toLowerCase();
       final currentMovesLower = currentMoves.isEmpty ? '' : '$currentMoves ';
 
-      // Check if this line starts with current moves followed by more
       if (currentMoves.isEmpty) {
-        // At starting position - show all openings
         allOpenings.putIfAbsent(line.name, () => line);
       } else if (normalizedMoves.startsWith(currentMovesLower.trim()) &&
           normalizedMoves.length > currentMovesLower.trim().length) {
-        // Opening that continues from current position
         allOpenings.putIfAbsent(line.name, () => line);
       }
     }
 
-    // Sort by name and move length
     final openingsList = allOpenings.values.toList();
     openingsList.sort((a, b) {
       final cmp = a.name.compareTo(b.name);
       if (cmp != 0) return cmp;
       return a.moveTokens.length.compareTo(b.moveTokens.length);
     });
+    return openingsList;
+  }
+
+  void _showAllPossibleOpenings() {
+    final openingsList = _allPossibleOpeningsFromCurrentPosition();
 
     if (openingsList.isEmpty) {
-      // Flash the button red then reset to off
-      setState(() {
-        _openingButtonFlashRed = true;
-      });
-      _openingButtonFlashController.forward(from: 0).then((_) {
-        if (mounted) {
-          setState(() {
-            _openingButtonFlashRed = false;
-            _openingMode = OpeningMode.off;
-          });
-        }
-      });
+      _flashOpeningButtonUnavailable(
+        logMessage:
+            'Opening list unavailable: no openings remain from this position.',
+      );
       return;
     }
 
@@ -5996,7 +6128,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       ..addAll(_targetsWithRegisteredGambits(square, _legalTargets));
   }
 
-  Set<String> _targetsWithRegisteredGambits(String from, Set<String> targets) {
+  Set<String> _targetsWithRegisteredGambits(
+    String from,
+    Set<String> targets, {
+    bool? gambitsOnly,
+  }) {
     final sourcePiece = boardState[from];
     if (sourcePiece == null) {
       return <String>{};
@@ -6013,7 +6149,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
       if (_findGambitsForCandidateMove(
         notation,
-        gambitsOnly: _isGambitsOnlyOpeningMode,
+        gambitsOnly: gambitsOnly ?? _isGambitsOnlyOpeningMode,
       ).isNotEmpty) {
         available.add(to);
       }
@@ -6244,7 +6380,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     String to, {
     String? forcedPromotion,
   }) async {
-    if (_gameOutcome != null) return;
+    final canEditResolvedPosition = _analysisEditMode && !_playVsBot;
+    if (_gameOutcome != null && !canEditResolvedPosition) return;
     final piece = boardState[from];
     if (piece == null) return;
     if (!_canHumanInteractWithBoardPiece(piece)) return;
@@ -6996,9 +7133,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _handleHoldTap(String square) {
     if (_playVsBot && !_isHumanTurnInBotGame) return;
     if (_analysisEditMode && !_isOpeningSelectionMode) {
-      if (_gameOutcome != null) {
-        return;
-      }
       if (_editToolboxEraserSelected) {
         _eraseEditModePiece(square);
         return;
@@ -7168,15 +7302,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
+    final detectedOutcome = _detectCurrentGameOutcome();
+    if (detectedOutcome != null) {
+      final gameOutcome = detectedOutcome.outcome;
+      setState(() {
+        _gameOutcome = gameOutcome;
+        _gameDrawReason = detectedOutcome.drawReason;
+        _botThinking = false;
+      });
+      _persistAnalysisSnapshotIfNeeded();
+      unawaited(_startGameResultReveal(gameOutcome));
+      return;
+    }
+
     _persistAnalysisSnapshotIfNeeded();
     _refreshAnalysisForCurrentPosition();
   }
 
   void _placeEditModePiece(String piece, String square) {
     if (!_analysisEditMode || _isOpeningSelectionMode) {
-      return;
-    }
-    if (_gameOutcome != null) {
       return;
     }
     if (piece == 'k_w' || piece == 'k_b') {
@@ -7197,9 +7341,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _eraseEditModePiece(String square) {
     if (!_analysisEditMode || _isOpeningSelectionMode) {
-      return;
-    }
-    if (_gameOutcome != null) {
       return;
     }
 
@@ -7256,8 +7397,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   ) {
     if (!_analysisEditMode ||
         _isOpeningSelectionMode ||
-        !_editToolboxEraserSelected ||
-        _gameOutcome != null) {
+        !_editToolboxEraserSelected) {
       return;
     }
     final square = _squareForBoardLocalPosition(
@@ -7624,7 +7764,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   // --- Move Handling ---
   void _onMove(String from, String to, {String? promotion}) {
-    if (_gameOutcome != null) return;
+    final canEditResolvedPosition = _analysisEditMode && !_playVsBot;
+    if (_gameOutcome != null && !canEditResolvedPosition) return;
     if (_playVsBot && !_isHumanTurnInBotGame && !_botThinking) {
       return;
     }
@@ -7673,6 +7814,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       nextBoardState: nextBoardState,
     );
     final isHumanVsBotMove = _playVsBot && moverIsWhite == _humanPlaysWhite;
+
+    if (canEditResolvedPosition && _gameOutcome != null) {
+      _cancelGameResultReveal();
+    }
 
     // Opening matching needs SAN-like notation such as e4, exd5, Nf3, Rxe5.
     final notation = _buildMoveNotation(
@@ -7765,6 +7910,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         pieceMoved: piece,
         pieceCaptured: captured,
       );
+      if (canEditResolvedPosition) {
+        _gameResultDialogVisible = false;
+        _clearGameOutcomeState();
+      }
       _updateCurrentOpening();
       _refreshGambitPreview();
       if (!_playVsBot) {
@@ -7790,20 +7939,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final detectedOutcome = _detectCurrentGameOutcome();
     if (detectedOutcome != null) {
-      final missingKingAfterMove =
-          !boardState.values.contains('k_w') ||
-          !boardState.values.contains('k_b');
-      if (_analysisEditMode && !_playVsBot && !missingKingAfterMove) {
-        setState(() {
-          _pendingMoveQualityGrading = null;
-          _gameResultDialogVisible = false;
-          _botThinking = false;
-          _clearGameOutcomeState();
-        });
-        _persistAnalysisSnapshotIfNeeded();
-        _refreshAnalysisForCurrentPosition();
-        return;
-      }
       final gameOutcome = detectedOutcome.outcome;
       _send('stop');
       setState(() {
@@ -10613,6 +10748,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : activeMove?.uci != null && activeMove!.uci!.length >= 4
         ? activeMove.uci!.substring(2, 4)
         : null;
+    final openingOptionSourceSquares = _openingMode == OpeningMode.off
+        ? const <String>{}
+        : _sourceSquaresWithRegisteredOpenings(
+            gambitsOnly: _isGambitsOnlyOpeningMode,
+          );
+    final previewMoveSquares = _gambitPreviewLines.isEmpty
+        ? const <String>{}
+        : _getPreviewMoveSqares();
 
     return Container(
       decoration: _playVsBot
@@ -10930,12 +11073,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                               : 'yellow';
                                         } else if (_gambitPreviewLines
                                                 .isNotEmpty &&
-                                            _getPreviewMoveSqares().contains(
-                                              sq,
-                                            )) {
+                                            previewMoveSquares.contains(sq)) {
                                           glowColor = _isGambitsOnlyOpeningMode
                                               ? 'violet'
-                                              : 'blue';
+                                              : 'yellow';
+                                        } else if (openingOptionSourceSquares
+                                            .contains(sq)) {
+                                          glowColor = 'yellow';
                                         }
                                         return _buildPieceWithGlow(
                                           p,
@@ -10985,10 +11129,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final accentColor = isDark
         ? const Color(0xFFFFD166)
         : const Color(0xFFB77912);
-    final feedbackBackgroundColor = Color.alphaBlend(
-      scheme.surface.withValues(alpha: isDark ? 0.82 : 0.96),
-      isDark ? const Color(0xFF101621) : Colors.white,
-    );
     final tileBackgroundColor = Color.alphaBlend(
       scheme.surface.withValues(alpha: isDark ? 0.74 : 0.90),
       isDark ? const Color(0xFF11161F) : Colors.white,
@@ -11001,28 +11141,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         data: _BoardDragPayload.palette(piece: entry.piece),
         feedback: Material(
           color: Colors.transparent,
-          child: Container(
+          child: SizedBox(
             width: feedbackSize,
             height: feedbackSize,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: feedbackBackgroundColor,
-              borderRadius: BorderRadius.circular(borderRadius + 2),
-              border: Border.all(
-                color: accentColor.withValues(alpha: isDark ? 0.55 : 0.42),
+            child: Center(
+              child: _pieceImage(
+                entry.piece,
+                width: pieceSize + 10,
+                height: pieceSize + 10,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: scheme.shadow.withValues(alpha: isDark ? 0.28 : 0.16),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: _pieceImage(
-              entry.piece,
-              width: pieceSize + 6,
-              height: pieceSize + 6,
             ),
           ),
         ),
@@ -11926,11 +12053,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ? arcade.amber
           : _botDifficultyColor(_selectedBotDifficulty);
       final statusAccent = _gameOutcome != null
-          ? (_gameOutcome == GameOutcome.draw
-                ? arcade.amber
-                : _isWinningOutcomeForPov
-                ? arcade.victory
-                : arcade.crimson)
+          ? _vsBotOutcomeAccent(
+              arcade,
+              isDraw: _gameOutcome == GameOutcome.draw,
+              isWin: _isWinningOutcomeForPov,
+            )
           : _botThinking
           ? arcade.amber
           : _isHumanTurnInBotGame

@@ -229,6 +229,34 @@ _VsBotArcadePalette _vsBotArcadePaletteFor(
   );
 }
 
+Color _vsBotSemanticAccent(
+  _VsBotArcadePalette arcade,
+  Color color, {
+  double lightBlend = 0.12,
+  double darkBlend = 0.06,
+}) {
+  if (!arcade.monochrome) return color;
+  return Color.lerp(
+    color,
+    arcade.text,
+    arcade.isDark ? darkBlend : lightBlend,
+  )!;
+}
+
+Color _vsBotOutcomeAccent(
+  _VsBotArcadePalette arcade, {
+  required bool isDraw,
+  required bool isWin,
+}) {
+  if (isDraw) {
+    return _vsBotSemanticAccent(arcade, const Color(0xFFD8A93A));
+  }
+  if (isWin) {
+    return _vsBotSemanticAccent(arcade, const Color(0xFF34B86B));
+  }
+  return _vsBotSemanticAccent(arcade, const Color(0xFFE35D5D));
+}
+
 BoxDecoration _vsBotArcadePanelDecoration({
   required _VsBotArcadePalette palette,
   required Color accent,
@@ -1190,10 +1218,40 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) {
+          final theme = Theme.of(dialogContext);
+          final scheme = theme.colorScheme;
+          final isLight = theme.brightness == Brightness.light;
+          final useMonochrome =
+              dialogContext.watch<AppThemeProvider>().isMonochrome ||
+              _isCinematicThemeEnabled;
           final isDraw = outcome == GameOutcome.draw;
-          final accent = isDraw
-              ? const Color(0xFFD8B640)
+          final rawAccent = isDraw
+              ? const Color(0xFFD1A22E)
               : const Color(0xFFE45C5C);
+          final accent = useMonochrome
+              ? Color.lerp(rawAccent, scheme.onSurface, isLight ? 0.12 : 0.06)!
+              : rawAccent;
+          final panelBase = scheme.surface;
+          final panelTint = Color.alphaBlend(
+            (useMonochrome ? scheme.onSurface : scheme.primary).withValues(
+              alpha: isLight ? 0.045 : 0.10,
+            ),
+            panelBase,
+          );
+          final panelEnd = Color.alphaBlend(
+            accent.withValues(alpha: isLight ? 0.05 : 0.08),
+            panelBase,
+          );
+          final titleColor = scheme.onSurface;
+          final messageColor = scheme.onSurface.withValues(
+            alpha: isLight ? 0.72 : 0.80,
+          );
+          final continueBackground = useMonochrome
+              ? scheme.onSurface
+              : scheme.primary;
+          final continueForeground = useMonochrome
+              ? scheme.surface
+              : scheme.onPrimary;
           final title = isDraw ? 'Draw' : 'Checkmate';
           final message = isDraw
               ? _drawOutcomeDialogMessage(_gameDrawReason)
@@ -1211,24 +1269,29 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF141B2A), Color(0xFF0C121D)],
+                    colors: [panelTint, panelBase, panelEnd],
+                    stops: const [0.0, 0.58, 1.0],
                   ),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.13),
+                    color: scheme.outline.withValues(
+                      alpha: isLight ? 0.24 : 0.34,
+                    ),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: accent.withValues(alpha: 0.16),
-                      blurRadius: 34,
-                      spreadRadius: 1.5,
+                      color: accent.withValues(alpha: isLight ? 0.12 : 0.18),
+                      blurRadius: 30,
+                      spreadRadius: 1.0,
                     ),
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      blurRadius: 40,
-                      offset: const Offset(0, 16),
+                      color: scheme.shadow.withValues(
+                        alpha: isLight ? 0.14 : 0.32,
+                      ),
+                      blurRadius: 34,
+                      offset: const Offset(0, 14),
                     ),
                   ],
                 ),
@@ -1255,8 +1318,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     const SizedBox(height: 16),
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: titleColor,
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.3,
@@ -1267,7 +1330,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       message,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.78),
+                        color: messageColor,
                         fontSize: 13,
                         height: 1.35,
                       ),
@@ -1280,8 +1343,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         onPressed: () =>
                             Navigator.of(dialogContext).pop('continue'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2A6CF0),
-                          foregroundColor: Colors.white,
+                          backgroundColor: continueBackground,
+                          foregroundColor: continueForeground,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -1298,9 +1361,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         onPressed: () =>
                             Navigator.of(dialogContext).pop('reset'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
+                          foregroundColor: scheme.onSurface,
                           side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.18),
+                            color: scheme.outline.withValues(
+                              alpha: isLight ? 0.34 : 0.46,
+                            ),
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -1350,11 +1415,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         );
         final isWin = _isWinningOutcomeForPov;
         final isDraw = outcome == GameOutcome.draw;
-        final accent = isDraw
-            ? arcade.amber
-            : isWin
-            ? arcade.victory
-            : arcade.crimson;
+        final accent = _vsBotOutcomeAccent(
+          arcade,
+          isDraw: isDraw,
+          isWin: isWin,
+        );
         final title = isDraw
             ? 'Draw'
             : isWin
@@ -1549,12 +1614,18 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         }
 
         Widget buildActionColumn() {
+          final chooseOpponentAccent = _vsBotSemanticAccent(
+            arcade,
+            const Color(0xFF4F9BFF),
+          );
           final chooseOpponentForeground = _vsBotReadableAccentColor(
-            arcade.cyan,
+            chooseOpponentAccent,
             arcade,
           );
           final chooseOpponentBackground = Color.alphaBlend(
-            arcade.cyan.withValues(alpha: arcade.monochrome ? 0.22 : 0.34),
+            chooseOpponentAccent.withValues(
+              alpha: arcade.monochrome ? 0.24 : 0.34,
+            ),
             arcade.panelAlt,
           );
 
@@ -1591,7 +1662,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                 resultValue: 'menu',
                 label: 'Main Menu',
                 icon: Icons.home_rounded,
-                foregroundColor: Colors.white70,
+                foregroundColor: arcade.monochrome
+                    ? arcade.text.withValues(alpha: 0.78)
+                    : Colors.white70,
                 textButton: true,
               ),
             ],
