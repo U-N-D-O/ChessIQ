@@ -8786,7 +8786,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   List<String> _launchSquaresForSuggestionCount(int count) {
-    const preferred = <String>['e2', 'c2', 'd2', 'f2', 'b2', 'g2', 'a2', 'h2'];
+    const preferred = <String>[
+      'e2',
+      'd2',
+      'g1',
+      'c2',
+      'b1',
+      'g2',
+      'b2',
+      'a2',
+      'f2',
+      'h2',
+    ];
     final safeCount = count.clamp(1, preferred.length);
     return preferred.take(safeCount).toList();
   }
@@ -10376,11 +10387,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       alignment: Alignment.centerRight,
                       child: ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: sideMaxWidth),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerRight,
-                          child: rightAccessory,
-                        ),
+                        child: rightAccessory,
                       ),
                     ),
                   ],
@@ -10421,7 +10428,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final clusterWidth = showEditModeButton ? 168 * scale : 72 * scale;
     return SizedBox(
       width: clusterWidth,
-      height: 20 * scale,
+      height: 30,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -10440,25 +10447,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             Align(
               alignment: Alignment.center,
               child: SizedBox(
-                width: 20 * scale,
-                height: 20 * scale,
+                width: 30,
+                height: 30,
                 child: IconButton(
                   onPressed: () {
                     _setAnalysisEditMode(!_analysisEditMode);
                   },
-                  icon: Text(
-                    _analysisEditMode ? '🛠️' : '🔒',
-                    style: TextStyle(fontSize: 14 * scale),
+                  icon: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: Image.asset(
+                      _analysisEditMode
+                          ? 'assets/pieces/edit board.png'
+                          : 'assets/pieces/edit no board.png',
+                      width: 18,
+                      height: 18,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.medium,
+                    ),
                   ),
                   tooltip: _analysisEditMode
                       ? 'Edit mode on (any move allowed)'
                       : 'Edit mode off (legal moves only)',
-                  splashRadius: 14 * scale,
+                  splashRadius: 18,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints.tightFor(
-                    width: 20 * scale,
-                    height: 20 * scale,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 30,
+                    height: 30,
                   ),
                 ),
               ),
