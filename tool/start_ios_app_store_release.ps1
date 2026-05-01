@@ -10,7 +10,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Require-Command {
+function Assert-Command {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$InstallHint
@@ -58,8 +58,8 @@ function Prompt-YesNo {
     return $answer -in @('y', 'yes')
 }
 
-Require-Command -Name 'git' -InstallHint 'Install Git and retry.'
-Require-Command -Name 'gh' -InstallHint 'Install GitHub CLI from https://cli.github.com/ and run gh auth login first.'
+Assert-Command -Name 'git' -InstallHint 'Install Git and retry.'
+Assert-Command -Name 'gh' -InstallHint 'Install GitHub CLI from https://cli.github.com/ and run gh auth login first.'
 
 & gh auth status | Out-Null
 

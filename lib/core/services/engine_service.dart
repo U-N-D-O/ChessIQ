@@ -815,6 +815,13 @@ class CoordinatedEngineService extends EngineService {
       if (task.request.role != request.role) {
         return false;
       }
+      // Background confirmations are per-move; only a re-queue for the SAME
+      // FEN should supersede a queued one. Confirmations for other moves'
+      // post-/pre-move FENs must be allowed to wait their turn.
+      if (request.role == EngineRequestRole.backgroundConfirmation &&
+          task.request.fen != request.fen) {
+        return false;
+      }
       _cancelTask(task, reason);
       return true;
     });
@@ -822,6 +829,13 @@ class CoordinatedEngineService extends EngineService {
 
   bool _shouldPreempt(EngineRequestSpec active, EngineRequestSpec next) {
     if (active.role == next.role) {
+      // Same-role same-FEN preempts (refresh). Same-role different-FEN for
+      // backgroundConfirmation does NOT preempt — the active one runs to
+      // completion so it can publish its move's grade.
+      if (next.role == EngineRequestRole.backgroundConfirmation &&
+          active.fen != next.fen) {
+        return false;
+      }
       return true;
     }
     return next.role.priority > active.role.priority;

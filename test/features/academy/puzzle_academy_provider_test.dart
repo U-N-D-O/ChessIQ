@@ -30,6 +30,17 @@ Map<String, EloNodeProgress> _buildTestNodes() {
       themeRewardUnlocked: false,
       speedDemon: false,
     ),
+    '1050_1100': const EloNodeProgress(
+      startElo: 1050,
+      endElo: 1100,
+      totalPuzzles: 500,
+      solvedCount: 0,
+      attempts: 0,
+      unlocked: false,
+      goldCrown: false,
+      themeRewardUnlocked: false,
+      speedDemon: false,
+    ),
     '1500_1550': const EloNodeProgress(
       startElo: 1500,
       endElo: 1550,
@@ -85,6 +96,7 @@ void main() {
       <String, Object>{
         'semesterId': 'tactician',
         'nodeKey': '1000_1050',
+        'nextNodeKey': '1050_1100',
         'cost': 1200,
       },
       <String, Object>{
@@ -108,6 +120,7 @@ void main() {
     for (final purchase in purchases) {
       final semesterId = purchase['semesterId']! as String;
       final nodeKey = purchase['nodeKey']! as String;
+      final nextNodeKey = purchase['nextNodeKey'] as String?;
       final cost = purchase['cost']! as int;
 
       final beforeNode = provider.progress.nodes[nodeKey];
@@ -126,6 +139,13 @@ void main() {
       expect(afterNode, isNotNull, reason: semesterId);
       expect(provider.ownsSemesterTuition(semesterId), isTrue);
       expect(afterNode!.unlocked, isTrue, reason: semesterId);
+      if (nextNodeKey != null) {
+        expect(
+          provider.progress.nodes[nextNodeKey]?.unlocked,
+          isFalse,
+          reason: 'Tuition should only unlock the first level in $semesterId',
+        );
+      }
       expect(
         provider.requiresPreviousSemesterExamGate(afterNode),
         isFalse,
@@ -157,6 +177,54 @@ void main() {
       expect(reloadedNode!.unlocked, isTrue, reason: semesterId);
     }
 
+    expect(
+      reloadedProvider.progress.nodes['1050_1100']?.unlocked,
+      isFalse,
+      reason: 'Reloaded tuition purchase should not unlock a full semester.',
+    );
+
     expect(reloadedProvider.progress.coins, remainingCoins);
   });
+
+  test(
+    'semester tuition cannot be bought when entry level is already unlocked',
+    () async {
+      SharedPreferences.setMockInitialValues(const <String, Object>{});
+
+      final fallbackNodes = _buildTestNodes();
+      final provider = PuzzleAcademyProvider();
+      provider.debugHydrateProgress(
+        PuzzleProgressModel.initial(nodes: fallbackNodes).copyWith(
+          coins: 12000,
+          examResults: const <AcademyExamResult>[
+            AcademyExamResult(
+              nodeKey: '450_500',
+              score: 9000,
+              leaderboardScore: 9000,
+              correctCount: 45,
+              totalCount: 50,
+              elapsedMs: 1000,
+              timeLimitMs: 3600000,
+              completedAtMs: 1,
+            ),
+            AcademyExamResult(
+              nodeKey: '450_500',
+              score: 9100,
+              leaderboardScore: 9100,
+              correctCount: 46,
+              totalCount: 50,
+              elapsedMs: 1000,
+              timeLimitMs: 3600000,
+              completedAtMs: 2,
+            ),
+          ],
+        ),
+      );
+
+      expect(provider.isSemesterAlreadyUnlocked('tactician'), isTrue);
+      expect(await provider.buySemesterTuition('tactician'), isFalse);
+      expect(provider.ownsSemesterTuition('tactician'), isFalse);
+      expect(provider.progress.coins, 12000);
+    },
+  );
 }

@@ -506,6 +506,8 @@ MoveQualityAssessment? _engineLineAssessment(
   final cpGapFromBest = context.cpGapFromBest;
 
   if (playedMoveRank == 1) {
+    // Stockfish flagged the played move as the top line at the captured
+    // pre-move depth. Trust that even when the post-move evaluation drifts.
     return _assessment(
       context.insideOpeningExemption ? MoveQuality.book : MoveQuality.optimal,
       context,
@@ -529,18 +531,23 @@ MoveQualityAssessment? _engineLineAssessment(
     return null;
   }
 
+  // Rank-based promotions require an explicit cp-gap so we never promote a
+  // move whose engine-line context is incomplete. A null cpGapFromBest almost
+  // always means the played move was not present in the captured pre-move
+  // lines (e.g. when MultiPV is narrow), in which case the rank reading is
+  // unreliable.
   if (playedMoveRank == 2 &&
       _allowsStrongPromotion(baseline) &&
-      (cpGapFromBest == null ||
-          cpGapFromBest <= moveQualityEqualPositionEquivalentCpGap)) {
+      cpGapFromBest != null &&
+      cpGapFromBest <= moveQualityEqualPositionEquivalentCpGap) {
     return _assessment(MoveQuality.strong, context);
   }
 
   if (playedMoveRank != null &&
       playedMoveRank <= 3 &&
       _allowsSolidPromotion(baseline) &&
-      (cpGapFromBest == null ||
-          cpGapFromBest <= moveQualityReasonableAlternativeCpGap)) {
+      cpGapFromBest != null &&
+      cpGapFromBest <= moveQualityReasonableAlternativeCpGap) {
     return _assessment(MoveQuality.solid, context);
   }
 

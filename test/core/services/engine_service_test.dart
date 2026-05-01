@@ -137,6 +137,145 @@ void main() {
     expect(secondResult.lines.single.move, 'g8f6');
   });
 
+  test('background confirmations for different FENs coexist', () async {
+    late _FakeEngineTransport transport;
+    var readyCount = 0;
+    final service = CoordinatedEngineService.debug(
+      owner: 'analysis.bgconf',
+      transportFactory: () => transport = _FakeEngineTransport((cmd, fake) {
+        if (cmd == 'uci') {
+          fake.emit('uciok');
+          return;
+        }
+        if (cmd == 'isready') {
+          readyCount++;
+          if (readyCount == 1) {
+            fake.emit('readyok');
+          }
+        }
+      }),
+    );
+    await service.startScheduler();
+
+    // First confirmation starts and runs to completion.
+    final confA = service.scheduleSearch(
+      const EngineRequestSpec(
+        requestId: 'bgconf-a',
+        role: EngineRequestRole.backgroundConfirmation,
+        fen: 'fen-a',
+        whiteToMove: true,
+        multiPv: 1,
+        depth: 10,
+        timeout: Duration(milliseconds: 500),
+      ),
+    );
+    await _flushMicrotasks();
+    transport.emit('readyok');
+    await _flushMicrotasks();
+
+    // Second confirmation for a DIFFERENT FEN must NOT cancel the first.
+    final confB = service.scheduleSearch(
+      const EngineRequestSpec(
+        requestId: 'bgconf-b',
+        role: EngineRequestRole.backgroundConfirmation,
+        fen: 'fen-b',
+        whiteToMove: false,
+        multiPv: 1,
+        depth: 10,
+        timeout: Duration(milliseconds: 500),
+      ),
+    );
+    await _flushMicrotasks();
+
+    transport.emit('info depth 10 multipv 1 score cp 25 pv e2e4');
+    transport.emit('bestmove e2e4');
+    await _flushMicrotasks();
+
+    transport.emit('readyok');
+    await _flushMicrotasks();
+    transport.emit('info depth 10 multipv 1 score cp -10 pv e7e5');
+    transport.emit('bestmove e7e5');
+
+    final resultA = await confA.result;
+    final resultB = await confB.result;
+
+    expect(
+      resultA.succeeded,
+      isTrue,
+      reason:
+          'first confirmation must not be cancelled by a different-FEN '
+          'confirmation queued after it',
+    );
+    expect(resultA.bestMove, 'e2e4');
+    expect(resultB.succeeded, isTrue);
+    expect(resultB.bestMove, 'e7e5');
+  });
+
+  test(
+    'background confirmation for the SAME FEN supersedes the prior one',
+    () async {
+      late _FakeEngineTransport transport;
+      final service = CoordinatedEngineService.debug(
+        owner: 'analysis.bgconf-same',
+        transportFactory: () => transport = _FakeEngineTransport((cmd, fake) {
+          if (cmd == 'uci') {
+            fake.emit('uciok');
+            return;
+          }
+          if (cmd == 'isready') {
+            fake.emit('readyok');
+          }
+        }),
+      );
+      await service.startScheduler();
+
+      final first = service.scheduleSearch(
+        const EngineRequestSpec(
+          requestId: 'bgconf-same-1',
+          role: EngineRequestRole.backgroundConfirmation,
+          fen: 'fen-shared',
+          whiteToMove: true,
+          multiPv: 1,
+          depth: 10,
+          timeout: Duration(milliseconds: 500),
+        ),
+      );
+      await _flushMicrotasks();
+      transport.emit('readyok');
+      await _flushMicrotasks();
+
+      final second = service.scheduleSearch(
+        const EngineRequestSpec(
+          requestId: 'bgconf-same-2',
+          role: EngineRequestRole.backgroundConfirmation,
+          fen: 'fen-shared',
+          whiteToMove: true,
+          multiPv: 2,
+          depth: 12,
+          timeout: Duration(milliseconds: 500),
+        ),
+      );
+      await _flushMicrotasks();
+
+      transport.emit('readyok');
+      await _flushMicrotasks();
+      transport.emit('info depth 12 multipv 1 score cp 5 pv c2c4');
+      transport.emit('bestmove c2c4');
+      await _flushMicrotasks();
+
+      final firstResult = await first.result;
+      final secondResult = await second.result;
+
+      expect(
+        firstResult.cancelled,
+        isTrue,
+        reason: 'a same-FEN re-queue must supersede the prior confirmation',
+      );
+      expect(secondResult.succeeded, isTrue);
+      expect(secondResult.bestMove, 'c2c4');
+    },
+  );
+
   test(
     'sends go infinite for endless live analysis and can cancel it',
     () async {

@@ -756,6 +756,22 @@ class _SemesterHeader extends StatelessWidget {
       monochromeOverride: monochrome,
     );
     final accentCyan = _accentCyan(context);
+    final headerBase = Color.alphaBlend(
+      palette.boardDark.withValues(alpha: palette.isDark ? 0.24 : 0.10),
+      palette.isDark ? palette.panelAlt : scheme.surface,
+    );
+    final headerFill = Color.alphaBlend(
+      (palette.monochrome ? palette.text : accentCyan).withValues(
+        alpha: palette.isDark ? 0.20 : 0.15,
+      ),
+      headerBase,
+    );
+    final headerEdge = (palette.monochrome ? palette.text : accentCyan)
+        .withValues(alpha: palette.isDark ? 0.70 : 0.62);
+    final chevronFill = Color.alphaBlend(
+      headerEdge.withValues(alpha: palette.isDark ? 0.20 : 0.13),
+      headerFill,
+    );
 
     return PuzzleAcademyPressable(
       onTap: onTap,
@@ -763,73 +779,149 @@ class _SemesterHeader extends StatelessWidget {
       monochromeOverride: monochrome,
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: puzzleAcademyPanelDecoration(
-          palette: palette,
-          accent: accentCyan,
-          radius: 10,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[
+              Color.alphaBlend(
+                headerEdge.withValues(alpha: palette.isDark ? 0.20 : 0.16),
+                headerFill,
+              ),
+              headerFill,
+              Color.alphaBlend(
+                palette.amber.withValues(
+                  alpha: palette.monochrome
+                      ? (palette.isDark ? 0.06 : 0.04)
+                      : (palette.isDark ? 0.11 : 0.08),
+                ),
+                headerFill,
+              ),
+            ],
+            stops: const <double>[0.0, 0.58, 1.0],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: headerEdge, width: 3.4),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: palette.shadow,
+              offset: const Offset(7, 7),
+              blurRadius: 0,
+            ),
+            ...puzzleAcademySurfaceGlow(
+              headerEdge,
+              monochrome: palette.monochrome,
+              strength: palette.isDark ? 0.86 : 0.66,
+            ),
+          ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${semester.title} • ${semester.minElo}-${semester.maxElo}',
-                    style: _academyHeaderStyle(
-                      context,
-                      color: scheme.onSurface,
-                      monochrome: monochrome,
-                      size: 15.0,
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: 5,
+                  decoration: BoxDecoration(
+                    color: headerEdge,
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(7),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: headerEdge.withValues(alpha: 0.32),
+                        blurRadius: 12,
+                        offset: const Offset(2, 0),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(
-                  expanded ? Icons.expand_less : Icons.expand_more,
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                  size: 18,
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                PuzzleAcademyTag(
-                  label: '$nodeCount Levels',
-                  accent: accentCyan,
-                  compact: true,
-                  monochromeOverride: monochrome,
-                ),
-                PuzzleAcademyTag(
-                  label: '${(progress * 100).round()}% clear',
-                  accent: palette.amber,
-                  compact: true,
-                  filled: progress >= 1.0,
-                  monochromeOverride: monochrome,
-                ),
-                PuzzleAcademyTag(
-                  label: expanded ? 'COLLAPSE' : 'EXPAND',
-                  accent: scheme.outline,
-                  foregroundColor: scheme.onSurface.withValues(alpha: 0.74),
-                  compact: true,
-                  monochromeOverride: monochrome,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                minHeight: 7,
-                value: progress,
-                backgroundColor: scheme.outline.withValues(alpha: 0.22),
-                valueColor: AlwaysStoppedAnimation<Color>(accentCyan),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${semester.title} • ${semester.minElo}-${semester.maxElo}',
+                          style: _academyHeaderStyle(
+                            context,
+                            color: scheme.onSurface,
+                            monochrome: monochrome,
+                            size: 15.0,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: chevronFill,
+                          borderRadius: BorderRadius.circular(7),
+                          border: Border.all(
+                            color: headerEdge.withValues(alpha: 0.72),
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(
+                          expanded ? Icons.expand_less : Icons.expand_more,
+                          color: scheme.onSurface.withValues(alpha: 0.86),
+                          size: 19,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      PuzzleAcademyTag(
+                        label: '$nodeCount Levels',
+                        accent: accentCyan,
+                        compact: true,
+                        monochromeOverride: monochrome,
+                      ),
+                      PuzzleAcademyTag(
+                        label: '${(progress * 100).round()}% clear',
+                        accent: palette.amber,
+                        compact: true,
+                        filled: progress >= 1.0,
+                        monochromeOverride: monochrome,
+                      ),
+                      PuzzleAcademyTag(
+                        label: expanded ? 'COLLAPSE' : 'EXPAND',
+                        accent: scheme.outline,
+                        foregroundColor: scheme.onSurface.withValues(
+                          alpha: 0.74,
+                        ),
+                        compact: true,
+                        monochromeOverride: monochrome,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      minHeight: 7,
+                      value: progress,
+                      backgroundColor: headerEdge.withValues(
+                        alpha: palette.isDark ? 0.26 : 0.18,
+                      ),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        palette.monochrome ? palette.text : accentCyan,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

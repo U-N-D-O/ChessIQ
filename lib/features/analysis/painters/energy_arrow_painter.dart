@@ -25,13 +25,43 @@ class EnergyArrowPainter extends CustomPainter {
     this.boardInset = 0.0,
   });
 
+  // Anchor colors for the strength gradient. Each anchor is fully saturated
+  // so neighbouring bands stay clearly distinguishable, even when the renderer
+  // softens alpha for non-best lines.
+  static const Color _strengthBest = Color(0xFF00E676); // vivid pure green
+  static const Color _strengthGood = Color(0xFFAEEA00); // lime / chartreuse
+  static const Color _strengthNeutral = Color(0xFFFFEA00); // saturated yellow
+  static const Color _strengthSlip = Color(0xFFFF9100); // strong amber/orange
+  static const Color _strengthError = Color(0xFFFF3D00); // deep orange-red
+  static const Color _strengthCritical = Color(0xFFD50000); // intense red
+
+  Color _lerpStrength(double loss) {
+    // Piecewise linear interpolation across the loss spectrum. Stops are
+    // chosen so the previous hard thresholds still mark the visual midpoint
+    // of each transition.
+    if (loss <= 0) return _strengthBest;
+    if (loss < 30) {
+      return Color.lerp(_strengthBest, _strengthGood, loss / 30)!;
+    }
+    if (loss < 100) {
+      return Color.lerp(_strengthGood, _strengthNeutral, (loss - 30) / 70)!;
+    }
+    if (loss < 175) {
+      return Color.lerp(_strengthNeutral, _strengthSlip, (loss - 100) / 75)!;
+    }
+    if (loss < 250) {
+      return Color.lerp(_strengthSlip, _strengthError, (loss - 175) / 75)!;
+    }
+    if (loss < 500) {
+      return Color.lerp(_strengthError, _strengthCritical, (loss - 250) / 250)!;
+    }
+    return _strengthCritical;
+  }
+
   Color _getRelativeColor(int currentEval, int multiPv) {
-    if (multiPv == 1) return const Color(0xFF00FF88);
-    final loss = (bestEval - currentEval).abs();
-    if (loss < 30) return const Color(0xFF00FF88).withValues(alpha: 0.7);
-    if (loss < 100) return Colors.yellowAccent;
-    if (loss < 250) return Colors.orangeAccent;
-    return Colors.redAccent;
+    if (multiPv == 1) return _strengthBest;
+    final loss = (bestEval - currentEval).abs().toDouble();
+    return _lerpStrength(loss);
   }
 
   Color _darkenColor(Color color, double amount) {

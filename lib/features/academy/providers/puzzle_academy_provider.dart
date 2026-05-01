@@ -962,12 +962,11 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     final updatedNodes = Map<String, EloNodeProgress>.from(progress.nodes)
       ..[entryNodeKey] = entryNode.copyWith(unlocked: true);
 
-    var updated = progress.copyWith(
+    final updated = progress.copyWith(
       coins: currentCoins - cost,
       purchasedSemesterTuitions: updatedPurchasedTuitions,
       nodes: updatedNodes,
     );
-    updated = _applyUnlockingAndRewards(updated);
 
     await _saveUpdatedProgress(updated, syncCoins: true);
     if (_basePuzzleCountsByNode.isNotEmpty) {
@@ -1116,7 +1115,11 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     if (!_semesterTuitionCosts.containsKey(semester.id)) {
       return false;
     }
-    return snapshot.purchasedSemesterTuitions.contains(semester.id);
+    if (!snapshot.purchasedSemesterTuitions.contains(semester.id)) {
+      return false;
+    }
+
+    return node.key == _nodeKeyForRating(semester.minElo);
   }
 
   bool _requiresPreviousSemesterExamGateFor(

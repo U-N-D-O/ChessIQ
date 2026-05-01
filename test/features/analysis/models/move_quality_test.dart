@@ -517,4 +517,101 @@ void main() {
       expect(MoveQuality.book.explanation, isNot(contains('6 plies')));
     });
   });
+
+  group('Book fast-publish contract', () {
+    // The Book fast-publish path in base_state.dart relies on the classifier
+    // returning MoveQuality.book whenever insideOpeningExemption=true and
+    // the played move is at least a reasonable opening alternative. These
+    // tests lock that contract.
+
+    test('returns Book for rank-1 opening move with no engine evidence', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.0,
+          preMoveMoverWinProbability: 0.5,
+          postMoveMoverWinProbability: 0.5,
+          preMoveMoverEvalPawns: 0.0,
+          playedMoveRank: 1,
+          insideOpeningExemption: true,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.book);
+      expect(
+        assessment.scoringSuppressedReason,
+        MoveQualityScoringSuppressionReason.openingFeedbackOnly,
+      );
+    });
+
+    test('returns Book for rank-3 opening move with no engine evidence', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.0,
+          preMoveMoverWinProbability: 0.5,
+          postMoveMoverWinProbability: 0.5,
+          preMoveMoverEvalPawns: 0.0,
+          playedMoveRank: 3,
+          insideOpeningExemption: true,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.book);
+    });
+
+    test('returns Book in opening exemption even when rank is unknown', () {
+      // Fast-publish may run before any preMoveLines are available. With a
+      // near-equal context, the classifier still resolves to Book.
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.0,
+          preMoveMoverWinProbability: 0.5,
+          postMoveMoverWinProbability: 0.5,
+          preMoveMoverEvalPawns: 0.0,
+          insideOpeningExemption: true,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.book);
+    });
+
+    test('Book does NOT mutate charge', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.0,
+          preMoveMoverWinProbability: 0.5,
+          postMoveMoverWinProbability: 0.5,
+          preMoveMoverEvalPawns: 0.0,
+          playedMoveRank: 1,
+          insideOpeningExemption: true,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.book);
+      expect(updatedMoveQualityCharge(current: 47, assessment: assessment), 47);
+    });
+
+    test(
+      'without opening exemption, the same context grades as Optimal (post-cap behavior)',
+      () {
+        // Mirrors moves played past the 6-ply Book cap: the classifier
+        // returns the normal merit-based label, so charge can accumulate.
+        final assessment = classifyMoveQuality(
+          const MoveQualityClassificationContext(
+            deltaWpLoss: 0.0,
+            preMoveMoverWinProbability: 0.5,
+            postMoveMoverWinProbability: 0.5,
+            preMoveMoverEvalPawns: 0.0,
+            playedMoveRank: 1,
+            insideOpeningExemption: false,
+          ),
+        );
+
+        expect(assessment.quality, MoveQuality.optimal);
+        expect(
+          updatedMoveQualityCharge(current: 50, assessment: assessment),
+          greaterThan(50),
+        );
+      },
+    );
+  });
 }

@@ -2718,7 +2718,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
 
       _resetBoard(initialLaunch: false, withIntro: true);
       await _ensureEngineStarted();
-      await _handleVsBotMatchStarted(startedFromReplay: false);
+      await _handleVsBotMatchStarted();
 
       if (!mounted) return;
       setState(() {

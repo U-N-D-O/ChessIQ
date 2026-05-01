@@ -164,6 +164,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
   static const String _storeStateKey = 'store_state_v1';
   static const String _storeVsBotMatchStartCountKey = 'vsBotMatchStartCount';
+  static const String _cleanPlayPassTitle = 'Clean Play No-Ad Pass';
+  static const String _cleanPlayPassBenefit =
+      'analysis resets, bot rematches, and new bot matches stay ad-free';
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
   static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
@@ -171,6 +174,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
   static const int _moveQualityGradingMultiPv = 4;
+  static const int _moveQualityInitialPublishDepth = 2;
   static const int _moveQualityGradingDepth = 10;
   static const int _positionAnalysisCacheLimit = 24;
   static const Duration _gameResultRevealDuration = Duration(
@@ -199,6 +203,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   late AnimationController _buttonRippleController;
   late AnimationController _openingButtonFlashController;
   late AnimationController _storeCoinGainController;
+  final Stopwatch _spectralMotionClock = Stopwatch()..start();
   bool _openingButtonFlashRed = false;
   Timer? _openingModeFeedbackTimer;
   String? _openingModeFeedbackLabel;
@@ -510,6 +515,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _analysisEditMode = false;
   String? _selectedEditToolboxPiece;
   bool _editToolboxEraserSelected = false;
+  String? _lastEditDragEraseSquare;
   Timer? _editModeHintTimer;
   String? _editModeHintText;
   Timer? _moveQualityOverlayTimer;
@@ -3835,6 +3841,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return Duration(milliseconds: min(totalMs, 120000));
   }
 
+  Duration _moveQualitySearchTimeout({
+    required int multiPv,
+    required bool backgroundConfirmation,
+  }) {
+    final normalizedMultiPv = max(1, multiPv);
+    final liveBudgetMs = _analysisLiveCompletionTimeout(
+      depth: _moveQualityGradingDepth,
+      multiPv: normalizedMultiPv,
+    ).inMilliseconds;
+    final scaledBudgetMs = (liveBudgetMs * 0.45).round();
+    final minimumBudgetMs = backgroundConfirmation
+        ? (_playVsBot ? 3200 : 5000)
+        : (_playVsBot ? 2800 : 4200);
+    final maximumBudgetMs = _playVsBot ? 12000 : 18000;
+    return Duration(
+      milliseconds: min(maximumBudgetMs, max(minimumBudgetMs, scaledBudgetMs)),
+    );
+  }
+
+  Duration? _moveQualityFirstInfoTimeout({
+    required bool backgroundConfirmation,
+  }) {
+    if (_playVsBot) {
+      return backgroundConfirmation
+          ? const Duration(milliseconds: 1800)
+          : const Duration(milliseconds: 1600);
+    }
+    return backgroundConfirmation
+        ? const Duration(milliseconds: 2600)
+        : const Duration(milliseconds: 2200);
+  }
+
   String _nextEngineRequestId(EngineRequestRole role) {
     _engineRequestSequence++;
     return '${role.name}-$_engineRequestSequence';
@@ -4057,6 +4095,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final confirmationMultiPv = isPreMoveConfirmation
         ? _requiredPreMoveComparisonLineCount(pending.totalLegalMoveCount)
         : 1;
+    final confirmationMinimumDepth = _moveQualityGradingDepth;
+    final confirmationTimeout = _moveQualitySearchTimeout(
+      multiPv: confirmationMultiPv,
+      backgroundConfirmation: true,
+    );
     late final EngineSearchHandle confirmationHandle;
     final confirmationLines = <int, EngineLine>{};
     var consumedPrimaryLine = false;
@@ -4070,7 +4113,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         whiteToMove: targetWhiteToMove,
         multiPv: confirmationMultiPv,
         depth: _moveQualityGradingDepth,
-        timeout: Duration(milliseconds: _playVsBot ? 900 : 1400),
+        timeout: confirmationTimeout,
+        firstInfoTimeout: _moveQualityFirstInfoTimeout(
+          backgroundConfirmation: true,
+        ),
         preCommands: _analysisEngineRequestCommands,
       ),
       onUpdate: (update) {
@@ -4078,14 +4124,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         confirmationLines[update.line.multiPv] = update.line;
         final orderedConfirmationLines = confirmationLines.values.toList()
           ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
-        _recordPositionAnalysisLines(update.request.fen, orderedConfirmationLines);
+        _recordPositionAnalysisLines(
+          update.request.fen,
+          orderedConfirmationLines,
+        );
         if (isPreMoveConfirmation) {
           return;
         }
-        if (!update.isPrimaryVariation || consumedPrimaryLine) {
+        if (!update.isPrimaryVariation ||
+            consumedPrimaryLine ||
+            update.line.depth < confirmationMinimumDepth) {
           return;
         }
         consumedPrimaryLine = true;
+        if (identical(
+          _backgroundMoveQualityConfirmationsByFen[targetFen],
+          confirmationHandle,
+        )) {
+          _backgroundMoveQualityConfirmationsByFen.remove(targetFen);
+        }
         _scheduleMoveQualityGrading(
           pending,
           livePostMoveLine: update.request.fen == pending.postMoveFen
@@ -4103,27 +4160,51 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     _backgroundMoveQualityConfirmationsByFen[targetFen] = confirmationHandle;
     unawaited(
-      confirmationHandle.result.then((result) {
-        if (!isPreMoveConfirmation) {
-          return;
-        }
-        if (result.lines.isNotEmpty) {
-          _recordPositionAnalysisLines(targetFen, result.lines);
-        }
-        final activePending = _pendingMoveQualityGrading;
-        if (activePending?.moveIndex != pending.moveIndex ||
-            activePending?.uci != pending.uci) {
-          return;
-        }
-        _scheduleMoveQualityGrading(pending);
-      }).whenComplete(() {
-        if (identical(
-          _backgroundMoveQualityConfirmationsByFen[targetFen],
-          confirmationHandle,
-        )) {
-          _backgroundMoveQualityConfirmationsByFen.remove(targetFen);
-        }
-      }),
+      confirmationHandle.result
+          .then((result) {
+            if (result.lines.isNotEmpty) {
+              _recordPositionAnalysisLines(targetFen, result.lines);
+            }
+            if (identical(
+              _backgroundMoveQualityConfirmationsByFen[targetFen],
+              confirmationHandle,
+            )) {
+              _backgroundMoveQualityConfirmationsByFen.remove(targetFen);
+            }
+            final activePending = _pendingMoveQualityGrading;
+            if (activePending?.moveIndex != pending.moveIndex ||
+                activePending?.uci != pending.uci) {
+              return;
+            }
+            if (!isPreMoveConfirmation) {
+              final resultPrimaryLine = result.lines
+                  .where((line) => line.multiPv == 1)
+                  .cast<EngineLine?>()
+                  .firstWhere((line) => line != null, orElse: () => null);
+              _scheduleMoveQualityGrading(
+                pending,
+                livePostMoveLine: targetFen == pending.postMoveFen
+                    ? resultPrimaryLine
+                    : null,
+                livePostMoveWhiteToMove: targetFen == pending.postMoveFen
+                    ? targetWhiteToMove
+                    : null,
+                livePostMoveRole: targetFen == pending.postMoveFen
+                    ? EngineRequestRole.backgroundConfirmation
+                    : null,
+              );
+              return;
+            }
+            _scheduleMoveQualityGrading(pending);
+          })
+          .whenComplete(() {
+            if (identical(
+              _backgroundMoveQualityConfirmationsByFen[targetFen],
+              confirmationHandle,
+            )) {
+              _backgroundMoveQualityConfirmationsByFen.remove(targetFen);
+            }
+          }),
     );
   }
 
@@ -4210,8 +4291,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool moverIsWhite,
     required Map<String, String> nextBoardState,
   }) {
-    final canGrade =
-        !kIsWeb && (_playVsBot ? _vsBotEvalEnabled : _suggestionsEnabled);
+    final canGrade = !kIsWeb && (_playVsBot || _suggestionsEnabled);
     if (!canGrade) {
       return null;
     }
@@ -4295,7 +4375,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _send('go depth $_moveQualityGradingDepth');
 
     try {
-      final gradingTimeout = Duration(milliseconds: _playVsBot ? 700 : 1200);
+      final gradingTimeout = _moveQualitySearchTimeout(
+        multiPv: multiPv,
+        backgroundConfirmation: false,
+      );
       return await completer.future.timeout(
         gradingTimeout,
         onTimeout: _buildCurrentGradingSearchSnapshot,
@@ -4330,6 +4413,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         gradingGeneration != _moveQualityGradingGeneration) {
       return;
     }
+    final fastPublish =
+        livePostMoveRole != EngineRequestRole.backgroundConfirmation;
     final evidence = resolveMoveQualityEvidence(
       moverIsWhite: pending.moverIsWhite,
       capturedPreMoveLines: pending.preMoveLines,
@@ -4345,7 +4430,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       postMoveCacheEntry: pending.postMoveFen == null
           ? null
           : _cachedPositionAnalysisForFen(pending.postMoveFen!),
-      minimumDepth: _moveQualityGradingDepth,
+      minimumDepth: fastPublish
+          ? _moveQualityInitialPublishDepth
+          : _moveQualityGradingDepth,
+      requireCoveredPreMoveComparison: !fastPublish,
     );
     if (!evidence.isReadyToPublish) {
       _deferPendingMoveQualityGrading(
@@ -4379,6 +4467,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     final currentMove = _moveHistory[pending.moveIndex];
+    final previousPublishedQuality = currentMove.quality;
     if (currentMove.uci != pending.uci) {
       return;
     }
@@ -4505,7 +4594,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (isHumanVsBotMove && pending.chargeEpoch == _vsBotChargeEpoch) {
         _vsBotCharge = chargeAfter;
       }
-      if (!_playVsBot || isHumanVsBotMove) {
+      final shouldShowAssessment =
+          livePostMoveRole != EngineRequestRole.backgroundConfirmation ||
+          previousPublishedQuality != quality;
+      if ((!_playVsBot || isHumanVsBotMove) && shouldShowAssessment) {
         _lastMoveQualityBadgeQuality = quality;
         _lastMoveQualityBadgeSquare = badgeSquare;
         _showMoveQualityOverlay(
@@ -4515,9 +4607,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     });
 
+    final shouldQueueConfirmation =
+        _playVsBot && isHumanVsBotMove && fastPublish ||
+        _shouldQueueBackgroundConfirmation(assessment);
     if (livePostMoveRole != EngineRequestRole.backgroundConfirmation &&
         !_openingFeedbackOnlyApplies(pending.moveIndex) &&
-        _shouldQueueBackgroundConfirmation(assessment)) {
+        shouldQueueConfirmation) {
       _queueBackgroundMoveQualityConfirmation(pending);
     }
 
@@ -4593,7 +4688,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           context.watch<AppThemeProvider>().isMonochrome ||
           _isCinematicThemeEnabled;
       final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
-      final accent = quality.color;
+      final assessmentColor = quality.color;
+      final panelAccent = useMonochrome ? arcade.text : assessmentColor;
       final chargeDelta = _moveQualityOverlayChargeDelta;
       final chargeText = switch (_moveQualityOverlayScoringSuppressedReason) {
         MoveQualityScoringSuppressionReason.openingFeedbackOnly =>
@@ -4619,7 +4715,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
               decoration: _vsBotArcadePanelDecoration(
                 palette: arcade,
-                accent: accent,
+                accent: panelAccent,
                 radius: 18,
                 borderWidth: 2.2,
                 inset: true,
@@ -4637,8 +4733,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         style: puzzleAcademyIdentityStyle(
                           palette: arcade.base,
                           size: quality == MoveQuality.masterstroke ? 12 : 10,
-                          color: accent,
-                          withGlow: true,
+                          color: assessmentColor,
+                          withGlow: !useMonochrome,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -4648,8 +4744,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           style: puzzleAcademyIdentityStyle(
                             palette: arcade.base,
                             size: 7.8,
-                            color: accent,
-                            withGlow: true,
+                            color: assessmentColor,
+                            withGlow: !useMonochrome,
                           ),
                         ),
                       ),
@@ -4672,7 +4768,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       style: puzzleAcademyIdentityStyle(
                         palette: arcade.base,
                         size: 6.4,
-                        color: accent,
+                        color: useMonochrome ? arcade.text : assessmentColor,
                       ),
                     ),
                   ],
@@ -4690,22 +4786,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
     final isLight = theme.brightness == Brightness.light;
-    final accentColor = useMonochrome ? scheme.onSurface : quality.color;
+    final assessmentColor = quality.color;
+    final accentColor = useMonochrome ? scheme.onSurface : assessmentColor;
     final panelColor = useMonochrome
         ? Color.alphaBlend(
             scheme.onSurface.withValues(alpha: isLight ? 0.06 : 0.12),
             scheme.surface,
           )
         : Color.alphaBlend(
-            quality.color.withValues(alpha: isLight ? 0.10 : 0.14),
+            assessmentColor.withValues(alpha: isLight ? 0.10 : 0.14),
             scheme.surface,
           );
     final borderColor = useMonochrome
         ? scheme.onSurface.withValues(alpha: isLight ? 0.16 : 0.24)
-        : quality.color.withValues(alpha: isLight ? 0.28 : 0.40);
-    final shadowColor = (useMonochrome ? scheme.shadow : quality.color)
+        : assessmentColor.withValues(alpha: isLight ? 0.28 : 0.40);
+    final shadowColor = (useMonochrome ? scheme.shadow : assessmentColor)
         .withValues(alpha: isLight ? 0.10 : 0.18);
-    final titleColor = scheme.onSurface;
+    final titleColor = useMonochrome ? assessmentColor : scheme.onSurface;
     final messageColor = scheme.onSurface.withValues(
       alpha: isLight ? 0.76 : 0.82,
     );
@@ -6147,7 +6244,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     String to, {
     String? forcedPromotion,
   }) async {
-    if (_gameOutcome != null && !_analysisEditMode) return;
+    if (_gameOutcome != null) return;
     final piece = boardState[from];
     if (piece == null) return;
     if (!_canHumanInteractWithBoardPiece(piece)) return;
@@ -6899,6 +6996,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _handleHoldTap(String square) {
     if (_playVsBot && !_isHumanTurnInBotGame) return;
     if (_analysisEditMode && !_isOpeningSelectionMode) {
+      if (_gameOutcome != null) {
+        return;
+      }
       if (_editToolboxEraserSelected) {
         _eraseEditModePiece(square);
         return;
@@ -7008,17 +7108,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String get _editModeEngineKingsHint =>
       'Keep one white king and one black king on the board for Stockfish analysis.';
 
-    String get _editModeKingsLockedHint =>
+  String get _editModeKingsLockedHint =>
       'Kings stay locked so the board remains analyzable.';
-
-  String _editToolboxLabelForPiece(String piece) {
-    for (final entry in _editToolboxPieces) {
-      if (entry.piece == piece) {
-        return entry.label;
-      }
-    }
-    return piece;
-  }
 
   void _applyManualBoardEdit(
     Map<String, String> nextBoardState, {
@@ -7077,25 +7168,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    final detectedOutcome = _detectCurrentGameOutcome();
-    if (detectedOutcome != null) {
-      final gameOutcome = detectedOutcome.outcome;
-      setState(() {
-        _gameOutcome = gameOutcome;
-        _gameDrawReason = detectedOutcome.drawReason;
-        _botThinking = false;
-      });
-      _persistAnalysisSnapshotIfNeeded();
-      unawaited(_startGameResultReveal(gameOutcome));
-      return;
-    }
-
     _persistAnalysisSnapshotIfNeeded();
     _refreshAnalysisForCurrentPosition();
   }
 
   void _placeEditModePiece(String piece, String square) {
     if (!_analysisEditMode || _isOpeningSelectionMode) {
+      return;
+    }
+    if (_gameOutcome != null) {
       return;
     }
     if (piece == 'k_w' || piece == 'k_b') {
@@ -7118,6 +7199,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!_analysisEditMode || _isOpeningSelectionMode) {
       return;
     }
+    if (_gameOutcome != null) {
+      return;
+    }
 
     final existingPiece = boardState[square];
     if (existingPiece == null) {
@@ -7137,7 +7221,55 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final nextBoardState = Map<String, String>.from(boardState);
     nextBoardState.remove(square);
-    _applyManualBoardEdit(nextBoardState, hintText: 'Piece removed');
+    _applyManualBoardEdit(nextBoardState);
+  }
+
+  String? _squareForBoardLocalPosition(
+    Offset localPosition,
+    Size boardSize,
+    bool reverse,
+  ) {
+    if (boardSize.width <= 0 || boardSize.height <= 0) {
+      return null;
+    }
+    if (localPosition.dx < 0 ||
+        localPosition.dy < 0 ||
+        localPosition.dx >= boardSize.width ||
+        localPosition.dy >= boardSize.height) {
+      return null;
+    }
+
+    final visualFile = (localPosition.dx / (boardSize.width / 8)).floor();
+    final visualRankFromTop = (localPosition.dy / (boardSize.height / 8))
+        .floor();
+    final clampedFile = visualFile.clamp(0, 7);
+    final clampedRank = visualRankFromTop.clamp(0, 7);
+    final row = reverse ? clampedRank : (7 - clampedRank);
+    final col = reverse ? (7 - clampedFile) : clampedFile;
+    return '${String.fromCharCode(97 + col)}${row + 1}';
+  }
+
+  void _handleEditEraserPointer(
+    Offset localPosition,
+    Size boardSize,
+    bool reverse,
+  ) {
+    if (!_analysisEditMode ||
+        _isOpeningSelectionMode ||
+        !_editToolboxEraserSelected ||
+        _gameOutcome != null) {
+      return;
+    }
+    final square = _squareForBoardLocalPosition(
+      localPosition,
+      boardSize,
+      reverse,
+    );
+    if (square == null || square == _lastEditDragEraseSquare) {
+      return;
+    }
+    _lastEditDragEraseSquare = square;
+    _eraseEditModePiece(square);
   }
 
   void _toggleEditToolboxEraser() {
@@ -7151,6 +7283,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
+      _lastEditDragEraseSquare = null;
       _legalTargets.clear();
       _gambitAvailableTargets.clear();
     });
@@ -7165,6 +7298,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ? null
           : piece;
       _editToolboxEraserSelected = false;
+      _lastEditDragEraseSquare = null;
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
       _legalTargets.clear();
@@ -7490,7 +7624,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   // --- Move Handling ---
   void _onMove(String from, String to, {String? promotion}) {
-    if (_gameOutcome != null && !_analysisEditMode) return;
+    if (_gameOutcome != null) return;
     if (_playVsBot && !_isHumanTurnInBotGame && !_botThinking) {
       return;
     }
@@ -7605,7 +7739,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           chargeAfter: _vsBotCharge,
         ),
       );
-      _pendingMoveQualityGrading = pendingMoveQuality;
+      if (pendingMoveQuality != null) {
+        _pendingMoveQualityGrading = pendingMoveQuality;
+      }
       _historyIndex = _moveHistory.length - 1;
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
@@ -7654,6 +7790,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final detectedOutcome = _detectCurrentGameOutcome();
     if (detectedOutcome != null) {
+      final missingKingAfterMove =
+          !boardState.values.contains('k_w') ||
+          !boardState.values.contains('k_b');
+      if (_analysisEditMode && !_playVsBot && !missingKingAfterMove) {
+        setState(() {
+          _pendingMoveQualityGrading = null;
+          _gameResultDialogVisible = false;
+          _botThinking = false;
+          _clearGameOutcomeState();
+        });
+        _persistAnalysisSnapshotIfNeeded();
+        _refreshAnalysisForCurrentPosition();
+        return;
+      }
       final gameOutcome = detectedOutcome.outcome;
       _send('stop');
       setState(() {
@@ -7791,16 +7941,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
   }
 
-  Future<void> _handleVsBotMatchStarted({
-    required bool startedFromReplay,
-  }) async {
+  Future<void> _handleVsBotMatchStarted() async {
     _vsBotMatchStartCount += 1;
     await _saveStoreState();
 
     if (_vsBotMatchStartCount % _vsBotInterstitialMatchInterval != 0) {
       return;
     }
-    if (startedFromReplay && _adFreeOwned) {
+    if (_adFreeOwned) {
       return;
     }
 
@@ -9312,12 +9460,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   final double height = maxHeight;
 
                   final double scale = (width / 430.0).clamp(0.8, 1.4);
-                    const double portraitToolboxGap = 12.0;
-                    final portraitBoardRect =
-                      !isLandscape && _analysisEditMode
+                  const double portraitToolboxGap = 12.0;
+                  final portraitBoardRect = !isLandscape && _analysisEditMode
                       ? _boardRectInScene()
                       : null;
-                    final portraitToolboxWidth = portraitBoardRect == null
+                  final portraitToolboxWidth = portraitBoardRect == null
                       ? null
                       : min(portraitBoardRect.width, 420.0);
 
@@ -9535,16 +9682,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                     ),
                                                                     if (_analysisEditMode)
                                                                       Align(
-                                                                        alignment: Alignment.center,
+                                                                        alignment:
+                                                                            Alignment.center,
                                                                         child: SizedBox(
                                                                           width: min(
                                                                             sideConstraints.maxWidth,
                                                                             220.0,
                                                                           ),
-                                                                          child:
-                                                                              _buildEditModeToolbox(
-                                                                                isLandscape: true,
-                                                                              ),
+                                                                          child: _buildEditModeToolbox(
+                                                                            isLandscape:
+                                                                                true,
+                                                                          ),
                                                                         ),
                                                                       ),
                                                                     if (_hasMoveQualityBanner)
@@ -9682,12 +9830,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             left:
                                 portraitBoardRect.center.dx -
                                 (portraitToolboxWidth / 2),
-                            top: portraitBoardRect.bottom +
-                                portraitToolboxGap,
+                            top: portraitBoardRect.bottom + portraitToolboxGap,
                             width: portraitToolboxWidth,
-                            child: _buildEditModeToolbox(
-                              isLandscape: false,
-                            ),
+                            child: _buildEditModeToolbox(isLandscape: false),
                           ),
                         _buildSuggestionLaunchOverlay(),
                         _buildButtonRippleOverlay(),
@@ -10487,258 +10632,325 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(innerBoardRadius),
-        child: GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 8,
-          ),
-          itemCount: 64,
-          itemBuilder: (context, i) {
-            final visualFile = i % 8;
-            final visualRankFromTop = i ~/ 8;
-            int row = reverse ? (i ~/ 8) : (7 - i ~/ 8);
-            int col = reverse ? (7 - i % 8) : (i % 8);
-            String sq = String.fromCharCode(97 + col) + (row + 1).toString();
-            bool isDark = (row + col) % 2 == 0;
-            String? p = boardState[sq];
-            final showFileLabel = visualRankFromTop == 7;
-            final showRankLabel = visualFile == 0;
-            final labelColor = isDark ? lightSquareColor : darkSquareColor;
-            final isGambitSelected = _gambitSelectedFrom == sq;
-            final isHoldSelected = _holdSelectedFrom == sq;
-            final isLegalTarget = _legalTargets.contains(sq);
-            final isGambitAvailableTarget = _gambitAvailableTargets.contains(
-              sq,
+        child: LayoutBuilder(
+          builder: (context, boardConstraints) {
+            final boardSize = Size(
+              boardConstraints.maxWidth,
+              boardConstraints.maxHeight,
             );
-            final showOpeningSelectionDots =
-                _isOpeningSelectionMode && isGambitAvailableTarget;
-            final showLockedLegalDots =
-                !_analysisEditMode && !_isOpeningSelectionMode;
-            final showTargetDot =
-                isLegalTarget &&
-                (showOpeningSelectionDots || showLockedLegalDots);
-            final isCaptureTarget = isLegalTarget && p != null;
-            final showMoveQualityBadge =
-                activeMoveQuality != null && activeMoveQualitySquare == sq;
-            final canHumanDragPiece = _canHumanInteractWithBoardPiece(p);
-            const legalDotBase = Color(0xFF9EA8BA);
-
-            return DragTarget<_BoardDragPayload>(
-              onAcceptWithDetails: (d) {
-                if (_isOpeningSelectionMode && _selectedGambit == null) {
-                  final fromSquare = d.data.fromSquare;
-                  if (fromSquare != null) {
-                    _handleGambitDragDrop(fromSquare, sq);
-                  }
-                  return;
-                }
-                final fromSquare = d.data.fromSquare;
-                if (fromSquare != null) {
-                  unawaited(_attemptMove(fromSquare, sq));
-                  return;
-                }
-                if (_analysisEditMode && !_isOpeningSelectionMode) {
-                  _placeEditModePiece(d.data.piece, sq);
-                }
+            return Listener(
+              behavior: HitTestBehavior.deferToChild,
+              onPointerDown: (event) {
+                _lastEditDragEraseSquare = null;
+                _handleEditEraserPointer(
+                  event.localPosition,
+                  boardSize,
+                  reverse,
+                );
               },
-              builder: (context, candidateData, rejectedData) => Container(
-                decoration: BoxDecoration(
-                  color: isDark ? darkSquareColor : lightSquareColor,
-                  border: (isGambitSelected || isHoldSelected)
-                      ? Border.all(color: _openingSelectionAccent, width: 2)
-                      : null,
+              onPointerMove: (event) => _handleEditEraserPointer(
+                event.localPosition,
+                boardSize,
+                reverse,
+              ),
+              onPointerUp: (_) => _lastEditDragEraseSquare = null,
+              onPointerCancel: (_) => _lastEditDragEraseSquare = null,
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 8,
                 ),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () =>
-                      (_isOpeningSelectionMode && _selectedGambit == null)
-                      ? _handleBoardTap(sq)
-                      : _handleHoldTap(sq),
-                  onLongPress: () {
-                    if (_openingMode != OpeningMode.off) return;
-                    if (!canHumanDragPiece) return;
-                    setState(() {
-                      _holdSelectedFrom = sq;
-                      _gambitSelectedFrom = null;
-                      _legalTargets
-                        ..clear()
-                        ..addAll(
-                          _analysisEditMode ? <String>{} : _legalMovesFrom(sq),
-                        );
-                    });
-                  },
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (showMoveQualityBadge)
-                        Positioned(
-                          top: 2,
-                          right: 2,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(
-                                alpha: _playVsBot ? 0.72 : 0.56,
-                              ),
-                              borderRadius: BorderRadius.circular(7),
-                              border: Border.all(
-                                color: activeMoveQuality.color.withValues(
-                                  alpha: 0.55,
-                                ),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: activeMoveQuality.color.withValues(
-                                    alpha: 0.18,
-                                  ),
-                                  blurRadius: 8,
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              activeMoveQuality.displaySymbol,
-                              style: TextStyle(
-                                color: activeMoveQuality.color,
-                                fontSize:
-                                    activeMoveQuality == MoveQuality.oversight
-                                    ? 8.5
-                                    : activeMoveQuality ==
-                                          MoveQuality.masterstroke
-                                    ? 10.5
-                                    : 9.2,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
-                            ),
+                itemCount: 64,
+                itemBuilder: (context, i) {
+                  final visualFile = i % 8;
+                  final visualRankFromTop = i ~/ 8;
+                  int row = reverse ? (i ~/ 8) : (7 - i ~/ 8);
+                  int col = reverse ? (7 - i % 8) : (i % 8);
+                  String sq =
+                      String.fromCharCode(97 + col) + (row + 1).toString();
+                  bool isDark = (row + col) % 2 == 0;
+                  String? p = boardState[sq];
+                  final showFileLabel = visualRankFromTop == 7;
+                  final showRankLabel = visualFile == 0;
+                  final labelColor = isDark
+                      ? lightSquareColor
+                      : darkSquareColor;
+                  final isGambitSelected = _gambitSelectedFrom == sq;
+                  final isHoldSelected = _holdSelectedFrom == sq;
+                  final isLegalTarget = _legalTargets.contains(sq);
+                  final isGambitAvailableTarget = _gambitAvailableTargets
+                      .contains(sq);
+                  final showOpeningSelectionDots =
+                      _isOpeningSelectionMode && isGambitAvailableTarget;
+                  final showLockedLegalDots =
+                      !_analysisEditMode && !_isOpeningSelectionMode;
+                  final showTargetDot =
+                      isLegalTarget &&
+                      (showOpeningSelectionDots || showLockedLegalDots);
+                  final isCaptureTarget = isLegalTarget && p != null;
+                  final showMoveQualityBadge =
+                      activeMoveQuality != null &&
+                      activeMoveQualitySquare == sq;
+                  final canHumanDragPiece = _canHumanInteractWithBoardPiece(p);
+                  const legalDotBase = Color(0xFF9EA8BA);
+
+                  return DragTarget<_BoardDragPayload>(
+                    onAcceptWithDetails: (d) {
+                      if (_isOpeningSelectionMode && _selectedGambit == null) {
+                        final fromSquare = d.data.fromSquare;
+                        if (fromSquare != null) {
+                          _handleGambitDragDrop(fromSquare, sq);
+                        }
+                        return;
+                      }
+                      final fromSquare = d.data.fromSquare;
+                      if (fromSquare != null) {
+                        unawaited(_attemptMove(fromSquare, sq));
+                        return;
+                      }
+                      if (_analysisEditMode && !_isOpeningSelectionMode) {
+                        _placeEditModePiece(d.data.piece, sq);
+                      }
+                    },
+                    builder: (context, candidateData, rejectedData) =>
+                        Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? darkSquareColor : lightSquareColor,
+                            border: (isGambitSelected || isHoldSelected)
+                                ? Border.all(
+                                    color: _openingSelectionAccent,
+                                    width: 2,
+                                  )
+                                : null,
                           ),
-                        ),
-                      if (showTargetDot)
-                        Center(
-                          child: Container(
-                            width: isCaptureTarget ? 26 : 12,
-                            height: isCaptureTarget ? 26 : 12,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isCaptureTarget
-                                  ? Colors.transparent
-                                  : (showOpeningSelectionDots
-                                        ? _openingSelectionAccent.withValues(
-                                            alpha: 0.55,
-                                          )
-                                        : legalDotBase.withValues(alpha: 0.6)),
-                              border: isCaptureTarget
-                                  ? Border.all(
-                                      color: showOpeningSelectionDots
-                                          ? _openingSelectionAccent.withValues(
-                                              alpha: 0.75,
-                                            )
-                                          : legalDotBase.withValues(alpha: 0.8),
-                                      width: 2,
-                                    )
-                                  : null,
-                            ),
-                          ),
-                        ),
-                      if (showFileLabel || showRankLabel)
-                        Positioned(
-                          left: 3,
-                          bottom: 2,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (showRankLabel)
-                                Text(
-                                  (row + 1).toString(),
-                                  style: TextStyle(
-                                    fontSize: 8,
-                                    height: 1,
-                                    letterSpacing: 0.1,
-                                    fontWeight: FontWeight.w600,
-                                    color: labelColor.withValues(alpha: 0.92),
-                                  ),
-                                ),
-                              if (showFileLabel)
-                                Text(
-                                  String.fromCharCode(97 + col),
-                                  style: TextStyle(
-                                    fontSize: 8,
-                                    height: 1,
-                                    letterSpacing: 0.1,
-                                    fontWeight: FontWeight.w600,
-                                    color: labelColor.withValues(alpha: 0.92),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      if (p != null)
-                        Center(
-                          child: Draggable<_BoardDragPayload>(
-                            maxSimultaneousDrags: canHumanDragPiece ? 1 : 0,
-                            data: _BoardDragPayload.fromBoard(
-                              fromSquare: sq,
-                              piece: p,
-                            ),
-                            feedback: _buildPieceGlow(p),
-                            onDragStarted: () {
-                              if (!canHumanDragPiece) {
-                                return;
-                              }
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () =>
+                                (_isOpeningSelectionMode &&
+                                    _selectedGambit == null)
+                                ? _handleBoardTap(sq)
+                                : _handleHoldTap(sq),
+                            onLongPress: () {
+                              if (_openingMode != OpeningMode.off) return;
+                              if (!canHumanDragPiece) return;
                               setState(() {
-                                if (_isOpeningSelectionMode) {
-                                  _selectGambitSource(sq);
-                                } else {
-                                  _holdSelectedFrom = sq;
-                                  _gambitSelectedFrom = null;
-                                  _legalTargets
-                                    ..clear()
-                                    ..addAll(
-                                      _analysisEditMode
-                                          ? <String>{}
-                                          : _legalMovesFrom(sq),
-                                    );
-                                  _gambitAvailableTargets.clear();
-                                }
+                                _holdSelectedFrom = sq;
+                                _gambitSelectedFrom = null;
+                                _legalTargets
+                                  ..clear()
+                                  ..addAll(
+                                    _analysisEditMode
+                                        ? <String>{}
+                                        : _legalMovesFrom(sq),
+                                  );
                               });
                             },
-                            onDragEnd: (details) {
-                              if (!details.wasAccepted) {
-                                setState(() {
-                                  _holdSelectedFrom = null;
-                                  _gambitSelectedFrom = null;
-                                  _legalTargets.clear();
-                                  _gambitAvailableTargets.clear();
-                                });
-                              }
-                            },
-                            childWhenDragging: Opacity(
-                              opacity: 0.2,
-                              child: _pieceImage(p),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (showMoveQualityBadge)
+                                  Positioned(
+                                    top: 2,
+                                    right: 2,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: _playVsBot ? 0.72 : 0.56,
+                                        ),
+                                        borderRadius: BorderRadius.circular(7),
+                                        border: Border.all(
+                                          color: activeMoveQuality.color
+                                              .withValues(
+                                                alpha: useMonochrome
+                                                    ? 0.0
+                                                    : 0.55,
+                                              ),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: useMonochrome
+                                                ? Colors.black.withValues(
+                                                    alpha: 0.18,
+                                                  )
+                                                : activeMoveQuality.color
+                                                      .withValues(alpha: 0.18),
+                                            blurRadius: useMonochrome ? 3 : 8,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        activeMoveQuality.displaySymbol,
+                                        style: TextStyle(
+                                          color: activeMoveQuality.color,
+                                          fontSize:
+                                              activeMoveQuality ==
+                                                  MoveQuality.oversight
+                                              ? 8.5
+                                              : activeMoveQuality ==
+                                                    MoveQuality.masterstroke
+                                              ? 10.5
+                                              : 9.2,
+                                          fontWeight: FontWeight.w900,
+                                          height: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (showTargetDot)
+                                  Center(
+                                    child: Container(
+                                      width: isCaptureTarget ? 26 : 12,
+                                      height: isCaptureTarget ? 26 : 12,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isCaptureTarget
+                                            ? Colors.transparent
+                                            : (showOpeningSelectionDots
+                                                  ? _openingSelectionAccent
+                                                        .withValues(alpha: 0.55)
+                                                  : legalDotBase.withValues(
+                                                      alpha: 0.6,
+                                                    )),
+                                        border: isCaptureTarget
+                                            ? Border.all(
+                                                color: showOpeningSelectionDots
+                                                    ? _openingSelectionAccent
+                                                          .withValues(
+                                                            alpha: 0.75,
+                                                          )
+                                                    : legalDotBase.withValues(
+                                                        alpha: 0.8,
+                                                      ),
+                                                width: 2,
+                                              )
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                                if (showFileLabel || showRankLabel)
+                                  Positioned(
+                                    left: 3,
+                                    bottom: 2,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (showRankLabel)
+                                          Text(
+                                            (row + 1).toString(),
+                                            style: TextStyle(
+                                              fontSize: 8,
+                                              height: 1,
+                                              letterSpacing: 0.1,
+                                              fontWeight: FontWeight.w600,
+                                              color: labelColor.withValues(
+                                                alpha: 0.92,
+                                              ),
+                                            ),
+                                          ),
+                                        if (showFileLabel)
+                                          Text(
+                                            String.fromCharCode(97 + col),
+                                            style: TextStyle(
+                                              fontSize: 8,
+                                              height: 1,
+                                              letterSpacing: 0.1,
+                                              fontWeight: FontWeight.w600,
+                                              color: labelColor.withValues(
+                                                alpha: 0.92,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                if (p != null)
+                                  Center(
+                                    child: Draggable<_BoardDragPayload>(
+                                      maxSimultaneousDrags: canHumanDragPiece
+                                          ? 1
+                                          : 0,
+                                      data: _BoardDragPayload.fromBoard(
+                                        fromSquare: sq,
+                                        piece: p,
+                                      ),
+                                      feedback: _buildPieceGlow(
+                                        p,
+                                        motionSeed: sq,
+                                      ),
+                                      onDragStarted: () {
+                                        if (!canHumanDragPiece) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          if (_isOpeningSelectionMode) {
+                                            _selectGambitSource(sq);
+                                          } else {
+                                            _holdSelectedFrom = sq;
+                                            _gambitSelectedFrom = null;
+                                            _legalTargets
+                                              ..clear()
+                                              ..addAll(
+                                                _analysisEditMode
+                                                    ? <String>{}
+                                                    : _legalMovesFrom(sq),
+                                              );
+                                            _gambitAvailableTargets.clear();
+                                          }
+                                        });
+                                      },
+                                      onDragEnd: (details) {
+                                        if (!details.wasAccepted) {
+                                          setState(() {
+                                            _holdSelectedFrom = null;
+                                            _gambitSelectedFrom = null;
+                                            _legalTargets.clear();
+                                            _gambitAvailableTargets.clear();
+                                          });
+                                        }
+                                      },
+                                      childWhenDragging: Opacity(
+                                        opacity: 0.2,
+                                        child: _pieceImage(
+                                          p,
+                                          motionSeed: '$sq-dragging',
+                                        ),
+                                      ),
+                                      child: () {
+                                        String? glowColor;
+                                        if (_isOpeningSelectionMode &&
+                                            _gambitSelectedFrom == sq) {
+                                          glowColor = _isGambitsOnlyOpeningMode
+                                              ? 'violet'
+                                              : 'yellow';
+                                        } else if (_gambitPreviewLines
+                                                .isNotEmpty &&
+                                            _getPreviewMoveSqares().contains(
+                                              sq,
+                                            )) {
+                                          glowColor = _isGambitsOnlyOpeningMode
+                                              ? 'violet'
+                                              : 'blue';
+                                        }
+                                        return _buildPieceWithGlow(
+                                          p,
+                                          glowColor,
+                                          motionSeed: sq,
+                                        );
+                                      }(),
+                                    ),
+                                  ),
+                              ],
                             ),
-                            child: () {
-                              String? glowColor;
-                              if (_isOpeningSelectionMode &&
-                                  _gambitSelectedFrom == sq) {
-                                glowColor = _isGambitsOnlyOpeningMode
-                                    ? 'violet'
-                                    : 'yellow';
-                              } else if (_gambitPreviewLines.isNotEmpty &&
-                                  _getPreviewMoveSqares().contains(sq)) {
-                                glowColor = _isGambitsOnlyOpeningMode
-                                    ? 'violet'
-                                    : 'blue';
-                              }
-                              return _buildPieceWithGlow(p, glowColor);
-                            }(),
                           ),
                         ),
-                    ],
-                  ),
-                ),
+                  );
+                },
               ),
             );
           },
@@ -10848,7 +11060,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ]
                   : const <BoxShadow>[],
             ),
-            child: _pieceImage(entry.piece, width: pieceSize, height: pieceSize),
+            child: _pieceImage(
+              entry.piece,
+              width: pieceSize,
+              height: pieceSize,
+            ),
           ),
         ),
       ),
@@ -10873,36 +11089,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       scheme.surface.withValues(alpha: isDark ? 0.70 : 0.92),
       isDark ? const Color(0xFF121821) : Colors.white,
     );
-    final selectedPiece = _selectedEditToolboxPiece;
-    final selectedPieceMessage = _editToolboxEraserSelected
-        ? 'Eraser selected. Tap squares to clear pieces.'
-        : selectedPiece == null
-        ? null
-        : '${_editToolboxLabelForPiece(selectedPiece)} selected. Tap squares to place it.';
     final whitePieces = _editToolboxPieces
         .where((entry) => entry.piece.endsWith('_w'))
         .toList(growable: false);
     final blackPieces = _editToolboxPieces
         .where((entry) => entry.piece.endsWith('_b'))
         .toList(growable: false);
-    final headerStyle = TextStyle(
-      color: accentColor,
-      fontSize: isLandscape ? 12.5 : 13.2,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 0.18,
-    );
-    final subtitleStyle = TextStyle(
-      color: scheme.onSurface.withValues(alpha: isDark ? 0.72 : 0.82),
-      fontSize: isLandscape ? 10.2 : 10.6,
-      fontWeight: FontWeight.w600,
-      height: 1.1,
-    );
-    final sectionStyle = TextStyle(
-      color: scheme.onSurface.withValues(alpha: isDark ? 0.78 : 0.88),
-      fontSize: isLandscape ? 10.1 : 10.4,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 0.32,
-    );
 
     return Material(
       color: Colors.transparent,
@@ -10916,10 +11108,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         decoration: BoxDecoration(
           color: panelBackgroundColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: panelBorderColor,
-            width: 1.2,
-          ),
+          border: Border.all(color: panelBorderColor, width: 1.2),
           boxShadow: [
             BoxShadow(
               color: scheme.shadow.withValues(alpha: isDark ? 0.30 : 0.14),
@@ -10930,22 +11119,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ),
         child: LayoutBuilder(
           builder: (context, toolboxConstraints) {
-          final sectionSpacing = isLandscape ? 8.0 : 8.0;
+            final sectionSpacing = isLandscape ? 8.0 : 8.0;
             final columnsPerRow = isLandscape ? 3 : 5;
-            final widthBasedTileSize = ((toolboxConstraints.maxWidth -
-                (sectionSpacing * (columnsPerRow - 1))) /
-              columnsPerRow)
-                .clamp(isLandscape ? 48.0 : 48.0, isLandscape ? 60.0 : 68.0)
-                .toDouble()
-            ;
+            final widthBasedTileSize =
+                ((toolboxConstraints.maxWidth -
+                            (sectionSpacing * (columnsPerRow - 1))) /
+                        columnsPerRow)
+                    .clamp(isLandscape ? 48.0 : 48.0, isLandscape ? 60.0 : 68.0)
+                    .toDouble();
             final maxHeight = toolboxConstraints.maxHeight;
             final fixedHeightBudget =
-                (selectedPieceMessage == null ? 74.0 : 92.0) +
+                42.0 +
                 18.0 +
-                18.0 +
-                8.0 +
-                (isLandscape ? sectionSpacing * 3 : sectionSpacing) +
-                (isLandscape ? 20.0 : 0.0);
+                (isLandscape ? sectionSpacing * 2 : 12.0) +
+                (isLandscape ? 12.0 : 0.0);
             final heightBasedTileSize = maxHeight.isFinite
                 ? ((maxHeight - fixedHeightBudget) / (isLandscape ? 4 : 2))
                       .clamp(
@@ -10954,8 +11141,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       )
                       .toDouble()
                 : widthBasedTileSize;
-            final tileSize = min(widthBasedTileSize, heightBasedTileSize)
-                .toDouble();
+            final tileSize = min(
+              widthBasedTileSize,
+              heightBasedTileSize,
+            ).toDouble();
             final pieceSize = (tileSize * (isLandscape ? 0.62 : 0.60))
                 .clamp(30.0, 42.0)
                 .toDouble();
@@ -10964,7 +11153,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 .toDouble();
 
             Widget buildActionButton({
-              required IconData icon,
+              required Widget child,
               required String tooltip,
               required VoidCallback onPressed,
               bool selected = false,
@@ -11001,15 +11190,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 ),
                         ),
                       ),
-                      child: Icon(
-                        icon,
-                        color: selected
-                            ? accentColor
-                            : scheme.onSurface.withValues(
-                                alpha: isDark ? 0.82 : 0.74,
-                              ),
-                        size: 19,
-                      ),
+                      child: Center(child: child),
                     ),
                   ),
                 ),
@@ -11028,24 +11209,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ];
             }
 
-            Widget buildPieceSection(
-              String label,
-              List<_EditToolboxPiece> pieces,
-            ) {
+            Widget buildPieceSection(List<_EditToolboxPiece> pieces) {
               final rows = buildRows(pieces);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(label, style: sectionStyle),
-                  const SizedBox(height: 8),
-                  for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
+                  for (
+                    int rowIndex = 0;
+                    rowIndex < rows.length;
+                    rowIndex++
+                  ) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        for (int pieceIndex = 0;
-                            pieceIndex < rows[rowIndex].length;
-                            pieceIndex++) ...[
+                        for (
+                          int pieceIndex = 0;
+                          pieceIndex < rows[rowIndex].length;
+                          pieceIndex++
+                        ) ...[
                           _buildEditToolboxPieceTile(
                             rows[rowIndex][pieceIndex],
                             tileSize: tileSize,
@@ -11072,61 +11254,54 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Edit toolbox', style: headerStyle),
-                          const SizedBox(height: 4),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: _confirmCleanEditBoard,
-                              style: TextButton.styleFrom(
-                                foregroundColor: accentColor,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              child: const Text('Clear'),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: _confirmCleanEditBoard,
+                          style: TextButton.styleFrom(
+                            foregroundColor: accentColor,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
                             ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
                           ),
-                          if (selectedPieceMessage != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              selectedPieceMessage,
-                              style: subtitleStyle,
-                              maxLines: isLandscape ? 2 : 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ],
+                          child: const Text('Clear'),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     buildActionButton(
-                      icon: Icons.backspace_rounded,
+                      child: Image.asset(
+                        'assets/pieces/eraser.png',
+                        width: 20,
+                        height: 20,
+                        fit: BoxFit.contain,
+                      ),
                       tooltip: 'Erase pieces',
                       onPressed: _toggleEditToolboxEraser,
                       selected: _editToolboxEraserSelected,
                     ),
                     const SizedBox(width: 6),
                     buildActionButton(
-                      icon: Icons.close_rounded,
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: scheme.onSurface.withValues(
+                          alpha: isDark ? 0.82 : 0.74,
+                        ),
+                        size: 20,
+                      ),
                       tooltip: 'Close edit toolbox',
                       onPressed: () => _setAnalysisEditMode(false),
                     ),
                   ],
                 ),
                 const SizedBox(height: 6),
-                buildPieceSection('White pieces', whitePieces),
+                buildPieceSection(whitePieces),
                 const SizedBox(height: 10),
-                buildPieceSection('Black pieces', blackPieces),
+                buildPieceSection(blackPieces),
               ],
             );
           },
@@ -11202,7 +11377,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildPieceGlow(String p) {
+  Widget _buildPieceGlow(String p, {String? motionSeed}) {
     final glowColor = _isGambitsOnlyOpeningMode
         ? const Color(0xFFB16CFF)
         : _openingMode == OpeningMode.yellowGlow
@@ -11222,7 +11397,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
         ],
       ),
-      child: _pieceImage(p),
+      child: _pieceImage(p, motionSeed: motionSeed),
     );
   }
 
@@ -11239,9 +11414,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return squares;
   }
 
-  Widget _buildPieceWithGlow(String piece, String? selectedGlowColor) {
+  Widget _buildPieceWithGlow(
+    String piece,
+    String? selectedGlowColor, {
+    String? motionSeed,
+  }) {
     if (selectedGlowColor == null) {
-      return _pieceImage(piece);
+      return _pieceImage(piece, motionSeed: motionSeed);
     }
 
     final glowColor = selectedGlowColor == 'yellow'
@@ -11261,7 +11440,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
         ],
       ),
-      child: _pieceImage(piece),
+      child: _pieceImage(piece, motionSeed: motionSeed),
     );
   }
 
@@ -14370,7 +14549,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     }
     if (_playVsBot) {
-      await _handleVsBotMatchStarted(startedFromReplay: true);
+      await _handleVsBotMatchStarted();
     }
     if (!mounted) return;
     setState(() {
@@ -14440,13 +14619,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _adFreeOwned = true;
     await _saveStoreState();
     unawaited(_playStorePurchaseSound());
-    _addLog('Reset Board No-Ad Pass activated');
+    _addLog('$_cleanPlayPassTitle activated');
     if (!mounted) return;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Purchase Complete'),
-        content: const Text('Reset Board No-Ad Pass activated.'),
+        content: const Text(
+          'Clean Play No-Ad Pass activated. Analysis resets, bot rematches, and new bot matches stay ad-free.',
+        ),
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -14730,10 +14911,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ),
                     _storeItemCard(
                       icon: Icons.block_outlined,
-                      title: 'Reset Board No-Ad Pass',
+                      title: _cleanPlayPassTitle,
                       subtitle: _adFreeOwned
-                          ? 'Owned (analysis resets and bot rematches stay ad-free)'
-                          : 'Skips ads after analysis resets and same-bot rematches',
+                          ? 'Owned ($_cleanPlayPassBenefit)'
+                          : 'Skips ads for $_cleanPlayPassBenefit',
                       priceLabel: '\$6.99',
                       enabled: !_adFreeOwned,
                       actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
@@ -15745,6 +15926,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     PieceThemeMode? theme,
     bool applyBlackOutline = true,
     double blackOutlineOverflowPx = 0,
+    String? motionSeed,
   }) {
     final activeTheme = theme ?? _pieceThemeMode;
     final assetPiece = AppThemeProvider.pieceAssetForIndex(
@@ -15876,37 +16058,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
-        final phase = _pieceThemePhase(piece);
-        final phase2 = _pieceThemePhase2(piece);
-        final phase3 = _pieceThemePhase3(piece);
+        final phase = _pieceThemePhase(piece, motionSeed);
+        final phase2 = _pieceThemePhase2(piece, motionSeed);
+        final phase3 = _pieceThemePhase3(piece, motionSeed);
         final frequency =
-            1.55 +
-            (piece.codeUnits.fold<int>(0, (sum, v) => sum + v) % 8) * 0.055;
-        final t = _pulseController.value * 2 * pi * frequency + phase;
-        final pulse =
-            ((sin(t) * 0.8) +
-                    (sin(t * 1.73 + phase2) * 0.45) +
-                    (sin(t * 2.27 + phase3) * 0.35)) *
-                0.18 +
-            0.53;
+            0.48 + (_pieceThemeHash(piece, motionSeed) % 13) * 0.017;
+        final elapsedSeconds =
+            _spectralMotionClock.elapsedMicroseconds /
+            Duration.microsecondsPerSecond;
+        final t = elapsedSeconds * frequency + phase;
+        final shimmer =
+            (sin(t * 1.17) * 0.42) +
+            (sin(t * 0.73 + phase2) * 0.34) +
+            (cos(t * 1.43 + phase3) * 0.24);
+        final pulse = (0.46 + shimmer * 0.08).clamp(0.36, 0.56);
         final flutterOffset = Offset(
-          cos(t * 1.95 + phase2) * (0.28 + pulse * 0.43),
-          sin(t * 2.23 + phase3) * (0.22 + pulse * 0.48),
+          cos(t * 1.31 + phase2) * (0.14 + pulse * 0.18),
+          sin(t * 1.47 + phase3) * (0.12 + pulse * 0.20),
         );
         final glowColor = _pieceTintColor(
           piece,
           activeTheme,
-        ).withValues(alpha: (0.26 + pulse * 0.34).clamp(0.2, 0.78));
+        ).withValues(alpha: (0.20 + pulse * 0.18).clamp(0.22, 0.36));
         final trailOffsets =
             <Offset>[
-                  const Offset(-1.1, -0.9),
-                  const Offset(1.0, -0.2),
-                  const Offset(-0.6, 1.2),
+                  const Offset(-0.85, -0.62),
+                  const Offset(0.78, -0.18),
+                  const Offset(-0.42, 0.88),
                 ]
                 .map(
                   (offset) =>
-                      offset * (0.70 + pulse * 0.92) +
-                      flutterOffset * (0.6 + pulse * 0.35),
+                      offset * (0.74 + pulse * 0.34) +
+                      flutterOffset * (0.34 + pulse * 0.12),
                 )
                 .toList(growable: false);
 
@@ -15915,8 +16098,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             boxShadow: [
               BoxShadow(
                 color: glowColor,
-                blurRadius: 18 + pulse * 12,
-                spreadRadius: 2.8 + pulse * 4.5,
+                blurRadius: 11 + pulse * 8,
+                spreadRadius: 1.2 + pulse * 1.8,
               ),
             ],
           ),
@@ -15927,10 +16110,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 Transform.translate(
                   offset: offset,
                   child: Opacity(
-                    opacity: (0.16 - pulse * 0.06).clamp(0.06, 0.18),
+                    opacity: (0.095 - pulse * 0.018).clamp(0.055, 0.10),
                     child: ColorFiltered(
                       colorFilter: ColorFilter.mode(
-                        glowColor.withValues(alpha: 0.26),
+                        glowColor.withValues(alpha: 0.20),
                         BlendMode.srcIn,
                       ),
                       child: baseImage,
@@ -15945,18 +16128,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  double _pieceThemePhase(String piece) {
-    return (piece.codeUnits.fold<int>(0, (sum, v) => sum + v) % 100) * 0.0628;
+  int _pieceThemeHash(String piece, String? motionSeed) {
+    final key = '$piece:${motionSeed ?? piece}';
+    return key.codeUnits.fold<int>(0, (sum, value) => sum + value * 31);
   }
 
-  double _pieceThemePhase2(String piece) {
-    return (piece.codeUnits.fold<int>(0, (sum, v) => sum + v * 3) % 100) *
-        0.0628;
+  double _pieceThemePhase(String piece, [String? motionSeed]) {
+    return (_pieceThemeHash(piece, motionSeed) % 1000) * 0.0062831853;
   }
 
-  double _pieceThemePhase3(String piece) {
-    return (piece.codeUnits.fold<int>(0, (sum, v) => sum + v * 5) % 100) *
-        0.0628;
+  double _pieceThemePhase2(String piece, [String? motionSeed]) {
+    return ((_pieceThemeHash(piece, motionSeed) * 3 + 17) % 1000) *
+        0.0062831853;
+  }
+
+  double _pieceThemePhase3(String piece, [String? motionSeed]) {
+    return ((_pieceThemeHash(piece, motionSeed) * 5 + 43) % 1000) *
+        0.0062831853;
   }
 
   Color _pieceTintColor(String piece, PieceThemeMode theme) {

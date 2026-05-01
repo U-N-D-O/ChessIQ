@@ -5309,100 +5309,147 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         ? foreground
         : foreground.withValues(alpha: 0.55);
     final effectiveAccent = enabled ? accent : accent.withValues(alpha: 0.46);
+    final haloAccent = enabled
+        ? Color.lerp(accent, palette.signal, 0.22)!
+        : effectiveAccent;
 
     return Material(
       key: buttonKey,
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: <Color>[
                 Color.alphaBlend(
-                  palette.boardLight.withValues(alpha: 0.18),
+                  palette.boardLight.withValues(alpha: enabled ? 0.30 : 0.14),
+                  haloAccent,
+                ),
+                Color.alphaBlend(
+                  palette.amber.withValues(alpha: enabled ? 0.16 : 0.04),
                   effectiveAccent,
                 ),
                 effectiveAccent,
               ],
+              stops: const <double>[0.0, 0.52, 1.0],
             ),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: effectiveAccent.withValues(alpha: enabled ? 0.96 : 0.42),
-              width: 2,
+              color: effectiveForeground.withValues(
+                alpha: enabled ? 0.84 : 0.28,
+              ),
+              width: 3,
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: palette.shadow.withValues(alpha: enabled ? 0.26 : 0.14),
-                offset: const Offset(5, 5),
+                color: palette.shadow.withValues(alpha: enabled ? 0.34 : 0.14),
+                offset: const Offset(7, 7),
                 blurRadius: 0,
               ),
               if (enabled)
                 BoxShadow(
-                  color: effectiveAccent.withValues(alpha: 0.20),
+                  color: haloAccent.withValues(alpha: 0.30),
+                  blurRadius: 28,
+                  spreadRadius: 2,
+                ),
+              if (enabled)
+                BoxShadow(
+                  color: palette.amber.withValues(alpha: 0.12),
                   blurRadius: 18,
-                  spreadRadius: 1,
+                  offset: const Offset(-2, -2),
                 ),
             ],
           ),
           child: Row(
             children: <Widget>[
               Container(
-                width: 40,
-                height: 40,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
-                  color: effectiveForeground.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: effectiveForeground.withValues(alpha: 0.26),
-                    width: 2,
+                  color: effectiveForeground.withValues(
+                    alpha: enabled ? 0.20 : 0.10,
                   ),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(
+                    color: effectiveForeground.withValues(
+                      alpha: enabled ? 0.50 : 0.20,
+                    ),
+                    width: 3,
+                  ),
+                  boxShadow: enabled
+                      ? <BoxShadow>[
+                          BoxShadow(
+                            color: effectiveForeground.withValues(alpha: 0.12),
+                            blurRadius: 14,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
                 ),
                 child: Icon(
                   Icons.play_arrow_rounded,
-                  size: 24,
+                  size: 36,
                   color: effectiveForeground,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'START QUIZ',
+                      'PRESS START',
                       style: _academyHudStyle(
                         palette: palette,
-                        color: effectiveForeground.withValues(alpha: 0.88),
-                        size: 10.6,
+                        color: effectiveForeground.withValues(alpha: 0.92),
+                        size: 11.2,
                         weight: FontWeight.w800,
-                        letterSpacing: 1.0,
+                        letterSpacing: 1.1,
                         height: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 7),
                     Text(
                       label,
                       style: _academyDisplayStyle(
                         palette: palette,
                         color: effectiveForeground,
-                        size: 17,
+                        size: 20,
                         weight: FontWeight.w700,
-                        letterSpacing: 0.6,
+                        letterSpacing: 0.75,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Icon(
-                Icons.arrow_forward_rounded,
-                size: 24,
-                color: effectiveForeground.withValues(alpha: 0.92),
+              const SizedBox(width: 12),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: effectiveForeground.withValues(
+                    alpha: enabled ? 0.16 : 0.08,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: effectiveForeground.withValues(
+                      alpha: enabled ? 0.36 : 0.18,
+                    ),
+                    width: 2,
+                  ),
+                ),
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 26,
+                  color: effectiveForeground.withValues(alpha: 0.94),
+                ),
               ),
             ],
           ),

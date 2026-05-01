@@ -303,6 +303,7 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
   bool? livePostMoveWhiteToMove,
   PositionAnalysisCacheEntry? postMoveCacheEntry,
   required int minimumDepth,
+  bool requireCoveredPreMoveComparison = true,
 }) {
   final normalizedCapturedPreMoveLines = _normalizedEngineLines(
     capturedPreMoveLines,
@@ -335,6 +336,7 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
       ? null
       : math.max(1, requiredPreMoveLineCount);
   final needsCoveredPreMoveComparison =
+      requireCoveredPreMoveComparison &&
       normalizedRequiredPreMoveLineCount != null &&
       !hasDirectPreMoveComparison &&
       preMoveLines.length < normalizedRequiredPreMoveLineCount;
