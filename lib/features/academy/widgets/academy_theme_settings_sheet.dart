@@ -12,6 +12,7 @@ Future<void> showAcademyThemeSettingsSheet({
   required bool hapticsEnabled,
   required FutureOr<void> Function(bool enabled) onSoundEnabledChanged,
   required FutureOr<void> Function(bool enabled) onHapticsEnabledChanged,
+  UniversalSettingsExtraBuilder? extraSectionsBuilder,
 }) async {
   if (!context.mounted) return;
 
@@ -64,6 +65,7 @@ Future<void> showAcademyThemeSettingsSheet({
       onHapticsEnabledChanged: onHapticsEnabledChanged,
       boardThemeSelectorBuilder: boardThemeSelectorBuilder,
       pieceThemeSelectorBuilder: pieceThemeSelectorBuilder,
+      extraSectionsBuilder: extraSectionsBuilder,
     );
   }
 

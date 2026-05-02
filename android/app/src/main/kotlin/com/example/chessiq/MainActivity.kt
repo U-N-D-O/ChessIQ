@@ -1,4 +1,4 @@
-package com.example.chessiq
+package com.qila.chessiq
 
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity

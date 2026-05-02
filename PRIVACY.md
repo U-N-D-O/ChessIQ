@@ -44,6 +44,8 @@ ChessIQ does not show this network metadata on the public leaderboard, and it is
 
 Joining the Academy leaderboard is tied to saving an Academy profile. If you do not want to publish a nickname and country or region on the leaderboard, do not complete leaderboard profile setup.
 
+If you later want to remove that Academy leaderboard identity, you can delete the Academy profile from Puzzle Academy settings. This removes the live leaderboard profile and clears the local saved Academy profile and exam history used for leaderboard participation.
+
 ## Contact
 
 For privacy or data questions related to ChessIQ, contact:

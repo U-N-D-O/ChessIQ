@@ -73,6 +73,25 @@ class FirebaseAuthService {
     return _idToken;
   }
 
+  /// Discards the current anonymous identity and provisions a fresh one.
+  Future<void> rotateAnonymousIdentity() async {
+    final prefs = await SharedPreferences.getInstance();
+    _uid = null;
+    _idToken = null;
+    _refreshToken = null;
+    _expiry = null;
+    _lastError = null;
+
+    await Future.wait([
+      prefs.remove(_prefUid),
+      prefs.remove(_prefIdToken),
+      prefs.remove(_prefRefreshToken),
+      prefs.remove(_prefExpiryMs),
+    ]);
+
+    await _signInAnonymously();
+  }
+
   bool _isExpiredOrSoon() {
     if (_expiry == null) return true;
     return _expiry!.isBefore(DateTime.now().add(const Duration(minutes: 5)));

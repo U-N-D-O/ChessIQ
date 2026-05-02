@@ -265,6 +265,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
 
   PuzzleProgressModel? _progress;
   String? _lastRegistrationError;
+  String? _lastProfileDeletionError;
   Map<String, int> _basePuzzleCountsByNode = const <String, int>{};
   final Map<String, List<PuzzleItem>> _basePuzzleCacheByNode =
       <String, List<PuzzleItem>>{};
@@ -304,6 +305,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   bool get shouldShowGrandmasterOracle => _shouldShowGrandmasterOracle;
   String? get celebrationNodeKey => _celebrationNodeKey;
   String? get lastRegistrationError => _lastRegistrationError;
+  String? get lastProfileDeletionError => _lastProfileDeletionError;
   List<PuzzleItem> get dailyPuzzles => _dailyPuzzles;
   Duration get examDuration => _examDuration;
   int get examPuzzleCount => _examPuzzleCount;
@@ -512,7 +514,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       score: totalScore,
       title: '${bestResultsByNode.length} exams counted',
     );
-    if (status == HandleAvailabilityStatus.verificationUnavailable) {
+    if (status == HandleAvailabilityStatus.verificationUnavailable ||
+        status == HandleAvailabilityStatus.renameRequired) {
       _lastRegistrationError = ScoreboardService.instance.lastFunctionError;
     }
     return status;
@@ -538,6 +541,30 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     _progress = progress.copyWith(handle: '', country: '');
     await _saveProgress();
     notifyListeners();
+  }
+
+  Future<DeleteProfileResult?> deleteAcademyProfile() async {
+    _lastProfileDeletionError = null;
+    final existingHandle = progress.handle.trim().toLowerCase();
+
+    try {
+      final result = await ScoreboardService.instance.deleteProfile();
+      _progress = progress.copyWith(
+        handle: '',
+        country: '',
+        examResults: const <AcademyExamResult>[],
+      );
+      _remoteScoreboardEntries = _remoteScoreboardEntries
+          .where((entry) => entry.handle.trim().toLowerCase() != existingHandle)
+          .toList(growable: false);
+      await _saveProgress();
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _lastProfileDeletionError =
+          ScoreboardService.instance.lastFunctionError ?? e.toString();
+      return null;
+    }
   }
 
   String get currentTitle {
@@ -1321,14 +1348,26 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     );
     if (totalScore <= 0) return;
 
-    await ScoreboardService.instance.submitScore(
-      handle: progress.handle.trim().isEmpty
-          ? 'Unknown Player'
-          : progress.handle.trim(),
-      country: progress.country.trim(),
-      score: totalScore,
-      title: '${bestResultsByNode.length} exams counted',
-    );
+    try {
+      await ScoreboardService.instance.submitScore(
+        handle: progress.handle.trim().isEmpty
+            ? 'Unknown Player'
+            : progress.handle.trim(),
+        country: progress.country.trim(),
+        score: totalScore,
+        title: '${bestResultsByNode.length} exams counted',
+      );
+    } catch (_) {
+      final error = ScoreboardService.instance.lastFunctionError;
+      if (error != null &&
+          error.toLowerCase().contains('score cannot decrease')) {
+        return;
+      }
+      debugPrint(
+        '[PuzzleAcademyProvider] Academy scoreboard submit failed: '
+        '${error ?? 'unknown error'}',
+      );
+    }
   }
 
   Future<void> refreshRemoteScoreboard({required bool national}) async {

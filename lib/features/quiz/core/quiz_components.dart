@@ -438,9 +438,14 @@ abstract class _QuizComponents extends _QuizScreen {
   Widget _buildQuizBoard({
     required Map<String, String> boardState,
     required bool whiteToMove,
+    String? selectedSquare,
+    Set<String> targetSquares = const <String>{},
+    Set<String> suggestedFromSquares = const <String>{},
+    ValueChanged<String>? onSquareTap,
   }) {
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
+    final scheme = Theme.of(context).colorScheme;
     final reverse =
         _perspective == BoardPerspective.black ||
         (_perspective == BoardPerspective.auto && !whiteToMove);
@@ -468,49 +473,99 @@ abstract class _QuizComponents extends _QuizScreen {
         final showFileLabel = visualRankFromTop == 7;
         final showRankLabel = visualFile == 0;
         final labelColor = isDark ? lightSquareColor : darkSquareColor;
+        final isSelected = selectedSquare == sq;
+        final isTarget = targetSquares.contains(sq);
+        final isSuggestedFrom = suggestedFromSquares.contains(sq);
+        final isCaptureTarget = isTarget && piece != null;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: isDark ? darkSquareColor : lightSquareColor,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (showFileLabel || showRankLabel)
-                Positioned(
-                  left: 3,
-                  bottom: 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (showRankLabel)
-                        Text(
-                          '${row + 1}',
-                          style: TextStyle(
-                            fontSize: 8,
-                            height: 1,
-                            letterSpacing: 0.1,
-                            fontWeight: FontWeight.w600,
-                            color: labelColor.withValues(alpha: 0.92),
-                          ),
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onSquareTap == null ? null : () => onSquareTap(sq),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? darkSquareColor : lightSquareColor,
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (isSuggestedFrom)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: scheme.primary.withValues(alpha: 0.32),
+                          width: 2,
                         ),
-                      if (showFileLabel)
-                        Text(
-                          String.fromCharCode(97 + col),
-                          style: TextStyle(
-                            fontSize: 8,
-                            height: 1,
-                            letterSpacing: 0.1,
-                            fontWeight: FontWeight.w600,
-                            color: labelColor.withValues(alpha: 0.92),
-                          ),
-                        ),
-                    ],
+                      ),
+                    ),
                   ),
-                ),
-              if (piece != null) Center(child: _pieceImage(piece)),
-            ],
+                if (isSelected)
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: scheme.primary.withValues(alpha: 0.18),
+                        border: Border.all(
+                          color: scheme.primary.withValues(alpha: 0.82),
+                          width: 3,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (isTarget)
+                  Center(
+                    child: Container(
+                      width: isCaptureTarget ? 28 : 12,
+                      height: isCaptureTarget ? 28 : 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isCaptureTarget
+                            ? Colors.transparent
+                            : scheme.primary.withValues(alpha: 0.56),
+                        border: isCaptureTarget
+                            ? Border.all(
+                                color: scheme.primary.withValues(alpha: 0.76),
+                                width: 3,
+                              )
+                            : null,
+                      ),
+                    ),
+                  ),
+                if (showFileLabel || showRankLabel)
+                  Positioned(
+                    left: 3,
+                    bottom: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showRankLabel)
+                          Text(
+                            '${row + 1}',
+                            style: TextStyle(
+                              fontSize: 8,
+                              height: 1,
+                              letterSpacing: 0.1,
+                              fontWeight: FontWeight.w600,
+                              color: labelColor.withValues(alpha: 0.92),
+                            ),
+                          ),
+                        if (showFileLabel)
+                          Text(
+                            String.fromCharCode(97 + col),
+                            style: TextStyle(
+                              fontSize: 8,
+                              height: 1,
+                              letterSpacing: 0.1,
+                              fontWeight: FontWeight.w600,
+                              color: labelColor.withValues(alpha: 0.92),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (piece != null) Center(child: _pieceImage(piece)),
+              ],
+            ),
           ),
         );
       },

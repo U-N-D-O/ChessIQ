@@ -23,6 +23,8 @@ samples, guidance on mobile development, and a full API reference.
 - Third-party credits and notices: see `THIRD_PARTY_NOTICES.md`
 - Privacy policy and leaderboard data notice: see `PRIVACY.md`
 - Corresponding-source release note: see `CORRESPONDING_SOURCE.md`
+- One-click Android release setup: see `ANDROID_ONE_CLICK_RELEASE_SETUP.md`
+- Google Play signed release path: see `GOOGLE_PLAY_RELEASE.md`
 - One-click iOS release setup: see `IOS_ONE_CLICK_RELEASE_SETUP.md`
 - Apple signing asset walkthrough: see `APPLE_SIGNING_ASSETS_GUIDE.md`
 - Apple App Store signed release path: see `APPLE_APP_STORE_RELEASE.md`

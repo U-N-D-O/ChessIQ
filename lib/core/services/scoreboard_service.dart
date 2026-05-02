@@ -7,11 +7,22 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum HandleAvailabilityStatus { available, taken, verificationUnavailable }
+enum HandleAvailabilityStatus {
+  available,
+  taken,
+  renameRequired,
+  verificationUnavailable,
+}
+
+class DeleteProfileResult {
+  const DeleteProfileResult({required this.authDeleted});
+
+  final bool authDeleted;
+}
 
 /// Scoreboard service – traffic-minimised and authenticated.
 ///
-/// **Writes** go through the `submitAcademyScore` Cloud Function so that
+/// **Writes** go through the `submitAcademyScoreV2` Cloud Function so that
 /// the RTDB security rules can block all direct client writes.
 ///
 /// **Reads** go directly to RTDB (public path) with an optional auth token
@@ -26,6 +37,14 @@ class ScoreboardService {
   static const String _databaseUrl = kFirebaseRealtimeDatabaseUrl;
   static const String _globalPath = 'academy_scoreboard/global';
   static const String _countryRoot = 'academy_scoreboard/by_country';
+  static const String _submitAcademyScoreFunction = 'submitAcademyScoreV2';
+  static const String _submitAcademyScoreFallbackFunction =
+      'submitAcademyScore';
+  static const String _checkHandleAvailabilityFunction =
+      'checkHandleAvailabilityV2';
+  static const String _checkHandleAvailabilityFallbackFunction =
+      'checkHandleAvailability';
+  static const String _moderatedHandlePrefix = 'ACADEMY_HANDLE_MODERATED:';
 
   // Cloud Function base URL (project: chessiq-89b45, region: us-central1)
   static const String _cfBase =
@@ -54,6 +73,41 @@ class ScoreboardService {
     return Uri.encodeComponent(
       normalized.replaceAll(RegExp(r'[.#$\[\]/]'), '_'),
     );
+  }
+
+  bool _isMissingFunctionError(String? message) {
+    final normalized = (message ?? '').toLowerCase();
+    return normalized.contains('returned html (404)') ||
+        normalized.contains('function error 404') ||
+        normalized.contains('not found') ||
+        normalized.contains('endpoint may be unavailable');
+  }
+
+  String _stripModeratedHandlePrefix(String message) {
+    final index = message.toUpperCase().indexOf(_moderatedHandlePrefix);
+    if (index < 0) {
+      return message.replaceFirst('Exception: ', '').trim();
+    }
+    return message
+        .substring(index + _moderatedHandlePrefix.length)
+        .replaceFirst('Exception: ', '')
+        .trim();
+  }
+
+  Future<Map<String, dynamic>> _callPreferredFunction({
+    required String primary,
+    required String fallback,
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      return await _callFunction(primary, data);
+    } catch (error) {
+      final message = _lastFunctionError ?? error.toString();
+      if (!_isMissingFunctionError(message)) {
+        rethrow;
+      }
+      return _callFunction(fallback, data);
+    }
   }
 
   Uri _url(String path, [Map<String, String>? query]) {
@@ -205,84 +259,23 @@ class ScoreboardService {
         return;
       }
 
-      // ── Primary: Cloud Function write ─────────────────────────────────────
-      bool submitted = false;
-      try {
-        await _callFunction('submitAcademyScore', {
+      await _callPreferredFunction(
+        primary: _submitAcademyScoreFunction,
+        fallback: _submitAcademyScoreFallbackFunction,
+        data: {
           'handle': trimmedHandle,
           'country': normalizedCountry,
           'score': score,
           'title': title,
-        });
-        submitted = true;
-      } catch (_) {
-        // CF not deployed yet or offline – fall through to direct REST writes.
-      }
-
-      // ── Fallback: direct RTDB writes (pre-deployment / offline) ──────────
-      if (!submitted) {
-        final previousCountry = (cachedHandle == handleKey)
-            ? cachedCountry
-            : null;
-        final token = await FirebaseAuthService.instance.getIdToken();
-        if (token == null) {
-          throw Exception('No Firebase auth token available for score submit');
-        }
-        final authParam = <String, String>{'auth': token};
-
-        final body = jsonEncode({
-          'handle': trimmedHandle,
-          'country': normalizedCountry,
-          'score': score,
-          'title': title,
-          'updatedAt': DateTime.now().toUtc().toIso8601String(),
-        });
-
-        final pending = <Future<http.Response>>[
-          http.put(_url('$_globalPath/$handleKey', authParam), body: body),
-          http.put(
-            _url(
-              '$_countryRoot/${_countryKey(normalizedCountry)}/$handleKey',
-              authParam,
-            ),
-            body: body,
-          ),
-        ];
-
-        if (previousCountry != null &&
-            previousCountry.trim().isNotEmpty &&
-            previousCountry.trim() != normalizedCountry) {
-          pending.add(
-            http.delete(
-              _url(
-                '$_countryRoot/${_countryKey(previousCountry)}/$handleKey',
-                authParam,
-              ),
-            ),
-          );
-        }
-
-        final responses = await Future.wait(pending);
-        final allSucceeded = responses.every(
-          (response) => response.statusCode >= 200 && response.statusCode < 300,
-        );
-        if (!allSucceeded) {
-          final codes = responses
-              .map((response) => response.statusCode.toString())
-              .join(',');
-          throw Exception('RTDB fallback write failed with status: $codes');
-        }
-        submitted = true;
-      }
+        },
+      );
 
       // ── Persist cache ─────────────────────────────────────────────────────
-      if (submitted) {
-        await Future.wait([
-          prefs.setString(_prefHandle, handleKey),
-          prefs.setString(_prefCountry, normalizedCountry),
-          prefs.setInt(_prefScore, score),
-        ]);
-      }
+      await Future.wait([
+        prefs.setString(_prefHandle, handleKey),
+        prefs.setString(_prefCountry, normalizedCountry),
+        prefs.setInt(_prefScore, score),
+      ]);
     } catch (e) {
       debugPrint('Scoreboard submit failed: $e');
       // Best-effort; don't surface leaderboard errors to the user.
@@ -291,7 +284,7 @@ class ScoreboardService {
 
   /// Atomically reserves/updates a player's leaderboard profile on backend.
   ///
-  /// This calls `submitAcademyScore` directly so nickname ownership is
+  /// This calls `submitAcademyScoreV2` directly so nickname ownership is
   /// validated server-side before the app accepts the profile locally.
   Future<HandleAvailabilityStatus> registerProfile({
     required String handle,
@@ -309,21 +302,31 @@ class ScoreboardService {
         : country.trim();
 
     try {
-      await _callFunction('submitAcademyScore', {
-        'handle': trimmedHandle,
-        'country': normalizedCountry,
-        'score': score,
-        'title': title,
-      });
+      await _callPreferredFunction(
+        primary: _submitAcademyScoreFunction,
+        fallback: _submitAcademyScoreFallbackFunction,
+        data: {
+          'handle': trimmedHandle,
+          'country': normalizedCountry,
+          'score': score,
+          'title': title,
+        },
+      );
       return HandleAvailabilityStatus.available;
     } catch (e) {
-      final message = e.toString().toLowerCase();
+      final rawMessage = _lastFunctionError ?? e.toString();
+      if (rawMessage.toUpperCase().contains(_moderatedHandlePrefix)) {
+        _lastFunctionError = _stripModeratedHandlePrefix(rawMessage);
+        return HandleAvailabilityStatus.renameRequired;
+      }
+
+      final message = rawMessage.toLowerCase();
       if (message.contains('already-exists') ||
           message.contains('already taken') ||
           message.contains('nickname is already taken')) {
         return HandleAvailabilityStatus.taken;
       }
-      _lastFunctionError ??= e.toString();
+      _lastFunctionError ??= rawMessage;
       return HandleAvailabilityStatus.verificationUnavailable;
     }
   }
@@ -337,19 +340,25 @@ class ScoreboardService {
       return HandleAvailabilityStatus.verificationUnavailable;
     }
 
-    final normalizedRequested = trimmed.toLowerCase();
-    final normalizedCurrent = currentHandle?.trim().toLowerCase();
-    if (normalizedCurrent != null && normalizedRequested == normalizedCurrent) {
-      return HandleAvailabilityStatus.available;
-    }
-
     // Primary: Cloud Function checks the private handle_registry node.
     try {
-      final result = await _callFunction('checkHandleAvailability', {
-        'handle': trimmed,
-      });
+      final result = await _callPreferredFunction(
+        primary: _checkHandleAvailabilityFunction,
+        fallback: _checkHandleAvailabilityFallbackFunction,
+        data: {'handle': trimmed},
+      );
+      if (result['moderated'] == true) {
+        return HandleAvailabilityStatus.renameRequired;
+      }
       final available = result['available'];
       if (available is bool) {
+        final normalizedRequested = trimmed.toLowerCase();
+        final normalizedCurrent = currentHandle?.trim().toLowerCase();
+        if (available &&
+            normalizedCurrent != null &&
+            normalizedRequested == normalizedCurrent) {
+          return HandleAvailabilityStatus.available;
+        }
         return available
             ? HandleAvailabilityStatus.available
             : HandleAvailabilityStatus.taken;
@@ -383,6 +392,30 @@ class ScoreboardService {
           currentHandle: currentHandle,
         ) ==
         HandleAvailabilityStatus.available;
+  }
+
+  Future<DeleteProfileResult> deleteProfile({
+    bool deleteAnonymousIdentity = true,
+  }) async {
+    _lastFunctionError = null;
+
+    final result = await _callFunction('deleteAcademyProfile', {
+      'deleteAnonymousAuth': deleteAnonymousIdentity,
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.remove(_prefHandle),
+      prefs.remove(_prefCountry),
+      prefs.remove(_prefScore),
+    ]);
+
+    final authDeleted = result['authDeleted'] == true;
+    if (deleteAnonymousIdentity && authDeleted) {
+      await FirebaseAuthService.instance.rotateAnonymousIdentity();
+    }
+
+    return DeleteProfileResult(authDeleted: authDeleted);
   }
 
   Future<List<LeaderboardEntry>> fetchTopScores({

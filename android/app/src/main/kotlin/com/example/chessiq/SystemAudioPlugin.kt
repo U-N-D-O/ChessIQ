@@ -1,4 +1,4 @@
-package com.example.chessiq
+package com.qila.chessiq
 
 import android.content.Context
 import android.media.AudioManager

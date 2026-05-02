@@ -57,6 +57,7 @@ def _emit_github_env(config: dict) -> int:
     print(f"STOCKFISH_TAG={stockfish['tag_ref']}")
     print(f"STOCKFISH_COMMIT={stockfish['commit']}")
     print(f"CHESSIQ_PRIVACY_NOTICE_URL={config['privacy_notice_url']}")
+    print(f"CHESSIQ_ANDROID_APPLICATION_ID={config['android_application_id']}")
     print(f"CHESSIQ_IOS_BUNDLE_ID={config['ios_bundle_identifier']}")
     return 0
 
@@ -64,6 +65,7 @@ def _emit_github_env(config: dict) -> int:
 def _run_checks(config: dict, expected_tag: str | None) -> int:
     errors: list[str] = []
     privacy_url = config["privacy_notice_url"]
+    android_application_id = config["android_application_id"]
     ios_bundle_identifier = config["ios_bundle_identifier"]
     stockfish = config["stockfish"]
 
@@ -73,7 +75,9 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         _expect(errors, (REPO_ROOT / relative_path).exists(), f"Required document missing: {relative_path}")
 
     _expect(errors, (REPO_ROOT / "IOS_ONE_CLICK_RELEASE_SETUP.md").exists(), "IOS_ONE_CLICK_RELEASE_SETUP.md is missing")
+    _expect(errors, (REPO_ROOT / "ANDROID_ONE_CLICK_RELEASE_SETUP.md").exists(), "ANDROID_ONE_CLICK_RELEASE_SETUP.md is missing")
     _expect(errors, (REPO_ROOT / "APPLE_SIGNING_ASSETS_GUIDE.md").exists(), "APPLE_SIGNING_ASSETS_GUIDE.md is missing")
+    _expect(errors, (REPO_ROOT / "GOOGLE_PLAY_RELEASE.md").exists(), "GOOGLE_PLAY_RELEASE.md is missing")
 
     license_text = _read_text("LICENSE")
     _expect(errors, "GNU GENERAL PUBLIC LICENSE" in license_text, "LICENSE must contain the GNU GPL text")
@@ -117,8 +121,29 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         "PRIVACY.md",
         "CORRESPONDING_SOURCE.md",
         "APPLE_APP_STORE_RELEASE.md",
+        "ANDROID_ONE_CLICK_RELEASE_SETUP.md",
+        "GOOGLE_PLAY_RELEASE.md",
         "IOS_ONE_CLICK_RELEASE_SETUP.md",
         "APPLE_SIGNING_ASSETS_GUIDE.md",
+    )
+    _check_contains(
+        errors,
+        "ANDROID_ONE_CLICK_RELEASE_SETUP.md",
+        "tool/setup_android_release_secrets.ps1",
+        "tool/start_android_play_release.ps1",
+        "ANDROID_KEYSTORE_BASE64",
+        "ANDROID_KEY_ALIAS",
+    )
+    _check_contains(
+        errors,
+        "GOOGLE_PLAY_RELEASE.md",
+        "Build Android Signed AAB",
+        "ANDROID_KEYSTORE_BASE64",
+        "tool/setup_android_release_secrets.ps1",
+        "tool/start_android_play_release.ps1",
+        "tool/release_guard.py --expected-tag",
+        android_application_id,
+        privacy_url,
     )
     _check_contains(
         errors,
@@ -148,6 +173,14 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         "lib/core/constants/legal_links.dart",
         privacy_url,
         "chessIqPrivacyNoticeUri",
+    )
+    _check_contains(
+        errors,
+        "android/app/build.gradle.kts",
+        android_application_id,
+        "ANDROID_KEYSTORE_PATH",
+        "key.properties",
+        "signingConfigs",
     )
     _check_contains(
         errors,
@@ -222,10 +255,35 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
     )
     _check_contains(
         errors,
+        ".github/workflows/build_android_aab.yml",
+        "ANDROID_KEYSTORE_BASE64",
+        "ANDROID_KEYSTORE_PASSWORD",
+        "ANDROID_KEY_ALIAS",
+        "ANDROID_KEY_PASSWORD",
+        "keytool -list",
+        "refs/tags/${{ inputs.release_tag }}",
+        "flutter build appbundle --release",
+    )
+    _check_contains(
+        errors,
         "tool/setup_ios_release_secrets.ps1",
         "gh secret set",
         "APPLE_DISTRIBUTION_CERTIFICATE_BASE64",
         "APP_STORE_CONNECT_API_KEY_ID",
+    )
+    _check_contains(
+        errors,
+        "tool/setup_android_release_secrets.ps1",
+        "gh secret set",
+        "ANDROID_KEYSTORE_BASE64",
+        "ANDROID_KEY_ALIAS",
+    )
+    _check_contains(
+        errors,
+        "tool/start_android_play_release.ps1",
+        "'workflow', 'run', 'build_android_aab.yml'",
+        "build_android_aab.yml",
+        "release_tag",
     )
     _check_contains(
         errors,

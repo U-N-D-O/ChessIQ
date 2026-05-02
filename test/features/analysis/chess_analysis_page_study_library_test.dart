@@ -265,6 +265,41 @@ Future<void> _openFirstVariation(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 900));
 }
 
+Finder _studyFollowUpToggleInkWell() {
+  return find.descendant(
+    of: find.byKey(const ValueKey<String>('quiz_study_follow_up_toggle')),
+    matching: find.byType(InkWell),
+  );
+}
+
+Future<void> _tapStudyReplayControl(WidgetTester tester, String label) async {
+  final replayControls = find.byKey(
+    const ValueKey<String>('quiz_study_detail_replay_controls'),
+  );
+  final buttonLabel = find.descendant(
+    of: replayControls,
+    matching: find.text(label),
+  );
+  expect(buttonLabel, findsOneWidget);
+  await tester.tap(buttonLabel);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 250));
+}
+
+Future<void> _advanceStudyLineUntilFollowUpsUnlock(
+  WidgetTester tester, {
+  int maxSteps = 48,
+}) async {
+  for (var step = 0; step < maxSteps; step++) {
+    final toggleInkWell = tester.widget<InkWell>(_studyFollowUpToggleInkWell());
+    if (toggleInkWell.onTap != null) {
+      return;
+    }
+    await _tapStudyReplayControl(tester, 'NEXT');
+  }
+  fail('Follow-ups did not unlock within $maxSteps replay steps.');
+}
+
 void _expectFinderWithinViewport(
   WidgetTester tester,
   Finder finder,
@@ -381,6 +416,77 @@ void main() {
         ),
         findsNothing,
       );
+    },
+  );
+
+  testWidgets(
+    'study follow-ups stay below replay controls, unlock only at line end, and deactivate after stepping back',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpOpeningsStudyLibrary(tester, size: const Size(390, 844));
+      await _openFirstVariation(tester);
+
+      final replayControls = find.byKey(
+        const ValueKey<String>('quiz_study_detail_replay_controls'),
+      );
+      final followUpControls = find.byKey(
+        const ValueKey<String>('quiz_study_follow_up_controls'),
+      );
+      final followUpToggle = find.byKey(
+        const ValueKey<String>('quiz_study_follow_up_toggle'),
+      );
+      final nextLabel = find.descendant(
+        of: replayControls,
+        matching: find.text('NEXT'),
+      );
+
+      expect(replayControls, findsOneWidget);
+      expect(followUpControls, findsOneWidget);
+      expect(followUpToggle, findsOneWidget);
+      expect(
+        find.descendant(of: replayControls, matching: followUpControls),
+        findsOneWidget,
+      );
+      expect(
+        tester.getTopLeft(followUpToggle).dy,
+        greaterThan(tester.getBottomLeft(nextLabel).dy),
+      );
+
+      final lockedToggle = tester.widget<InkWell>(
+        _studyFollowUpToggleInkWell(),
+      );
+      expect(lockedToggle.onTap, isNull);
+
+      await _advanceStudyLineUntilFollowUpsUnlock(tester);
+
+      final unlockedToggle = tester.widget<InkWell>(
+        _studyFollowUpToggleInkWell(),
+      );
+      expect(unlockedToggle.onTap, isNotNull);
+
+      await tester.tap(followUpToggle);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(find.text('FOLLOW-UPS ON'), findsOneWidget);
+      expect(find.text('SUGGESTIONS'), findsOneWidget);
+
+      await _tapStudyReplayControl(tester, 'BACK');
+
+      final relockedToggle = tester.widget<InkWell>(
+        _studyFollowUpToggleInkWell(),
+      );
+      expect(find.text('FOLLOW-UPS ON'), findsNothing);
+      expect(find.text('SUGGESTIONS'), findsNothing);
+      expect(relockedToggle.onTap, isNull);
+
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
     },
   );
 

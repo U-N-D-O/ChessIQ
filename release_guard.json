@@ -1,5 +1,6 @@
 {
     "privacy_notice_url": "https://modus.qila.gl/ChessIQ/privacy-notice",
+    "android_application_id": "com.qila.chessiq",
     "ios_bundle_identifier": "com.qila.chessiq",
     "stockfish": {
         "repo": "https://github.com/official-stockfish/Stockfish.git",
@@ -12,7 +13,9 @@
         "THIRD_PARTY_NOTICES.md",
         "PRIVACY.md",
         "CORRESPONDING_SOURCE.md",
-        "APPLE_APP_STORE_RELEASE.md"
+        "APPLE_APP_STORE_RELEASE.md",
+        "ANDROID_ONE_CLICK_RELEASE_SETUP.md",
+        "GOOGLE_PLAY_RELEASE.md"
     ],
     "bundled_legal_assets": [
         "COPYRIGHT.md",

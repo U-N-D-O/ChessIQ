@@ -35,8 +35,6 @@ abstract class _StoreState extends _VsBotCore {
 
   Future<void> _buyAcademyTuitionPass() => super._buyAcademyTuitionPass();
 
-  Future<void> _resetPurchases() => super._resetPurchases();
-
   String _storeRewardAdCountdownLabel(Duration remaining) =>
       super._storeRewardAdCountdownLabel(remaining);
 

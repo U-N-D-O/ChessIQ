@@ -23,12 +23,16 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
     this.dailyPuzzlesValue = const <PuzzleItem>[],
     this.hasTodayDailyPuzzleValue = false,
     this.completedTodayDailyCountValue = 0,
+    this.handleValue = 'Tester',
+    this.countryValue = 'US',
+    this.registerStatusValue = HandleAvailabilityStatus.available,
+    this.registrationErrorValue,
   }) : _progress =
            PuzzleProgressModel.initial(
              nodes: {for (final node in nodesValue) node.key: node},
            ).copyWith(
-             handle: 'Tester',
-             country: 'US',
+             handle: handleValue,
+             country: countryValue,
              examResults: examResultsValue,
              seenSemesters: {
                for (final semester in PuzzleAcademyProvider().semesters)
@@ -82,7 +86,7 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
     ),
   ];
 
-  final PuzzleProgressModel _progress;
+  PuzzleProgressModel _progress;
   final List<EloNodeProgress> nodesValue;
   final List<AcademyExamResult> examResultsValue;
   final bool scoreboardLoadedValue;
@@ -95,6 +99,12 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
   final List<PuzzleItem> dailyPuzzlesValue;
   final bool hasTodayDailyPuzzleValue;
   final int completedTodayDailyCountValue;
+  final String handleValue;
+  final String countryValue;
+  final HandleAvailabilityStatus registerStatusValue;
+  final String? registrationErrorValue;
+  int registerAcademyProfileCallCount = 0;
+  int deleteAcademyProfileCallCount = 0;
 
   @override
   PuzzleProgressModel get progress => _progress;
@@ -124,6 +134,9 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
   String? get lastScoreboardError => lastScoreboardErrorValue;
 
   @override
+  String? get lastRegistrationError => registrationErrorValue;
+
+  @override
   bool get shouldAskForProfile => false;
 
   @override
@@ -149,7 +162,20 @@ class _TestPuzzleAcademyProvider extends PuzzleAcademyProvider {
     required String handle,
     required String country,
   }) async {
-    return HandleAvailabilityStatus.available;
+    registerAcademyProfileCallCount += 1;
+    return registerStatusValue;
+  }
+
+  @override
+  Future<DeleteProfileResult?> deleteAcademyProfile() async {
+    deleteAcademyProfileCallCount += 1;
+    _progress = _progress.copyWith(
+      handle: '',
+      country: '',
+      examResults: const <AcademyExamResult>[],
+    );
+    notifyListeners();
+    return const DeleteProfileResult(authDeleted: true);
   }
 
   @override
@@ -242,6 +268,32 @@ Future<void> _pumpAcademyProfileDialog(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets(
+    'shows a forced rename warning when a moderated nickname is flagged',
+    (tester) async {
+      final provider = _TestPuzzleAcademyProvider(
+        handleValue: 'FlaggedName',
+        countryValue: 'United Kingdom',
+        registerStatusValue: HandleAvailabilityStatus.renameRequired,
+        registrationErrorValue:
+            'This nickname was removed from ChessIQ leaderboards for violating the nickname rules. Choose a new nickname to continue.',
+      );
+
+      await _pumpPuzzleMapScreen(
+        tester,
+        provider: provider,
+        size: const Size(1280, 900),
+      );
+
+      expect(find.text('Nickname Change Required'), findsOneWidget);
+      expect(
+        find.textContaining('Choose a new nickname to continue.'),
+        findsOneWidget,
+      );
+      expect(provider.registerAcademyProfileCallCount, 1);
+    },
+  );
 
   testWidgets(
     'Academy hub phone page shows logo, top controls, and two visible pictures',
@@ -649,12 +701,22 @@ void main() {
       );
       expect(
         find.byKey(
+          const ValueKey<String>('academy_exams_compact_title_toggle'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
           const ValueKey<String>('academy_exams_compact_dashboard_panel'),
         ),
         findsNothing,
       );
       expect(
         find.byKey(const ValueKey<String>('academy_exams_compact_stats_panel')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('academy_exams_compact_title_panel')),
         findsNothing,
       );
       expect(find.text('Puzzle Academy Exams'), findsNothing);
@@ -696,6 +758,20 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Coins 120'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('academy_exams_compact_title_toggle'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      expect(
+        find.byKey(const ValueKey<String>('academy_exams_compact_title_panel')),
+        findsOneWidget,
+      );
+      expect(find.text('Tester'), findsOneWidget);
     },
   );
 
@@ -726,6 +802,10 @@ void main() {
       find.byKey(const ValueKey<String>('academy_exams_compact_stats_toggle')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey<String>('academy_exams_compact_title_toggle')),
+      findsOneWidget,
+    );
     expect(find.text('Puzzle Academy Exams'), findsNothing);
     expect(find.text('Coins 120'), findsNothing);
     expect(
@@ -745,6 +825,22 @@ void main() {
 
     expect(find.text('Puzzle Academy Exams'), findsOneWidget);
     expect(find.text('NEXT EXAM GATE'), findsOneWidget);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('academy_exams_compact_title_toggle')),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('academy_exams_compact_title_toggle')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(
+      find.byKey(const ValueKey<String>('academy_exams_compact_title_panel')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Academy store sheet closes from the top-right close button', (
@@ -755,7 +851,7 @@ void main() {
     await _pumpPuzzleMapScreen(
       tester,
       provider: provider,
-      size: const Size(390, 844),
+      size: const Size(1200, 900),
     );
 
     await _openExamsDashboard(tester);
@@ -905,6 +1001,23 @@ void main() {
       tester.getSize(find.byType(Dialog)).height,
       lessThan(heightWithoutKeyboard),
     );
+  });
+
+  testWidgets('current title panel does not expose edit or delete shortcuts', (
+    tester,
+  ) async {
+    final provider = _TestPuzzleAcademyProvider();
+    provider.setShowAcademyExamsDashboard(true);
+
+    await _pumpPuzzleMapScreen(
+      tester,
+      provider: provider,
+      size: const Size(1200, 900),
+    );
+
+    expect(find.widgetWithText(OutlinedButton, 'DELETE PROFILE'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'EDIT PROFILE'), findsNothing);
+    expect(find.text('Current Title'), findsOneWidget);
   });
 
   testWidgets(

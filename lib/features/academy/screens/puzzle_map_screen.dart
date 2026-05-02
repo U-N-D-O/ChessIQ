@@ -311,6 +311,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       const _AcademyHubQuizSnapshot();
   bool _compactDashboardOverviewExpanded = false;
   bool _compactDashboardStatsExpanded = false;
+  bool _compactDashboardTitleExpanded = false;
 
   bool get _useReducedWindowsVisualEffects =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
@@ -437,15 +438,48 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     if (!mounted || !provider.initialized) return;
     if (_dismissedProfileSetupToMenu) return;
     if (!provider.shouldAskForProfile) {
-      unawaited(
-        provider.registerAcademyProfile(
-          handle: provider.progress.handle,
-          country: provider.progress.country,
-        ),
+      final status = await provider.registerAcademyProfile(
+        handle: provider.progress.handle,
+        country: provider.progress.country,
       );
+      if (!mounted) return;
+      if (status == HandleAvailabilityStatus.renameRequired) {
+        await _showAcademyProfileRenameRequiredWarning(provider);
+        if (!mounted) return;
+        await _showAcademyProfileDialog(
+          provider,
+          allowExitToMenu: true,
+          initialHandleOverride: '',
+          initialCountryOverride: provider.progress.country,
+        );
+      }
       return;
     }
     await _showAcademyProfileDialog(provider, allowExitToMenu: true);
+  }
+
+  Future<void> _showAcademyProfileRenameRequiredWarning(
+    PuzzleAcademyProvider provider,
+  ) async {
+    final detail = (provider.lastRegistrationError ?? '').trim();
+    final warning = detail.isNotEmpty
+        ? detail
+        : 'This nickname was removed from ChessIQ leaderboards for violating the nickname rules. Choose a new nickname to continue.';
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Nickname Change Required'),
+        content: Text(warning),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('CHOOSE NEW NICKNAME'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<Map<String, String>?> _promptAcademyProfileDialog({
@@ -488,9 +522,11 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     bool lockHandle = false,
     bool lockCountry = false,
     bool allowExitToMenu = false,
+    String? initialHandleOverride,
+    String? initialCountryOverride,
   }) async {
-    var initialHandle = provider.progress.handle;
-    var initialCountry = provider.progress.country;
+    var initialHandle = initialHandleOverride ?? provider.progress.handle;
+    var initialCountry = initialCountryOverride ?? provider.progress.country;
 
     while (mounted) {
       final result = await _promptAcademyProfileDialog(
@@ -522,6 +558,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         country: country,
       );
       if (!mounted) return;
+
+      if (status == HandleAvailabilityStatus.renameRequired) {
+        await _showAcademyProfileRenameRequiredWarning(provider);
+        if (!mounted) return;
+        initialHandle = '';
+        initialCountry = country;
+        continue;
+      }
 
       if (status == HandleAvailabilityStatus.verificationUnavailable) {
         final errorDetail = provider.lastRegistrationError ?? 'Unknown error';
@@ -604,6 +648,140 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     } finally {
       _didShowAcademyProfilePrompt = false;
     }
+  }
+
+  Future<bool> _confirmAcademyProfileDeletion(
+    PuzzleAcademyProvider provider,
+  ) async {
+    final handle = provider.progress.handle.trim();
+    if (handle.isEmpty) return false;
+
+    final confirmationController = TextEditingController();
+    try {
+      final monochrome =
+          context.read<AppThemeProvider>().isMonochrome ||
+          widget.cinematicThemeEnabled;
+      return await _runWithPortraitProfileDialogLock(
+            () => showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (dialogContext) {
+                final palette = puzzleAcademyPalette(
+                  dialogContext,
+                  monochromeOverride: monochrome,
+                );
+                final danger = Theme.of(dialogContext).colorScheme.error;
+                return StatefulBuilder(
+                  builder: (dialogContext, setDialogState) {
+                    final matchesHandle =
+                        confirmationController.text.trim() == handle;
+                    return PuzzleAcademyDialogShell(
+                      title: 'Delete Academy Profile',
+                      subtitle:
+                          'Remove the live leaderboard identity for $handle.',
+                      accent: danger,
+                      icon: Icons.delete_forever_outlined,
+                      monochromeOverride: monochrome,
+                      actions: [
+                        OutlinedButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          style: puzzleAcademyOutlinedButtonStyle(
+                            palette: palette,
+                            accent: palette.cyan,
+                          ),
+                          child: const Text('CANCEL'),
+                        ),
+                        FilledButton(
+                          onPressed: matchesHandle
+                              ? () => Navigator.of(dialogContext).pop(true)
+                              : null,
+                          style: puzzleAcademyFilledButtonStyle(
+                            palette: palette,
+                            backgroundColor: danger,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('DELETE PROFILE'),
+                        ),
+                      ],
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'This removes your Academy nickname and country or region from the live leaderboard, clears the saved Academy profile and exam history on this device, and attempts to rotate the anonymous Firebase identity used for Academy ownership checks. Local puzzle solves, coins, and Academy Store purchases stay on this device.',
+                            style: puzzleAcademyHudStyle(
+                              palette: palette,
+                              size: 12.1,
+                              weight: FontWeight.w600,
+                              height: 1.45,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Type $handle to confirm.',
+                            style: puzzleAcademyHudStyle(
+                              palette: palette,
+                              size: 11.4,
+                              weight: FontWeight.w700,
+                              color: palette.cyan,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: confirmationController,
+                            autofocus: true,
+                            onChanged: (_) => setDialogState(() {}),
+                            decoration: const InputDecoration(
+                              labelText: 'Nickname confirmation',
+                              hintText: 'Type your current nickname exactly',
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ) ??
+          false;
+    } finally {
+      confirmationController.dispose();
+    }
+  }
+
+  Future<void> _deleteAcademyProfile(PuzzleAcademyProvider provider) async {
+    if (!mounted || provider.shouldAskForProfile) return;
+
+    final confirmed = await _confirmAcademyProfileDeletion(provider);
+    if (!mounted || !confirmed) return;
+
+    final result = await provider.deleteAcademyProfile();
+    if (!mounted) return;
+
+    if (result == null) {
+      final detail = provider.lastProfileDeletionError ?? 'Unknown error.';
+      await _showStatusDialog(
+        title: 'Profile Deletion Failed',
+        message:
+            'ChessIQ could not delete this Academy profile right now. $detail',
+      );
+      return;
+    }
+
+    unawaited(
+      provider.refreshRemoteScoreboard(
+        national: _leaderboardScope == _LeaderboardScope.national,
+      ),
+    );
+
+    await _showStatusDialog(
+      title: 'Academy Profile Deleted',
+      message: result.authDeleted
+          ? 'Your Academy leaderboard profile plus the local Academy profile and exam history on this device were removed. If you join again later, ChessIQ will attach the new profile to a fresh anonymous Firebase identity.'
+          : 'Your Academy leaderboard profile plus the local Academy profile and exam history on this device were removed. ChessIQ kept the current anonymous Firebase identity because identity cleanup was unavailable just now.',
+    );
   }
 
   Future<void> _showPendingEducation(PuzzleAcademyProvider provider) async {
@@ -3711,6 +3889,38 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   ),
                 ),
         ),
+        const SizedBox(height: 10),
+        _buildCompactDashboardToggle(
+          keyName: 'academy_exams_compact_title_toggle',
+          label: 'Current Title',
+          icon: Icons.workspace_premium_outlined,
+          accent: palette.amber,
+          monochrome: monochrome,
+          expanded: _compactDashboardTitleExpanded,
+          onPressed: () {
+            setState(() {
+              _compactDashboardTitleExpanded = !_compactDashboardTitleExpanded;
+            });
+          },
+        ),
+        PuzzleAcademyAnimatedSwap(
+          child: _compactDashboardTitleExpanded
+              ? Padding(
+                  key: const ValueKey<String>(
+                    'academy_exams_compact_title_panel',
+                  ),
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _buildCurrentTitlePanel(
+                    provider,
+                    monochrome: monochrome,
+                  ),
+                )
+              : const SizedBox(
+                  key: ValueKey<String>(
+                    'academy_exams_compact_title_collapsed',
+                  ),
+                ),
+        ),
       ],
     );
   }
@@ -4224,6 +4434,17 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                         ),
                       ],
                     ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Manage nickname and country changes from the Academy Store. Delete the leaderboard profile from Academy settings if you need a clean start.',
+                      style: puzzleAcademyHudStyle(
+                        palette: palette,
+                        size: 11.2,
+                        weight: FontWeight.w700,
+                        color: palette.textMuted,
+                        height: 1.4,
+                      ),
+                    ),
                   ],
                 ),
         ),
@@ -4560,6 +4781,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   Future<void> _openQuickThemeSettings(AppThemeProvider themeProvider) async {
     if (!mounted) return;
+    final provider = context.read<PuzzleAcademyProvider>();
     final prefs = await SharedPreferences.getInstance();
     final soundEnabled = !(prefs.getBool(_muteSoundsKey) ?? false);
     final hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
@@ -4577,6 +4799,55 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         onHapticsEnabledChanged: (enabled) async {
           await prefs.setBool(_hapticsEnabledKey, enabled);
         },
+        extraSectionsBuilder: provider.shouldAskForProfile
+            ? null
+            : (sheetContext, _) {
+                final scheme = Theme.of(sheetContext).colorScheme;
+                return <Widget>[
+                  Card(
+                    color: Color.alphaBlend(
+                      scheme.error.withValues(alpha: 0.08),
+                      scheme.surface,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      side: BorderSide(
+                        color: scheme.error.withValues(alpha: 0.24),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Academy Profile',
+                            style: Theme.of(sheetContext).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Delete the live leaderboard profile plus the local Academy profile and exam history stored on this device.',
+                            style: Theme.of(sheetContext).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.tonalIcon(
+                            onPressed: () async {
+                              Navigator.of(sheetContext).pop();
+                              await _deleteAcademyProfile(provider);
+                            },
+                            icon: const Icon(Icons.delete_forever_outlined),
+                            label: const Text('Delete Academy Profile'),
+                            style: FilledButton.styleFrom(
+                              foregroundColor: scheme.error,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ];
+              },
       );
     } catch (_) {
       if (!mounted) return;
@@ -4988,6 +5259,16 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
                 size: 12.0,
                 weight: FontWeight.w600,
                 height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'You can delete this Academy profile later from Academy settings.',
+              style: puzzleAcademyHudStyle(
+                palette: palette,
+                size: 11.1,
+                weight: FontWeight.w600,
+                color: palette.cyan,
               ),
             ),
             Align(

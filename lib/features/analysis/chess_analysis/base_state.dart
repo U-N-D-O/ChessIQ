@@ -566,6 +566,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _quizStudyExpandedFamily;
   Map<String, int> _quizStudyOpeningCounts = <String, int>{};
   int _quizStudyShownPly = 0;
+  bool _quizStudyFollowUpMode = false;
+  bool _quizStudyFollowUpSuggestionsVisible = true;
+  bool _quizStudyFollowUpEvalVisible = true;
+  bool _quizStudyFollowUpAutoReply = true;
+  bool _quizStudyFollowUpBusy = false;
+  String? _quizStudyFollowUpError;
+  bool? _quizStudyFollowUpUserIsWhite;
+  Map<String, String> _quizStudyFollowUpBoardState = <String, String>{};
+  bool _quizStudyFollowUpWhiteToMove = true;
+  String? _quizStudyFollowUpFen;
+  String? _quizStudyFollowUpSelectedSquare;
+  String? _quizStudyFollowUpLastAutoReplyMove;
+  List<String> _quizStudyFollowUpBranchMoves = <String>[];
+  List<EngineLine> _quizStudyFollowUpLines = <EngineLine>[];
+  EvalSnapshot? _quizStudyFollowUpEvalSnapshot;
+  EngineSearchHandle? _quizStudyFollowUpHandle;
+  int _quizStudyFollowUpRequestToken = 0;
+  int _quizStudyFollowUpStreak = 0;
+  int _quizStudyFollowUpBestBranch = 0;
   int _quizStreak = 0;
   int _quizBestStreak = 0;
   int _quizTotalAnswered = 0;
@@ -2212,7 +2231,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
               SizedBox(height: condensed ? 8 : 10),
               Text(
-                'Product lineage, data sources, and legal access points for the ChessIQ shell.',
+                'Product lineage, community feedback, data sources, and legal access points for the ChessIQ shell.',
                 style: _creditsBodyStyle(
                   visuals,
                   size: condensed ? 11.8 : 12.5,
@@ -2300,6 +2319,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildCreditsOwnershipPanel({required _CreditsDialogVisuals visuals}) {
+    Future<void> openFeedbackPage() async {
+      const feedbackUrl = 'https://modus.qila.gl/ChessIQ/feedback';
+      final feedbackUri = Uri.parse(feedbackUrl);
+
+      final launched = await launchUrl(feedbackUri);
+      if (launched || !mounted) return;
+      await Clipboard.setData(const ClipboardData(text: feedbackUrl));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the feedback page. The URL has been copied instead.',
+          ),
+        ),
+      );
+    }
+
     Future<void> openPrivacyNotice() async {
       final launched = await launchUrl(chessIqPrivacyNoticeUri);
       if (launched || !mounted) return;
@@ -2346,13 +2382,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           Row(
             children: <Widget>[
               Icon(
-                Icons.verified_outlined,
+                Icons.forum_outlined,
                 size: 16,
                 color: visuals.primaryAccent,
               ),
               const SizedBox(width: 8),
               Text(
-                'GPL / LEGAL',
+                'COMMUNITY / LEGAL',
                 style: _creditsLabelStyle(
                   visuals,
                   color: visuals.primaryAccent,
@@ -2362,7 +2398,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 10),
           Text(
-            'ChessIQ is presented here with a GPLv3-focused release posture. The linked records below cover the project license, third-party notices, hosted privacy notice, and supporting legal documents.',
+            'ChessIQ is an actively developed project. The current release is designed to be dependable and polished, while the broader product continues to evolve through new ideas, feature additions, refinements, and quality improvements over time.',
             style: _creditsBodyStyle(
               visuals,
               size: 12.4,
@@ -2433,7 +2469,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 10),
           Text(
-            'The hosted privacy notice opens in your browser, while the other buttons open the bundled legal records.',
+            'Ideas for improvement and bug reports are welcome. Thoughtful feedback helps guide future updates, prioritize fixes, and refine the product over time.',
+            style: _creditsBodyStyle(
+              visuals,
+              size: 12.0,
+              color: visuals.palette.text.withValues(alpha: 0.88),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildLegalNoticeLink(
+            label: 'Suggestions & Bug Reports',
+            icon: Icons.open_in_new_rounded,
+            accent: visuals.primaryAccent,
+            visuals: visuals,
+            onTap: () {
+              unawaited(openFeedbackPage());
+            },
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'The feedback button opens the hosted ChessIQ feedback page. The hosted privacy notice opens in your browser, while the other buttons open the bundled legal records.',
             style: _creditsLabelStyle(
               visuals,
               size: 10.9,
@@ -14890,40 +14945,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Future<void> _resetPurchases() async {
-    final economy = context.read<EconomyProvider>();
-    setState(() {
-      _depthTier = 1;
-      _extraSuggestionPurchases = 0;
-      _themePackOwned = false;
-      _sakuraBoardOwned = false;
-      _tropicalBoardOwned = false;
-      _tuttiFruttiOwned = false;
-      _spectralOwned = false;
-      _monochromePiecesOwned = false;
-      _piecePackOwned = false;
-      _adFreeOwned = false;
-      _academyTuitionPassOwned = false;
-      _perspective = _defaultPerspective;
-      _boardThemeMode = _defaultBoardTheme;
-      _pieceThemeMode = _defaultPieceTheme;
-      _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
-      _multiPvCount = _multiPvCount.clamp(0, _maxSuggestionsAllowed);
-      if (_multiPvCount >
-          _defaultMultiPvCount.clamp(0, _maxSuggestionsAllowed)) {
-        _multiPvCount = _defaultMultiPvCount.clamp(0, _maxSuggestionsAllowed);
-      }
-    });
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_savedDefaultSnapshotKey);
-    await economy.reset(clearStoreRewardCooldown: true, notify: false);
-    await _saveStoreState();
-    _send('setoption name MultiPV value $_effectiveMultiPvCount');
-    _analyze();
-    _addLog('Store purchases and saved settings reset');
-  }
-
   Future<void> _openStore({
     StoreSection initialSection = StoreSection.general,
   }) async {
@@ -15400,23 +15421,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         await _purchaseExtraSuggestion();
                         setL(() {});
                       },
-                    ),
-                    const SizedBox(height: 6),
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: () async {
-                          await _resetPurchases();
-                          if (!ctx.mounted) return;
-                          setL(() {});
-                        },
-                        icon: const Icon(Icons.restart_alt, size: 18),
-                        label: const Text('Reset Purchases'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: scheme.onSurface.withValues(
-                            alpha: 0.64,
-                          ),
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(

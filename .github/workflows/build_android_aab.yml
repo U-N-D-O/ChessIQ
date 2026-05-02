@@ -1,26 +1,74 @@
-name: Build Android AAB
+name: Build Android Signed AAB
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Git tag to build and sign.
+        required: true
+        type: string
+      build_name:
+        description: Optional version name override.
+        required: false
+        type: string
+      build_number:
+        description: Optional build number override.
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Git tag to build and sign.
+        required: true
+        type: string
+      build_name:
+        description: Optional version name override.
+        required: false
+        type: string
+      build_number:
+        description: Optional build number override.
+        required: false
+        type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
 
 jobs:
-  build-android-aab:
+  build-android-signed-aab:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout
+      - name: Checkout tagged source
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          fetch-depth: 0
 
       - name: Load release guard values
         run: python3 tool/release_guard.py --emit-github-env >> "$GITHUB_ENV"
 
       - name: Verify release guard
-        run: python3 tool/release_guard.py
+        run: python3 tool/release_guard.py --expected-tag "${{ inputs.release_tag }}"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Install Android NDK
         run: |
@@ -49,6 +97,32 @@ jobs:
 
       - name: Flutter pub get
         run: flutter pub get
+
+      - name: Install Android signing assets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          : "${ANDROID_KEYSTORE_BASE64:?Missing secret ANDROID_KEYSTORE_BASE64}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing secret ANDROID_KEYSTORE_PASSWORD}"
+          : "${ANDROID_KEY_ALIAS:?Missing secret ANDROID_KEY_ALIAS}"
+          : "${ANDROID_KEY_PASSWORD:?Missing secret ANDROID_KEY_PASSWORD}"
+
+          KEYSTORE_PATH="$RUNNER_TEMP/chessiq-upload.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null
+
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=$KEYSTORE_PATH
+          EOF
 
       - name: Fetch pinned Stockfish 18 source
         run: |
@@ -81,11 +155,23 @@ jobs:
           cp ../stockfish-x86_64 ../../android/app/src/main/assets/stockfish-x86_64
 
       - name: Build Android App Bundle
-        run: flutter build appbundle --release
+        env:
+          BUILD_NAME_INPUT: ${{ inputs.build_name }}
+          BUILD_NUMBER_INPUT: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          cmd=(flutter build appbundle --release)
+          if [ -n "${BUILD_NAME_INPUT:-}" ]; then
+            cmd+=(--build-name "$BUILD_NAME_INPUT")
+          fi
+          if [ -n "${BUILD_NUMBER_INPUT:-}" ]; then
+            cmd+=(--build-number "$BUILD_NUMBER_INPUT")
+          fi
+          "${cmd[@]}"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ChessIQ-aab
+          name: ChessIQ-android-signed-aab
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 90
