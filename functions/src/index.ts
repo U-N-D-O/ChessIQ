@@ -126,9 +126,22 @@ function buildOwnerRecord(params: {
     };
 }
 
+function hasInlineModerationFlag(value: unknown): boolean {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+
+    const record = value as Record<string, unknown>;
+    return record.moderated === true;
+}
+
 function parseActiveHandleModeration(
     value: unknown,
 ): AcademyHandleModerationRecord | null {
+    if (value === true) {
+        return { active: true };
+    }
+
     if (!value || typeof value !== "object") {
         return null;
     }
@@ -169,6 +182,28 @@ async function loadActiveHandleModeration(
 ): Promise<AcademyHandleModerationRecord | null> {
     const snap = await db.ref(`academy_handle_moderation/${handleKey}`).once("value");
     return parseActiveHandleModeration(snap.val());
+}
+
+async function activateHandleModeration(handleKey: string): Promise<void> {
+    await db.ref(`academy_handle_moderation/${handleKey}`).transaction((currentValue) => {
+        if (currentValue === true) {
+            return currentValue;
+        }
+        if (!currentValue || typeof currentValue !== "object") {
+            return true;
+        }
+
+        const record = currentValue as Record<string, unknown>;
+        if (record.active === true) {
+            return currentValue;
+        }
+
+        return {
+            ...record,
+            active: true,
+            updatedAt: new Date().toISOString(),
+        };
+    });
 }
 
 function buildModeratedHandleError(
@@ -562,14 +597,18 @@ export const hideModeratedAcademyLeaderboardEntry = functions.database
             return null;
         }
 
+        const handleKey = context.params.handleKey as string;
         const moderationRecord = await loadActiveHandleModeration(
-            context.params.handleKey as string,
+            handleKey,
         );
         if (!moderationRecord) {
-            return null;
+            if (!hasInlineModerationFlag(change.after.val())) {
+                return null;
+            }
+            await activateHandleModeration(handleKey);
         }
 
-        await removePublicAcademyProfile(context.params.handleKey as string);
+        await removePublicAcademyProfile(handleKey);
         return null;
     });
 
