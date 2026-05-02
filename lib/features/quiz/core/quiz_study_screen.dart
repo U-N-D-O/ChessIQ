@@ -2031,7 +2031,8 @@ Widget _buildQuizStudyFollowUpControls(
           label: isActive ? 'FOLLOW-UPS ON' : 'FOLLOW-UPS',
           accent: palette.emerald,
           onTap: canToggle
-              ? () => unawaited(state._toggleQuizStudyFollowUpMode(selectedLine))
+              ? () =>
+                    unawaited(state._toggleQuizStudyFollowUpMode(selectedLine))
               : null,
           filled: isActive,
         ),
@@ -2041,9 +2042,8 @@ Widget _buildQuizStudyFollowUpControls(
             icon: Icons.restart_alt_rounded,
             label: 'RESET BRANCH',
             accent: palette.signal,
-            onTap: () => unawaited(
-              state._resetQuizStudyFollowUpBranch(selectedLine),
-            ),
+            onTap: () =>
+                unawaited(state._resetQuizStudyFollowUpBranch(selectedLine)),
           ),
       ],
     ),
@@ -2158,7 +2158,10 @@ Widget _buildQuizStudyFollowUpPanel(
               child: InkWell(
                 borderRadius: BorderRadius.circular(4),
                 onTap: () => unawaited(
-                  state._applyQuizStudyFollowUpMove(selectedLine, candidate.move),
+                  state._applyQuizStudyFollowUpMove(
+                    selectedLine,
+                    candidate.move,
+                  ),
                 ),
                 child: Ink(
                   padding: const EdgeInsets.symmetric(
@@ -2173,10 +2176,11 @@ Widget _buildQuizStudyFollowUpPanel(
                     ),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                      color: (candidate.multiPv == 1
-                              ? palette.emerald
-                              : palette.cyan)
-                          .withValues(alpha: 0.42),
+                      color:
+                          (candidate.multiPv == 1
+                                  ? palette.emerald
+                                  : palette.cyan)
+                              .withValues(alpha: 0.42),
                       width: 2,
                     ),
                   ),
@@ -2334,9 +2338,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                                         ? palette.emerald.withValues(
                                             alpha: 0.84,
                                           )
-                                        : palette.cyan.withValues(
-                                            alpha: 0.88,
-                                          ),
+                                        : palette.cyan.withValues(alpha: 0.88),
                                     staticArrowStyle: true,
                                   ),
                                 ),
@@ -2408,10 +2410,10 @@ Widget _buildQuizStudyReplayControls(
 }) {
   final currentPly = preview?.shownPly ?? 0;
   final totalPly = preview?.totalPly ?? selectedLine.moveTokens.length;
-  final showFollowUpControls =
-      state._quizStudyFollowUpShouldShowControls(selectedLine);
-  final followUpActivationEnabled =
-      preview != null && currentPly == totalPly;
+  final showFollowUpControls = state._quizStudyFollowUpShouldShowControls(
+    selectedLine,
+  );
+  final followUpActivationEnabled = preview != null && currentPly == totalPly;
   final followUpActive = state._isQuizStudyFollowUpActiveFor(selectedLine);
 
   return KeyedSubtree(

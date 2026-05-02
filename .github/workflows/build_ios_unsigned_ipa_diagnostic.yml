@@ -1,6 +1,6 @@
 name: Build iOS Sideload IPA (Diagnostic)
 
-'on':
+on:
   workflow_dispatch:
 
 jobs:

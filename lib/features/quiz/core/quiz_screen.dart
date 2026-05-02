@@ -2707,7 +2707,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       return null;
     }
     return _QuizStudyFollowUpPosition(
-      boardState: Map<String, String>.unmodifiable(_quizStudyFollowUpBoardState),
+      boardState: Map<String, String>.unmodifiable(
+        _quizStudyFollowUpBoardState,
+      ),
       whiteToMove: _quizStudyFollowUpWhiteToMove,
       fen: _quizStudyFollowUpFen!,
       branchMoves: List<String>.unmodifiable(_quizStudyFollowUpBranchMoves),
@@ -2778,10 +2780,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     await _requestQuizStudyFollowUpSearch(line);
   }
 
-  bool _restoreQuizStudyFollowUpBranch(
-    EcoLine line,
-    List<String> branchMoves,
-  ) {
+  bool _restoreQuizStudyFollowUpBranch(EcoLine line, List<String> branchMoves) {
     final preview = _buildQuizStudyPreview(line);
     if (preview == null) {
       return false;
@@ -2885,10 +2884,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     return _buildMoveNotation(from, to, piece, captured, promotion);
   }
 
-  Future<void> _applyQuizStudyFollowUpMove(
-    EcoLine line,
-    String uciMove,
-  ) async {
+  Future<void> _applyQuizStudyFollowUpMove(EcoLine line, String uciMove) async {
     final currentFen = _quizStudyFollowUpFen;
     if (currentFen == null || _quizStudyFollowUpBoardState.isEmpty) {
       return;
