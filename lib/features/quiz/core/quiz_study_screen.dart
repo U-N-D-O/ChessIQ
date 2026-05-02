@@ -2008,6 +2008,238 @@ Widget _buildQuizStudyFamilyNavigatorPanel(
   );
 }
 
+Widget _buildQuizStudyFollowUpControls(
+  _QuizScreen state, {
+  required EcoLine selectedLine,
+  required _QuizAcademyPalette palette,
+  required Color accent,
+  required bool activationEnabled,
+}) {
+  final isActive = state._isQuizStudyFollowUpActiveFor(selectedLine);
+  final canToggle = activationEnabled || isActive;
+
+  return KeyedSubtree(
+    key: const ValueKey<String>('quiz_study_follow_up_controls'),
+    child: Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        state._academyHudButton(
+          palette: palette,
+          icon: Icons.route_outlined,
+          label: isActive ? 'FOLLOW-UPS ON' : 'FOLLOW-UPS',
+          accent: palette.emerald,
+          onTap: canToggle
+              ? () => unawaited(state._toggleQuizStudyFollowUpMode(selectedLine))
+              : null,
+          filled: isActive,
+        ),
+        if (isActive)
+          state._academyHudButton(
+            palette: palette,
+            icon: Icons.restart_alt_rounded,
+            label: 'RESET BRANCH',
+            accent: palette.signal,
+            onTap: () => unawaited(
+              state._resetQuizStudyFollowUpBranch(selectedLine),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+Widget _buildQuizStudyFollowUpPanel(
+  _QuizScreen state, {
+  required EcoLine selectedLine,
+  required _QuizAcademyPalette palette,
+  required Color accent,
+}) {
+  final position = state._quizStudyFollowUpPositionFor(selectedLine);
+  if (position == null) {
+    return const SizedBox.shrink();
+  }
+
+  final lines = state._quizStudyFollowUpLines
+      .where((line) => line.multiPv <= 3)
+      .toList(growable: false);
+
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Color.alphaBlend(
+        palette.emerald.withValues(alpha: 0.08),
+        palette.shell,
+      ),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(
+        color: palette.emerald.withValues(alpha: 0.26),
+        width: 2,
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            state._academyTag(
+              palette: palette,
+              label: state._quizStudyFollowUpBusy
+                  ? 'ENGINE LOADING'
+                  : 'FOLLOW-UPS READY',
+              accent: state._quizStudyFollowUpBusy
+                  ? palette.amber
+                  : palette.emerald,
+            ),
+            state._academyTag(
+              palette: palette,
+              label: 'BRANCH ${position.branchMoves.length}',
+              accent: accent,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Engine Follow-Ups',
+          style: state._academyHudStyle(
+            palette: palette,
+            size: 12.4,
+            weight: FontWeight.w800,
+            color: palette.emerald,
+            letterSpacing: 0.85,
+            height: 1.0,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Tap one of Stockfish\'s top continuations to extend the branch from the current study position.',
+          style: state._academyHudStyle(
+            palette: palette,
+            size: 11.3,
+            color: palette.textMuted,
+            weight: FontWeight.w600,
+            letterSpacing: 0.25,
+            height: 1.3,
+          ),
+        ),
+        if (state._quizStudyFollowUpError != null) ...<Widget>[
+          const SizedBox(height: 10),
+          Text(
+            state._quizStudyFollowUpError!,
+            style: state._academyHudStyle(
+              palette: palette,
+              size: 11.2,
+              color: palette.signal,
+              weight: FontWeight.w700,
+              letterSpacing: 0.22,
+            ),
+          ),
+        ] else if (state._quizStudyFollowUpBusy && lines.isEmpty) ...<Widget>[
+          const SizedBox(height: 10),
+          Text(
+            'Stockfish is evaluating the current branch...',
+            style: state._academyHudStyle(
+              palette: palette,
+              size: 11.2,
+              color: palette.amber,
+              weight: FontWeight.w700,
+              letterSpacing: 0.22,
+            ),
+          ),
+        ] else if (lines.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 10),
+          for (final candidate in lines) ...<Widget>[
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(4),
+                onTap: () => unawaited(
+                  state._applyQuizStudyFollowUpMove(selectedLine, candidate.move),
+                ),
+                child: Ink(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      (candidate.multiPv == 1 ? palette.emerald : palette.cyan)
+                          .withValues(alpha: 0.10),
+                      palette.panel,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: (candidate.multiPv == 1
+                              ? palette.emerald
+                              : palette.cyan)
+                          .withValues(alpha: 0.42),
+                      width: 2,
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            palette.shell.withValues(alpha: 0.22),
+                            palette.panel,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: palette.line.withValues(alpha: 0.65),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          '${candidate.multiPv}',
+                          style: state._academyHudStyle(
+                            palette: palette,
+                            size: 10.4,
+                            color: palette.text,
+                            weight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                            height: 1.0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          state._quizStudyMoveLabel(
+                            position.boardState,
+                            position.fen,
+                            candidate.move,
+                          ),
+                          style: state._academyHudStyle(
+                            palette: palette,
+                            size: 12.0,
+                            color: palette.text,
+                            weight: FontWeight.w800,
+                            letterSpacing: 0.22,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (candidate != lines.last) const SizedBox(height: 8),
+          ],
+        ],
+      ],
+    ),
+  );
+}
+
 Widget _buildQuizStudyBoardWalkthroughPanel(
   _QuizScreen state, {
   required EcoLine selectedLine,
@@ -2019,6 +2251,15 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
 }) {
   final previewUnavailableCopy =
       'This opening could not be replayed into a clean preview board, but the stored line is still available in Opening Details.';
+  final followUpPosition = state._quizStudyFollowUpPositionFor(selectedLine);
+  final displayedBoardState =
+      followUpPosition?.boardState ?? preview?.boardState;
+  final displayedWhiteToMove =
+      followUpPosition?.whiteToMove ?? preview?.whiteToMove;
+  final displayedLines = followUpPosition != null
+      ? state._quizStudyFollowUpLines
+      : (preview?.continuation ?? const <EngineLine>[]);
+  final followUpActive = followUpPosition != null;
 
   return KeyedSubtree(
     key: state._quizStudyBoardKey,
@@ -2040,11 +2281,13 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
             state._academyPanelHeader(
               palette: palette,
               title: 'BOARD',
-              subtitle: 'Replay the selected line move by move.',
+              subtitle: !followUpActive
+                  ? 'Replay the selected line move by move.'
+                  : 'Practice engine-backed follow-ups from the current study position.',
             ),
             const SizedBox(height: 14),
           ],
-          if (preview != null)
+          if (displayedBoardState != null && displayedWhiteToMove != null)
             Center(
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: boardMaxWidth),
@@ -2068,28 +2311,32 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                         final reverse =
                             state._perspective == BoardPerspective.black ||
                             (state._perspective == BoardPerspective.auto &&
-                                !preview.whiteToMove);
+                                !displayedWhiteToMove);
 
                         return Stack(
                           fit: StackFit.expand,
                           children: <Widget>[
                             state._buildQuizBoard(
-                              boardState: preview.boardState,
-                              whiteToMove: preview.whiteToMove,
+                              boardState: displayedBoardState,
+                              whiteToMove: displayedWhiteToMove,
                             ),
-                            if (preview.continuation.isNotEmpty)
+                            if (displayedLines.isNotEmpty)
                               IgnorePointer(
                                 child: CustomPaint(
                                   size: Size.infinite,
                                   painter: EnergyArrowPainter(
-                                    lines: preview.continuation,
+                                    lines: displayedLines,
                                     bestEval: 0,
                                     progress: 0,
                                     reverse: reverse,
                                     showSequenceNumbers: true,
-                                    overrideColor: palette.cyan.withValues(
-                                      alpha: 0.88,
-                                    ),
+                                    overrideColor: followUpActive
+                                        ? palette.emerald.withValues(
+                                            alpha: 0.84,
+                                          )
+                                        : palette.cyan.withValues(
+                                            alpha: 0.88,
+                                          ),
                                     staticArrowStyle: true,
                                   ),
                                 ),
@@ -2135,6 +2382,15 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
               accent: accent,
               maxWidth: boardMaxWidth,
             ),
+            if (followUpActive) ...<Widget>[
+              const SizedBox(height: 14),
+              _buildQuizStudyFollowUpPanel(
+                state,
+                selectedLine: selectedLine,
+                palette: palette,
+                accent: accent,
+              ),
+            ],
           ],
         ],
       ),
@@ -2152,6 +2408,11 @@ Widget _buildQuizStudyReplayControls(
 }) {
   final currentPly = preview?.shownPly ?? 0;
   final totalPly = preview?.totalPly ?? selectedLine.moveTokens.length;
+  final showFollowUpControls =
+      state._quizStudyFollowUpShouldShowControls(selectedLine);
+  final followUpActivationEnabled =
+      preview != null && currentPly == totalPly;
+  final followUpActive = state._isQuizStudyFollowUpActiveFor(selectedLine);
 
   return KeyedSubtree(
     key: const ValueKey<String>('quiz_study_detail_replay_controls'),
@@ -2159,48 +2420,78 @@ Widget _buildQuizStudyReplayControls(
       alignment: Alignment.center,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              _buildQuizStudyReplayButton(
-                state,
-                palette: palette,
-                icon: Icons.skip_previous_rounded,
-                label: 'START',
-                tooltip: 'Jump to the start position',
-                onPressed: preview != null && currentPly > 0
-                    ? () => state._resetQuizStudyPosition(selectedLine)
-                    : null,
-                accent: palette.amber,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _buildQuizStudyReplayButton(
+                    state,
+                    palette: palette,
+                    icon: Icons.skip_previous_rounded,
+                    label: 'START',
+                    tooltip: 'Jump to the start position',
+                    onPressed: preview != null && currentPly > 0
+                        ? () => state._resetQuizStudyPosition(selectedLine)
+                        : null,
+                    accent: palette.amber,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildQuizStudyReplayButton(
+                    state,
+                    palette: palette,
+                    icon: Icons.chevron_left_rounded,
+                    label: 'BACK',
+                    tooltip: 'Step back one move',
+                    onPressed: preview != null && currentPly > 0
+                        ? () => state._stepQuizStudyBackward(selectedLine)
+                        : null,
+                    accent: accent,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildQuizStudyReplayButton(
+                    state,
+                    palette: palette,
+                    icon: Icons.chevron_right_rounded,
+                    label: 'NEXT',
+                    tooltip: 'Step forward one move',
+                    onPressed: preview != null && currentPly < totalPly
+                        ? () => state._stepQuizStudyForward(selectedLine)
+                        : null,
+                    accent: palette.cyan,
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              _buildQuizStudyReplayButton(
+            ),
+            if (showFollowUpControls) ...<Widget>[
+              const SizedBox(height: 10),
+              _buildQuizStudyFollowUpControls(
                 state,
+                selectedLine: selectedLine,
                 palette: palette,
-                icon: Icons.chevron_left_rounded,
-                label: 'BACK',
-                tooltip: 'Step back one move',
-                onPressed: preview != null && currentPly > 0
-                    ? () => state._stepQuizStudyBackward(selectedLine)
-                    : null,
                 accent: accent,
+                activationEnabled: followUpActivationEnabled,
               ),
-              const SizedBox(width: 10),
-              _buildQuizStudyReplayButton(
-                state,
-                palette: palette,
-                icon: Icons.chevron_right_rounded,
-                label: 'NEXT',
-                tooltip: 'Step forward one move',
-                onPressed: preview != null && currentPly < totalPly
-                    ? () => state._stepQuizStudyForward(selectedLine)
-                    : null,
-                accent: palette.cyan,
-              ),
+              if (followUpActive) ...<Widget>[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.center,
+                  child: state._academyTag(
+                    palette: palette,
+                    label: state._quizStudyFollowUpBusy
+                        ? 'ENGINE LOADING'
+                        : 'FOLLOW-UPS READY',
+                    accent: state._quizStudyFollowUpBusy
+                        ? palette.amber
+                        : palette.emerald,
+                  ),
+                ),
+              ],
             ],
-          ),
+          ],
         ),
       ),
     ),
