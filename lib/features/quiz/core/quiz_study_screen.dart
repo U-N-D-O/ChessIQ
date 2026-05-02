@@ -2057,6 +2057,16 @@ Widget _buildQuizStudyFollowUpControls(
           ),
           state._academyHudButton(
             palette: palette,
+            icon: Icons.smart_toy_outlined,
+            label: state._quizStudyFollowUpAutoReply
+                ? 'AUTO REPLY'
+                : 'MANUAL REPLY',
+            accent: accent,
+            onTap: state._toggleQuizStudyFollowUpAutoReply,
+            filled: state._quizStudyFollowUpAutoReply,
+          ),
+          state._academyHudButton(
+            palette: palette,
             icon: Icons.restart_alt_rounded,
             label: 'RESET BRANCH',
             accent: palette.signal,
@@ -2091,7 +2101,7 @@ Widget _buildQuizStudyFollowUpStatusTags(
           palette: palette,
           label: state._quizStudyFollowUpBusy
               ? 'ENGINE LOADING'
-              : 'FOLLOW-UPS READY',
+            : 'ENGINE LIVE',
           accent: state._quizStudyFollowUpBusy
               ? palette.amber
               : palette.emerald,
@@ -2105,6 +2115,11 @@ Widget _buildQuizStudyFollowUpStatusTags(
           palette: palette,
           label: 'BRANCH ${state._quizStudyFollowUpBranchMoves.length}',
           accent: accent,
+        ),
+        state._academyTag(
+          palette: palette,
+          label: 'STREAK ${state._quizStudyFollowUpStreak}',
+          accent: palette.amber,
         ),
       ],
     ),
@@ -2191,13 +2206,21 @@ Widget _buildQuizStudyFollowUpPanel(
   required Color accent,
 }) {
   final position = state._quizStudyFollowUpPositionFor(selectedLine);
-  if (position == null) {
+  final followUpModeForLine =
+      state._quizStudyFollowUpMode &&
+      state._quizStudySelectedOpeningName == selectedLine.name;
+  if (!followUpModeForLine) {
     return const SizedBox.shrink();
   }
 
   final lines = state._quizStudyFollowUpLines
       .where((line) => line.multiPv <= 3)
       .toList(growable: false);
+  final userIsWhite = state._quizStudyFollowUpUserIsWhite;
+  final playerTurn =
+      position != null &&
+      userIsWhite != null &&
+      position.whiteToMove == userIsWhite;
 
   return Container(
     width: double.infinity,
@@ -2222,23 +2245,20 @@ Widget _buildQuizStudyFollowUpPanel(
           children: <Widget>[
             state._academyTag(
               palette: palette,
-              label: state._quizStudyFollowUpBusy
-                  ? 'ENGINE LOADING'
-                  : 'FOLLOW-UPS READY',
-              accent: state._quizStudyFollowUpBusy
-                  ? palette.amber
-                  : palette.emerald,
+              label: playerTurn ? 'YOUR TURN' : 'REPLY TURN',
+              accent: playerTurn ? palette.emerald : palette.amber,
             ),
-            state._academyTag(
-              palette: palette,
-              label: 'BRANCH ${position.branchMoves.length}',
-              accent: accent,
-            ),
+            if (state._quizStudyFollowUpAutoReply)
+              state._academyTag(
+                palette: palette,
+                label: 'AUTO TOP 3',
+                accent: accent,
+              ),
           ],
         ),
         const SizedBox(height: 10),
         Text(
-          'Engine Follow-Ups',
+          'Best Follow-Ups',
           style: state._academyHudStyle(
             palette: palette,
             size: 12.4,
@@ -2250,7 +2270,11 @@ Widget _buildQuizStudyFollowUpPanel(
         ),
         const SizedBox(height: 6),
         Text(
-          'Tap one of Stockfish\'s top continuations to extend the branch from the current study position.',
+          playerTurn
+              ? 'Pick a candidate move to keep the branch inside the engine-approved follow-ups.'
+              : state._quizStudyFollowUpAutoReply
+              ? 'The opponent will answer from Stockfish\'s top 3 moves, weighted toward the best line.'
+              : 'Manual reply mode is active. Choose one of the opponent\'s top 3 replies to continue the branch.',
           style: state._academyHudStyle(
             palette: palette,
             size: 11.3,
@@ -2284,19 +2308,22 @@ Widget _buildQuizStudyFollowUpPanel(
               letterSpacing: 0.22,
             ),
           ),
-        ] else if (lines.isNotEmpty) ...<Widget>[
+        ] else if (position != null && lines.isNotEmpty) ...<Widget>[
           const SizedBox(height: 10),
           for (final candidate in lines) ...<Widget>[
             Material(
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(4),
-                onTap: () => unawaited(
-                  state._applyQuizStudyFollowUpMove(
-                    selectedLine,
-                    candidate.move,
-                  ),
-                ),
+                onTap: playerTurn || !state._quizStudyFollowUpAutoReply
+                    ? () => unawaited(
+                        state._applyQuizStudyFollowUpMove(
+                          selectedLine,
+                          candidate.move,
+                          userMove: playerTurn,
+                        ),
+                      )
+                    : null,
                 child: Ink(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -2404,6 +2431,23 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
       followUpActive &&
       state._quizStudyFollowUpEvalVisible &&
       state._quizStudyFollowUpEvalSnapshot != null;
+  final canInteractFollowUpBoard = followUpActive &&
+      state._quizStudyFollowUpCanControlCurrentTurn(selectedLine);
+  final selectedSquare = canInteractFollowUpBoard
+      ? state._quizStudyFollowUpSelectedSquare
+      : null;
+  final suggestedFromSquares = canInteractFollowUpBoard
+      ? state._quizStudyFollowUpSuggestedFromSquares(selectedLine)
+      : const <String>{};
+  final targetSquares = canInteractFollowUpBoard
+      ? state._quizStudyFollowUpTargetSquares(selectedLine, selectedSquare)
+      : const <String>{};
+  final ghostMove = followUpActive
+      ? state._quizStudyFollowUpLastAutoReplyMove
+      : null;
+  final ghostLines = ghostMove == null
+      ? const <EngineLine>[]
+      : <EngineLine>[EngineLine(ghostMove, 0, 1, 1)];
 
   return KeyedSubtree(
     key: state._quizStudyBoardKey,
@@ -2481,7 +2525,35 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                                     state._buildQuizBoard(
                                       boardState: displayedBoardState,
                                       whiteToMove: displayedWhiteToMove,
+                                      selectedSquare: selectedSquare,
+                                      targetSquares: targetSquares,
+                                      suggestedFromSquares:
+                                          suggestedFromSquares,
+                                      onSquareTap: canInteractFollowUpBoard
+                                          ? (square) => unawaited(
+                                                state
+                                                    ._handleQuizStudyFollowUpSquareTap(
+                                                      selectedLine,
+                                                      square,
+                                                    ),
+                                              )
+                                          : null,
                                     ),
+                                    if (ghostLines.isNotEmpty)
+                                      IgnorePointer(
+                                        child: CustomPaint(
+                                          size: Size.infinite,
+                                          painter: EnergyArrowPainter(
+                                            lines: ghostLines,
+                                            bestEval: 0,
+                                            progress: 0,
+                                            reverse: reverse,
+                                            overrideColor: const Color(
+                                              0xFF6D7482,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     if (displayedLines.isNotEmpty)
                                       IgnorePointer(
                                         child: CustomPaint(
@@ -2589,7 +2661,9 @@ Widget _buildQuizStudyReplayControls(
   final showFollowUpControls = state._quizStudyFollowUpShouldShowControls(
     selectedLine,
   );
-  final followUpActivationEnabled = preview != null && currentPly == totalPly;
+  final followUpControlsUnlocked = state._quizStudyFollowUpControlsUnlocked(
+    selectedLine,
+  );
   final followUpActive = state._isQuizStudyFollowUpActiveFor(selectedLine);
 
   return KeyedSubtree(
@@ -2651,7 +2725,7 @@ Widget _buildQuizStudyReplayControls(
                 selectedLine: selectedLine,
                 palette: palette,
                 accent: accent,
-                activationEnabled: followUpActivationEnabled,
+                activationEnabled: followUpControlsUnlocked,
               ),
               if (followUpActive) ...<Widget>[
                 const SizedBox(height: 10),
