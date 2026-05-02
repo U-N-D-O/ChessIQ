@@ -41,9 +41,9 @@ The UCI protocol is identical to the desktop version — all analysis logic in `
 
 1. Add the required Apple signing secrets described in
     [APPLE_APP_STORE_RELEASE.md](../APPLE_APP_STORE_RELEASE.md)
-2. Go to GitHub **Actions** → **Build iOS Signed IPA**
+2. Go to GitHub **Actions** → **Build iOS App Store Signed IPA**
 3. Run it with the exact release tag you want to ship
-4. Wait for completion, then download artifact **ChessIQ-ios-signed-ipa**
+4. Wait for completion, then download artifact **ChessIQ-ios-app-store-signed-ipa**
 5. Upload `ChessIQ-signed.ipa` to App Store Connect
 
 Notes:
@@ -52,6 +52,8 @@ Notes:
    provisioning profile you supply through GitHub secrets.
 - The build is pinned to the tagged repo commit plus the pinned Stockfish
    revision recorded in the release guard and corresponding-source files.
+- This App Store artifact is not the sideload package. For local re-signing,
+   use **Build iOS Sideload IPA (Unsigned)** instead.
 
 ---
 

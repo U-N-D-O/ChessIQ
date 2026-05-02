@@ -122,6 +122,7 @@ if ($resolvedBuildNumber) {
 
 Write-Host ''
 Write-Host 'Release workflow started.'
+Write-Host 'Note: this launches the App Store IPA workflow, not the sideload IPA workflow.'
 Write-Host "Repository: $resolvedRepository"
 Write-Host "Tag: $resolvedReleaseTag"
 Write-Host "Upload to App Store Connect: $shouldUploadToAppStore"

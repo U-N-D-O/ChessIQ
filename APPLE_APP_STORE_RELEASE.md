@@ -34,7 +34,13 @@ Before submitting to Apple, make sure you have:
 
 ## GitHub Signed IPA Workflow
 
-Use GitHub **Actions** -> **Build iOS Signed IPA**.
+Use GitHub **Actions** -> **Build iOS App Store Signed IPA**.
+
+Do not use this workflow for sideloading. It exports an App Store submission
+IPA, not the unsigned sideload package.
+
+If you want an IPA to re-sign locally with your usual sideload tool, use
+GitHub **Actions** -> **Build iOS Sideload IPA (Unsigned)** instead.
 
 If you do not know the Apple/GitHub secret names yet, start with:
 
@@ -63,7 +69,7 @@ Optional GitHub secrets for direct App Store Connect upload:
 
 Workflow output:
 
-- Artifact `ChessIQ-ios-signed-ipa`
+- Artifact `ChessIQ-ios-app-store-signed-ipa`
 - Signed IPA `ChessIQ-signed.ipa`
 - Matching exported options plist
 - Matching `ChessIQ.xcarchive`
@@ -80,7 +86,7 @@ The simplest production path is the signed GitHub workflow above.
    `PRIVACY.md` all match.
 6. If automatic upload is enabled, wait for GitHub to upload the signed IPA to
   App Store Connect.
-7. Otherwise, download artifact `ChessIQ-ios-signed-ipa` and upload
+7. Otherwise, download artifact `ChessIQ-ios-app-store-signed-ipa` and upload
   `ChessIQ-signed.ipa` manually using Transporter or the Organizer upload flow.
 8. Complete App Store Connect metadata, privacy answers, and submission steps.
 
@@ -113,7 +119,7 @@ Before submission, confirm:
   to date
 - In-app credits expose the same legal/privacy story as the repository
 - The public repo tag for the release is available
-- The **Build iOS Signed IPA** workflow or `tool/release_guard.py --expected-tag <tag>` passes
+- The **Build iOS App Store Signed IPA** workflow or `tool/release_guard.py --expected-tag <tag>` passes
 - The privacy policy URL in App Store Connect points to the published policy
 - The signed archive was produced from the tagged commit
 

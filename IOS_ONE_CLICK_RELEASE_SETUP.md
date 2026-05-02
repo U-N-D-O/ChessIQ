@@ -83,7 +83,10 @@ That script will:
 3. optionally ask whether to upload directly to App Store Connect
 4. create the tag if needed
 5. push the tag
-6. start the GitHub workflow for the signed IPA
+6. start the GitHub workflow for the App Store signed IPA
+
+That workflow is for App Store submission only. If you want a sideload build,
+use the separate GitHub Actions workflow **Build iOS Sideload IPA (Unsigned)**.
 
 ## What Still Comes From Apple
 

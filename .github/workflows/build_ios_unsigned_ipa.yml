@@ -1,4 +1,4 @@
-name: Build iOS IPA (No Sign)
+name: Build iOS Sideload IPA (Unsigned)
 
 'on':
   workflow_dispatch:
@@ -102,14 +102,17 @@ jobs:
 
           rm -rf "$IPA_DIR"
           mkdir -p "$IPA_DIR/Payload"
-          cp -R "$APP_PATH" "$IPA_DIR/Payload/"
+          /usr/bin/ditto "$APP_PATH" "$IPA_DIR/Payload/Runner.app"
 
           cd "$IPA_DIR"
-          /usr/bin/zip -qry ChessIQ.ipa Payload
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload ChessIQ.ipa
+
+          /usr/bin/unzip -Z1 ChessIQ.ipa | grep '^Payload/Runner.app/Info.plist$' >/dev/null
+          /usr/bin/unzip -Z1 ChessIQ.ipa | grep '^Payload/Runner.app/Frameworks/App.framework/App$' >/dev/null
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ChessIQ-ipa-no-sign
+          name: ChessIQ-ios-sideload-unsigned-ipa
           path: build/ios/ipa/ChessIQ.ipa
           retention-days: 90

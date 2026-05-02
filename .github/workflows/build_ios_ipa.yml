@@ -1,4 +1,4 @@
-name: Build iOS Signed IPA
+name: Build iOS App Store Signed IPA
 
 on:
   workflow_dispatch:
@@ -312,7 +312,7 @@ jobs:
       - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ChessIQ-ios-signed-ipa
+          name: ChessIQ-ios-app-store-signed-ipa
           path: |
             build/ios/ipa/ChessIQ-signed.ipa
             build/ios/ipa/ExportOptions-used.plist
