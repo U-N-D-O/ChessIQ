@@ -2679,6 +2679,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     _quizStudyFollowUpFen = null;
     _quizStudyFollowUpBranchMoves = <String>[];
     _quizStudyFollowUpLines = <EngineLine>[];
+    _quizStudyFollowUpEvalSnapshot = null;
     _quizStudyFollowUpRequestToken += 1;
   }
 
@@ -2727,6 +2728,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyFollowUpFen = null;
       _quizStudyFollowUpBranchMoves = <String>[];
       _quizStudyFollowUpLines = <EngineLine>[];
+        _quizStudyFollowUpEvalSnapshot = null;
       _quizStudyFollowUpError =
           'Opening preview could not be converted into a practice position.';
       _quizStudyFollowUpBusy = false;
@@ -2741,6 +2743,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     _quizStudyFollowUpFen = preview.fen;
     _quizStudyFollowUpBranchMoves = <String>[];
     _quizStudyFollowUpLines = <EngineLine>[];
+    _quizStudyFollowUpEvalSnapshot = null;
     _quizStudyFollowUpError = null;
     _quizStudyFollowUpBusy = false;
     if (scheduleSearch) {
@@ -2773,11 +2776,45 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     return _quizStudySelectedOpeningName == line.name;
   }
 
+  void _toggleQuizStudyFollowUpSuggestionsVisible() {
+    setState(() {
+      _quizStudyFollowUpSuggestionsVisible =
+          !_quizStudyFollowUpSuggestionsVisible;
+    });
+  }
+
+  void _toggleQuizStudyFollowUpEvalVisible() {
+    setState(() {
+      _quizStudyFollowUpEvalVisible = !_quizStudyFollowUpEvalVisible;
+    });
+  }
+
   Future<void> _resetQuizStudyFollowUpBranch(EcoLine line) async {
     setState(() {
       _syncQuizStudyFollowUpBasePosition(line, scheduleSearch: false);
     });
     await _requestQuizStudyFollowUpSearch(line);
+  }
+
+  double _quizStudyEvalForCurrentPerspective(EvalSnapshot? snapshot) {
+    if (snapshot == null) {
+      return 0.0;
+    }
+    final whiteEval = snapshot.evalPawnsWhite;
+    final reversed =
+        _perspective == BoardPerspective.black ||
+        (_perspective == BoardPerspective.auto && !_quizStudyFollowUpWhiteToMove);
+    return reversed ? -whiteEval : whiteEval;
+  }
+
+  double _quizStudyEvalFill(EvalSnapshot? snapshot) {
+    final displayedEval = _quizStudyEvalForCurrentPerspective(snapshot);
+    return (0.5 + displayedEval / 8).clamp(0.0, 1.0);
+  }
+
+  String _quizStudyEvalText(EvalSnapshot? snapshot) {
+    final displayedEval = _quizStudyEvalForCurrentPerspective(snapshot);
+    return '${displayedEval > 0 ? '+' : ''}${displayedEval.toStringAsFixed(2)}';
   }
 
   bool _restoreQuizStudyFollowUpBranch(EcoLine line, List<String> branchMoves) {
@@ -2814,6 +2851,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     _quizStudyFollowUpFen = currentFen;
     _quizStudyFollowUpBranchMoves = List<String>.from(branchMoves);
     _quizStudyFollowUpLines = <EngineLine>[];
+    _quizStudyFollowUpEvalSnapshot = null;
     _quizStudyFollowUpBusy = false;
     _quizStudyFollowUpError = null;
     return true;
@@ -2919,6 +2957,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         uciMove,
       ];
       _quizStudyFollowUpLines = <EngineLine>[];
+      _quizStudyFollowUpEvalSnapshot = null;
       _quizStudyFollowUpBusy = false;
       _quizStudyFollowUpError = null;
     });
@@ -2958,6 +2997,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyFollowUpBusy = true;
       _quizStudyFollowUpError = null;
       _quizStudyFollowUpLines = <EngineLine>[];
+      _quizStudyFollowUpEvalSnapshot = null;
     });
 
     await _ensureEngineStarted();
@@ -3002,6 +3042,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
         setState(() {
           _quizStudyFollowUpBusy = false;
+          _quizStudyFollowUpEvalSnapshot = preferBestEvalSnapshot(
+            _quizStudyFollowUpEvalSnapshot,
+            update.snapshot,
+          );
           _quizStudyFollowUpLines = ordered;
         });
       },

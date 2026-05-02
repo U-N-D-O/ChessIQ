@@ -2036,7 +2036,25 @@ Widget _buildQuizStudyFollowUpControls(
               : null,
           filled: isActive,
         ),
-        if (isActive)
+        if (isActive) ...<Widget>[
+          state._academyHudButton(
+            palette: palette,
+            icon: Icons.insights_outlined,
+            label: state._quizStudyFollowUpSuggestionsVisible
+                ? 'SUGGESTIONS'
+                : 'SUGGESTIONS OFF',
+            accent: palette.cyan,
+            onTap: state._toggleQuizStudyFollowUpSuggestionsVisible,
+            filled: state._quizStudyFollowUpSuggestionsVisible,
+          ),
+          state._academyHudButton(
+            palette: palette,
+            icon: Icons.bar_chart_rounded,
+            label: state._quizStudyFollowUpEvalVisible ? 'EVAL' : 'EVAL OFF',
+            accent: palette.amber,
+            onTap: state._toggleQuizStudyFollowUpEvalVisible,
+            filled: state._quizStudyFollowUpEvalVisible,
+          ),
           state._academyHudButton(
             palette: palette,
             icon: Icons.restart_alt_rounded,
@@ -2045,7 +2063,123 @@ Widget _buildQuizStudyFollowUpControls(
             onTap: () =>
                 unawaited(state._resetQuizStudyFollowUpBranch(selectedLine)),
           ),
+        ],
       ],
+    ),
+  );
+}
+
+Widget _buildQuizStudyFollowUpStatusTags(
+  _QuizScreen state, {
+  required EcoLine selectedLine,
+  required _QuizAcademyPalette palette,
+  required Color accent,
+}) {
+  final followUpActive = state._isQuizStudyFollowUpActiveFor(selectedLine);
+  if (!followUpActive) {
+    return const SizedBox.shrink();
+  }
+
+  return KeyedSubtree(
+    key: const ValueKey<String>('quiz_study_follow_up_status_tags'),
+    child: Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        state._academyTag(
+          palette: palette,
+          label: state._quizStudyFollowUpBusy
+              ? 'ENGINE LOADING'
+              : 'FOLLOW-UPS READY',
+          accent: state._quizStudyFollowUpBusy
+              ? palette.amber
+              : palette.emerald,
+        ),
+        state._academyTag(
+          palette: palette,
+          label: 'TOP 3',
+          accent: palette.cyan,
+        ),
+        state._academyTag(
+          palette: palette,
+          label: 'BRANCH ${state._quizStudyFollowUpBranchMoves.length}',
+          accent: accent,
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildQuizStudyFollowUpEvalRail(
+  _QuizScreen state, {
+  required _QuizAcademyPalette palette,
+  required EvalSnapshot snapshot,
+}) {
+  final fill = state._quizStudyEvalFill(snapshot);
+  final evalText = state._quizStudyEvalText(snapshot);
+
+  return IgnorePointer(
+    child: SizedBox(
+      width: 26,
+      child: Column(
+        children: <Widget>[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                palette.shell.withValues(alpha: 0.88),
+                palette.panel,
+              ),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: palette.line.withValues(alpha: 0.6),
+                width: 1,
+              ),
+            ),
+            child: Text(
+              evalText,
+              textAlign: TextAlign.center,
+              style: state._academyHudStyle(
+                palette: palette,
+                size: 9.4,
+                weight: FontWeight.w800,
+                color: palette.text,
+                letterSpacing: 0.2,
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Container(
+              width: 12,
+              decoration: BoxDecoration(
+                color: palette.shell.withValues(alpha: 0.84),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: palette.line.withValues(alpha: 0.72),
+                  width: 1,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: FractionallySizedBox(
+                    heightFactor: fill,
+                    widthFactor: 1,
+                    child: ColoredBox(
+                      color: palette.text.withValues(alpha: 0.92),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -2261,9 +2395,15 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
   final displayedWhiteToMove =
       followUpPosition?.whiteToMove ?? preview?.whiteToMove;
   final displayedLines = followUpPosition != null
-      ? state._quizStudyFollowUpLines
+      ? (state._quizStudyFollowUpSuggestionsVisible
+        ? state._quizStudyFollowUpLines
+        : const <EngineLine>[])
       : (preview?.continuation ?? const <EngineLine>[]);
   final followUpActive = followUpPosition != null;
+    final showEvalRail =
+      followUpActive &&
+      state._quizStudyFollowUpEvalVisible &&
+      state._quizStudyFollowUpEvalSnapshot != null;
 
   return KeyedSubtree(
     key: state._quizStudyBoardKey,
@@ -2293,62 +2433,94 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
           ],
           if (displayedBoardState != null && displayedWhiteToMove != null)
             Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: boardMaxWidth),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: palette.shell,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: palette.line, width: 3),
-                      boxShadow: <BoxShadow>[
-                        ...puzzleAcademyRoundedDropShadow(
-                          palette.shadow.withValues(alpha: 0.18),
-                          blurRadius: 11,
-                          offsetY: 5,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final maxWidth = boardMaxWidth.isFinite
+                      ? min(boardMaxWidth, constraints.maxWidth)
+                      : constraints.maxWidth;
+                  const evalGap = 8.0;
+                  const evalWidth = 26.0;
+                  final totalEvalWidth = showEvalRail ? evalGap + evalWidth : 0.0;
+                  final boardSide = max(0.0, maxWidth - totalEvalWidth);
+
+                  return SizedBox(
+                    width: boardSide + totalEvalWidth,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        SizedBox(
+                          width: boardSide,
+                          height: boardSide,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: palette.shell,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: palette.line, width: 3),
+                              boxShadow: <BoxShadow>[
+                                ...puzzleAcademyRoundedDropShadow(
+                                  palette.shadow.withValues(alpha: 0.18),
+                                  blurRadius: 11,
+                                  offsetY: 5,
+                                ),
+                              ],
+                            ),
+                            child: Builder(
+                              builder: (context) {
+                                final reverse =
+                                    state._perspective == BoardPerspective.black ||
+                                    (state._perspective == BoardPerspective.auto &&
+                                        !displayedWhiteToMove);
+
+                                return Stack(
+                                  fit: StackFit.expand,
+                                  children: <Widget>[
+                                    state._buildQuizBoard(
+                                      boardState: displayedBoardState,
+                                      whiteToMove: displayedWhiteToMove,
+                                    ),
+                                    if (displayedLines.isNotEmpty)
+                                      IgnorePointer(
+                                        child: CustomPaint(
+                                          size: Size.infinite,
+                                          painter: EnergyArrowPainter(
+                                            lines: displayedLines,
+                                            bestEval: 0,
+                                            progress: 0,
+                                            reverse: reverse,
+                                            showSequenceNumbers: true,
+                                            overrideColor: followUpActive
+                                                ? palette.emerald.withValues(
+                                                    alpha: 0.84,
+                                                  )
+                                                : palette.cyan.withValues(
+                                                    alpha: 0.88,
+                                                  ),
+                                            staticArrowStyle: true,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
                         ),
+                        if (showEvalRail) ...<Widget>[
+                          const SizedBox(width: evalGap),
+                          SizedBox(
+                            width: evalWidth,
+                            height: boardSide,
+                            child: _buildQuizStudyFollowUpEvalRail(
+                              state,
+                              palette: palette,
+                              snapshot: state._quizStudyFollowUpEvalSnapshot!,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final reverse =
-                            state._perspective == BoardPerspective.black ||
-                            (state._perspective == BoardPerspective.auto &&
-                                !displayedWhiteToMove);
-
-                        return Stack(
-                          fit: StackFit.expand,
-                          children: <Widget>[
-                            state._buildQuizBoard(
-                              boardState: displayedBoardState,
-                              whiteToMove: displayedWhiteToMove,
-                            ),
-                            if (displayedLines.isNotEmpty)
-                              IgnorePointer(
-                                child: CustomPaint(
-                                  size: Size.infinite,
-                                  painter: EnergyArrowPainter(
-                                    lines: displayedLines,
-                                    bestEval: 0,
-                                    progress: 0,
-                                    reverse: reverse,
-                                    showSequenceNumbers: true,
-                                    overrideColor: followUpActive
-                                        ? palette.emerald.withValues(
-                                            alpha: 0.84,
-                                          )
-                                        : palette.cyan.withValues(alpha: 0.88),
-                                    staticArrowStyle: true,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
             )
           else
@@ -2479,17 +2651,11 @@ Widget _buildQuizStudyReplayControls(
               ),
               if (followUpActive) ...<Widget>[
                 const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.center,
-                  child: state._academyTag(
-                    palette: palette,
-                    label: state._quizStudyFollowUpBusy
-                        ? 'ENGINE LOADING'
-                        : 'FOLLOW-UPS READY',
-                    accent: state._quizStudyFollowUpBusy
-                        ? palette.amber
-                        : palette.emerald,
-                  ),
+                _buildQuizStudyFollowUpStatusTags(
+                  state,
+                  selectedLine: selectedLine,
+                  palette: palette,
+                  accent: accent,
                 ),
               ],
             ],

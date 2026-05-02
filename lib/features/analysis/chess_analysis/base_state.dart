@@ -567,6 +567,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Map<String, int> _quizStudyOpeningCounts = <String, int>{};
   int _quizStudyShownPly = 0;
   bool _quizStudyFollowUpMode = false;
+  bool _quizStudyFollowUpSuggestionsVisible = true;
+  bool _quizStudyFollowUpEvalVisible = true;
   bool _quizStudyFollowUpBusy = false;
   String? _quizStudyFollowUpError;
   Map<String, String> _quizStudyFollowUpBoardState = <String, String>{};
@@ -574,6 +576,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _quizStudyFollowUpFen;
   List<String> _quizStudyFollowUpBranchMoves = <String>[];
   List<EngineLine> _quizStudyFollowUpLines = <EngineLine>[];
+  EvalSnapshot? _quizStudyFollowUpEvalSnapshot;
   EngineSearchHandle? _quizStudyFollowUpHandle;
   int _quizStudyFollowUpRequestToken = 0;
   int _quizStreak = 0;
