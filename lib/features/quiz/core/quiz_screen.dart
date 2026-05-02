@@ -13,7 +13,6 @@ class _QuizStudyPreview {
   final int shownPly;
   final int totalPly;
   final List<EngineLine> continuation;
-  final String fen;
 
   const _QuizStudyPreview({
     required this.boardState,
@@ -21,21 +20,6 @@ class _QuizStudyPreview {
     required this.shownPly,
     required this.totalPly,
     required this.continuation,
-    required this.fen,
-  });
-}
-
-class _QuizStudyFollowUpPosition {
-  final Map<String, String> boardState;
-  final bool whiteToMove;
-  final String fen;
-  final List<String> branchMoves;
-
-  const _QuizStudyFollowUpPosition({
-    required this.boardState,
-    required this.whiteToMove,
-    required this.fen,
-    required this.branchMoves,
   });
 }
 
@@ -1398,7 +1382,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudySelectedOpeningName = null;
       _quizStudyExpandedFamily = null;
       _quizStudyShownPly = 0;
-      _deactivateQuizStudyFollowUps();
       _quizStudyOpeningCounts.clear();
       _quizReviewHistory.clear();
       _quizReviewIndex = null;
@@ -2009,7 +1992,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizEligibleCount = nextEligibleCount;
       _quizStudyDetailOpen = false;
       _quizStudyShownPly = 0;
-      _deactivateQuizStudyFollowUps();
     });
   }
 
@@ -2343,7 +2325,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyDetailOpen = false;
       _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
-      _deactivateQuizStudyFollowUps();
 
       if (_quizStudySelectedOpeningName != null &&
           !nextLineNames.contains(_quizStudySelectedOpeningName)) {
@@ -2391,7 +2372,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyDetailOpen = false;
       _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
-      _deactivateQuizStudyFollowUps();
     });
     _focusQuizStudyLibraryIndex(focusSelection: true);
   }
@@ -2405,14 +2385,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyDetailOpen = false;
       _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
-      _deactivateQuizStudyFollowUps();
     });
   }
 
   void _selectQuizStudyOpening(EcoLine line, {bool focusBoard = false}) {
     final familyName = _quizStudyFamilyName(line.name);
     setState(() {
-      _deactivateQuizStudyFollowUps();
       _quizStudySelectedOpeningName = line.name;
       _quizStudyExpandedFamily = familyName;
       _quizStudyDetailOpen = true;
@@ -2442,9 +2420,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
 
     setState(() {
       _quizStudyShownPly = clampedPly;
-      if (_quizStudyFollowUpMode && clampedPly != line.moveTokens.length) {
-        _deactivateQuizStudyFollowUps();
-      }
     });
   }
 
@@ -2453,11 +2428,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   void _stepQuizStudyBackward(EcoLine line) {
-    if (_isQuizStudyFollowUpActiveFor(line) &&
-        _quizStudyFollowUpBranchMoves.isNotEmpty) {
-      unawaited(_undoQuizStudyFollowUpCycle(line));
-      return;
-    }
     _setQuizStudyShownPly(line, _quizStudyShownPlyFor(line) - 1);
   }
 
@@ -2601,16 +2571,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final shownPly = _quizStudyShownPlyFor(line);
     var boardState = _initialBoardState();
     var whiteToMove = true;
-    final game = chess.Chess();
 
     for (var index = 0; index < shownPly; index++) {
       final token = line.moveTokens[index];
       final uciMove = _resolveSanToUci(boardState, token, whiteToMove);
       if (uciMove == null) {
-        return null;
-      }
-      final applied = game.move(_uciPayloadFromMove(uciMove));
-      if (applied == false) {
         return null;
       }
       boardState = _applyUciMove(boardState, uciMove);
@@ -2644,754 +2609,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       shownPly: shownPly,
       totalPly: line.moveTokens.length,
       continuation: List<EngineLine>.unmodifiable(continuation),
-      fen: game.fen,
     );
-  }
-
-  Map<String, String> _uciPayloadFromMove(String uciMove) {
-    final payload = <String, String>{
-      'from': uciMove.substring(0, 2),
-      'to': uciMove.substring(2, 4),
-    };
-    if (uciMove.length > 4) {
-      payload['promotion'] = uciMove.substring(4, 5);
-    }
-    return payload;
-  }
-
-  void _cancelQuizStudyFollowUpSearch({String reason = 'refresh'}) {
-    _quizStudyFollowUpHandle?.cancel(reason: reason);
-    _quizStudyFollowUpHandle = null;
-  }
-
-  void _clearQuizStudyFollowUpState({
-    bool preserveMode = true,
-    bool cancelSearch = true,
-  }) {
-    if (cancelSearch) {
-      _cancelQuizStudyFollowUpSearch(reason: 'study reset');
-    }
-    _quizStudyFollowUpMode = preserveMode ? _quizStudyFollowUpMode : false;
-    _quizStudyFollowUpBusy = false;
-    _quizStudyFollowUpError = null;
-    _quizStudyFollowUpUserIsWhite = null;
-    _quizStudyFollowUpBoardState = <String, String>{};
-    _quizStudyFollowUpWhiteToMove = true;
-    _quizStudyFollowUpFen = null;
-    _quizStudyFollowUpSelectedSquare = null;
-    _quizStudyFollowUpLastAutoReplyMove = null;
-    _quizStudyFollowUpBranchMoves = <String>[];
-    _quizStudyFollowUpLines = <EngineLine>[];
-    _quizStudyFollowUpEvalSnapshot = null;
-    _quizStudyFollowUpRequestToken += 1;
-    _quizStudyFollowUpStreak = 0;
-    _quizStudyFollowUpBestBranch = 0;
-  }
-
-  void _deactivateQuizStudyFollowUps({bool cancelSearch = true}) {
-    _clearQuizStudyFollowUpState(
-      preserveMode: false,
-      cancelSearch: cancelSearch,
-    );
-  }
-
-  bool _canActivateQuizStudyFollowUpMode(EcoLine line) {
-    if (_quizStudySelectedOpeningName != line.name) {
-      return false;
-    }
-    if (_quizStudyShownPlyFor(line) != line.moveTokens.length) {
-      return false;
-    }
-    return _buildQuizStudyPreview(line) != null;
-  }
-
-  _QuizStudyFollowUpPosition? _quizStudyFollowUpPositionFor(EcoLine line) {
-    if (!_quizStudyFollowUpMode ||
-        _quizStudySelectedOpeningName != line.name ||
-        _quizStudyFollowUpFen == null ||
-        _quizStudyFollowUpBoardState.isEmpty) {
-      return null;
-    }
-    return _QuizStudyFollowUpPosition(
-      boardState: Map<String, String>.unmodifiable(
-        _quizStudyFollowUpBoardState,
-      ),
-      whiteToMove: _quizStudyFollowUpWhiteToMove,
-      fen: _quizStudyFollowUpFen!,
-      branchMoves: List<String>.unmodifiable(_quizStudyFollowUpBranchMoves),
-    );
-  }
-
-  void _syncQuizStudyFollowUpBasePosition(
-    EcoLine line, {
-    bool scheduleSearch = true,
-  }) {
-    final preview = _buildQuizStudyPreview(line);
-    if (preview == null) {
-      _quizStudyFollowUpBoardState = <String, String>{};
-      _quizStudyFollowUpWhiteToMove = true;
-      _quizStudyFollowUpFen = null;
-      _quizStudyFollowUpBranchMoves = <String>[];
-      _quizStudyFollowUpLines = <EngineLine>[];
-      _quizStudyFollowUpEvalSnapshot = null;
-      _quizStudyFollowUpError =
-          'Opening preview could not be converted into a practice position.';
-      _quizStudyFollowUpBusy = false;
-      _quizStudyFollowUpUserIsWhite = null;
-      if (scheduleSearch) {
-        _cancelQuizStudyFollowUpSearch(reason: 'preview unavailable');
-      }
-      return;
-    }
-
-    _quizStudyFollowUpUserIsWhite = preview.whiteToMove;
-    _quizStudyFollowUpBoardState = Map<String, String>.from(preview.boardState);
-    _quizStudyFollowUpWhiteToMove = preview.whiteToMove;
-    _quizStudyFollowUpFen = preview.fen;
-    _quizStudyFollowUpSelectedSquare = null;
-    _quizStudyFollowUpLastAutoReplyMove = null;
-    _quizStudyFollowUpBranchMoves = <String>[];
-    _quizStudyFollowUpLines = <EngineLine>[];
-    _quizStudyFollowUpEvalSnapshot = null;
-    _quizStudyFollowUpError = null;
-    _quizStudyFollowUpBusy = false;
-    _quizStudyFollowUpStreak = 0;
-    _quizStudyFollowUpBestBranch = 0;
-    if (scheduleSearch) {
-      _cancelQuizStudyFollowUpSearch(reason: 'study base sync');
-    }
-  }
-
-  Future<void> _toggleQuizStudyFollowUpMode(EcoLine line) async {
-    if (_quizStudyFollowUpMode) {
-      setState(_deactivateQuizStudyFollowUps);
-      return;
-    }
-    if (!_canActivateQuizStudyFollowUpMode(line)) {
-      return;
-    }
-
-    setState(() {
-      _quizStudyFollowUpMode = true;
-      _syncQuizStudyFollowUpBasePosition(line, scheduleSearch: false);
-    });
-
-    await _requestQuizStudyFollowUpSearch(line);
-  }
-
-  bool _isQuizStudyFollowUpActiveFor(EcoLine line) {
-    return _quizStudyFollowUpMode && _quizStudySelectedOpeningName == line.name;
-  }
-
-  bool _quizStudyFollowUpControlsUnlocked(EcoLine line) {
-    return _canActivateQuizStudyFollowUpMode(line) ||
-        _isQuizStudyFollowUpActiveFor(line);
-  }
-
-  bool _quizStudyFollowUpShouldShowControls(EcoLine line) {
-    return _quizStudySelectedOpeningName == line.name;
-  }
-
-  void _toggleQuizStudyFollowUpSuggestionsVisible() {
-    setState(() {
-      _quizStudyFollowUpSuggestionsVisible =
-          !_quizStudyFollowUpSuggestionsVisible;
-    });
-  }
-
-  void _toggleQuizStudyFollowUpEvalVisible() {
-    setState(() {
-      _quizStudyFollowUpEvalVisible = !_quizStudyFollowUpEvalVisible;
-    });
-  }
-
-  void _toggleQuizStudyFollowUpAutoReply() {
-    setState(() {
-      _quizStudyFollowUpAutoReply = !_quizStudyFollowUpAutoReply;
-      _quizStudyFollowUpSelectedSquare = null;
-    });
-  }
-
-  Future<void> _resetQuizStudyFollowUpBranch(EcoLine line) async {
-    setState(() {
-      _syncQuizStudyFollowUpBasePosition(line, scheduleSearch: false);
-    });
-    await _requestQuizStudyFollowUpSearch(line);
-  }
-
-  double _quizStudyEvalForCurrentPerspective(EvalSnapshot? snapshot) {
-    if (snapshot == null) {
-      return 0.0;
-    }
-    final whiteEval = snapshot.evalPawnsWhite;
-    final reversed =
-        _perspective == BoardPerspective.black ||
-        (_perspective == BoardPerspective.auto &&
-            !_quizStudyFollowUpWhiteToMove);
-    return reversed ? -whiteEval : whiteEval;
-  }
-
-  double _quizStudyEvalFill(EvalSnapshot? snapshot) {
-    final displayedEval = _quizStudyEvalForCurrentPerspective(snapshot);
-    return (0.5 + displayedEval / 8).clamp(0.0, 1.0);
-  }
-
-  String _quizStudyEvalText(EvalSnapshot? snapshot) {
-    final displayedEval = _quizStudyEvalForCurrentPerspective(snapshot);
-    return '${displayedEval > 0 ? '+' : ''}${displayedEval.toStringAsFixed(2)}';
-  }
-
-  String _quizStudyMoveLabel(
-    Map<String, String> boardState,
-    String fen,
-    String uciMove,
-  ) {
-    if (uciMove.length < 4) {
-      return uciMove;
-    }
-    final from = uciMove.substring(0, 2);
-    final to = uciMove.substring(2, 4);
-    final piece = boardState[from];
-    if (piece == null) {
-      return uciMove;
-    }
-    final promotion = uciMove.length > 4
-        ? (uciMove[4] == 'r' ? 't' : uciMove[4])
-        : null;
-    final fenParts = fen.split(' ');
-    final enPassantTarget = fenParts.length > 3 && fenParts[3] != '-'
-        ? fenParts[3]
-        : null;
-    final captureSquare = _enPassantCaptureSquare(
-      boardState,
-      from,
-      to,
-      piece,
-      enPassantTarget: enPassantTarget,
-    );
-    final captured = captureSquare == null
-        ? boardState[to]
-        : boardState[captureSquare];
-    return _buildMoveNotation(from, to, piece, captured, promotion);
-  }
-
-  bool _quizStudyFollowUpPlayerTurn(EcoLine line) {
-    final position = _quizStudyFollowUpPositionFor(line);
-    final userIsWhite = _quizStudyFollowUpUserIsWhite;
-    if (position == null || userIsWhite == null) {
-      return false;
-    }
-    return position.whiteToMove == userIsWhite;
-  }
-
-  bool _quizStudyFollowUpCanControlCurrentTurn(EcoLine line) {
-    if (!_isQuizStudyFollowUpActiveFor(line)) {
-      return false;
-    }
-    if (_quizStudyFollowUpLines.isEmpty) {
-      return false;
-    }
-    return _quizStudyFollowUpPlayerTurn(line) || !_quizStudyFollowUpAutoReply;
-  }
-
-  List<EngineLine> _quizStudyFollowUpSuggestedLines(EcoLine line) {
-    if (!_quizStudyFollowUpCanControlCurrentTurn(line)) {
-      return const <EngineLine>[];
-    }
-    return _quizStudyFollowUpLines
-        .where((entry) => entry.multiPv <= 3 && entry.move.length >= 4)
-        .toList(growable: false);
-  }
-
-  List<EngineLine> _quizStudyFollowUpResolvedLines(EngineSearchResult result) {
-    final resolved = result.lines
-        .where((entry) => entry.multiPv <= 3 && entry.move.length >= 4)
-        .toList(growable: false);
-    if (resolved.isNotEmpty) {
-      return resolved;
-    }
-
-    final bestMove = result.bestMove;
-    if (bestMove == null || bestMove.length < 4) {
-      return const <EngineLine>[];
-    }
-
-    final fallbackDepth = max(
-      1,
-      _quizStudyFollowUpEvalSnapshot?.depth ?? result.request.depth ?? 1,
-    );
-    return <EngineLine>[EngineLine(bestMove, 0, fallbackDepth, 1)];
-  }
-
-  Set<String> _quizStudyFollowUpSuggestedFromSquares(EcoLine line) {
-    return _quizStudyFollowUpSuggestedLines(line)
-        .map((entry) => entry.move.substring(0, 2))
-        .where((square) => square.length == 2)
-        .toSet();
-  }
-
-  Set<String> _quizStudyFollowUpTargetSquares(
-    EcoLine line,
-    String? fromSquare,
-  ) {
-    if (fromSquare == null || fromSquare.length != 2) {
-      return const <String>{};
-    }
-    final targets = <String>{};
-    for (final entry in _quizStudyFollowUpSuggestedLines(line)) {
-      if (entry.move.startsWith(fromSquare) && entry.move.length >= 4) {
-        targets.add(entry.move.substring(2, 4));
-      }
-    }
-    return targets;
-  }
-
-  String? _resolveQuizStudyFollowUpCandidateMove(
-    EcoLine line,
-    String from,
-    String to, {
-    String? preferredPromotion,
-  }) {
-    final requestedPromotion = preferredPromotion == null
-        ? null
-        : (preferredPromotion == 't' ? 'r' : preferredPromotion.toLowerCase());
-    String? fallbackPromotion;
-    var hasNonPromotionCandidate = false;
-    for (final entry in _quizStudyFollowUpSuggestedLines(line)) {
-      final move = entry.move;
-      if (move.length < 4 ||
-          move.substring(0, 2) != from ||
-          move.substring(2, 4) != to) {
-        continue;
-      }
-      if (move.length == 4) {
-        hasNonPromotionCandidate = true;
-        continue;
-      }
-      final promotion = move.substring(4, 5).toLowerCase();
-      if (requestedPromotion != null && promotion == requestedPromotion) {
-        return move;
-      }
-      fallbackPromotion ??= move;
-    }
-
-    if (requestedPromotion != null) {
-      return fallbackPromotion ?? '$from$to$requestedPromotion';
-    }
-    if (hasNonPromotionCandidate) {
-      return '$from$to';
-    }
-    return fallbackPromotion;
-  }
-
-  bool _quizStudyFollowUpNeedsPromotionChoice(
-    EcoLine line,
-    String from,
-    String to,
-  ) {
-    var candidateCount = 0;
-    var promotionCount = 0;
-    for (final entry in _quizStudyFollowUpSuggestedLines(line)) {
-      final move = entry.move;
-      if (move.length < 4 ||
-          move.substring(0, 2) != from ||
-          move.substring(2, 4) != to) {
-        continue;
-      }
-      candidateCount += 1;
-      if (move.length > 4) {
-        promotionCount += 1;
-      }
-    }
-    return candidateCount > 0 && promotionCount == candidateCount;
-  }
-
-  Future<void> _handleQuizStudyFollowUpSquareTap(
-    EcoLine line,
-    String square,
-  ) async {
-    if (!_quizStudyFollowUpCanControlCurrentTurn(line)) {
-      return;
-    }
-    final position = _quizStudyFollowUpPositionFor(line);
-    if (position == null) {
-      return;
-    }
-
-    final targetSquares = _quizStudyFollowUpTargetSquares(
-      line,
-      _quizStudyFollowUpSelectedSquare,
-    );
-    if (_quizStudyFollowUpSelectedSquare != null &&
-        targetSquares.contains(square)) {
-      final from = _quizStudyFollowUpSelectedSquare!;
-      String? preferredPromotion;
-      if (_quizStudyFollowUpNeedsPromotionChoice(line, from, square)) {
-        final movingPiece = _quizStudyFollowUpBoardState[from];
-        if (movingPiece == null) {
-          return;
-        }
-        preferredPromotion = await _showPromotionPicker(
-          movingPiece.endsWith('_w'),
-        );
-        if (preferredPromotion == null) {
-          return;
-        }
-      }
-      final move = _resolveQuizStudyFollowUpCandidateMove(
-        line,
-        from,
-        square,
-        preferredPromotion: preferredPromotion,
-      );
-      if (move == null) {
-        return;
-      }
-      setState(() {
-        _quizStudyFollowUpSelectedSquare = null;
-      });
-      await _applyQuizStudyFollowUpMove(
-        line,
-        move,
-        userMove: _quizStudyFollowUpPlayerTurn(line),
-      );
-      return;
-    }
-
-    final piece = position.boardState[square];
-    final turnIsWhite = position.whiteToMove;
-    final canSelectPiece =
-        piece != null &&
-        piece.endsWith(turnIsWhite ? '_w' : '_b') &&
-        _quizStudyFollowUpSuggestedFromSquares(line).contains(square);
-
-    setState(() {
-      _quizStudyFollowUpSelectedSquare = canSelectPiece
-          ? (_quizStudyFollowUpSelectedSquare == square ? null : square)
-          : null;
-    });
-  }
-
-  bool _restoreQuizStudyFollowUpBranch(
-    EcoLine line,
-    List<String> branchMoves, {
-    required int preserveBestBranch,
-  }) {
-    final preview = _buildQuizStudyPreview(line);
-    if (preview == null) {
-      return false;
-    }
-
-    final game = chess.Chess.fromFEN(preview.fen);
-    var boardState = Map<String, String>.from(preview.boardState);
-    var whiteToMove = preview.whiteToMove;
-    var currentFen = preview.fen;
-
-    for (final move in branchMoves) {
-      final fenParts = currentFen.split(' ');
-      final enPassantTarget = fenParts.length > 3 && fenParts[3] != '-'
-          ? fenParts[3]
-          : null;
-      final result = game.move(_uciPayloadFromMove(move));
-      if (result == false) {
-        return false;
-      }
-      boardState = _applyUciMove(
-        boardState,
-        move,
-        enPassantTarget: enPassantTarget,
-      );
-      currentFen = game.fen;
-      whiteToMove = !whiteToMove;
-    }
-
-    _quizStudyFollowUpUserIsWhite = preview.whiteToMove;
-    _quizStudyFollowUpBoardState = boardState;
-    _quizStudyFollowUpWhiteToMove = whiteToMove;
-    _quizStudyFollowUpFen = currentFen;
-    _quizStudyFollowUpSelectedSquare = null;
-    _quizStudyFollowUpLastAutoReplyMove = null;
-    _quizStudyFollowUpBranchMoves = List<String>.from(branchMoves);
-    _quizStudyFollowUpLines = <EngineLine>[];
-    _quizStudyFollowUpEvalSnapshot = null;
-    _quizStudyFollowUpBusy = false;
-    _quizStudyFollowUpError = null;
-    _quizStudyFollowUpStreak = (branchMoves.length + 1) ~/ 2;
-    _quizStudyFollowUpBestBranch = max(preserveBestBranch, branchMoves.length);
-    return true;
-  }
-
-  Future<void> _undoQuizStudyFollowUpCycle(EcoLine line) async {
-    if (!_isQuizStudyFollowUpActiveFor(line)) {
-      return;
-    }
-    final branchLength = _quizStudyFollowUpBranchMoves.length;
-    if (branchLength == 0) {
-      _setQuizStudyShownPly(line, _quizStudyShownPlyFor(line) - 1);
-      return;
-    }
-
-    final preserveBestBranch = _quizStudyFollowUpBestBranch;
-    final lastUserIndex = branchLength.isOdd
-        ? branchLength - 1
-        : branchLength - 2;
-    final restoredMoves = _quizStudyFollowUpBranchMoves
-        .take(max(0, lastUserIndex))
-        .toList(growable: false);
-
-    var restored = false;
-    setState(() {
-      _cancelQuizStudyFollowUpSearch(reason: 'study undo');
-      restored = _restoreQuizStudyFollowUpBranch(
-        line,
-        restoredMoves,
-        preserveBestBranch: preserveBestBranch,
-      );
-    });
-
-    if (!restored) {
-      setState(() {
-        _quizStudyFollowUpError =
-            'The follow-up branch could not be rewound from this position.';
-      });
-      return;
-    }
-
-    await _requestQuizStudyFollowUpSearch(line);
-  }
-
-  Future<void> _applyQuizStudyFollowUpMove(
-    EcoLine line,
-    String uciMove, {
-    required bool userMove,
-    bool markAsAutoReply = false,
-  }) async {
-    final currentFen = _quizStudyFollowUpFen;
-    if (currentFen == null || _quizStudyFollowUpBoardState.isEmpty) {
-      return;
-    }
-
-    int? playedRank;
-    if (userMove) {
-      for (final entry in _quizStudyFollowUpLines) {
-        if (entry.move == uciMove) {
-          playedRank = entry.multiPv;
-          break;
-        }
-      }
-    }
-
-    final game = chess.Chess.fromFEN(currentFen);
-    final result = game.move(_uciPayloadFromMove(uciMove));
-    if (result == false) {
-      setState(() {
-        _quizStudyFollowUpError =
-            'That practice move could not be applied to the current branch.';
-      });
-      return;
-    }
-
-    final fenParts = currentFen.split(' ');
-    final enPassantTarget = fenParts.length > 3 && fenParts[3] != '-'
-        ? fenParts[3]
-        : null;
-    final nextBoardState = _applyUciMove(
-      _quizStudyFollowUpBoardState,
-      uciMove,
-      enPassantTarget: enPassantTarget,
-    );
-
-    setState(() {
-      _quizStudyFollowUpBoardState = nextBoardState;
-      _quizStudyFollowUpWhiteToMove = !_quizStudyFollowUpWhiteToMove;
-      _quizStudyFollowUpFen = game.fen;
-      _quizStudyFollowUpSelectedSquare = null;
-      _quizStudyFollowUpLastAutoReplyMove = markAsAutoReply ? uciMove : null;
-      _quizStudyFollowUpBranchMoves = <String>[
-        ..._quizStudyFollowUpBranchMoves,
-        uciMove,
-      ];
-      _quizStudyFollowUpLines = <EngineLine>[];
-      _quizStudyFollowUpEvalSnapshot = null;
-      _quizStudyFollowUpBusy = false;
-      _quizStudyFollowUpError = null;
-      _quizStudyFollowUpBestBranch = max(
-        _quizStudyFollowUpBestBranch,
-        _quizStudyFollowUpBranchMoves.length,
-      );
-      if (userMove) {
-        if (playedRank != null && playedRank <= 3) {
-          _quizStudyFollowUpStreak += 1;
-        } else {
-          _quizStudyFollowUpStreak = 0;
-        }
-      }
-    });
-
-    await _requestQuizStudyFollowUpSearch(line);
-  }
-
-  List<BotMoveCandidate> _quizStudyFollowUpCandidatesFromLines(
-    List<EngineLine> lines,
-    Map<String, String> boardState,
-  ) {
-    return lines
-        .where((line) => line.multiPv <= 3)
-        .map(
-          (line) => BotMoveCandidate(
-            line: line,
-            isCapture: _isCaptureMoveOnBoard(boardState, line.move),
-            isCheck: false,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  Future<void> _maybeAutoReplyQuizStudyFollowUp(EcoLine line) async {
-    if (!_quizStudyFollowUpMode || !_quizStudyFollowUpAutoReply) {
-      return;
-    }
-    final userIsWhite = _quizStudyFollowUpUserIsWhite;
-    if (userIsWhite == null) {
-      return;
-    }
-    if (_quizStudyFollowUpWhiteToMove == userIsWhite) {
-      return;
-    }
-    final candidates = _quizStudyFollowUpCandidatesFromLines(
-      _quizStudyFollowUpLines,
-      _quizStudyFollowUpBoardState,
-    );
-    if (candidates.isEmpty) {
-      return;
-    }
-    const policy = BotMoveSelectionPolicy(
-      rankWeights: <int>[14, 5, 2],
-      safeEvalGapCp: 120,
-      nearBestEvalGapCp: 30,
-      nearBestBonus: 2,
-      captureBias: 1,
-      checkBias: 1,
-    );
-    final chosen = BotMoveSelector.pickCandidate(candidates, policy, _rng);
-    if (chosen == null) {
-      return;
-    }
-    await _applyQuizStudyFollowUpMove(
-      line,
-      chosen.line.move,
-      userMove: false,
-      markAsAutoReply: true,
-    );
-  }
-
-  Future<void> _requestQuizStudyFollowUpSearch(EcoLine line) async {
-    if (!_quizStudyFollowUpMode || _quizStudySelectedOpeningName != line.name) {
-      return;
-    }
-    final fen = _quizStudyFollowUpFen;
-    if (fen == null || fen.isEmpty) {
-      return;
-    }
-
-    _cancelQuizStudyFollowUpSearch(reason: 'study refresh');
-    final requestToken = ++_quizStudyFollowUpRequestToken;
-    setState(() {
-      _quizStudyFollowUpBusy = true;
-      _quizStudyFollowUpError = null;
-      _quizStudyFollowUpLines = <EngineLine>[];
-      _quizStudyFollowUpEvalSnapshot = null;
-    });
-
-    await _ensureEngineStarted();
-    if (!mounted ||
-        !_quizStudyFollowUpMode ||
-        _quizStudySelectedOpeningName != line.name) {
-      return;
-    }
-    final engine = _engine;
-    if (engine == null) {
-      setState(() {
-        _quizStudyFollowUpBusy = false;
-        _quizStudyFollowUpError =
-            'Stockfish is unavailable for follow-up practice on this device.';
-      });
-      return;
-    }
-
-    final handle = engine.scheduleSearch(
-      EngineRequestSpec(
-        requestId: _nextEngineRequestId(EngineRequestRole.liveAnalysis),
-        role: EngineRequestRole.liveAnalysis,
-        fen: fen,
-        whiteToMove: _quizStudyFollowUpWhiteToMove,
-        multiPv: 3,
-        depth: max(10, min(_engineDepth, 14)),
-        timeout: const Duration(milliseconds: 3200),
-        firstInfoTimeout: const Duration(milliseconds: 2200),
-      ),
-      onUpdate: (update) {
-        if (!mounted ||
-            requestToken != _quizStudyFollowUpRequestToken ||
-            !_quizStudyFollowUpMode ||
-            _quizStudySelectedOpeningName != line.name ||
-            update.request.fen != _quizStudyFollowUpFen) {
-          return;
-        }
-        setState(() {
-          _quizStudyFollowUpBusy = false;
-          _quizStudyFollowUpEvalSnapshot = preferBestEvalSnapshot(
-            _quizStudyFollowUpEvalSnapshot,
-            update.snapshot,
-          );
-          _quizStudyFollowUpLines.removeWhere(
-            (entry) => entry.multiPv == update.line.multiPv,
-          );
-          _quizStudyFollowUpLines.add(update.line);
-          _quizStudyFollowUpLines.sort(
-            (a, b) => a.multiPv.compareTo(b.multiPv),
-          );
-        });
-      },
-    );
-    _quizStudyFollowUpHandle = handle;
-
-    unawaited(() async {
-      try {
-        final result = await handle.result;
-        if (!mounted ||
-            requestToken != _quizStudyFollowUpRequestToken ||
-            !_quizStudyFollowUpMode ||
-            _quizStudySelectedOpeningName != line.name ||
-            handle != _quizStudyFollowUpHandle) {
-          return;
-        }
-        if (result.cancelled) {
-          setState(() {
-            _quizStudyFollowUpBusy = false;
-          });
-          return;
-        }
-        setState(() {
-          _quizStudyFollowUpHandle = null;
-          _quizStudyFollowUpBusy = false;
-          _quizStudyFollowUpLines = _quizStudyFollowUpResolvedLines(result);
-        });
-        await _maybeAutoReplyQuizStudyFollowUp(line);
-      } catch (_) {
-        if (!mounted || requestToken != _quizStudyFollowUpRequestToken) {
-          return;
-        }
-        setState(() {
-          _quizStudyFollowUpHandle = null;
-          _quizStudyFollowUpBusy = false;
-          if (_quizStudyFollowUpLines.isEmpty) {
-            _quizStudyFollowUpError =
-                'Stockfish could not finish the follow-up search.';
-          }
-        });
-      }
-    }());
   }
 
   void _appendQuizReviewEntry({
@@ -3493,7 +2711,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizLaunchedFromAcademy = true;
       _quizStudyMode = false;
       _quizStudyDetailOpen = false;
-      _deactivateQuizStudyFollowUps();
       _quizQuestionsTarget = 10;
       _syncQuizDifficultyToAcademyProgress();
       _resetQuizToSetupState();
@@ -7787,9 +7004,5 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   Widget _buildQuizBoard({
     required Map<String, String> boardState,
     required bool whiteToMove,
-    String? selectedSquare,
-    Set<String> targetSquares = const <String>{},
-    Set<String> suggestedFromSquares = const <String>{},
-    ValueChanged<String>? onSquareTap,
   });
 }
