@@ -1,0 +1,176 @@
+name: Build iOS Sideload IPA (Diagnostic)
+
+'on':
+  workflow_dispatch:
+
+jobs:
+  build-ios-ipa-diagnostic:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Clone Stockfish 18
+        run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git
+
+      - name: Build Stockfish objects (iOS device arm64)
+        working-directory: Stockfish/src
+        run: |
+          set -euo pipefail
+
+          {
+            echo '#!/bin/bash'
+            echo 'args=()'
+            echo 'for arg in "$@"; do'
+            echo '  case "$arg" in'
+            echo '    -mmacosx-version-min=*) ;;'
+            echo '    -m64) ;;'
+            echo '    -flto|-flto=*) ;;'
+            echo '    *) args+=("$arg") ;;'
+            echo '  esac'
+            echo 'done'
+            echo 'exec xcrun --sdk iphoneos clang++ "${args[@]}" -miphoneos-version-min=14.0'
+          } > /tmp/ios-device-cxx.sh
+          chmod +x /tmp/ios-device-cxx.sh
+
+          make -j"$(sysctl -n hw.logicalcpu)" \
+            ARCH=apple-silicon \
+            CXX=/tmp/ios-device-cxx.sh \
+            build
+
+      - name: Build libstockfish_ios.a
+        run: |
+          set -euo pipefail
+          cd Stockfish/src
+
+          perl -0777 -pe 's/\bint\s+main\s*\(/extern "C" int stockfish_main(/' main.cpp > main_stockfish.cpp
+          /tmp/ios-device-cxx.sh \
+            -arch arm64 \
+            -Wall -Wcast-qual -fno-exceptions -std=c++17 -pedantic -Wextra -Wshadow -Wmissing-declarations \
+            -DUSE_PTHREADS -DNDEBUG -O3 -funroll-loops -DIS_64BIT -DUSE_POPCNT \
+            -DUSE_NEON=8 -march=armv8.2-a+dotprod -DUSE_NEON_DOTPROD -DARCH=apple-silicon \
+            -c -o main_stockfish.o main_stockfish.cpp
+
+          xcrun --sdk iphoneos nm -gU main_stockfish.o | tee /tmp/main_stockfish_symbols.txt
+          grep -E "_stockfish_main$" /tmp/main_stockfish_symbols.txt >/dev/null
+
+          shopt -s nullglob
+          objs=()
+          for obj in *.o; do
+            if [[ "$obj" != "main.o" && "$obj" != "main_stockfish.o" ]]; then
+              objs+=("$obj")
+            fi
+          done
+          for obj in syzygy/*.o; do
+            objs+=("$obj")
+          done
+
+          /usr/bin/libtool -static \
+            -o ../../ios/Runner/libstockfish_ios.a \
+            main_stockfish.o "${objs[@]}"
+
+      - name: Configure iOS link flags for Stockfish
+        run: |
+          set -euo pipefail
+          cat >> ios/Flutter/Release.xcconfig <<'EOF'
+          LIBRARY_SEARCH_PATHS=$(inherited) $(PROJECT_DIR)/Runner
+          OTHER_LDFLAGS=$(inherited) -lstockfish_ios -lc++
+          EOF
+
+      - name: Build Flutter iOS app (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Collect bundle diagnostics
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          DIAG_DIR="build/ios/diagnostics"
+          ADHOC_DIR="build/ios/adhoc_verify"
+          ADHOC_APP="$ADHOC_DIR/Runner.app"
+
+          test -d "$APP_PATH"
+          rm -rf "$DIAG_DIR" "$ADHOC_DIR"
+          mkdir -p "$DIAG_DIR" "$ADHOC_DIR"
+
+          find "$APP_PATH" | LC_ALL=C sort > "$DIAG_DIR/app_manifest.txt"
+
+          {
+            while IFS= read -r file; do
+              rel="${file#$APP_PATH/}"
+              echo "=== $rel ==="
+              plutil -lint "$file"
+              echo
+            done < <(
+              find "$APP_PATH" -type f \( -name '*.plist' -o -name 'CodeResources' \) | LC_ALL=C sort
+            )
+          } > "$DIAG_DIR/plist_lint.txt"
+
+          file "$APP_PATH/Runner" "$APP_PATH/Frameworks/App.framework/App" > "$DIAG_DIR/macho_file.txt"
+          otool -l "$APP_PATH/Runner" > "$DIAG_DIR/runner_otool_load_commands.txt"
+          otool -l "$APP_PATH/Frameworks/App.framework/App" > "$DIAG_DIR/app_framework_otool_load_commands.txt"
+
+          codesign -d --verbose=4 "$APP_PATH/Runner" > "$DIAG_DIR/runner_codesign_display.txt" 2>&1 || true
+          codesign -d --verbose=4 "$APP_PATH/Frameworks/App.framework" > "$DIAG_DIR/app_framework_bundle_codesign_display.txt" 2>&1 || true
+          codesign -d --verbose=4 "$APP_PATH/Frameworks/App.framework/App" > "$DIAG_DIR/app_framework_binary_codesign_display.txt" 2>&1 || true
+
+          /usr/bin/ditto "$APP_PATH" "$ADHOC_APP"
+          find "$ADHOC_APP" -name '_CodeSignature' -type d -prune -exec rm -rf {} +
+          find "$ADHOC_APP" -name 'embedded.mobileprovision' -type f -delete
+
+          {
+            echo '=== Ad hoc sign nested frameworks ==='
+            if [ -d "$ADHOC_APP/Frameworks" ]; then
+              while IFS= read -r path; do
+                echo "$path"
+                codesign --force --sign - --timestamp=none "$path"
+              done < <(
+                find "$ADHOC_APP/Frameworks" -mindepth 1 -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) | LC_ALL=C sort
+              )
+            fi
+            echo '=== Ad hoc sign app ==='
+            codesign --force --sign - --timestamp=none "$ADHOC_APP"
+            echo '=== Ad hoc verify ==='
+            codesign --verify --deep --strict --verbose=4 "$ADHOC_APP"
+          } > "$DIAG_DIR/adhoc_sign_and_verify.txt" 2>&1 || true
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          IPA_DIR="build/ios/ipa"
+
+          test -d "$APP_PATH"
+
+          rm -rf "$IPA_DIR"
+          mkdir -p "$IPA_DIR/Payload"
+          /usr/bin/ditto "$APP_PATH" "$IPA_DIR/Payload/Runner.app"
+
+          cd "$IPA_DIR"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload ChessIQ.ipa
+
+          /usr/bin/unzip -Z1 ChessIQ.ipa | grep '^Payload/Runner.app/Info.plist$' >/dev/null
+          /usr/bin/unzip -Z1 ChessIQ.ipa | grep '^Payload/Runner.app/Frameworks/App.framework/App$' >/dev/null
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChessIQ-ipa-no-sign-diagnostic
+          path: build/ios/ipa/ChessIQ.ipa
+          retention-days: 30
+
+      - name: Upload diagnostics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChessIQ-ios-sideload-diagnostics
+          path: build/ios/diagnostics
+          retention-days: 30
