@@ -403,6 +403,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   final GlobalKey _quizStudyBoardKey = GlobalKey();
   final GlobalKey _quizStudyLibraryIndexKey = GlobalKey();
   final GlobalKey _quizStudyLibrarySelectionKey = GlobalKey();
+  final Map<String, String> _quizOpeningDisplayNameCache = <String, String>{};
+  final Map<String, String?> _quizOpeningFinalFenCache = <String, String?>{};
 
   void _focusQuizAcademyModePanel() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1047,6 +1049,151 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
 
     return _quizStudyDisplayLineLabel(cleanedName);
+  }
+
+  String _quizOpeningLineCacheKey(EcoLine line) {
+    return '${line.name}\u0000${line.normalizedMoves}';
+  }
+
+  String _quizOpeningInferenceKey(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r"[’`´']"), '')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+  }
+
+  bool _quizOpeningNeedsParentContext(String name) {
+    final cleaned = name.trim();
+    if (cleaned.isEmpty) {
+      return false;
+    }
+
+    if (RegExp(r'[:;,()]| - ').hasMatch(cleaned)) {
+      return false;
+    }
+
+    return RegExp(
+      r'\b(variation|gambit|attack|line|system|formation)\b',
+      caseSensitive: false,
+    ).hasMatch(cleaned);
+  }
+
+  bool _quizOpeningProvidesParentContext(String name) {
+    final cleaned = name.trim();
+    if (cleaned.isEmpty) {
+      return false;
+    }
+
+    return RegExp(r'[:;,()]| - ').hasMatch(cleaned);
+  }
+
+  String? _quizOpeningFinalFen(EcoLine line) {
+    final cacheKey = _quizOpeningLineCacheKey(line);
+    if (_quizOpeningFinalFenCache.containsKey(cacheKey)) {
+      return _quizOpeningFinalFenCache[cacheKey];
+    }
+
+    var boardState = _initialBoardState();
+    var whiteToMove = true;
+    final game = chess.Chess();
+
+    for (final token in line.moveTokens) {
+      final uciMove = _resolveSanToUci(boardState, token, whiteToMove);
+      if (uciMove == null) {
+        _quizOpeningFinalFenCache[cacheKey] = null;
+        return null;
+      }
+      final applied = game.move(_uciPayloadFromMove(uciMove));
+      if (applied == false) {
+        _quizOpeningFinalFenCache[cacheKey] = null;
+        return null;
+      }
+      boardState = _applyUciMove(boardState, uciMove);
+      whiteToMove = !whiteToMove;
+    }
+
+    _quizOpeningFinalFenCache[cacheKey] = game.fen;
+    return game.fen;
+  }
+
+  int _quizOpeningContextScore(String candidateName, String bareName) {
+    final candidateKey = _quizOpeningInferenceKey(candidateName);
+    final bareKey = _quizOpeningInferenceKey(bareName);
+    var score = 0;
+
+    if (candidateKey.contains(bareKey)) {
+      score += 100;
+    }
+    if (candidateKey.endsWith(bareKey)) {
+      score += 20;
+    }
+    if (candidateName.contains(':')) {
+      score += 12;
+    }
+    if (candidateName.contains(',')) {
+      score += 8;
+    }
+    if (candidateName.contains(' - ')) {
+      score += 4;
+    }
+
+    return score + min(candidateName.length, 160);
+  }
+
+  String _quizResolvedOpeningDisplayName(EcoLine line) {
+    final cacheKey = _quizOpeningLineCacheKey(line);
+    final cached = _quizOpeningDisplayNameCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
+    final cleanedName = _quizStudyDisplayLineLabel(line.name.trim());
+    if (!_quizOpeningNeedsParentContext(cleanedName) ||
+        _ecoOpeningsLoading ||
+        _ecoLines.isEmpty) {
+      _quizOpeningDisplayNameCache[cacheKey] = cleanedName;
+      return cleanedName;
+    }
+
+    final bareKey = _quizOpeningInferenceKey(cleanedName);
+    final targetFen = _quizOpeningFinalFen(line);
+    if (bareKey.isEmpty || targetFen == null || targetFen.isEmpty) {
+      _quizOpeningDisplayNameCache[cacheKey] = cleanedName;
+      return cleanedName;
+    }
+
+    var bestName = cleanedName;
+    var bestScore = -1;
+
+    for (final candidate in _ecoLines) {
+      final candidateName = candidate.name.trim();
+      if (!_quizOpeningProvidesParentContext(candidateName)) {
+        continue;
+      }
+
+      final candidateDisplay = _quizStudyDisplayLineLabel(candidateName);
+      final candidateKey = _quizOpeningInferenceKey(candidateDisplay);
+      if (!candidateKey.contains(bareKey)) {
+        continue;
+      }
+
+      final candidateFen = _quizOpeningFinalFen(candidate);
+      if (candidateFen != targetFen) {
+        continue;
+      }
+
+      final score = _quizOpeningContextScore(candidateDisplay, cleanedName);
+      if (score > bestScore) {
+        bestScore = score;
+        bestName = candidateDisplay;
+      }
+    }
+
+    final resolvedName = bestScore >= 100 ? bestName : cleanedName;
+    _quizOpeningDisplayNameCache[cacheKey] = resolvedName;
+    return resolvedName;
   }
 
   List<EcoLine> _dedupeQuizStudyLinesByName(Iterable<EcoLine> lines) {
@@ -4222,9 +4369,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       if (activeMode == GambitQuizMode.guessName) {
         _quizPrompt = '';
         _quizPromptFocus = '';
-        _quizOptions = options.map((entry) => entry.name).toList();
+        _quizOptions = options
+            .map((entry) => _quizResolvedOpeningDisplayName(entry))
+            .toList();
       } else {
-        _quizPrompt = resolvedCorrect.name;
+        _quizPrompt = _quizResolvedOpeningDisplayName(resolvedCorrect);
         _quizPromptFocus = '';
         _quizOptions = options.map((entry) => entry.normalizedMoves).toList();
       }
