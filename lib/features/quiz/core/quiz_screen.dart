@@ -2728,7 +2728,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyFollowUpFen = null;
       _quizStudyFollowUpBranchMoves = <String>[];
       _quizStudyFollowUpLines = <EngineLine>[];
-        _quizStudyFollowUpEvalSnapshot = null;
+      _quizStudyFollowUpEvalSnapshot = null;
       _quizStudyFollowUpError =
           'Opening preview could not be converted into a practice position.';
       _quizStudyFollowUpBusy = false;
@@ -2803,7 +2803,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     final whiteEval = snapshot.evalPawnsWhite;
     final reversed =
         _perspective == BoardPerspective.black ||
-        (_perspective == BoardPerspective.auto && !_quizStudyFollowUpWhiteToMove);
+        (_perspective == BoardPerspective.auto &&
+            !_quizStudyFollowUpWhiteToMove);
     return reversed ? -whiteEval : whiteEval;
   }
 

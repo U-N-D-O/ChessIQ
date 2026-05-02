@@ -2396,11 +2396,11 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
       followUpPosition?.whiteToMove ?? preview?.whiteToMove;
   final displayedLines = followUpPosition != null
       ? (state._quizStudyFollowUpSuggestionsVisible
-        ? state._quizStudyFollowUpLines
-        : const <EngineLine>[])
+            ? state._quizStudyFollowUpLines
+            : const <EngineLine>[])
       : (preview?.continuation ?? const <EngineLine>[]);
   final followUpActive = followUpPosition != null;
-    final showEvalRail =
+  final showEvalRail =
       followUpActive &&
       state._quizStudyFollowUpEvalVisible &&
       state._quizStudyFollowUpEvalSnapshot != null;
@@ -2440,7 +2440,9 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                       : constraints.maxWidth;
                   const evalGap = 8.0;
                   const evalWidth = 26.0;
-                  final totalEvalWidth = showEvalRail ? evalGap + evalWidth : 0.0;
+                  final totalEvalWidth = showEvalRail
+                      ? evalGap + evalWidth
+                      : 0.0;
                   final boardSide = max(0.0, maxWidth - totalEvalWidth);
 
                   return SizedBox(
@@ -2467,8 +2469,10 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                             child: Builder(
                               builder: (context) {
                                 final reverse =
-                                    state._perspective == BoardPerspective.black ||
-                                    (state._perspective == BoardPerspective.auto &&
+                                    state._perspective ==
+                                        BoardPerspective.black ||
+                                    (state._perspective ==
+                                            BoardPerspective.auto &&
                                         !displayedWhiteToMove);
 
                                 return Stack(
