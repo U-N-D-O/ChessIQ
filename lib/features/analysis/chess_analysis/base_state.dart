@@ -174,6 +174,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
   static const int _bookOpeningPlyLimit = 6;
+  static const int _sacrificeModePrice = 2850;
   static const int _moveQualityGradingMultiPv = 4;
   static const int _moveQualityInitialPublishDepth = 2;
   static const int _moveQualityGradingDepth = 10;
@@ -482,6 +483,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _spectralOwned = false;
   bool _monochromePiecesOwned = false;
   bool _piecePackOwned = false;
+  bool _sacrificeModeOwned = false;
   bool _adFreeOwned = false;
   bool _academyTuitionPassOwned = false;
   bool _introCompleted = true;
@@ -2961,7 +2963,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final visibleCount = _shouldShowVisualSuggestions
         ? _visualSuggestionLineCount
         : 1;
-    return max(1, visibleCount);
+    return _isSacrificeModeActive ? max(3, visibleCount) : max(1, visibleCount);
   }
 
   bool get _isEngineActive =>
@@ -2973,6 +2975,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool get _shouldKeepEvalActive =>
       _playVsBot ? _vsBotEvalEnabled : _isEngineActive;
+
+  bool get _shouldRunSacrificeScan => _isSacrificeModeActive;
 
   bool get _shouldShowCenterEvalCounter => _shouldKeepEvalActive && !_playVsBot;
 
@@ -3494,6 +3498,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final sakuraBoard = decoded['sakuraBoardOwned'];
       final tropicalBoard = decoded['tropicalBoardOwned'];
       final piecePack = decoded['piecePackOwned'];
+      final sacrificeMode = decoded['sacrificeModeOwned'];
       final tuttiFrutti = decoded['tuttiFruttiOwned'];
       final spectral = decoded['spectralOwned'];
       final monochromePieces = decoded['monochromePiecesOwned'];
@@ -3509,6 +3514,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (sakuraBoard is bool) _sakuraBoardOwned = sakuraBoard;
       if (tropicalBoard is bool) _tropicalBoardOwned = tropicalBoard;
       if (piecePack is bool) _piecePackOwned = piecePack;
+      if (sacrificeMode is bool) _sacrificeModeOwned = sacrificeMode;
       if (tuttiFrutti is bool) _tuttiFruttiOwned = tuttiFrutti;
       if (spectral is bool) _spectralOwned = spectral;
       if (monochromePieces is bool) {
@@ -3552,6 +3558,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'spectralOwned': _spectralOwned,
       'monochromePiecesOwned': _monochromePiecesOwned,
       'piecePackOwned': _piecePackOwned,
+      'sacrificeModeOwned': _sacrificeModeOwned,
       'adFreeOwned': _adFreeOwned,
       'academyTuitionPassOwned': _academyTuitionPassOwned,
       _storeVsBotMatchStartCountKey: _vsBotMatchStartCount,
@@ -4456,7 +4463,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final shouldShowVisualSuggestions = _shouldShowVisualSuggestions;
-    if (!_shouldKeepEvalActive && !shouldShowVisualSuggestions) {
+    if (!_shouldKeepEvalActive &&
+        !shouldShowVisualSuggestions &&
+        !_shouldRunSacrificeScan) {
       engine.cancelSearches(
         roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
         reason: 'analysis inactive',
@@ -5880,6 +5889,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool get _isGambitsOnlyOpeningMode => _openingMode == OpeningMode.violetGlow;
 
+    bool get _isSacrificeModeActive =>
+      !_playVsBot &&
+      _sacrificeModeOwned &&
+      _openingMode == OpeningMode.sacrificeGlow;
+
   Color get _openingSelectionAccent => _isGambitsOnlyOpeningMode
       ? const Color(0xFFB16CFF)
       : const Color(0xFFFFD166);
@@ -5888,6 +5902,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return switch (mode) {
       OpeningMode.yellowGlow => const Color(0xFFFFD166),
       OpeningMode.violetGlow => const Color(0xFFB16CFF),
+      OpeningMode.sacrificeGlow => const Color(0xFFE65151),
       OpeningMode.blueGlow || OpeningMode.off => const Color(0xFF5AAEE8),
     };
   }
@@ -5939,6 +5954,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       OpeningMode.yellowGlow => 'select',
       OpeningMode.blueGlow => 'possible',
       OpeningMode.violetGlow => 'gambit',
+      OpeningMode.sacrificeGlow => 'sacrifice',
       OpeningMode.off => null,
     };
   }
@@ -5960,6 +5976,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     ).isNotEmpty;
     String? feedbackLabel;
     Color? feedbackColor;
+    bool refreshAnalysis = false;
+    bool openSacrificeStore = false;
     if ((_openingMode == OpeningMode.off ||
             _openingMode == OpeningMode.violetGlow) &&
         !hasOpeningChoices) {
@@ -5970,7 +5988,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     setState(() {
-      // Cycle: off -> yellow -> blue -> violet -> yellow
+      // Cycle: off -> yellow -> blue -> violet -> sacrifice -> yellow
       if (_openingMode == OpeningMode.off) {
         // First press: enter yellow selection mode.
         _openingMode = OpeningMode.yellowGlow;
@@ -6002,25 +6020,57 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _selectGambitSource(selected);
         }
         _addLog('Opening mode enabled - violet gambits only');
+      } else if (_openingMode == OpeningMode.violetGlow) {
+        if (!_sacrificeModeOwned) {
+          _openingMode = OpeningMode.yellowGlow;
+          _gambitSelectedFrom = null;
+          _legalTargets.clear();
+          _gambitAvailableTargets.clear();
+          _selectedGambit = null;
+          _gambitPreviewLines = [];
+          openSacrificeStore = true;
+          _addLog(
+            'Sacrifice mode locked - unlock it in the store for $_sacrificeModePrice coins.',
+          );
+        } else {
+          _openingMode = OpeningMode.sacrificeGlow;
+          _gambitSelectedFrom = null;
+          _legalTargets.clear();
+          _gambitAvailableTargets.clear();
+          _selectedGambit = null;
+          _gambitPreviewLines = [];
+          refreshAnalysis = true;
+          _addLog('Opening mode enabled - red sacrifice scan');
+        }
       } else {
-        // Fourth press: back to yellow selection mode.
+        // Next press: back to yellow selection mode.
         _openingMode = OpeningMode.yellowGlow;
         _gambitSelectedFrom = null;
         _legalTargets.clear();
         _gambitAvailableTargets.clear();
         _selectedGambit = null;
         _gambitPreviewLines = [];
+        refreshAnalysis = true;
         _addLog('Opening mode back to yellow');
       }
 
-      feedbackLabel = _openingModeFeedbackLabelFor(_openingMode);
-      feedbackColor = _openingModeButtonColor(_openingMode);
+        final feedbackMode = openSacrificeStore
+          ? OpeningMode.sacrificeGlow
+          : _openingMode;
+        feedbackLabel = _openingModeFeedbackLabelFor(feedbackMode);
+        feedbackColor = _openingModeButtonColor(feedbackMode);
       _openingModeFeedbackLabel = feedbackLabel;
       _openingModeFeedbackColor = feedbackColor;
     });
 
     if (feedbackLabel != null && feedbackColor != null) {
       _scheduleOpeningModeFeedbackDismiss();
+    }
+    if (refreshAnalysis) {
+      _refreshAnalysisForCurrentPosition();
+    }
+    if (openSacrificeStore) {
+      unawaited(_openStore(initialSection: StoreSection.general));
     }
   }
 
@@ -7669,7 +7719,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     var sideToMove = _isWhiteTurn;
     final preview = <EngineLine>[];
     final remainingTokens = gambit.moveTokens.sublist(currentTokens.length);
-    for (int index = 0; index < remainingTokens.length && index < 6; index++) {
+    final previewLimit = _isGambitsOnlyOpeningMode ? 3 : 6;
+    for (
+      int index = 0;
+      index < remainingTokens.length && index < previewLimit;
+      index++
+    ) {
       final uciMove = _resolveSanToUci(
         simulatedState,
         remainingTokens[index],
@@ -7684,6 +7739,69 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       sideToMove = !sideToMove;
     }
     return preview;
+  }
+
+  List<EngineLine> _sacrificePreviewLinesForCurrentPosition() {
+    if (!_isSacrificeModeActive) {
+      return const <EngineLine>[];
+    }
+    final currentFen = _genFen();
+    final liveLines = _analysisLinesFen == currentFen
+        ? _analysisLines
+        : const <EngineLine>[];
+    if (liveLines.isEmpty) {
+      return const <EngineLine>[];
+    }
+
+    final moverIsWhite = _isWhiteTurn;
+    final materialBefore = _materialCountForSide(boardState, moverIsWhite);
+    final baselineEvalCp = (_currentEval * 100).round();
+    final sacrificeLines = <EngineLine>[];
+
+    for (final line in liveLines) {
+      if (!_isLegalUciMove(line.move)) {
+        continue;
+      }
+      final nextBoardState = _applyUciMove(
+        Map<String, String>.from(boardState),
+        line.move,
+      );
+      final materialAfter = _materialCountForSide(nextBoardState, moverIsWhite);
+      final materialLoss = materialBefore - materialAfter;
+      if (materialLoss <= 0) {
+        continue;
+      }
+      if (line.eval <= baselineEvalCp) {
+        continue;
+      }
+      sacrificeLines.add(line);
+    }
+
+    sacrificeLines.sort((a, b) {
+      final evalCompare = b.eval.compareTo(a.eval);
+      if (evalCompare != 0) {
+        return evalCompare;
+      }
+      return a.multiPv.compareTo(b.multiPv);
+    });
+
+    final limited = sacrificeLines.take(3).toList(growable: false);
+    return <EngineLine>[
+      for (int index = 0; index < limited.length; index++)
+        EngineLine(
+          limited[index].move,
+          limited[index].eval,
+          limited[index].depth,
+          index + 1,
+        ),
+    ];
+  }
+
+  List<EngineLine> _openingPreviewArrowLines() {
+    if (_isSacrificeModeActive) {
+      return _sacrificePreviewLinesForCurrentPosition();
+    }
+    return _gambitPreviewLines;
   }
 
   String _sanitizeSanToken(String san) {
@@ -11682,11 +11800,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildPieceGlow(String p, {String? motionSeed}) {
-    final glowColor = _isGambitsOnlyOpeningMode
-        ? const Color(0xFFB16CFF)
-        : _openingMode == OpeningMode.yellowGlow
-        ? const Color(0xFFFFD166)
-        : const Color(0xFF5AAEE8);
+    final glowColor = _isSacrificeModeActive
+      ? const Color(0xFFE65151)
+      : _isGambitsOnlyOpeningMode
+      ? const Color(0xFFB16CFF)
+      : _openingMode == OpeningMode.yellowGlow
+      ? const Color(0xFFFFD166)
+      : const Color(0xFF5AAEE8);
 
     return Container(
       width: 70,
@@ -11707,7 +11827,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Set<String> _getPreviewMoveSqares() {
     final squares = <String>{};
-    for (final line in _gambitPreviewLines) {
+    for (final line in _openingPreviewArrowLines()) {
       if (line.move.length >= 4) {
         final from = line.move.substring(0, 2);
         final to = line.move.substring(2, 4);
@@ -11749,10 +11869,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildAnimatedArrows(bool reverse) {
-    final lines = _gambitPreviewLines.isNotEmpty
-        ? _gambitPreviewLines
-        : _topLines;
-    final showSequenceNumbers = _gambitPreviewLines.isNotEmpty;
+    final previewLines = _openingPreviewArrowLines();
+    final lines = previewLines.isNotEmpty ? previewLines : _topLines;
+    final showSequenceNumbers = previewLines.isNotEmpty;
+    final previewArrowColor = _isSacrificeModeActive
+      ? const Color(0xFFE65151)
+      : _isGambitsOnlyOpeningMode && _gambitPreviewLines.isNotEmpty
+      ? const Color(0xFFB16CFF)
+      : _openingMode == OpeningMode.yellowGlow && _gambitPreviewLines.isNotEmpty
+      ? const Color(0xFFFFD166)
+      : null;
     final media = MediaQuery.of(context);
     final compactBotFrame =
         _playVsBot &&
@@ -11774,6 +11900,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 progress: _pulseController.value,
                 reverse: reverse,
                 showSequenceNumbers: showSequenceNumbers,
+                overrideColor: previewArrowColor,
                 boardInset: boardInset,
               ),
             ),
@@ -12502,6 +12629,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         duration: const Duration(milliseconds: 180),
                         curve: Curves.easeOut,
                         child: Text(
+                          key: const ValueKey<String>(
+                            'analysis_opening_mode_feedback_label',
+                          ),
                           _openingModeFeedbackLabel ?? '',
                           textAlign: TextAlign.center,
                           maxLines: 1,
@@ -12511,12 +12641,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.2,
+                            shadows: _openingMode == OpeningMode.sacrificeGlow ||
+                                    _openingModeFeedbackLabel == 'sacrifice'
+                                ? <Shadow>[
+                                    Shadow(
+                                      color: const Color(
+                                        0xFFFFD166,
+                                      ).withValues(alpha: 0.90),
+                                      blurRadius: 10,
+                                    ),
+                                  ]
+                                : null,
                           ),
                         ),
                       ),
                     ),
                   ),
                   GestureDetector(
+                    key: const ValueKey<String>('analysis_opening_mode_button'),
                     onTap: _toggleGambitMode,
                     child: AnimatedBuilder(
                       animation: _openingButtonFlashController,
@@ -12528,6 +12670,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         final Color activeColor = _openingButtonFlashRed
                             ? Colors.redAccent
                             : _openingModeButtonColor(_openingMode);
+                        final Color glowColor =
+                          !_openingButtonFlashRed &&
+                            _openingMode == OpeningMode.sacrificeGlow
+                          ? const Color(0xFFFFD166)
+                          : activeColor;
                         final bool isOn =
                             _openingButtonFlashRed ||
                             _openingMode != OpeningMode.off;
@@ -12567,7 +12714,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             boxShadow: isOn
                                 ? [
                                     BoxShadow(
-                                      color: activeColor.withValues(
+                                      color: glowColor.withValues(
                                         alpha: _openingButtonFlashRed
                                             ? (blink ? 0.7 : 0.0)
                                             : 0.5,
@@ -14727,6 +14874,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _addLog('Suggestions increased to $_maxSuggestionsAllowed');
   }
 
+  Future<void> _purchaseSacrificeMode() async {
+    if (_sacrificeModeOwned) {
+      return;
+    }
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(_sacrificeModePrice)) {
+      _addLog('Not enough coins for Sacrifice Mode');
+      return;
+    }
+
+    setState(() {
+      _sacrificeModeOwned = true;
+    });
+    await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
+    _addLog('Sacrifice Mode unlocked');
+  }
+
   Future<void> _purchaseThemePack() async {
     const price = 900;
     if (_themePackOwned) return;
@@ -15441,6 +15606,70 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       actionColor: const Color(0xFF8FD0FF),
                       onTap: () async {
                         await _purchaseExtraSuggestion();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      itemKey: const ValueKey<String>(
+                        'analysis_store_sacrifice_mode_card',
+                      ),
+                      icon: Icons.local_fire_department_outlined,
+                      title: 'Sacrifice Mode',
+                      subtitle: _sacrificeModeOwned
+                          ? 'Owned · unlocks the red sacrifice scan on the analysis opening button'
+                          : 'Unlock the red sacrifice scan with yellow glare on the analysis opening button',
+                      priceLabel: '$_sacrificeModePrice c',
+                      enabled: !_sacrificeModeOwned,
+                      actionLabel: _sacrificeModeOwned ? 'Owned' : 'Unlock',
+                      actionColor: const Color(0xFFE65151),
+                      preview: Padding(
+                        padding: const EdgeInsets.only(left: 10),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              const Color(0xFFE65151).withValues(alpha: 0.12),
+                              scheme.surface,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFFE65151).withValues(
+                                alpha: 0.34,
+                              ),
+                            ),
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: const Color(0xFFFFD166).withValues(
+                                  alpha: 0.28,
+                                ),
+                                blurRadius: 12,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 7,
+                            ),
+                            child: Text(
+                              'SACRIFICE',
+                              style: TextStyle(
+                                color: Color(0xFFE65151),
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                                shadows: <Shadow>[
+                                  Shadow(
+                                    color: Color(0xFFFFD166),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      onTap: () async {
+                        await _purchaseSacrificeMode();
                         setL(() {});
                       },
                     ),

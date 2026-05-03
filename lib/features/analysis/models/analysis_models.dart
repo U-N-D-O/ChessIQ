@@ -10,7 +10,7 @@ enum PieceThemeMode { classic, ember, frost, tuttiFrutti, spectral, monochrome }
 
 enum AppSection { menu, analysis, gambitQuiz, botSetup, puzzleAcademy }
 
-enum OpeningMode { off, yellowGlow, blueGlow, violetGlow }
+enum OpeningMode { off, yellowGlow, blueGlow, violetGlow, sacrificeGlow }
 
 enum EngineRequestRole {
   liveAnalysis,
