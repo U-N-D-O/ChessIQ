@@ -91,16 +91,13 @@ void main() {
 
   group('Opening mode enum', () {
     test('includes sacrifice mode in the persisted cycle order', () {
-      expect(
-        OpeningMode.values,
-        <OpeningMode>[
-          OpeningMode.off,
-          OpeningMode.yellowGlow,
-          OpeningMode.blueGlow,
-          OpeningMode.violetGlow,
-          OpeningMode.sacrificeGlow,
-        ],
-      );
+      expect(OpeningMode.values, <OpeningMode>[
+        OpeningMode.off,
+        OpeningMode.yellowGlow,
+        OpeningMode.blueGlow,
+        OpeningMode.violetGlow,
+        OpeningMode.sacrificeGlow,
+      ]);
     });
   });
 
