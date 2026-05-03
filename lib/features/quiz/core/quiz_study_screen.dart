@@ -2280,214 +2280,216 @@ Widget _buildQuizStudyFollowUpPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: <Widget>[
-            state._academyTag(
-              palette: palette,
-              label: playerTurn ? 'YOUR TURN' : 'REPLY TURN',
-              accent: playerTurn ? palette.emerald : palette.amber,
-            ),
-            if (state._quizStudyFollowUpAutoReply)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
               state._academyTag(
                 palette: palette,
-                label: 'AUTO TOP 3',
-                accent: accent,
+                label: playerTurn ? 'YOUR TURN' : 'REPLY TURN',
+                accent: playerTurn ? palette.emerald : palette.amber,
               ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Best Follow-Ups',
-          style: state._academyHudStyle(
-            palette: palette,
-            size: 12.4,
-            weight: FontWeight.w800,
-            color: palette.emerald,
-            letterSpacing: 0.85,
-            height: 1.0,
+              if (state._quizStudyFollowUpAutoReply)
+                state._academyTag(
+                  palette: palette,
+                  label: 'AUTO TOP 3',
+                  accent: accent,
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          playerTurn
-              ? 'Pick a candidate move to keep the branch inside the engine-approved follow-ups.'
-              : state._quizStudyFollowUpAutoReply
-              ? 'The opponent will answer from Stockfish\'s top 3 moves, weighted toward the best line.'
-              : 'Manual reply mode is active. Choose one of the opponent\'s top 3 replies to continue the branch.',
-          style: state._academyHudStyle(
-            palette: palette,
-            size: 11.3,
-            color: palette.textMuted,
-            weight: FontWeight.w600,
-            letterSpacing: 0.25,
-            height: 1.3,
-          ),
-        ),
-        if (state._quizStudyFollowUpError != null) ...<Widget>[
           const SizedBox(height: 10),
           Text(
-            state._quizStudyFollowUpError!,
+            'Best Follow-Ups',
             style: state._academyHudStyle(
               palette: palette,
-              size: 11.2,
-              color: palette.signal,
-              weight: FontWeight.w700,
-              letterSpacing: 0.22,
+              size: 12.4,
+              weight: FontWeight.w800,
+              color: palette.emerald,
+              letterSpacing: 0.85,
+              height: 1.0,
             ),
           ),
-        ] else if (state._quizStudyFollowUpBusy && lines.isEmpty) ...<Widget>[
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Text(
-            'Stockfish is evaluating the current branch...',
+            playerTurn
+                ? 'Pick a candidate move to keep the branch inside the engine-approved follow-ups.'
+                : state._quizStudyFollowUpAutoReply
+                ? 'The opponent will answer from Stockfish\'s top 3 moves, weighted toward the best line.'
+                : 'Manual reply mode is active. Choose one of the opponent\'s top 3 replies to continue the branch.',
             style: state._academyHudStyle(
               palette: palette,
-              size: 11.2,
-              color: palette.amber,
-              weight: FontWeight.w700,
-              letterSpacing: 0.22,
+              size: 11.3,
+              color: palette.textMuted,
+              weight: FontWeight.w600,
+              letterSpacing: 0.25,
+              height: 1.3,
             ),
           ),
-        ] else if (position != null && lines.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 10),
-          for (final candidate in lines) ...<Widget>[
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(4),
-                onTap: playerTurn || !state._quizStudyFollowUpAutoReply
-                    ? () => unawaited(
-                        state._applyQuizStudyFollowUpMove(
-                          selectedLine,
-                          candidate.move,
-                          userMove: playerTurn,
-                        ),
-                      )
-                    : null,
-                child: Ink(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Color.alphaBlend(
-                      (candidate.multiPv == 1 ? palette.emerald : palette.cyan)
-                          .withValues(alpha: 0.10),
-                      palette.panel,
-                    ),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color:
-                          (candidate.multiPv == 1
-                                  ? palette.emerald
-                                  : palette.cyan)
-                              .withValues(alpha: 0.42),
-                      width: 2,
-                    ),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                        width: 26,
-                        height: 26,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Color.alphaBlend(
-                            palette.shell.withValues(alpha: 0.22),
-                            palette.panel,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: palette.line.withValues(alpha: 0.65),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Text(
-                          '${candidate.multiPv}',
-                          style: state._academyHudStyle(
-                            palette: palette,
-                            size: 10.4,
-                            color: palette.text,
-                            weight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                            height: 1.0,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          state._quizStudyMoveLabel(
-                            position.boardState,
-                            position.fen,
+          if (state._quizStudyFollowUpError != null) ...<Widget>[
+            const SizedBox(height: 10),
+            Text(
+              state._quizStudyFollowUpError!,
+              style: state._academyHudStyle(
+                palette: palette,
+                size: 11.2,
+                color: palette.signal,
+                weight: FontWeight.w700,
+                letterSpacing: 0.22,
+              ),
+            ),
+          ] else if (state._quizStudyFollowUpBusy && lines.isEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            Text(
+              'Stockfish is evaluating the current branch...',
+              style: state._academyHudStyle(
+                palette: palette,
+                size: 11.2,
+                color: palette.amber,
+                weight: FontWeight.w700,
+                letterSpacing: 0.22,
+              ),
+            ),
+          ] else if (position != null && lines.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            for (final candidate in lines) ...<Widget>[
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: playerTurn || !state._quizStudyFollowUpAutoReply
+                      ? () => unawaited(
+                          state._applyQuizStudyFollowUpMove(
+                            selectedLine,
                             candidate.move,
+                            userMove: playerTurn,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: state._academyHudStyle(
-                            palette: palette,
-                            size: 12.0,
-                            color: palette.text,
-                            weight: FontWeight.w800,
-                            letterSpacing: 0.22,
-                            height: 1.1,
-                          ),
-                        ),
+                        )
+                      : null,
+                  child: Ink(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                        (candidate.multiPv == 1
+                                ? palette.emerald
+                                : palette.cyan)
+                            .withValues(alpha: 0.10),
+                        palette.panel,
                       ),
-                      if (state._quizStudyFollowUpEvalVisible) ...<Widget>[
-                        const SizedBox(width: 10),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color:
+                            (candidate.multiPv == 1
+                                    ? palette.emerald
+                                    : palette.cyan)
+                                .withValues(alpha: 0.42),
+                        width: 2,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
                         Container(
-                          constraints: const BoxConstraints(minWidth: 58),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
+                          width: 26,
+                          height: 26,
+                          alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: Color.alphaBlend(
-                              (candidate.multiPv == 1
-                                      ? palette.emerald
-                                      : palette.cyan)
-                                  .withValues(alpha: 0.10),
-                              palette.shell,
+                              palette.shell.withValues(alpha: 0.22),
+                              palette.panel,
                             ),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color:
-                                  (candidate.multiPv == 1
-                                          ? palette.emerald
-                                          : palette.cyan)
-                                      .withValues(alpha: 0.34),
+                              color: palette.line.withValues(alpha: 0.65),
                               width: 1.5,
                             ),
                           ),
                           child: Text(
-                            state._quizStudyEvalTextForLine(
-                              candidate,
-                              whiteToMove: position.whiteToMove,
-                            ),
-                            textAlign: TextAlign.center,
+                            '${candidate.multiPv}',
                             style: state._academyHudStyle(
                               palette: palette,
-                              size: 10.2,
-                              color: candidate.multiPv == 1
-                                  ? palette.emerald
-                                  : palette.cyan,
+                              size: 10.4,
+                              color: palette.text,
                               weight: FontWeight.w800,
-                              letterSpacing: 0.18,
+                              letterSpacing: 0.2,
                               height: 1.0,
                             ),
                           ),
                         ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            state._quizStudyMoveLabel(
+                              position.boardState,
+                              position.fen,
+                              candidate.move,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: state._academyHudStyle(
+                              palette: palette,
+                              size: 12.0,
+                              color: palette.text,
+                              weight: FontWeight.w800,
+                              letterSpacing: 0.22,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                        if (state._quizStudyFollowUpEvalVisible) ...<Widget>[
+                          const SizedBox(width: 10),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 58),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color.alphaBlend(
+                                (candidate.multiPv == 1
+                                        ? palette.emerald
+                                        : palette.cyan)
+                                    .withValues(alpha: 0.10),
+                                palette.shell,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color:
+                                    (candidate.multiPv == 1
+                                            ? palette.emerald
+                                            : palette.cyan)
+                                        .withValues(alpha: 0.34),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              state._quizStudyEvalTextForLine(
+                                candidate,
+                                whiteToMove: position.whiteToMove,
+                              ),
+                              textAlign: TextAlign.center,
+                              style: state._academyHudStyle(
+                                palette: palette,
+                                size: 10.2,
+                                color: candidate.multiPv == 1
+                                    ? palette.emerald
+                                    : palette.cyan,
+                                weight: FontWeight.w800,
+                                letterSpacing: 0.18,
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            if (candidate != lines.last) const SizedBox(height: 8),
+              if (candidate != lines.last) const SizedBox(height: 8),
+            ],
           ],
-        ],
         ],
       ),
     ),

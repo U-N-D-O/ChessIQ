@@ -457,9 +457,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         );
         if (targetBox == null || scrollBox == null) return;
 
-        final targetTop = scrollBox.globalToLocal(
-          targetBox.localToGlobal(Offset.zero),
-        ).dy;
+        final targetTop = scrollBox
+            .globalToLocal(targetBox.localToGlobal(Offset.zero))
+            .dy;
         final targetBottom = targetTop + targetBox.size.height;
         const topInset = 12.0;
         const bottomInset = 12.0;
