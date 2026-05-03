@@ -1,20 +1,12 @@
 # ChessIQ
 
-A new Flutter project.
+ChessIQ is an open-source chess analysis, training, and learning project built with Flutter.
 
-## Getting Started
+The project is meant to keep improving over time, and the community that uses it is part of that process. If you have an idea for a better workflow, stronger analysis tools, UI refinements, training features, bug fixes, or other improvements, those ideas are welcome and can help shape future updates.
 
-This project is a starting point for a Flutter application.
+## Open Source
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+ChessIQ is developed in the open and is intended to grow with feedback and contributions from the people who use it. Community suggestions, bug reports, and thoughtful improvements are encouraged.
 
 ## License And Attribution
 

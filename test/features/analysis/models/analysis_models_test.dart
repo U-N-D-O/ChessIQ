@@ -89,6 +89,21 @@ void main() {
     });
   });
 
+  group('Opening mode enum', () {
+    test('includes sacrifice mode in the persisted cycle order', () {
+      expect(
+        OpeningMode.values,
+        <OpeningMode>[
+          OpeningMode.off,
+          OpeningMode.yellowGlow,
+          OpeningMode.blueGlow,
+          OpeningMode.violetGlow,
+          OpeningMode.sacrificeGlow,
+        ],
+      );
+    });
+  });
+
   group('Position analysis cache', () {
     test('keeps deepest primary evidence and richest matching line set', () {
       final shallow = _engineUpdate(

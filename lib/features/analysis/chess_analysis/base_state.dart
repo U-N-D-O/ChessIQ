@@ -2422,7 +2422,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 10),
           Text(
-            'ChessIQ is an actively developed project. The current release is designed to be dependable and polished, while the broader product continues to evolve through new ideas, feature additions, refinements, and quality improvements over time.',
+            'ChessIQ is an open-source project that is actively developed in public. The current release is designed to be dependable and polished, while the broader product continues to evolve through new ideas, feature additions, refinements, and quality improvements from the community that uses it.',
             style: _creditsBodyStyle(
               visuals,
               size: 12.4,
@@ -2493,7 +2493,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 10),
           Text(
-            'Ideas for improvement and bug reports are welcome. Thoughtful feedback helps guide future updates, prioritize fixes, and refine the product over time.',
+            'Ideas for improvement, bug reports, and community contributions are welcome. Thoughtful feedback helps guide future updates, prioritize fixes, and refine the project over time.',
             style: _creditsBodyStyle(
               visuals,
               size: 12.0,
@@ -5889,7 +5889,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool get _isGambitsOnlyOpeningMode => _openingMode == OpeningMode.violetGlow;
 
-    bool get _isSacrificeModeActive =>
+  bool get _isSacrificeModeActive =>
       !_playVsBot &&
       _sacrificeModeOwned &&
       _openingMode == OpeningMode.sacrificeGlow;
@@ -6054,11 +6054,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _addLog('Opening mode back to yellow');
       }
 
-        final feedbackMode = openSacrificeStore
+      final feedbackMode = openSacrificeStore
           ? OpeningMode.sacrificeGlow
           : _openingMode;
-        feedbackLabel = _openingModeFeedbackLabelFor(feedbackMode);
-        feedbackColor = _openingModeButtonColor(feedbackMode);
+      feedbackLabel = _openingModeFeedbackLabelFor(feedbackMode);
+      feedbackColor = _openingModeButtonColor(feedbackMode);
       _openingModeFeedbackLabel = feedbackLabel;
       _openingModeFeedbackColor = feedbackColor;
     });
@@ -11801,12 +11801,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Widget _buildPieceGlow(String p, {String? motionSeed}) {
     final glowColor = _isSacrificeModeActive
-      ? const Color(0xFFE65151)
-      : _isGambitsOnlyOpeningMode
-      ? const Color(0xFFB16CFF)
-      : _openingMode == OpeningMode.yellowGlow
-      ? const Color(0xFFFFD166)
-      : const Color(0xFF5AAEE8);
+        ? const Color(0xFFE65151)
+        : _isGambitsOnlyOpeningMode
+        ? const Color(0xFFB16CFF)
+        : _openingMode == OpeningMode.yellowGlow
+        ? const Color(0xFFFFD166)
+        : const Color(0xFF5AAEE8);
 
     return Container(
       width: 70,
@@ -11873,12 +11873,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final lines = previewLines.isNotEmpty ? previewLines : _topLines;
     final showSequenceNumbers = previewLines.isNotEmpty;
     final previewArrowColor = _isSacrificeModeActive
-      ? const Color(0xFFE65151)
-      : _isGambitsOnlyOpeningMode && _gambitPreviewLines.isNotEmpty
-      ? const Color(0xFFB16CFF)
-      : _openingMode == OpeningMode.yellowGlow && _gambitPreviewLines.isNotEmpty
-      ? const Color(0xFFFFD166)
-      : null;
+        ? const Color(0xFFE65151)
+        : _isGambitsOnlyOpeningMode && _gambitPreviewLines.isNotEmpty
+        ? const Color(0xFFB16CFF)
+        : _openingMode == OpeningMode.yellowGlow &&
+              _gambitPreviewLines.isNotEmpty
+        ? const Color(0xFFFFD166)
+        : null;
     final media = MediaQuery.of(context);
     final compactBotFrame =
         _playVsBot &&
@@ -12641,7 +12642,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.2,
-                            shadows: _openingMode == OpeningMode.sacrificeGlow ||
+                            shadows:
+                                _openingMode == OpeningMode.sacrificeGlow ||
                                     _openingModeFeedbackLabel == 'sacrifice'
                                 ? <Shadow>[
                                     Shadow(
@@ -12671,10 +12673,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ? Colors.redAccent
                             : _openingModeButtonColor(_openingMode);
                         final Color glowColor =
-                          !_openingButtonFlashRed &&
-                            _openingMode == OpeningMode.sacrificeGlow
-                          ? const Color(0xFFFFD166)
-                          : activeColor;
+                            !_openingButtonFlashRed &&
+                                _openingMode == OpeningMode.sacrificeGlow
+                            ? const Color(0xFFFFD166)
+                            : activeColor;
                         final bool isOn =
                             _openingButtonFlashRed ||
                             _openingMode != OpeningMode.off;
@@ -15632,15 +15634,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: const Color(0xFFE65151).withValues(
-                                alpha: 0.34,
-                              ),
+                              color: const Color(
+                                0xFFE65151,
+                              ).withValues(alpha: 0.34),
                             ),
                             boxShadow: <BoxShadow>[
                               BoxShadow(
-                                color: const Color(0xFFFFD166).withValues(
-                                  alpha: 0.28,
-                                ),
+                                color: const Color(
+                                  0xFFFFD166,
+                                ).withValues(alpha: 0.28),
                                 blurRadius: 12,
                                 spreadRadius: 1,
                               ),
