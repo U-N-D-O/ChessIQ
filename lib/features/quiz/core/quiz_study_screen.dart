@@ -230,6 +230,11 @@ Widget _buildQuizStudyScreen(_QuizScreen state) {
   );
   final contentBottomPadding = 18 + media.padding.bottom;
 
+  state._syncQuizStudyCompactLandscapeAutoFocus(
+    selectedLine,
+    compactLandscape: compactLandscapeDetail,
+  );
+
   final browserContent =
       layout.isTablet || layout.mode == _QuizStudyLayoutMode.phoneLandscape
       ? Row(
@@ -1831,6 +1836,7 @@ Widget _buildQuizStudyDetailScreen(
     palette: palette,
     accent: accent,
     compactLandscape: compactLandscape,
+    useOuterScroll: compactLandscape,
   );
   final boardPanel = _buildQuizStudyBoardWalkthroughPanel(
     state,
@@ -1843,6 +1849,26 @@ Widget _buildQuizStudyDetailScreen(
   );
 
   if (compactLandscape) {
+    final followUpActive = state._isQuizStudyFollowUpActiveFor(selectedLine);
+    final followUpPanel = _buildQuizStudyFollowUpPanel(
+      state,
+      selectedLine: selectedLine,
+      palette: palette,
+      accent: accent,
+    );
+
+    if (followUpActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!state.mounted ||
+            !state._quizStudyLandscapeDetailScrollController.hasClients) {
+          return;
+        }
+        if (state._quizStudyLandscapeDetailScrollController.offset <= 1.0) {
+          state._focusQuizStudyFollowUpPanel();
+        }
+      });
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final panelGap = max(8.0, layout.sectionGap - 4);
@@ -1877,13 +1903,24 @@ Widget _buildQuizStudyDetailScreen(
             SizedBox(width: panelGap),
             Expanded(
               flex: 5,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  detailHeader,
-                  SizedBox(height: panelGap),
-                  Expanded(child: navigatorPanel),
-                ],
+              child: Scrollbar(
+                child: SingleChildScrollView(
+                  key: state._quizStudyLandscapeDetailScrollKey,
+                  controller: state._quizStudyLandscapeDetailScrollController,
+                  padding: const EdgeInsets.only(right: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      detailHeader,
+                      if (followUpActive) ...<Widget>[
+                        SizedBox(height: panelGap),
+                        followUpPanel,
+                      ],
+                      SizedBox(height: panelGap),
+                      navigatorPanel,
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -1934,6 +1971,7 @@ Widget _buildQuizStudyFamilyNavigatorPanel(
   required _QuizAcademyPalette palette,
   required Color accent,
   bool compactLandscape = false,
+  bool useOuterScroll = false,
 }) {
   final navigatorBody = familyLines.length > 1
       ? Wrap(
@@ -1995,7 +2033,7 @@ Widget _buildQuizStudyFamilyNavigatorPanel(
           ),
           const SizedBox(height: 14),
         ],
-        if (compactLandscape)
+        if (compactLandscape && !useOuterScroll)
           Expanded(
             child: Scrollbar(
               child: SingleChildScrollView(child: navigatorBody),
@@ -2026,6 +2064,7 @@ Widget _buildQuizStudyFollowUpControls(
       runSpacing: 8,
       children: <Widget>[
         state._academyHudButton(
+          buttonKey: const ValueKey<String>('quiz_study_follow_up_toggle'),
           palette: palette,
           icon: Icons.route_outlined,
           label: isActive ? 'FOLLOW-UPS ON' : 'FOLLOW-UPS',
@@ -2222,23 +2261,25 @@ Widget _buildQuizStudyFollowUpPanel(
   final playerTurn =
       position != null && state._quizStudyFollowUpPlayerTurn(selectedLine);
 
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Color.alphaBlend(
-        palette.emerald.withValues(alpha: 0.08),
-        palette.shell,
+  return KeyedSubtree(
+    key: state._quizStudyFollowUpPanelKey,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          palette.emerald.withValues(alpha: 0.08),
+          palette.shell,
+        ),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: palette.emerald.withValues(alpha: 0.26),
+          width: 2,
+        ),
       ),
-      borderRadius: BorderRadius.circular(4),
-      border: Border.all(
-        color: palette.emerald.withValues(alpha: 0.26),
-        width: 2,
-      ),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -2447,7 +2488,8 @@ Widget _buildQuizStudyFollowUpPanel(
             if (candidate != lines.last) const SizedBox(height: 8),
           ],
         ],
-      ],
+        ],
+      ),
     ),
   );
 }

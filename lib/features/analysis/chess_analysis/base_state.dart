@@ -380,6 +380,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int _historyIndex = -1;
   late ScrollController _historyScrollController;
   late ScrollController _quizStudyLibraryScrollController;
+  late ScrollController _quizStudyLandscapeDetailScrollController;
   late ScrollController _quizQuestionOptionsScrollController;
   final Map<String, String> _ecoOpenings = {};
   final List<EcoLine> _ecoLines = [];
@@ -713,10 +714,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
   }
 
+  void _handleQuizStudyMetricsChange() {}
+
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
     _scheduleEditToolboxMetricsRefresh();
+    _handleQuizStudyMetricsChange();
   }
 
   @override
@@ -824,6 +828,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     _historyScrollController = ScrollController();
     _quizStudyLibraryScrollController = ScrollController();
+    _quizStudyLandscapeDetailScrollController = ScrollController();
     _quizQuestionOptionsScrollController = ScrollController();
     _resetBoard(withIntro: false);
     _loadEcoOpenings();
@@ -16708,6 +16713,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _botSetupPageController.dispose();
     _historyScrollController.dispose();
     _quizStudyLibraryScrollController.dispose();
+    _quizStudyLandscapeDetailScrollController.dispose();
     _quizQuestionOptionsScrollController.dispose();
     _introAudioPlayer.dispose();
     _menuAudioPlayer.dispose();

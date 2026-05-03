@@ -615,6 +615,43 @@ void main() {
     },
   );
 
+  testWidgets(
+    'study follow-ups remain available after rotating into compact landscape',
+    (tester) async {
+      const portraitViewport = Size(390, 844);
+      const landscapeViewport = Size(844, 390);
+
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpOpeningsStudyLibrary(tester, size: portraitViewport);
+      await _openFirstVariation(tester);
+      await _advanceStudyLineUntilFollowUpsUnlock(tester);
+
+      final followUpToggle = find.byKey(
+        const ValueKey<String>('quiz_study_follow_up_toggle'),
+      );
+      expect(followUpToggle, findsOneWidget);
+
+      await tester.tap(followUpToggle);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      tester.view.physicalSize = landscapeViewport;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final bestFollowUps = find.text('Best Follow-Ups');
+      final navigatorPanel = find.byKey(
+        const ValueKey<String>('quiz_study_detail_navigator_panel'),
+      );
+
+      expect(navigatorPanel, findsOneWidget);
+      expect(bestFollowUps, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('study library shows inline secondary information at iPad size', (
     tester,
   ) async {

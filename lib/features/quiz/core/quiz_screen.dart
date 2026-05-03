@@ -401,10 +401,13 @@ class _QuizAcademySetupGlowPainter extends CustomPainter {
 abstract class _QuizScreen extends _AnalysisPageShared {
   final GlobalKey _quizAcademyModePanelFocusKey = GlobalKey();
   final GlobalKey _quizStudyBoardKey = GlobalKey();
+  final GlobalKey _quizStudyLandscapeDetailScrollKey = GlobalKey();
+  final GlobalKey _quizStudyFollowUpPanelKey = GlobalKey();
   final GlobalKey _quizStudyLibraryIndexKey = GlobalKey();
   final GlobalKey _quizStudyLibrarySelectionKey = GlobalKey();
   final Map<String, String> _quizOpeningDisplayNameCache = <String, String>{};
   final Map<String, String?> _quizOpeningFinalFenCache = <String, String?>{};
+  bool _quizStudyCompactLandscapeAutoFocusArmed = false;
 
   void _focusQuizAcademyModePanel() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -437,6 +440,101 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           alignment: 0.02,
         ),
       );
+    });
+  }
+
+  void _focusQuizStudyFollowUpPanel() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!_quizStudyLandscapeDetailScrollController.hasClients) return;
+        final targetBox = _renderBoxFromContext(
+          _quizStudyFollowUpPanelKey.currentContext,
+        );
+        final scrollBox = _renderBoxFromContext(
+          _quizStudyLandscapeDetailScrollKey.currentContext,
+        );
+        if (targetBox == null || scrollBox == null) return;
+
+        final targetTop = scrollBox.globalToLocal(
+          targetBox.localToGlobal(Offset.zero),
+        ).dy;
+        final targetBottom = targetTop + targetBox.size.height;
+        const topInset = 12.0;
+        const bottomInset = 12.0;
+        final viewportHeight = scrollBox.size.height;
+        double delta = 0.0;
+        if (targetTop < topInset) {
+          delta = targetTop - topInset;
+        } else if (targetBottom > viewportHeight - bottomInset) {
+          delta = targetBottom - (viewportHeight - bottomInset);
+        } else {
+          return;
+        }
+
+        final position = _quizStudyLandscapeDetailScrollController.position;
+        final computedOffset = (position.pixels + delta)
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+        final minimumRevealOffset = min(position.maxScrollExtent, 180.0);
+        final targetOffset = max(computedOffset, minimumRevealOffset);
+        if ((position.pixels - targetOffset).abs() < 1.0) {
+          return;
+        }
+
+        unawaited(
+          _quizStudyLandscapeDetailScrollController.animateTo(
+            targetOffset,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOut,
+          ),
+        );
+      });
+    });
+  }
+
+  bool _isQuizStudyCompactLandscapeActive() {
+    final media = MediaQuery.maybeOf(context);
+    if (media == null || !_quizStudyDetailOpen) {
+      return false;
+    }
+    final layout = _QuizStudyLayoutSpec.fromMedia(media);
+    return layout.mode == _QuizStudyLayoutMode.phoneLandscape &&
+        !layout.isTablet;
+  }
+
+  void _syncQuizStudyCompactLandscapeAutoFocus(
+    EcoLine? selectedLine, {
+    required bool compactLandscape,
+  }) {
+    if (!compactLandscape) {
+      _quizStudyCompactLandscapeAutoFocusArmed = false;
+      return;
+    }
+    if (_quizStudyCompactLandscapeAutoFocusArmed) {
+      return;
+    }
+    _quizStudyCompactLandscapeAutoFocusArmed = true;
+    if (selectedLine != null && _isQuizStudyFollowUpActiveFor(selectedLine)) {
+      _focusQuizStudyFollowUpPanel();
+    }
+  }
+
+  @override
+  void _handleQuizStudyMetricsChange() {
+    if (!_quizStudyMode ||
+        !_quizStudyDetailOpen ||
+        !_quizStudyFollowUpMode ||
+        _quizStudySelectedOpeningName == null) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isQuizStudyCompactLandscapeActive()) {
+        return;
+      }
+      _focusQuizStudyFollowUpPanel();
     });
   }
 
@@ -3008,6 +3106,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyFollowUpMode = true;
       _syncQuizStudyFollowUpBasePosition(line, scheduleSearch: false);
     });
+
+    if (_isQuizStudyCompactLandscapeActive()) {
+      _focusQuizStudyFollowUpPanel();
+    }
 
     await _requestQuizStudyFollowUpSearch(line);
   }
