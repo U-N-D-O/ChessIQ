@@ -441,14 +441,16 @@ abstract class _QuizComponents extends _QuizScreen {
     String? selectedSquare,
     Set<String> targetSquares = const <String>{},
     Set<String> suggestedFromSquares = const <String>{},
+    bool? reverseOverride,
     ValueChanged<String>? onSquareTap,
   }) {
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
     final scheme = Theme.of(context).colorScheme;
     final reverse =
-        _perspective == BoardPerspective.black ||
-        (_perspective == BoardPerspective.auto && !whiteToMove);
+        reverseOverride ??
+        (_perspective == BoardPerspective.black ||
+            (_perspective == BoardPerspective.auto && !whiteToMove));
 
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),

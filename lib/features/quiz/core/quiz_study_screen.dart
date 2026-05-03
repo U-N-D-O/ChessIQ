@@ -2101,7 +2101,7 @@ Widget _buildQuizStudyFollowUpStatusTags(
           palette: palette,
           label: state._quizStudyFollowUpBusy
               ? 'ENGINE LOADING'
-            : 'ENGINE LIVE',
+              : 'ENGINE LIVE',
           accent: state._quizStudyFollowUpBusy
               ? palette.amber
               : palette.emerald,
@@ -2129,10 +2129,11 @@ Widget _buildQuizStudyFollowUpStatusTags(
 Widget _buildQuizStudyFollowUpEvalRail(
   _QuizScreen state, {
   required _QuizAcademyPalette palette,
-  required EvalSnapshot snapshot,
+  required EvalSnapshot? snapshot,
 }) {
-  final fill = state._quizStudyEvalFill(snapshot);
-  final evalText = state._quizStudyEvalText(snapshot);
+  final hasSnapshot = snapshot != null;
+  final fill = hasSnapshot ? state._quizStudyEvalFill(snapshot) : 0.5;
+  final evalText = hasSnapshot ? state._quizStudyEvalText(snapshot) : '...';
 
   return IgnorePointer(
     child: SizedBox(
@@ -2160,7 +2161,7 @@ Widget _buildQuizStudyFollowUpEvalRail(
                 palette: palette,
                 size: 9.4,
                 weight: FontWeight.w800,
-                color: palette.text,
+                color: hasSnapshot ? palette.text : palette.textMuted,
                 letterSpacing: 0.2,
                 height: 1.0,
               ),
@@ -2186,7 +2187,9 @@ Widget _buildQuizStudyFollowUpEvalRail(
                     heightFactor: fill,
                     widthFactor: 1,
                     child: ColoredBox(
-                      color: palette.text.withValues(alpha: 0.92),
+                      color: hasSnapshot
+                          ? palette.text.withValues(alpha: 0.92)
+                          : palette.line.withValues(alpha: 0.72),
                     ),
                   ),
                 ),
@@ -2216,11 +2219,8 @@ Widget _buildQuizStudyFollowUpPanel(
   final lines = state._quizStudyFollowUpLines
       .where((line) => line.multiPv <= 3)
       .toList(growable: false);
-  final userIsWhite = state._quizStudyFollowUpUserIsWhite;
   final playerTurn =
-      position != null &&
-      userIsWhite != null &&
-      position.whiteToMove == userIsWhite;
+      position != null && state._quizStudyFollowUpPlayerTurn(selectedLine);
 
   return Container(
     width: double.infinity,
@@ -2382,6 +2382,8 @@ Widget _buildQuizStudyFollowUpPanel(
                             position.fen,
                             candidate.move,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: state._academyHudStyle(
                             palette: palette,
                             size: 12.0,
@@ -2392,6 +2394,51 @@ Widget _buildQuizStudyFollowUpPanel(
                           ),
                         ),
                       ),
+                      if (state._quizStudyFollowUpEvalVisible) ...<Widget>[
+                        const SizedBox(width: 10),
+                        Container(
+                          constraints: const BoxConstraints(minWidth: 58),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              (candidate.multiPv == 1
+                                      ? palette.emerald
+                                      : palette.cyan)
+                                  .withValues(alpha: 0.10),
+                              palette.shell,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color:
+                                  (candidate.multiPv == 1
+                                          ? palette.emerald
+                                          : palette.cyan)
+                                      .withValues(alpha: 0.34),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Text(
+                            state._quizStudyEvalTextForLine(
+                              candidate,
+                              whiteToMove: position.whiteToMove,
+                            ),
+                            textAlign: TextAlign.center,
+                            style: state._academyHudStyle(
+                              palette: palette,
+                              size: 10.2,
+                              color: candidate.multiPv == 1
+                                  ? palette.emerald
+                                  : palette.cyan,
+                              weight: FontWeight.w800,
+                              letterSpacing: 0.18,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -2427,11 +2474,9 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
             : const <EngineLine>[])
       : (preview?.continuation ?? const <EngineLine>[]);
   final followUpActive = followUpPosition != null;
-  final showEvalRail =
+  final showEvalRail = followUpActive && state._quizStudyFollowUpEvalVisible;
+  final canInteractFollowUpBoard =
       followUpActive &&
-      state._quizStudyFollowUpEvalVisible &&
-      state._quizStudyFollowUpEvalSnapshot != null;
-  final canInteractFollowUpBoard = followUpActive &&
       state._quizStudyFollowUpCanControlCurrentTurn(selectedLine);
   final selectedSquare = canInteractFollowUpBoard
       ? state._quizStudyFollowUpSelectedSquare
@@ -2448,6 +2493,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
   final ghostLines = ghostMove == null
       ? const <EngineLine>[]
       : <EngineLine>[EngineLine(ghostMove, 0, 1, 1)];
+  final reverse = state._quizStudyBoardIsReversed(selectedLine);
 
   return KeyedSubtree(
     key: state._quizStudyBoardKey,
@@ -2512,13 +2558,6 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                             ),
                             child: Builder(
                               builder: (context) {
-                                final reverse =
-                                    state._perspective ==
-                                        BoardPerspective.black ||
-                                    (state._perspective ==
-                                            BoardPerspective.auto &&
-                                        !displayedWhiteToMove);
-
                                 return Stack(
                                   fit: StackFit.expand,
                                   children: <Widget>[
@@ -2529,14 +2568,15 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                                       targetSquares: targetSquares,
                                       suggestedFromSquares:
                                           suggestedFromSquares,
+                                      reverseOverride: reverse,
                                       onSquareTap: canInteractFollowUpBoard
                                           ? (square) => unawaited(
-                                                state
-                                                    ._handleQuizStudyFollowUpSquareTap(
-                                                      selectedLine,
-                                                      square,
-                                                    ),
-                                              )
+                                              state
+                                                  ._handleQuizStudyFollowUpSquareTap(
+                                                    selectedLine,
+                                                    square,
+                                                  ),
+                                            )
                                           : null,
                                     ),
                                     if (ghostLines.isNotEmpty)
@@ -2589,7 +2629,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                             child: _buildQuizStudyFollowUpEvalRail(
                               state,
                               palette: palette,
-                              snapshot: state._quizStudyFollowUpEvalSnapshot!,
+                              snapshot: state._quizStudyFollowUpEvalSnapshot,
                             ),
                           ),
                         ],

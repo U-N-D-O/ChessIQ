@@ -2869,6 +2869,92 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
+  bool _quizStudyNameImpliesBlackRepertoire(String name) {
+    final normalized = _quizOpeningInferenceKey(name);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (normalized.contains('defense') ||
+        normalized.contains('defence') ||
+        normalized.contains('countergambit') ||
+        normalized.contains('counter gambit') ||
+        normalized.contains('gambit accepted') ||
+        normalized.contains('gambit declined')) {
+      return true;
+    }
+
+    const blackKeywords = <String>[
+      'sicilian',
+      'french',
+      'caro kann',
+      'petrov',
+      'petroff',
+      'scandinavian',
+      'alekhine',
+      'pirc',
+      'philidor',
+      'owen',
+      'dutch',
+      'slav',
+      'semi slav',
+      'nimzo indian',
+      'bogo indian',
+      'queens indian',
+      'kings indian',
+      'grunfeld',
+      'benoni',
+      'benko',
+      'budapest',
+      'old indian',
+      'modern defense',
+      'modern defence',
+      'berlin defense',
+      'berlin defence',
+      'chigorin defense',
+      'chigorin defence',
+    ];
+    for (final keyword in blackKeywords) {
+      if (normalized.contains(keyword)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _quizStudyOpeningIsBlackRepertoire(EcoLine line) {
+    if (_quizStudyNameImpliesBlackRepertoire(line.name)) {
+      return true;
+    }
+
+    final resolvedName = _quizResolvedOpeningDisplayName(line);
+    if (_quizStudyNameImpliesBlackRepertoire(resolvedName)) {
+      return true;
+    }
+
+    final lineFamily = _quizStudyFamilyName(line.name);
+    if (_quizStudyNameImpliesBlackRepertoire(lineFamily)) {
+      return true;
+    }
+
+    final resolvedFamily = _quizStudyFamilyName(resolvedName);
+    return _quizStudyNameImpliesBlackRepertoire(resolvedFamily);
+  }
+
+  bool _quizStudyLearnerIsWhite(EcoLine line) {
+    switch (_perspective) {
+      case BoardPerspective.white:
+        return true;
+      case BoardPerspective.black:
+        return false;
+      case BoardPerspective.auto:
+        return !_quizStudyOpeningIsBlackRepertoire(line);
+    }
+  }
+
+  bool _quizStudyBoardIsReversed(EcoLine line) {
+    return !_quizStudyLearnerIsWhite(line);
+  }
+
   void _syncQuizStudyFollowUpBasePosition(
     EcoLine line, {
     bool scheduleSearch = true,
@@ -2891,7 +2977,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       return;
     }
 
-    _quizStudyFollowUpUserIsWhite = preview.whiteToMove;
+    _quizStudyFollowUpUserIsWhite = _quizStudyLearnerIsWhite(line);
     _quizStudyFollowUpBoardState = Map<String, String>.from(preview.boardState);
     _quizStudyFollowUpWhiteToMove = preview.whiteToMove;
     _quizStudyFollowUpFen = preview.fen;
@@ -2966,16 +3052,26 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     await _requestQuizStudyFollowUpSearch(line);
   }
 
-  double _quizStudyEvalForCurrentPerspective(EvalSnapshot? snapshot) {
-    if (snapshot == null) {
-      return 0.0;
+  int _quizStudyEvalCentipawnsForCurrentPerspectiveFromWhite(int whiteEvalCp) {
+    final followUpUserIsWhite = _quizStudyFollowUpUserIsWhite;
+    if (followUpUserIsWhite != null) {
+      return followUpUserIsWhite ? whiteEvalCp : -whiteEvalCp;
     }
-    final whiteEval = snapshot.evalPawnsWhite;
     final reversed =
         _perspective == BoardPerspective.black ||
         (_perspective == BoardPerspective.auto &&
             !_quizStudyFollowUpWhiteToMove);
-    return reversed ? -whiteEval : whiteEval;
+    return reversed ? -whiteEvalCp : whiteEvalCp;
+  }
+
+  double _quizStudyEvalForCurrentPerspective(EvalSnapshot? snapshot) {
+    if (snapshot == null) {
+      return 0.0;
+    }
+    return _quizStudyEvalCentipawnsForCurrentPerspectiveFromWhite(
+          snapshot.evalCpWhite,
+        ) /
+        100.0;
   }
 
   double _quizStudyEvalFill(EvalSnapshot? snapshot) {
@@ -2988,13 +3084,27 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     return '${displayedEval > 0 ? '+' : ''}${displayedEval.toStringAsFixed(2)}';
   }
 
+  String _quizStudyEvalTextForLine(
+    EngineLine line, {
+    required bool whiteToMove,
+  }) {
+    final whiteEvalCp = whiteToMove ? line.eval : -line.eval;
+    final displayedCp = _quizStudyEvalCentipawnsForCurrentPerspectiveFromWhite(
+      whiteEvalCp,
+    );
+    if (displayedCp.abs() >= 9900) {
+      return displayedCp >= 0 ? '+M' : '-M';
+    }
+    final displayedEval = displayedCp / 100.0;
+    return '${displayedEval > 0 ? '+' : ''}${displayedEval.toStringAsFixed(2)}';
+  }
+
   bool _quizStudyFollowUpPlayerTurn(EcoLine line) {
     final position = _quizStudyFollowUpPositionFor(line);
-    final userIsWhite = _quizStudyFollowUpUserIsWhite;
-    if (position == null || userIsWhite == null) {
+    if (position == null) {
       return false;
     }
-    return position.whiteToMove == userIsWhite;
+    return position.whiteToMove == _quizStudyLearnerIsWhite(line);
   }
 
   bool _quizStudyFollowUpCanControlCurrentTurn(EcoLine line) {
@@ -3198,7 +3308,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       whiteToMove = !whiteToMove;
     }
 
-    _quizStudyFollowUpUserIsWhite = preview.whiteToMove;
+    _quizStudyFollowUpUserIsWhite = _quizStudyLearnerIsWhite(line);
     _quizStudyFollowUpBoardState = boardState;
     _quizStudyFollowUpWhiteToMove = whiteToMove;
     _quizStudyFollowUpFen = currentFen;
@@ -3378,10 +3488,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     if (!_quizStudyFollowUpMode || !_quizStudyFollowUpAutoReply) {
       return;
     }
-    final userIsWhite = _quizStudyFollowUpUserIsWhite;
-    if (userIsWhite == null) {
-      return;
-    }
+    final userIsWhite = _quizStudyLearnerIsWhite(line);
     if (_quizStudyFollowUpWhiteToMove == userIsWhite) {
       return;
     }
@@ -5223,7 +5330,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         final quizCard = _buildQuizAcademyLauncherCard(
           cardKey: const ValueKey<String>('quiz_academy_launcher_quiz'),
           palette: palette,
+          useMonochrome: useMonochrome,
           assetPath: 'assets/academy/openingsquiz.png',
+          glowShineAssetPath: 'assets/academy/openingsquiz_shine.png',
           title: 'Openings Quiz',
           subtitle:
               'Choose the mode and level, then start a 10-question opening session.',
@@ -5248,7 +5357,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
         final studyCard = _buildQuizAcademyLauncherCard(
           cardKey: const ValueKey<String>('quiz_academy_launcher_study'),
           palette: palette,
+          useMonochrome: useMonochrome,
           assetPath: 'assets/academy/openingsstudy.png',
+          glowShineAssetPath: 'assets/academy/openingsstudy_shine.png',
+          glareShineAssetPath: 'assets/academy/openingsstudy_shine2.png',
           title: 'Openings Study',
           subtitle:
               'Open the library, browse families, and replay saved lines.',
@@ -5282,7 +5394,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   Widget _buildQuizAcademyLauncherCard({
     Key? cardKey,
     required _QuizAcademyPalette palette,
+    required bool useMonochrome,
     required String assetPath,
+    String? glowShineAssetPath,
+    String? glareShineAssetPath,
     required String title,
     required String subtitle,
     required String cartridgeLabel,
@@ -5290,6 +5405,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required Color accent,
     required VoidCallback onTap,
   }) {
+    final reducedEffects = MediaQuery.of(context).disableAnimations;
     final foreground = accent.computeLuminance() > 0.55
         ? const Color(0xFF081015)
         : Colors.white;
@@ -5338,20 +5454,28 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 ],
               ),
               const SizedBox(height: 14),
-              Container(
-                height: 168,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: accent.withValues(alpha: 0.58),
-                    width: 2,
-                  ),
-                  color: palette.shell,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: Image.asset(assetPath, fit: BoxFit.cover),
-                ),
+              LayoutBuilder(
+                builder: (context, artConstraints) {
+                  final artFrameHeight = (artConstraints.maxWidth * 0.68).clamp(
+                    188.0,
+                    228.0,
+                  );
+                  return Container(
+                    height: artFrameHeight,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: palette.shell,
+                    ),
+                    child: _buildQuizAcademyLauncherArt(
+                      assetPath: assetPath,
+                      glowShineAssetPath: glowShineAssetPath,
+                      glareShineAssetPath: glareShineAssetPath,
+                      accent: accent,
+                      useMonochrome: useMonochrome,
+                      reducedEffects: reducedEffects,
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Text(
@@ -5407,6 +5531,267 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildQuizAcademyLauncherArt({
+    required String assetPath,
+    String? glowShineAssetPath,
+    String? glareShineAssetPath,
+    required Color accent,
+    required bool useMonochrome,
+    required bool reducedEffects,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(2),
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Image.asset(
+            assetPath,
+            fit: BoxFit.contain,
+            alignment: Alignment.center,
+            filterQuality: FilterQuality.none,
+          ),
+          if (glowShineAssetPath != null || glareShineAssetPath != null)
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  final glowSeed = _quizAcademyLauncherPhaseSeed(
+                    glowShineAssetPath ?? assetPath,
+                  );
+                  final glareSeed =
+                      _quizAcademyLauncherPhaseSeed(
+                        glareShineAssetPath ?? glowShineAssetPath ?? assetPath,
+                      ) +
+                      0.37;
+                  final glowPhase = reducedEffects
+                      ? 0.0
+                      : _quizAcademyLauncherTimedPhase(
+                          cycleMultiplier: 1.0,
+                          speedMultiplier: 1.5,
+                          seed: glowSeed,
+                        );
+                  final glarePhase = reducedEffects
+                      ? 0.0
+                      : _quizAcademyLauncherTimedPhase(
+                          cycleMultiplier: 4.0,
+                          speedMultiplier: 1.5,
+                          seed: glareSeed,
+                        );
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      if (glowShineAssetPath != null)
+                        _buildQuizAcademyLauncherGlowOverlay(
+                          assetPath: glowShineAssetPath,
+                          accent: accent,
+                          phase: glowPhase,
+                          reducedEffects: reducedEffects,
+                        ),
+                      if (glareShineAssetPath != null)
+                        _buildQuizAcademyLauncherGlareOverlay(
+                          assetPath: glareShineAssetPath,
+                          useMonochrome: useMonochrome,
+                          phase: glarePhase,
+                          reducedEffects: reducedEffects,
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizAcademyLauncherGlowOverlay({
+    required String assetPath,
+    required Color accent,
+    required double phase,
+    required bool reducedEffects,
+  }) {
+    final pulse = Curves.easeInOutCubic.transform(
+      0.5 - 0.5 * cos(phase * 2 * pi),
+    );
+    final bandCenter = reducedEffects ? 0.48 : -0.18 + phase * 1.34;
+    final lead = bandCenter.clamp(0.0, 1.0);
+    final center = max(lead, (bandCenter + 0.18).clamp(0.0, 1.0));
+    final trail = max(center, (bandCenter + 0.38).clamp(0.0, 1.0));
+    final glareGold =
+        Color.lerp(accent, const Color(0xFFFFC94A), 0.88) ??
+        const Color(0xFFFFC94A);
+    final glareGoldSoft =
+        Color.lerp(glareGold, const Color(0xFFFFE7A0), 0.62) ??
+        const Color(0xFFFFE7A0);
+    const glareCore = Color(0xFFFFFAEF);
+    final drift = reducedEffects ? 0.0 : sin(phase * 2 * pi) * 1.6;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        Transform.translate(
+          offset: Offset(0, drift * 0.6),
+          child: ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: reducedEffects ? 1.6 : 5.0,
+              sigmaY: reducedEffects ? 1.6 : 5.0,
+            ),
+            child: Opacity(
+              opacity: reducedEffects ? 0.18 : 0.16 + pulse * 0.12,
+              child: _buildQuizAcademyLauncherOverlayImage(assetPath),
+            ),
+          ),
+        ),
+        Opacity(
+          opacity: reducedEffects ? 0.76 : 0.66 + pulse * 0.14,
+          child: _buildQuizAcademyLauncherOverlayImage(assetPath),
+        ),
+        if (!reducedEffects)
+          Opacity(
+            opacity: 0.44 + pulse * 0.22,
+            child: ShaderMask(
+              blendMode: BlendMode.srcATop,
+              shaderCallback: (bounds) {
+                return LinearGradient(
+                  begin: const Alignment(-1.0, -0.1),
+                  end: const Alignment(1.0, 0.25),
+                  colors: <Color>[
+                    Colors.transparent,
+                    glareGold.withValues(alpha: 0.22),
+                    glareCore.withValues(alpha: 0.98),
+                    glareGoldSoft.withValues(alpha: 0.82),
+                    Colors.transparent,
+                  ],
+                  stops: <double>[0.0, lead, center, trail, 1.0],
+                ).createShader(bounds);
+              },
+              child: Transform.translate(
+                offset: Offset(0, drift * -0.22),
+                child: _buildQuizAcademyLauncherOverlayImage(assetPath),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  double _quizAcademyLauncherPhaseSeed(String value) {
+    var total = 0;
+    for (final codeUnit in value.codeUnits) {
+      total = (total * 31 + codeUnit) % 9973;
+    }
+    return total / 9973.0;
+  }
+
+  double _quizAcademyLauncherTimedPhase({
+    double cycleMultiplier = 1.0,
+    double speedMultiplier = 1.0,
+    double seed = 0.0,
+  }) {
+    final baseDuration = _pulseController.duration;
+    if (baseDuration == null || baseDuration.inMicroseconds <= 0) {
+      return 0.0;
+    }
+    final elapsed = _pulseController.lastElapsedDuration ?? Duration.zero;
+    final elapsedSeconds =
+        elapsed.inMicroseconds / Duration.microsecondsPerSecond;
+    final baseCycleSeconds =
+        baseDuration.inMicroseconds / Duration.microsecondsPerSecond;
+    final averageCycleSeconds =
+        (baseCycleSeconds * cycleMultiplier.clamp(0.001, 1000.0)) /
+        speedMultiplier.clamp(0.001, 1000.0);
+    final driftA = sin(elapsedSeconds * (0.61 + seed * 0.17) + seed * 6.2);
+    final driftB = sin(elapsedSeconds * (0.23 + seed * 0.11) + seed * 9.1);
+    final driftC = sin(elapsedSeconds * (0.11 + seed * 0.07) + seed * 12.7);
+    final progress =
+        (elapsedSeconds / averageCycleSeconds) +
+        0.05 * driftA +
+        0.022 * driftB +
+        0.012 * driftC;
+    return progress - progress.floorToDouble();
+  }
+
+  Widget _buildQuizAcademyLauncherGlareOverlay({
+    required String assetPath,
+    required bool useMonochrome,
+    required double phase,
+    required bool reducedEffects,
+  }) {
+    final sweep = Curves.easeInOutCubic.transform(phase);
+    final pulse = Curves.easeInOutCubic.transform(
+      (1.0 - ((sweep - 0.5).abs() / 0.5).clamp(0.0, 1.0)).toDouble(),
+    );
+    final bandCenter = reducedEffects ? 0.46 : -0.24 + sweep * 1.48;
+    final lead = bandCenter.clamp(0.0, 1.0);
+    final innerLead = max(lead, (bandCenter + 0.08).clamp(0.0, 1.0));
+    final center = max(innerLead, (bandCenter + 0.16).clamp(0.0, 1.0));
+    final innerTrail = max(center, (bandCenter + 0.24).clamp(0.0, 1.0));
+    final trail = max(innerTrail, (bandCenter + 0.34).clamp(0.0, 1.0));
+    final baseOpacity = reducedEffects ? 0.12 : (useMonochrome ? 0.10 : 0.12);
+    final sweepOpacity = reducedEffects
+        ? (useMonochrome ? 0.26 : 0.30)
+        : (useMonochrome ? 0.58 : 0.66) * pulse;
+    final highlightColor = useMonochrome
+        ? const Color(0xFFFFE2A1)
+        : const Color(0xFFFFC94A);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        Opacity(
+          opacity: baseOpacity,
+          child: _buildQuizAcademyLauncherOverlayImage(assetPath),
+        ),
+        if (sweepOpacity > 0)
+          Opacity(
+            opacity: sweepOpacity,
+            child: ShaderMask(
+              blendMode: BlendMode.srcATop,
+              shaderCallback: (bounds) {
+                return LinearGradient(
+                  begin: const Alignment(-1.0, -0.85),
+                  end: const Alignment(1.0, 0.95),
+                  colors: <Color>[
+                    Colors.transparent,
+                    Colors.transparent,
+                    highlightColor.withValues(alpha: 0.18),
+                    Colors.white.withValues(alpha: 0.98),
+                    highlightColor.withValues(
+                      alpha: useMonochrome ? 0.72 : 0.84,
+                    ),
+                    Colors.transparent,
+                    Colors.transparent,
+                  ],
+                  stops: <double>[
+                    0.0,
+                    lead,
+                    innerLead,
+                    center,
+                    innerTrail,
+                    trail,
+                    1.0,
+                  ],
+                ).createShader(bounds);
+              },
+              child: _buildQuizAcademyLauncherOverlayImage(assetPath),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildQuizAcademyLauncherOverlayImage(String assetPath) {
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      alignment: Alignment.center,
+      filterQuality: FilterQuality.none,
+      errorBuilder: (context, error, stackTrace) {
+        return const SizedBox.shrink();
+      },
     );
   }
 
@@ -7938,6 +8323,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     String? selectedSquare,
     Set<String> targetSquares = const <String>{},
     Set<String> suggestedFromSquares = const <String>{},
+    bool? reverseOverride,
     ValueChanged<String>? onSquareTap,
   });
 }

@@ -152,7 +152,7 @@ const List<_EditToolboxPiece> _editToolboxPieces = <_EditToolboxPiece>[
 ];
 
 abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const String _lastBotIndexKey = 'last_bot_index_v1';
   static const String _vsBotCompletedTiersKey = 'vs_bot_completed_tiers_v1';
   static const BoardPerspective _defaultPerspective = BoardPerspective.white;
@@ -518,6 +518,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _selectedEditToolboxPiece;
   bool _editToolboxEraserSelected = false;
   String? _lastEditDragEraseSquare;
+  bool _pendingEditToolboxMetricsRefresh = false;
   Timer? _editModeHintTimer;
   String? _editModeHintText;
   Timer? _moveQualityOverlayTimer;
@@ -696,9 +697,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _startIdleInterstitialTimer();
   }
 
+  void _scheduleEditToolboxMetricsRefresh() {
+    if (_pendingEditToolboxMetricsRefresh || !_analysisEditMode) {
+      return;
+    }
+    _pendingEditToolboxMetricsRefresh = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingEditToolboxMetricsRefresh = false;
+      if (!mounted || !_analysisEditMode) {
+        return;
+      }
+      setState(() {});
+    });
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _scheduleEditToolboxMetricsRefresh();
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadVsBotSetupPrefs();
     _pulseController = AnimationController(
       vsync: this,
@@ -16463,6 +16485,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     for (final player in _boardSfxPlayers) {
       player.dispose();
     }
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 }
