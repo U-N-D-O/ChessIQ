@@ -314,7 +314,25 @@ void _expectCompactPhoneOptionStatusLabelsHidden() {
   expect(find.text('Reviewed option'), findsNothing);
 }
 
-void _expectCompactPhoneFeedbackOverlaySingleLine(WidgetTester tester) {
+void _expectCompactPhoneFeedbackOverlayTwoLineWrap(WidgetTester tester) {
+  final feedbackOverlay = find.byKey(
+    const ValueKey<String>('quiz_session_feedback_overlay'),
+  );
+  final feedbackText = find.descendant(
+    of: feedbackOverlay,
+    matching: find.byWidgetPredicate(
+      (widget) =>
+          widget is Text && widget.data != null && widget.data!.isNotEmpty,
+    ),
+  );
+
+  final textWidget = tester.widget<Text>(feedbackText);
+  expect(textWidget.maxLines, 2);
+  expect(textWidget.softWrap, isTrue);
+  expect(textWidget.overflow, TextOverflow.ellipsis);
+}
+
+void _expectCompactLandscapeFeedbackOverlaySingleLine(WidgetTester tester) {
   final feedbackOverlay = find.byKey(
     const ValueKey<String>('quiz_session_feedback_overlay'),
   );
@@ -329,6 +347,7 @@ void _expectCompactPhoneFeedbackOverlaySingleLine(WidgetTester tester) {
   final textWidget = tester.widget<Text>(feedbackText);
   expect(textWidget.maxLines, 1);
   expect(textWidget.softWrap, isFalse);
+  expect(textWidget.overflow, TextOverflow.ellipsis);
 }
 
 void main() {
@@ -650,6 +669,84 @@ void main() {
   );
 
   testWidgets(
+    'opening quiz selector keeps very hard locked in both quiz modes until hard is cleared',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpOpeningsQuizSelector(tester, size: const Size(390, 844));
+
+      final setupScroll = find.byType(Scrollable).first;
+      final veryHardCard = find.byKey(
+        const ValueKey<String>('quiz_setup_level_card_veryHard'),
+      );
+      expect(veryHardCard, findsOneWidget);
+
+      await tester.dragUntilVisible(
+        veryHardCard,
+        setupScroll,
+        const Offset(0, 300),
+      );
+      await tester.pump();
+
+      await tester.tap(veryHardCard);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('ORACLE LOCKED'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Complete 1 more perfect tournament level session to unlock Oracle.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('UNDERSTOOD'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final lineModeCard = find.byKey(
+        const ValueKey<String>('quiz_setup_mode_card_complete_opening_line'),
+      );
+      expect(lineModeCard, findsOneWidget);
+
+      await tester.dragUntilVisible(
+        lineModeCard,
+        setupScroll,
+        const Offset(0, -300),
+      );
+      await tester.pump();
+
+      await tester.tap(lineModeCard);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await tester.dragUntilVisible(
+        veryHardCard,
+        setupScroll,
+        const Offset(0, 300),
+      );
+      await tester.pump();
+
+      await tester.tap(veryHardCard);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('ORACLE LOCKED'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Complete 1 more perfect tournament level session to unlock Oracle.',
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
     'opening quiz selector keeps both mode cards visible on compact landscape',
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
@@ -889,7 +986,7 @@ void main() {
       expect(feedbackOverlayRect.left, closeTo(topPanelRect.left, 0.01));
       expect(feedbackOverlayRect.width, closeTo(topPanelRect.width, 0.01));
       expect(feedbackOverlayRect.height, closeTo(topPanelRect.height, 0.01));
-      _expectCompactPhoneFeedbackOverlaySingleLine(tester);
+      _expectCompactPhoneFeedbackOverlayTwoLineWrap(tester);
       final boardRectAfterSubmit = tester.getRect(boardCard);
       final questionRectAfterSubmit = tester.getRect(questionPanel);
       final actionRectAfterSubmit = tester.getRect(primaryAction);
@@ -1011,7 +1108,7 @@ void main() {
       expect(feedbackOverlayRect.left, closeTo(topPanelRect.left, 0.01));
       expect(feedbackOverlayRect.width, closeTo(topPanelRect.width, 0.01));
       expect(feedbackOverlayRect.height, closeTo(topPanelRect.height, 0.01));
-      _expectCompactPhoneFeedbackOverlaySingleLine(tester);
+      _expectCompactLandscapeFeedbackOverlaySingleLine(tester);
       final boardRectAfterSubmit = tester.getRect(boardCard);
       final questionRectAfterSubmit = tester.getRect(questionPanel);
       final actionRectAfterSubmit = tester.getRect(primaryAction);

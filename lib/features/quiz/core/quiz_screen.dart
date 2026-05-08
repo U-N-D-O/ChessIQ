@@ -1735,7 +1735,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               '${_quizSetupDifficultyLabel(difficulty)}: ${_quizSetupDifficultyDescription(difficulty)} (${_quizOptionCountForDifficulty(difficulty)} choices per question).',
         )
         .join('\n\n');
-    return '$levelDetails\n\nUnlock the next level by finishing ${_quizAcademyProgress.requiredPerfectSessions} perfect 100% runs in the previous level.';
+    final runLabel = _quizAcademyProgress.requiredPerfectSessions == 1
+        ? 'run'
+        : 'runs';
+    return '$levelDetails\n\nUnlock the next level by finishing ${_quizAcademyProgress.requiredPerfectSessions} perfect 100% $runLabel in the previous level.';
   }
 
   String _quizAcademyTierLabel(QuizDifficulty difficulty) {
@@ -1803,9 +1806,6 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   bool _quizDifficultyUnlocked(QuizDifficulty difficulty) {
-    if (difficulty == QuizDifficulty.veryHard) {
-      return true;
-    }
     return _quizAcademyProgress.isDifficultyUnlocked(difficulty);
   }
 
@@ -6538,11 +6538,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               : completed
               ? 'Completed already. Tap to revisit it.'
               : 'Tap to select this level.')
-        : 'Unlock with ${_quizAcademyProgress.remainingPerfectSessionsFor(previousDifficulty!)} perfect ${_quizSetupDifficultyLabel(previousDifficulty)} runs.';
+        : 'Unlock with ${_quizAcademyProgress.remainingPerfectSessionsFor(previousDifficulty!)} perfect ${_quizSetupDifficultyLabel(previousDifficulty)} ${_quizAcademyProgress.remainingPerfectSessionsFor(previousDifficulty) == 1 ? 'run' : 'runs'}.';
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        key: ValueKey<String>('quiz_setup_level_card_${difficulty.name}'),
         onTap: unlocked
             ? () => _setQuizDifficulty(difficulty)
             : () => unawaited(_showQuizDifficultyLockedDialog(difficulty)),
@@ -7522,6 +7523,11 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           : isCorrectOverlay == false
           ? wrongFeedbackAccent
           : routeAccent;
+      final feedbackOverlayPadding = compactLandscapePlayLayout
+        ? topPanelPadding
+        : compactPortraitPlayLayout
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
+        : topPanelPadding;
       final icon = isCorrectOverlay == true
           ? Icons.check_circle_rounded
           : Icons.info_outline_rounded;
@@ -7536,9 +7542,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             palette.shell.withValues(alpha: 0.16),
             palette.panelAlt,
           ),
-          padding: topPanelPadding,
+          padding: feedbackOverlayPadding,
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: compactPlayLayout ? 42 : 0),
+            constraints: BoxConstraints(
+              minHeight: compactLandscapePlayLayout
+                  ? 42
+                  : compactPortraitPlayLayout
+                  ? 48
+                  : 0,
+            ),
             child: Row(
               crossAxisAlignment: compactLandscapePlayLayout
                   ? CrossAxisAlignment.center
@@ -7549,8 +7561,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                 Expanded(
                   child: Text(
                     topFeedbackMessage!,
-                    maxLines: compactPlayLayout ? 1 : null,
-                    softWrap: !compactPlayLayout,
+                    maxLines: compactLandscapePlayLayout
+                        ? 1
+                        : compactPortraitPlayLayout
+                        ? 2
+                        : null,
+                    softWrap: !compactLandscapePlayLayout,
                     overflow: compactPlayLayout
                         ? TextOverflow.ellipsis
                         : TextOverflow.visible,
@@ -8230,7 +8246,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
               Stack(
                 children: <Widget>[
                   buildQuizTopPanel(),
-                  if (showQuizFeedbackOverlay) buildQuizFeedbackOverlayPanel(),
+                  if (showQuizFeedbackOverlay)
+                    Positioned.fill(child: buildQuizFeedbackOverlayPanel()),
                 ],
               ),
               SizedBox(height: topToContentGap),

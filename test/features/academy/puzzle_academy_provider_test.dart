@@ -6,6 +6,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const String _progressKey = 'puzzle_academy_progress_v2';
 
+List<PuzzleItem> _buildDailyPuzzles(int count) {
+  return List<PuzzleItem>.generate(
+    count,
+    (index) => PuzzleItem(
+      puzzleId: 'daily_$index',
+      fen: '8/8/8/8/8/8/8/8 w - - 0 1',
+      moves: const <String>['e2e4'],
+      rating: 1000 + index,
+      gameUrl: '',
+      themes: const <String>['daily'],
+      openingTags: const <String>[],
+    ),
+    growable: false,
+  );
+}
+
 Map<String, EloNodeProgress> _buildTestNodes() {
   return <String, EloNodeProgress>{
     '450_500': const EloNodeProgress(
@@ -79,6 +95,42 @@ Map<String, EloNodeProgress> _buildTestNodes() {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('daily challenge resumes at the first unsolved puzzle', () async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
+
+    final provider = PuzzleAcademyProvider();
+    provider.debugHydrateProgress(
+      PuzzleProgressModel.initial(nodes: _buildTestNodes()).copyWith(
+        completedDailyPuzzleIds: const <String>{'daily_0', 'daily_1'},
+      ),
+    );
+    provider.debugSetDailyPuzzles(_buildDailyPuzzles(5));
+
+    expect(provider.todayDailyPuzzle?.puzzleId, 'daily_2');
+    expect(provider.todayDailyPuzzleIndex, 2);
+  });
+
+  test(
+    'daily challenge resumes at the last puzzle after all daily puzzles are completed',
+    () async {
+      SharedPreferences.setMockInitialValues(const <String, Object>{});
+
+      final dailyPuzzles = _buildDailyPuzzles(20);
+      final provider = PuzzleAcademyProvider();
+      provider.debugHydrateProgress(
+        PuzzleProgressModel.initial(nodes: _buildTestNodes()).copyWith(
+          completedDailyPuzzleIds: dailyPuzzles
+              .map((puzzle) => puzzle.puzzleId)
+              .toSet(),
+        ),
+      );
+      provider.debugSetDailyPuzzles(dailyPuzzles);
+
+      expect(provider.todayDailyPuzzle?.puzzleId, 'daily_19');
+      expect(provider.todayDailyPuzzleIndex, 19);
+    },
+  );
 
   test('semester tuition purchases unlock entry levels and persist', () async {
     const startingCoins = 12000;

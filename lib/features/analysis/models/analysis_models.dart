@@ -236,6 +236,20 @@ class MoveQualityEvidenceResolution {
       !needsPreMoveConfirmation && !needsPostMoveConfirmation;
 }
 
+class MoveQualityComparisonSnapshot {
+  const MoveQualityComparisonSnapshot({
+    required this.playedMoveRank,
+    required this.cpGapFromBest,
+    required this.cpGapFromNextBetter,
+    required this.analyzedLegalMoveCount,
+  });
+
+  final int? playedMoveRank;
+  final int? cpGapFromBest;
+  final int? cpGapFromNextBetter;
+  final int analyzedLegalMoveCount;
+}
+
 EvalSnapshot? preferBestEvalSnapshot(
   EvalSnapshot? current,
   EvalSnapshot? candidate,
@@ -401,10 +415,73 @@ MoveQualityEvidenceResolution resolveMoveQualityEvidence({
   );
 }
 
+MoveQualityComparisonSnapshot resolveMoveQualityComparisonSnapshot({
+  required String playedMoveUci,
+  required List<EngineLine> preMoveLines,
+  required int? totalLegalMoveCount,
+  int? capturedPlayedMoveRank,
+  int? capturedCpGapFromBest,
+  int? capturedCpGapFromNextBetter,
+}) {
+  final normalizedPreMoveLines = _normalizedEngineLines(preMoveLines);
+  return MoveQualityComparisonSnapshot(
+    playedMoveRank:
+        _moveRankFromLines(normalizedPreMoveLines, playedMoveUci) ??
+        capturedPlayedMoveRank,
+    cpGapFromBest:
+        _cpGapFromBestFromLines(normalizedPreMoveLines, playedMoveUci) ??
+        capturedCpGapFromBest,
+    cpGapFromNextBetter:
+        _cpGapFromNextBetterFromLines(normalizedPreMoveLines, playedMoveUci) ??
+        capturedCpGapFromNextBetter,
+    analyzedLegalMoveCount: totalLegalMoveCount == null
+        ? normalizedPreMoveLines.length
+        : math.min(totalLegalMoveCount, normalizedPreMoveLines.length),
+  );
+}
+
 List<EngineLine> _normalizedEngineLines(List<EngineLine> lines) {
   final normalized = List<EngineLine>.from(lines);
   normalized.sort((a, b) => a.multiPv.compareTo(b.multiPv));
   return normalized;
+}
+
+int? _moveRankFromLines(List<EngineLine> lines, String uciMove) {
+  for (final line in lines) {
+    if (line.move == uciMove) {
+      return line.multiPv;
+    }
+  }
+  return null;
+}
+
+int? _cpGapFromBestFromLines(List<EngineLine> lines, String uciMove) {
+  if (lines.isEmpty) {
+    return null;
+  }
+  final bestEval = lines.first.eval;
+  for (final line in lines) {
+    if (line.move == uciMove) {
+      return math.max(0, bestEval - line.eval);
+    }
+  }
+  return null;
+}
+
+int? _cpGapFromNextBetterFromLines(List<EngineLine> lines, String uciMove) {
+  if (lines.length < 2) {
+    return null;
+  }
+  for (var index = 0; index < lines.length; index++) {
+    if (lines[index].move != uciMove) {
+      continue;
+    }
+    if (index == 0) {
+      return 0;
+    }
+    return math.max(0, lines[index - 1].eval - lines[index].eval);
+  }
+  return null;
 }
 
 class EngineSearchResult {

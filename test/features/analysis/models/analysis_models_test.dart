@@ -323,6 +323,30 @@ void main() {
     );
   });
 
+  group('Move quality comparison snapshot', () {
+    test(
+      'prefers refreshed pre-move coverage over stale captured grading data',
+      () {
+        final snapshot = resolveMoveQualityComparisonSnapshot(
+          playedMoveUci: 'e2e4',
+          preMoveLines: <EngineLine>[
+            EngineLine('e2e4', 64, 12, 1),
+            EngineLine('d2d4', 52, 12, 2),
+          ],
+          totalLegalMoveCount: 2,
+          capturedPlayedMoveRank: 4,
+          capturedCpGapFromBest: 180,
+          capturedCpGapFromNextBetter: 95,
+        );
+
+        expect(snapshot.playedMoveRank, 1);
+        expect(snapshot.cpGapFromBest, 0);
+        expect(snapshot.cpGapFromNextBetter, 0);
+        expect(snapshot.analyzedLegalMoveCount, 2);
+      },
+    );
+  });
+
   group('MoveRecord session grading metadata', () {
     test('copyWith preserves and updates runtime-only grading fields', () {
       final baseline = MoveRecord(

@@ -1,6 +1,6 @@
 import 'package:chessiq/features/analysis/models/analysis_models.dart';
 
-const int quizAcademyPromotionRequirement = 3;
+const int quizAcademyPromotionRequirement = 1;
 
 enum GambitQuizMode { guessName, guessLine }
 

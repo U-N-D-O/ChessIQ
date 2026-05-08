@@ -2404,15 +2404,24 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               ),
               child: LayoutBuilder(
                 builder: (context, cardConstraints) {
+                  final footerMetadataGapReserve =
+                      showCardStatus || showCardDescription
+                      ? (compactLandscape
+                            ? 4.0
+                            : compact
+                            ? 6.0
+                            : 8.0)
+                      : 0.0;
                   final footerReserve =
                       (layout.isLandscape
                           ? (compactLandscape ? 84.0 : 74.0)
                           : compact
                           ? 92.0
                           : 116.0) +
+                      footerMetadataGapReserve +
                       (showCardStatus ? 36.0 : 0.0) +
                       (showCardDescription
-                          ? (layout.isLandscape ? 32.0 : 44.0)
+                          ? (layout.isLandscape ? 32.0 : 48.0)
                           : 0.0);
                   final avatarExtent = max(
                     0.0,

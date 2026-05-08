@@ -30,6 +30,54 @@ class _DetectedGameOutcome {
   final DrawReason? drawReason;
 }
 
+class _SquareToast {
+  const _SquareToast({
+    required this.square,
+    required this.label,
+    required this.accent,
+    required this.startedAt,
+    required this.duration,
+  });
+
+  final String square;
+  final String label;
+  final Color accent;
+  final DateTime startedAt;
+  final Duration duration;
+}
+
+class _CheckAlert {
+  const _CheckAlert({
+    required this.square,
+    required this.againstViewer,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.icon,
+    required this.startedAt,
+  });
+
+  final String square;
+  final bool againstViewer;
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final IconData icon;
+  final DateTime startedAt;
+}
+
+class _CheckedKingState {
+  const _CheckedKingState({
+    required this.square,
+    required this.isWhite,
+    required this.againstViewer,
+  });
+
+  final String square;
+  final bool isWhite;
+  final bool againstViewer;
+}
+
 class _PendingMoveQualityGrading {
   static const Object _sentinel = Object();
 
@@ -185,6 +233,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _gameResultRevealSkipDelay = Duration(
     milliseconds: 250,
   );
+  static const Duration _checkAlertDuration = Duration(milliseconds: 1500);
+  static const Duration _squareToastDuration = Duration(milliseconds: 1500);
   static const Duration _creditsModernDwell = Duration(seconds: 15);
   static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
   static const Duration _creditsRetroDwell = Duration(seconds: 15);
@@ -504,6 +554,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _gameResultDialogVisible = false;
   _GameResultReveal? _gameResultReveal;
   int _gameResultRevealSequence = 0;
+  Timer? _checkAlertTimer;
+  _CheckAlert? _checkAlert;
+  Timer? _squareToastTimer;
+  _SquareToast? _squareToast;
   final List<String> _positionHistoryKeys = <String>[];
   final List<int> _halfmoveClockHistory = <int>[];
   bool _quizLaunchedFromAcademy = false;
@@ -3016,6 +3070,92 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _moveQualityOverlayScoringSuppressedReason = null;
   }
 
+  void _clearCheckAlertState() {
+    _checkAlertTimer?.cancel();
+    _checkAlertTimer = null;
+    _checkAlert = null;
+  }
+
+  void _clearSquareToastState() {
+    _squareToastTimer?.cancel();
+    _squareToastTimer = null;
+    _squareToast = null;
+  }
+
+  void _showSquareToast({
+    required String square,
+    required String label,
+    required Color accent,
+  }) {
+    final toast = _SquareToast(
+      square: square,
+      label: label,
+      accent: accent,
+      startedAt: DateTime.now(),
+      duration: _squareToastDuration,
+    );
+    _squareToastTimer?.cancel();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _squareToast = toast;
+    });
+    _squareToastTimer = Timer(toast.duration, () {
+      if (!mounted || _squareToast?.startedAt != toast.startedAt) {
+        return;
+      }
+      setState(_clearSquareToastState);
+    });
+  }
+
+  void _showCheckAlertForCurrentPosition({bool? moverIsWhite}) {
+    final checkedKing = _currentCheckedKingState(moverIsWhite: moverIsWhite);
+    if (checkedKing == null) {
+      if (_checkAlert != null && mounted) {
+        setState(_clearCheckAlertState);
+      } else {
+        _clearCheckAlertState();
+      }
+      return;
+    }
+
+    final againstViewer = checkedKing.againstViewer;
+    final alert = _CheckAlert(
+      square: checkedKing.square,
+      againstViewer: againstViewer,
+      title: againstViewer
+          ? (_playVsBot ? 'YOUR KING IN CHECK' : 'KING IN CHECK')
+          : 'CHECK',
+      subtitle: againstViewer
+          ? (_playVsBot
+                ? 'Defend immediately before the bot converts.'
+                : 'The side you are viewing is under direct attack.')
+          : (_playVsBot
+                ? 'The enemy king is under pressure.'
+                : 'Pressure lands on the opposing king.'),
+      accent: againstViewer ? const Color(0xFFE45C5C) : const Color(0xFFFFB347),
+      icon: againstViewer
+          ? Icons.warning_amber_rounded
+          : Icons.flash_on_rounded,
+      startedAt: DateTime.now(),
+    );
+
+    _checkAlertTimer?.cancel();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _checkAlert = alert;
+    });
+    _checkAlertTimer = Timer(_checkAlertDuration, () {
+      if (!mounted || _checkAlert?.startedAt != alert.startedAt) {
+        return;
+      }
+      setState(_clearCheckAlertState);
+    });
+  }
+
   void _cancelGameResultReveal() {
     _gameResultRevealSequence++;
     _gameResultReveal = null;
@@ -3071,6 +3211,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     setState(() {
       _clearMoveQualityOverlay();
+      _clearCheckAlertState();
       _gameResultReveal = reveal;
     });
 
@@ -4723,14 +4864,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final insideOpeningExemption = _openingFeedbackOnlyApplies(
       pending.moveIndex,
     );
-    final playedMoveRank =
-        pending.playedMoveRank ?? _moveRankFromLines(preMoveLines, pending.uci);
-    final cpGapFromBest =
-        pending.cpGapFromBest ??
-        _cpGapFromBestFromLines(preMoveLines, pending.uci);
-    final cpGapFromNextBetter =
-        pending.cpGapFromNextBetter ??
-        _cpGapFromNextBetterFromLines(preMoveLines, pending.uci);
+    final comparisonSnapshot = resolveMoveQualityComparisonSnapshot(
+      playedMoveUci: pending.uci,
+      preMoveLines: preMoveLines,
+      totalLegalMoveCount: pending.totalLegalMoveCount,
+      capturedPlayedMoveRank: pending.playedMoveRank,
+      capturedCpGapFromBest: pending.cpGapFromBest,
+      capturedCpGapFromNextBetter: pending.cpGapFromNextBetter,
+    );
+    final playedMoveRank = comparisonSnapshot.playedMoveRank;
+    final cpGapFromBest = comparisonSnapshot.cpGapFromBest;
+    final cpGapFromNextBetter = comparisonSnapshot.cpGapFromNextBetter;
+    final analyzedLegalMoveCount = comparisonSnapshot.analyzedLegalMoveCount;
     final confidence = _moveQualityConfidence(
       preMoveLines: preMoveLines,
       playedMoveRank: playedMoveRank,
@@ -4774,7 +4919,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         cpGapFromNextBetter: cpGapFromNextBetter,
         playedMoveRank: playedMoveRank,
         totalLegalMoveCount: pending.totalLegalMoveCount,
-        analyzedLegalMoveCount: pending.analyzedLegalMoveCount,
+        analyzedLegalMoveCount: analyzedLegalMoveCount,
         insideOpeningExemption: insideOpeningExemption,
         confidence: confidence,
         isSacrifice: pending.isSacrifice,
@@ -4870,6 +5015,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (livePostMoveRole != EngineRequestRole.backgroundConfirmation &&
         !_openingFeedbackOnlyApplies(pending.moveIndex) &&
         shouldQueueConfirmation) {
+      if (_playVsBot && isHumanVsBotMove && fastPublish) {
+        // Fast VS Bot grades should verify both the pre-move baseline and the
+        // post-move reply tree immediately so a shallow first impression can
+        // self-correct without relying on a later retry chain.
+        _queueBackgroundMoveQualityConfirmation(
+          pending,
+          fen: pending.preMoveFen,
+          whiteToMove: pending.moverIsWhite,
+        );
+      }
       _queueBackgroundMoveQualityConfirmation(pending);
     }
 
@@ -5597,6 +5752,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _clearGameOutcomeState() {
     _gameOutcome = null;
     _gameDrawReason = null;
+    _clearCheckAlertState();
+    _clearSquareToastState();
   }
 
   int get _halfmoveClock =>
@@ -5785,6 +5942,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     };
   }
 
+  String _drawOutcomePersistentTitle(DrawReason? reason) {
+    return switch (reason) {
+      DrawReason.threefoldRepetition => 'DRAW: THREEFOLD REPETITION',
+      DrawReason.fiftyMoveRule => 'DRAW: FIFTY-MOVE RULE',
+      DrawReason.insufficientMaterial => 'DRAW: INSUFFICIENT MATERIAL',
+      DrawReason.stalemate || null => 'DRAW: STALEMATE',
+    };
+  }
+
   String _drawOutcomeDialogMessage(DrawReason? reason) {
     return switch (reason) {
       DrawReason.threefoldRepetition =>
@@ -5808,6 +5974,104 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       DrawReason.stalemate ||
       null => 'Evenly matched. This one stays on the board.',
     };
+  }
+
+  String _endMatchCardTitle(GameOutcome outcome) {
+    if (outcome == GameOutcome.draw) {
+      return _drawOutcomePersistentTitle(_gameDrawReason);
+    }
+    if (_playVsBot) {
+      return _isWinningOutcomeForPov ? 'VICTORY' : 'DEFEAT';
+    }
+    return 'CHECKMATE';
+  }
+
+  String _endMatchCardSubtitle(GameOutcome outcome) {
+    if (outcome == GameOutcome.draw) {
+      return _drawOutcomeRevealSubtitle(_gameDrawReason);
+    }
+    if (_playVsBot) {
+      return _isWinningOutcomeForPov
+          ? 'Checkmate lands. The result is locked in.'
+          : 'Checkmate lands. The position is finished.';
+    }
+    return 'The mating net is fixed on the board.';
+  }
+
+  String? _findCurrentKingSquare(bool whiteKing) {
+    final king = whiteKing ? 'k_w' : 'k_b';
+    for (final entry in boardState.entries) {
+      if (entry.value == king) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  bool _isCheckAgainstViewer({
+    required bool checkedSideIsWhite,
+    bool? moverIsWhite,
+  }) {
+    if (_playVsBot) {
+      return checkedSideIsWhite == _humanPlaysWhite;
+    }
+    if (moverIsWhite != null) {
+      return false;
+    }
+    return checkedSideIsWhite == !_isBlackPovActive;
+  }
+
+  _CheckedKingState? _currentCheckedKingState({bool? moverIsWhite}) {
+    final states = <_CheckedKingState>[];
+    final whiteKingSquare = _findCurrentKingSquare(true);
+    if (whiteKingSquare != null && _isKingAttacked(boardState, true)) {
+      states.add(
+        _CheckedKingState(
+          square: whiteKingSquare,
+          isWhite: true,
+          againstViewer: _isCheckAgainstViewer(
+            checkedSideIsWhite: true,
+            moverIsWhite: moverIsWhite,
+          ),
+        ),
+      );
+    }
+    final blackKingSquare = _findCurrentKingSquare(false);
+    if (blackKingSquare != null && _isKingAttacked(boardState, false)) {
+      states.add(
+        _CheckedKingState(
+          square: blackKingSquare,
+          isWhite: false,
+          againstViewer: _isCheckAgainstViewer(
+            checkedSideIsWhite: false,
+            moverIsWhite: moverIsWhite,
+          ),
+        ),
+      );
+    }
+    if (states.isEmpty) {
+      return null;
+    }
+    if (states.length == 1) {
+      return states.first;
+    }
+    return states.firstWhere(
+      (state) => state.againstViewer,
+      orElse: () => states.first,
+    );
+  }
+
+  Set<String> _currentCheckedKingSquares() {
+    final squares = <String>{};
+    final whiteKingSquare = _findCurrentKingSquare(true);
+    if (whiteKingSquare != null && _isKingAttacked(boardState, true)) {
+      squares.add(whiteKingSquare);
+    }
+    final blackKingSquare = _findCurrentKingSquare(false);
+    if (blackKingSquare != null && _isKingAttacked(boardState, false)) {
+      squares.add(blackKingSquare);
+    }
+    return squares;
   }
 
   _DetectedGameOutcome? _detectCurrentGameOutcome() {
@@ -7520,11 +7784,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _gameOutcome = gameOutcome;
         _gameDrawReason = detectedOutcome.drawReason;
         _botThinking = false;
+        _clearCheckAlertState();
       });
       _persistAnalysisSnapshotIfNeeded();
       unawaited(_startGameResultReveal(gameOutcome));
       return;
     }
+
+    _showCheckAlertForCurrentPosition();
 
     _persistAnalysisSnapshotIfNeeded();
     _refreshAnalysisForCurrentPosition();
@@ -7638,6 +7905,64 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _legalTargets.clear();
       _gambitAvailableTargets.clear();
     });
+  }
+
+  void _toggleEditToolboxTurn() {
+    if (!_analysisEditMode || _isOpeningSelectionMode) {
+      return;
+    }
+
+    _send('stop');
+    _cancelGameResultReveal();
+    _cancelPendingMoveQualityGrading();
+
+    setState(() {
+      _isWhiteTurn = !_isWhiteTurn;
+      _botThinking = false;
+      _pendingMoveQualityGrading = null;
+      _holdSelectedFrom = null;
+      _gambitSelectedFrom = null;
+      _legalTargets.clear();
+      _gambitAvailableTargets.clear();
+      _clearMoveQualityOverlay();
+      _clearMoveQualityBadge();
+      _topLines = [];
+      _analysisLines = [];
+      _analysisLinesFen = null;
+      _gameResultDialogVisible = false;
+      _clearGameOutcomeState();
+      _restoreCachedEvalForFen(_genFen());
+      _editModeHintText = _isWhiteTurn ? 'White to move' : 'Black to move';
+    });
+    _scheduleEditModeHintHide();
+
+    if (!hasExactlyOneKingPerSide(boardState)) {
+      setState(() {
+        _editModeHintText = _editModeEngineKingsHint;
+      });
+      _scheduleEditModeHintHide();
+      _persistAnalysisSnapshotIfNeeded();
+      return;
+    }
+
+    final detectedOutcome = _detectCurrentGameOutcome();
+    if (detectedOutcome != null) {
+      final gameOutcome = detectedOutcome.outcome;
+      setState(() {
+        _gameOutcome = gameOutcome;
+        _gameDrawReason = detectedOutcome.drawReason;
+        _botThinking = false;
+        _clearCheckAlertState();
+      });
+      _persistAnalysisSnapshotIfNeeded();
+      unawaited(_startGameResultReveal(gameOutcome));
+      return;
+    }
+
+    _showCheckAlertForCurrentPosition();
+
+    _persistAnalysisSnapshotIfNeeded();
+    _refreshAnalysisForCurrentPosition();
   }
 
   void _toggleEditToolboxSelection(String piece) {
@@ -8207,6 +8532,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     unawaited(_playBoardMoveSound(isCapture: captured != null));
 
+    if (captureSquare != null && captured != null) {
+      _showSquareToast(
+        square: captureSquare,
+        label: 'En passant',
+        accent: const Color(0xFFFFD166),
+      );
+    }
+
     if (_playVsBot && _isKingAttacked(boardState, _isWhiteTurn)) {
       unawaited(_checkHaptic());
     }
@@ -8231,11 +8564,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _gameOutcome = gameOutcome;
         _gameDrawReason = detectedOutcome.drawReason;
         _botThinking = false;
+        _clearCheckAlertState();
       });
       _persistAnalysisSnapshotIfNeeded();
       unawaited(_startGameResultReveal(gameOutcome));
       return;
     }
+
+    _showCheckAlertForCurrentPosition(moverIsWhite: moverIsWhite);
 
     if (pendingMoveQuality != null && _pendingMoveQualityGrading != null) {
       _pendingMoveQualityGrading = pendingMoveQuality.copyWith(
@@ -8839,6 +9175,268 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Widget _buildSquareToastOverlay(Size scene, double scale) {
+    final toast = _squareToast;
+    if (toast == null) {
+      return const SizedBox.shrink();
+    }
+
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final reducedEffects = puzzleAcademyShouldReduceEffects(context);
+    final boardInset = _boardGridInsetForContext(context);
+    final squareRect = _squareRectInScene(
+      toast.square,
+      reverse: _boardReversed,
+      boardInset: boardInset,
+    );
+    if (squareRect == null) {
+      return const SizedBox.shrink();
+    }
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(
+        '${toast.square}-${toast.startedAt.microsecondsSinceEpoch}',
+      ),
+      tween: Tween(begin: 0, end: 1),
+      duration: toast.duration,
+      curve: Curves.easeOutCubic,
+      builder: (context, progress, child) {
+        final settle = Curves.easeOutBack.transform(
+          (progress / 0.32).clamp(0.0, 1.0),
+        );
+        final fade = (1.0 - ((progress - 0.58) / 0.42).clamp(0.0, 1.0))
+            .clamp(0.0, 1.0)
+            .toDouble();
+        final rise = Curves.easeOut.transform(progress) * (14 * scale);
+        final bubbleWidth = min(
+          scene.width - 24,
+          max(88.0 * scale, squareRect.width * 1.7),
+        );
+
+        return IgnorePointer(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: squareRect.center.dx - (bubbleWidth / 2),
+                top: squareRect.center.dy - (24 * scale) - rise,
+                child: Opacity(
+                  opacity: fade,
+                  child: Transform.scale(
+                    scale: 0.90 + (settle * 0.10),
+                    child: Container(
+                      constraints: BoxConstraints(maxWidth: bubbleWidth),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12 * scale,
+                        vertical: 7 * scale,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color.alphaBlend(
+                              toast.accent.withValues(alpha: 0.24),
+                              const Color(0xFF141B24),
+                            ),
+                            const Color(0xFF0A1017).withValues(alpha: 0.94),
+                          ],
+                        ),
+                        border: Border.all(
+                          color: toast.accent.withValues(alpha: 0.72),
+                        ),
+                        boxShadow: puzzleAcademySurfaceGlow(
+                          toast.accent,
+                          monochrome: arcade.monochrome,
+                          strength: reducedEffects ? 0.12 : 0.22,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.swap_horiz_rounded,
+                            color: toast.accent,
+                            size: 16 * scale,
+                          ),
+                          SizedBox(width: 6 * scale),
+                          Flexible(
+                            child: Text(
+                              toast.label,
+                              textAlign: TextAlign.center,
+                              style: puzzleAcademyHudStyle(
+                                palette: arcade.base,
+                                size: 11.4 * scale,
+                                color: toast.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCheckAlertOverlay(Size scene, double scale) {
+    final alert = _checkAlert;
+    if (alert == null) {
+      return const SizedBox.shrink();
+    }
+
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final reducedEffects = puzzleAcademyShouldReduceEffects(context);
+    final boardRect = _boardRectInScene();
+    final top = boardRect == null
+        ? 42.0 * scale
+        : max(20.0, boardRect.top - (54.0 * scale));
+    final sideInset = max(
+      12.0,
+      boardRect == null
+          ? 16.0
+          : (alert.againstViewer
+                ? boardRect.left
+                : scene.width - boardRect.right),
+    );
+    final maxWidth = min(300.0, scene.width - (sideInset * 2));
+    final background = alert.againstViewer
+        ? const Color(0xFF261118)
+        : const Color(0xFF21170D);
+    final secondary = alert.againstViewer
+        ? const Color(0xFFFF8B8B)
+        : const Color(0xFF58E09A);
+
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(alert.startedAt.microsecondsSinceEpoch),
+      tween: Tween(begin: 0, end: 1),
+      duration: _checkAlertDuration,
+      curve: Curves.easeOutCubic,
+      builder: (context, progress, child) {
+        final entrance = Curves.easeOutBack.transform(
+          (progress / 0.28).clamp(0.0, 1.0),
+        );
+        final fade = (1.0 - ((progress - 0.60) / 0.40).clamp(0.0, 1.0))
+            .clamp(0.0, 1.0)
+            .toDouble();
+        final horizontalOffset =
+            (1 - entrance) * (alert.againstViewer ? -18.0 : 18.0) * scale;
+        final verticalOffset = (1 - entrance) * -10.0 * scale;
+
+        return IgnorePointer(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: alert.againstViewer ? sideInset : null,
+                right: alert.againstViewer ? null : sideInset,
+                top: top,
+                child: Opacity(
+                  opacity: fade,
+                  child: Transform.translate(
+                    offset: Offset(horizontalOffset, verticalOffset),
+                    child: Container(
+                      constraints: BoxConstraints(maxWidth: maxWidth),
+                      padding: EdgeInsets.fromLTRB(
+                        14 * scale,
+                        10 * scale,
+                        14 * scale,
+                        10 * scale,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color.alphaBlend(
+                              alert.accent.withValues(alpha: 0.22),
+                              background,
+                            ),
+                            background.withValues(alpha: 0.96),
+                          ],
+                        ),
+                        border: Border.all(
+                          color: alert.accent.withValues(alpha: 0.72),
+                          width: 1.8,
+                        ),
+                        boxShadow: puzzleAcademySurfaceGlow(
+                          alert.accent,
+                          monochrome: arcade.monochrome,
+                          strength: reducedEffects ? 0.14 : 0.28,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 28 * scale,
+                            height: 28 * scale,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: alert.accent.withValues(alpha: 0.16),
+                              border: Border.all(
+                                color: alert.accent.withValues(alpha: 0.46),
+                              ),
+                            ),
+                            child: Icon(
+                              alert.icon,
+                              color: alert.accent,
+                              size: 18 * scale,
+                            ),
+                          ),
+                          SizedBox(width: 10 * scale),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  alert.title,
+                                  style: puzzleAcademyDisplayStyle(
+                                    palette: arcade.base,
+                                    size: 14 * scale,
+                                    color: alert.accent,
+                                    withGlow: true,
+                                  ),
+                                ),
+                                SizedBox(height: 2 * scale),
+                                Text(
+                                  alert.subtitle,
+                                  style: puzzleAcademyHudStyle(
+                                    palette: arcade.base,
+                                    size: 10.6 * scale,
+                                    color: secondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Offset _sceneDotOffset({
     required bool yellow,
     required double t,
@@ -9004,7 +9602,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildTopMostOverlay(Size scene, double scale) {
-    return const SizedBox.shrink();
+    if (_checkAlert == null && _squareToast == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned.fill(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _buildSquareToastOverlay(scene, scale),
+          _buildCheckAlertOverlay(scene, scale),
+        ],
+      ),
+    );
   }
 
   Widget _wrapBotAvatarInteractive(double scale, Widget child) {
@@ -9035,7 +9644,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  void _clearVsBotOverlayState() {}
+  void _clearVsBotOverlayState() {
+    _clearCheckAlertState();
+    _clearSquareToastState();
+  }
 
   Offset? _squareCenterInScene(String square) {
     final boardContext = _boardKey.currentContext;
@@ -11056,6 +11668,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final previewMoveSquares = _gambitPreviewLines.isEmpty
         ? const <String>{}
         : _getPreviewMoveSqares();
+    final checkedKingSquares = _currentCheckedKingSquares();
 
     return Container(
       decoration: _playVsBot
@@ -11131,6 +11744,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       isLegalTarget &&
                       (showOpeningSelectionDots || showLockedLegalDots);
                   final isCaptureTarget = isLegalTarget && p != null;
+                  final isCheckedKingSquare = checkedKingSquares.contains(sq);
                   final showMoveQualityBadge =
                       activeMoveQuality != null &&
                       activeMoveQualitySquare == sq;
@@ -11271,6 +11885,50 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                 width: 2,
                                               )
                                             : null,
+                                      ),
+                                    ),
+                                  ),
+                                if (isCheckedKingSquare)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(
+                                          _playVsBot ? 4.0 : 3.5,
+                                        ),
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              _playVsBot ? 9 : 7,
+                                            ),
+                                            gradient: RadialGradient(
+                                              colors: [
+                                                const Color(
+                                                  0xFFEA4E4E,
+                                                ).withValues(alpha: 0.16),
+                                                const Color(
+                                                  0xFFEA4E4E,
+                                                ).withValues(alpha: 0.04),
+                                                Colors.transparent,
+                                              ],
+                                              stops: const [0.0, 0.56, 1.0],
+                                            ),
+                                            border: Border.all(
+                                              color: const Color(
+                                                0xFFEA4E4E,
+                                              ).withValues(alpha: 0.96),
+                                              width: _playVsBot ? 2.2 : 2.0,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(
+                                                  0xFFEA4E4E,
+                                                ).withValues(alpha: 0.22),
+                                                blurRadius: 12,
+                                                spreadRadius: 0.4,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -11700,16 +12358,60 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    buildActionButton(
-                      child: Image.asset(
-                        'assets/pieces/eraser.png',
-                        width: 20,
-                        height: 20,
-                        fit: BoxFit.contain,
+                    Tooltip(
+                      message: _isWhiteTurn
+                          ? 'Switch turn (white to move)'
+                          : 'Switch turn (black to move)',
+                      waitDuration: const Duration(milliseconds: 300),
+                      child: GestureDetector(
+                        onTap: _toggleEditToolboxTurn,
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(1.4),
+                              child: Image.asset(
+                                'assets/pieces/switch.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      tooltip: 'Erase pieces',
-                      onPressed: _toggleEditToolboxEraser,
-                      selected: _editToolboxEraserSelected,
+                    ),
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: 'Erase pieces',
+                      waitDuration: const Duration(milliseconds: 300),
+                      child: GestureDetector(
+                        onTap: _toggleEditToolboxEraser,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 140),
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            boxShadow: _editToolboxEraserSelected
+                                ? <BoxShadow>[
+                                    BoxShadow(
+                                      color: accentColor.withOpacity(0.30),
+                                      blurRadius: 14,
+                                      spreadRadius: 1.5,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(5.0),
+                              child: Image.asset(
+                                'assets/pieces/eraser.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 6),
                     buildActionButton(
@@ -12288,6 +12990,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       required TextStyle titleStyle,
       required TextStyle subtitleStyle,
       required IconData icon,
+      required String resultTitle,
+      required String resultSubtitle,
     }) {
       final buttonRadius = BorderRadius.circular(18);
       return SizedBox(
@@ -12329,9 +13033,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('END MATCH', style: titleStyle),
+                      Text(
+                        resultTitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle,
+                      ),
                       const SizedBox(height: 4),
-                      Text('The game has concluded.', style: subtitleStyle),
+                      Text(
+                        resultSubtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: subtitleStyle,
+                      ),
                     ],
                   ),
                 ),
@@ -12448,6 +13162,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         : _isWinningOutcomeForPov
                         ? Icons.emoji_events_rounded
                         : Icons.flag_rounded,
+                    resultTitle: _endMatchCardTitle(endedOutcome),
+                    resultSubtitle: _endMatchCardSubtitle(endedOutcome),
                   )
                 else
                   Builder(
@@ -12602,6 +13318,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           icon: endedOutcome == GameOutcome.draw
               ? Icons.balance_rounded
               : Icons.flag_rounded,
+          resultTitle: _endMatchCardTitle(endedOutcome),
+          resultSubtitle: _endMatchCardSubtitle(endedOutcome),
         ),
       );
     }
@@ -16694,6 +17412,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _editModeHintTimer?.cancel();
     _moveQualityOverlayTimer?.cancel();
     _quizFeedbackOverlayTimer?.cancel();
+    _checkAlertTimer?.cancel();
+    _squareToastTimer?.cancel();
     _cancelPendingMoveQualityGrading();
     _clearBotGhostArrows();
     unawaited(_engine?.stop());

@@ -326,7 +326,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       }
     }
 
-    return _todayDailyPuzzle ?? _dailyPuzzles.first;
+    return _dailyPuzzles.last;
   }
 
   int get todayDailyPuzzleIndex {
@@ -1532,6 +1532,12 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     _progress = value.copyWith(nodes: _normalizedNodesFor(value));
     _initialized = true;
     _isLoading = false;
+  }
+
+  @visibleForTesting
+  void debugSetDailyPuzzles(List<PuzzleItem> puzzles) {
+    _dailyPuzzles = List<PuzzleItem>.unmodifiable(puzzles);
+    _todayDailyPuzzle = _dailyPuzzles.isEmpty ? null : _dailyPuzzles.first;
   }
 
   PuzzleProgressModel _applyUnlockingAndRewards(PuzzleProgressModel current) {

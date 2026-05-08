@@ -9,25 +9,35 @@ void main() {
       expect(progress.perfectSessionsFor(QuizDifficulty.easy), 0);
       expect(progress.isDifficultyUnlocked(QuizDifficulty.easy), isTrue);
       expect(progress.isDifficultyUnlocked(QuizDifficulty.medium), isFalse);
+      expect(progress.isDifficultyUnlocked(QuizDifficulty.hard), isFalse);
+      expect(progress.isDifficultyUnlocked(QuizDifficulty.veryHard), isFalse);
       expect(progress.highestUnlockedDifficulty(), QuizDifficulty.easy);
     });
 
-    test('requires perfect sessions in order to unlock next difficulty', () {
-      var progress = QuizAcademyProgress.initial();
+    test(
+      'unlocks each tier after one perfect session in the previous tier',
+      () {
+        var progress = QuizAcademyProgress.initial();
 
-      progress = progress.recordPerfectSession(QuizDifficulty.medium);
-      expect(progress.perfectSessionsFor(QuizDifficulty.medium), 0);
+        progress = progress.recordPerfectSession(QuizDifficulty.medium);
+        expect(progress.perfectSessionsFor(QuizDifficulty.medium), 0);
 
-      progress = progress.recordPerfectSession(QuizDifficulty.easy);
-      progress = progress.recordPerfectSession(QuizDifficulty.easy);
-      expect(progress.isDifficultyUnlocked(QuizDifficulty.medium), isFalse);
+        progress = progress.recordPerfectSession(QuizDifficulty.easy);
+        expect(progress.perfectSessionsFor(QuizDifficulty.easy), 1);
+        expect(progress.isDifficultyCompleted(QuizDifficulty.easy), isTrue);
+        expect(progress.isDifficultyUnlocked(QuizDifficulty.medium), isTrue);
+        expect(progress.highestUnlockedDifficulty(), QuizDifficulty.medium);
 
-      progress = progress.recordPerfectSession(QuizDifficulty.easy);
-      expect(progress.perfectSessionsFor(QuizDifficulty.easy), 3);
-      expect(progress.isDifficultyCompleted(QuizDifficulty.easy), isTrue);
-      expect(progress.isDifficultyUnlocked(QuizDifficulty.medium), isTrue);
-      expect(progress.highestUnlockedDifficulty(), QuizDifficulty.medium);
-    });
+        progress = progress.recordPerfectSession(QuizDifficulty.medium);
+        expect(progress.perfectSessionsFor(QuizDifficulty.medium), 1);
+        expect(progress.isDifficultyUnlocked(QuizDifficulty.hard), isTrue);
+
+        progress = progress.recordPerfectSession(QuizDifficulty.hard);
+        expect(progress.perfectSessionsFor(QuizDifficulty.hard), 1);
+        expect(progress.isDifficultyUnlocked(QuizDifficulty.veryHard), isTrue);
+        expect(progress.highestUnlockedDifficulty(), QuizDifficulty.veryHard);
+      },
+    );
 
     test('caps credit at the promotion requirement', () {
       var progress = QuizAcademyProgress.initial();
@@ -48,8 +58,8 @@ void main() {
         final progress = QuizAcademyProgress.fromMap({
           'easy': 99,
           'medium': -2,
-          'hard': 3,
-          'veryHard': 3,
+          'hard': 7,
+          'veryHard': 4,
         });
 
         expect(
@@ -57,8 +67,14 @@ void main() {
           quizAcademyPromotionRequirement,
         );
         expect(progress.perfectSessionsFor(QuizDifficulty.medium), 0);
-        expect(progress.perfectSessionsFor(QuizDifficulty.hard), 3);
-        expect(progress.perfectSessionsFor(QuizDifficulty.veryHard), 3);
+        expect(
+          progress.perfectSessionsFor(QuizDifficulty.hard),
+          quizAcademyPromotionRequirement,
+        );
+        expect(
+          progress.perfectSessionsFor(QuizDifficulty.veryHard),
+          quizAcademyPromotionRequirement,
+        );
         expect(progress.isTrackComplete, isTrue);
       },
     );
