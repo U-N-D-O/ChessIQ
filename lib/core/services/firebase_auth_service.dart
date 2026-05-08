@@ -21,6 +21,8 @@ class FirebaseAuthService {
 
   static const String _signInUrl =
       'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$_apiKey';
+    static const String _deleteUrl =
+      'https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$_apiKey';
   static const String _refreshUrl =
       'https://securetoken.googleapis.com/v1/token?key=$_apiKey';
 
@@ -71,6 +73,37 @@ class FirebaseAuthService {
       await _signInAnonymously();
     }
     return _idToken;
+  }
+
+  /// Deletes the current anonymous Firebase Auth user via Identity Toolkit.
+  ///
+  /// Returns true when Firebase confirms deletion. The caller remains
+  /// responsible for rotating local identity state afterward.
+  Future<bool> deleteCurrentAnonymousIdentity() async {
+    _lastError = null;
+
+    final idToken = await getIdToken();
+    if (idToken == null || idToken.isEmpty) {
+      _lastError =
+          'Anonymous account deletion failed: no valid Firebase ID token is available.';
+      return false;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse(_deleteUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'idToken': idToken}),
+      );
+      if (response.statusCode == 200) {
+        return true;
+      }
+      _lastError = _extractFirebaseError(response.body);
+      return false;
+    } catch (e) {
+      _lastError = 'Anonymous account deletion failed: $e';
+      return false;
+    }
   }
 
   /// Discards the current anonymous identity and provisions a fresh one.

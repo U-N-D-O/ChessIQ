@@ -8,19 +8,33 @@
             "global": {
                 ".indexOn": [
                     "score"
-                ]
+                ],
+                "$handleKey": {
+                    ".write": "auth != null && !newData.exists() && root.child('academy_profile_owner/' + auth.uid + '/handleKey').val() == $handleKey"
+                }
             },
             "by_country": {
                 "$country": {
                     ".indexOn": [
                         "score"
-                    ]
+                    ],
+                    "$handleKey": {
+                        ".write": "auth != null && !newData.exists() && root.child('academy_profile_owner/' + auth.uid + '/handleKey').val() == $handleKey && root.child('academy_profile_owner/' + auth.uid + '/countryKey').val() == $country"
+                    }
                 }
+            }
+        },
+        "academy_profile_owner": {
+            "$uid": {
+                ".read": "auth != null && auth.uid == $uid",
+                ".write": "auth != null && auth.uid == $uid && !newData.exists()"
             }
         },
         "handle_registry": {
             ".read": false,
-            ".write": false
+            "$handleKey": {
+                ".write": "auth != null && !newData.exists() && data.val() == auth.uid"
+            }
         }
     }
 }

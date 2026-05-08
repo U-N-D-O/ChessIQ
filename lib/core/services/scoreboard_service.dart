@@ -20,6 +20,16 @@ class DeleteProfileResult {
   final bool authDeleted;
 }
 
+class _OwnedAcademyProfileRecord {
+  const _OwnedAcademyProfileRecord({
+    required this.handleKey,
+    required this.countryKey,
+  });
+
+  final String handleKey;
+  final String countryKey;
+}
+
 /// Scoreboard service – traffic-minimised and authenticated.
 ///
 /// **Writes** go through the `submitAcademyScoreV2` Cloud Function so that
@@ -83,6 +93,14 @@ class ScoreboardService {
         normalized.contains('endpoint may be unavailable');
   }
 
+  bool _isFunctionAccessDeniedError(String? message) {
+    final normalized = (message ?? '').toLowerCase();
+    return normalized.contains('returned html (401)') ||
+        normalized.contains('returned html (403)') ||
+        normalized.contains('unauthorized') ||
+        normalized.contains('permission to the requested url');
+  }
+
   String _stripModeratedHandlePrefix(String message) {
     final index = message.toUpperCase().indexOf(_moderatedHandlePrefix);
     if (index < 0) {
@@ -114,6 +132,35 @@ class ScoreboardService {
     final uri = Uri.parse('$_databaseUrl/$path.json');
     if (query == null) return uri;
     return uri.replace(queryParameters: query);
+  }
+
+  String _formatHttpFailure({
+    required String action,
+    required http.Response response,
+  }) {
+    final trimmedBody = response.body.trim();
+    final contentType = response.headers['content-type'] ?? '';
+    final bodyPreview = trimmedBody.isEmpty
+        ? ''
+        : trimmedBody
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .substring(
+                0,
+                trimmedBody.length > 160 ? 160 : trimmedBody.length,
+              );
+
+    if (contentType.contains('text/html')) {
+      return 'ChessIQ could not $action. Firebase returned HTML '
+          '(${response.statusCode}) instead of JSON. Preview: $bodyPreview';
+    }
+
+    if (bodyPreview.isNotEmpty) {
+      return 'ChessIQ could not $action. Firebase returned '
+          '${response.statusCode}: $bodyPreview';
+    }
+
+    return 'ChessIQ could not $action. Firebase returned '
+        '${response.statusCode}.';
   }
 
   /// Adds the current auth token to an RTDB URL so authenticated rules apply.
@@ -230,6 +277,125 @@ class ScoreboardService {
       debugPrint('[ScoreboardService] Exception: $e');
       rethrow;
     }
+  }
+
+  Future<_OwnedAcademyProfileRecord?> _loadOwnedProfileForDeletion(
+    String uid,
+  ) async {
+    final uri = await _authedUrl('academy_profile_owner/$uid');
+    final response = await http
+        .get(uri)
+        .timeout(const Duration(seconds: 20), onTimeout: () {
+          throw Exception(
+            'Timed out while loading the Academy ownership record.',
+          );
+        });
+
+    if (response.statusCode != 200) {
+      final message = _formatHttpFailure(
+        action: 'load the Academy ownership record needed for profile deletion',
+        response: response,
+      );
+      _lastFunctionError = message;
+      throw Exception(message);
+    }
+
+    final trimmedBody = response.body.trim();
+    if (trimmedBody.isEmpty || trimmedBody == 'null') {
+      return null;
+    }
+
+    final decoded = jsonDecode(trimmedBody);
+    if (decoded is! Map<String, dynamic>) {
+      final message =
+          'ChessIQ could not read the Academy ownership record needed for '
+          'profile deletion.';
+      _lastFunctionError = message;
+      throw Exception(message);
+    }
+
+    final handleKey = decoded['handleKey']?.toString().trim() ?? '';
+    final countryKey = decoded['countryKey']?.toString().trim() ?? '';
+    if (handleKey.isEmpty || countryKey.isEmpty) {
+      final message =
+          'ChessIQ found an incomplete Academy ownership record and could not '
+          'safely delete the live profile.';
+      _lastFunctionError = message;
+      throw Exception(message);
+    }
+
+    return _OwnedAcademyProfileRecord(
+      handleKey: handleKey,
+      countryKey: countryKey,
+    );
+  }
+
+  Future<void> _deleteOwnedProfilePath({
+    required String path,
+    required String action,
+  }) async {
+    final uri = await _authedUrl(path);
+    final response = await http
+        .delete(uri)
+        .timeout(const Duration(seconds: 20), onTimeout: () {
+          throw Exception('Timed out while trying to $action.');
+        });
+
+    if (response.statusCode != 200) {
+      final message = _formatHttpFailure(action: action, response: response);
+      _lastFunctionError = message;
+      throw Exception(message);
+    }
+  }
+
+  Future<DeleteProfileResult> _deleteProfileDirect({
+    required bool deleteAnonymousIdentity,
+  }) async {
+    final uid = FirebaseAuthService.instance.uid;
+    if (uid == null || uid.isEmpty) {
+      final authError = FirebaseAuthService.instance.lastError;
+      final message = authError != null && authError.isNotEmpty
+          ? 'Authentication required before Academy profile deletion. '
+              '$authError'
+          : 'Authentication required before Academy profile deletion.';
+      _lastFunctionError = message;
+      throw Exception(message);
+    }
+
+    final ownedProfile = await _loadOwnedProfileForDeletion(uid);
+    if (ownedProfile == null) {
+      final message =
+          'ChessIQ could not locate the private Academy ownership record '
+          'needed to delete this live profile.';
+      _lastFunctionError = message;
+      throw Exception(message);
+    }
+
+    await _deleteOwnedProfilePath(
+      path: 'academy_scoreboard/global/${ownedProfile.handleKey}',
+      action: 'delete the global Academy leaderboard entry',
+    );
+    await _deleteOwnedProfilePath(
+      path:
+          'academy_scoreboard/by_country/${ownedProfile.countryKey}/${ownedProfile.handleKey}',
+      action: 'delete the national Academy leaderboard entry',
+    );
+    await _deleteOwnedProfilePath(
+      path: 'handle_registry/${ownedProfile.handleKey}',
+      action: 'release the Academy nickname',
+    );
+    await _deleteOwnedProfilePath(
+      path: 'academy_profile_owner/$uid',
+      action: 'delete the private Academy ownership record',
+    );
+
+    var authDeleted = false;
+    if (deleteAnonymousIdentity) {
+      authDeleted =
+          await FirebaseAuthService.instance.deleteCurrentAnonymousIdentity();
+    }
+
+    return DeleteProfileResult(authDeleted: authDeleted);
   }
 
   Future<void> submitScore({
@@ -399,9 +565,21 @@ class ScoreboardService {
   }) async {
     _lastFunctionError = null;
 
-    final result = await _callFunction('deleteAcademyProfile', {
-      'deleteAnonymousAuth': deleteAnonymousIdentity,
-    });
+    DeleteProfileResult result;
+    try {
+      final functionResult = await _callFunction('deleteAcademyProfile', {
+        'deleteAnonymousAuth': deleteAnonymousIdentity,
+      });
+      result = DeleteProfileResult(authDeleted: functionResult['authDeleted'] == true);
+    } catch (e) {
+      final message = _lastFunctionError ?? e.toString();
+      if (!_isFunctionAccessDeniedError(message)) {
+        rethrow;
+      }
+      result = await _deleteProfileDirect(
+        deleteAnonymousIdentity: deleteAnonymousIdentity,
+      );
+    }
 
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
@@ -410,12 +588,11 @@ class ScoreboardService {
       prefs.remove(_prefScore),
     ]);
 
-    final authDeleted = result['authDeleted'] == true;
-    if (deleteAnonymousIdentity && authDeleted) {
+    if (deleteAnonymousIdentity && result.authDeleted) {
       await FirebaseAuthService.instance.rotateAnonymousIdentity();
     }
 
-    return DeleteProfileResult(authDeleted: authDeleted);
+    return result;
   }
 
   Future<List<LeaderboardEntry>> fetchTopScores({
