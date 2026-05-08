@@ -7524,10 +7524,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           ? wrongFeedbackAccent
           : routeAccent;
       final feedbackOverlayPadding = compactLandscapePlayLayout
-        ? topPanelPadding
-        : compactPortraitPlayLayout
-        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
-        : topPanelPadding;
+          ? topPanelPadding
+          : compactPortraitPlayLayout
+          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
+          : topPanelPadding;
       final icon = isCorrectOverlay == true
           ? Icons.check_circle_rounded
           : Icons.info_outline_rounded;

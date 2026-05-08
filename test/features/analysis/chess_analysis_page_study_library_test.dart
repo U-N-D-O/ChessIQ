@@ -272,6 +272,14 @@ Finder _studyFollowUpToggleInkWell() {
   );
 }
 
+String _studyBoardFlipTooltip(WidgetTester tester) {
+  return tester
+      .widget<Tooltip>(
+        find.byKey(const ValueKey<String>('quiz_study_board_flip_button')),
+      )
+      .message!;
+}
+
 Future<void> _tapStudyReplayControl(WidgetTester tester, String label) async {
   final replayControls = find.byKey(
     const ValueKey<String>('quiz_study_detail_replay_controls'),
@@ -281,6 +289,8 @@ Future<void> _tapStudyReplayControl(WidgetTester tester, String label) async {
     matching: find.text(label),
   );
   expect(buttonLabel, findsOneWidget);
+  await tester.ensureVisible(buttonLabel);
+  await tester.pump();
   await tester.tap(buttonLabel);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 250));
@@ -416,6 +426,17 @@ void main() {
         ),
         findsNothing,
       );
+
+      final flipButton = find.byKey(
+        const ValueKey<String>('quiz_study_board_flip_button'),
+      );
+      expect(flipButton, findsOneWidget);
+
+      final initialFlipTooltip = _studyBoardFlipTooltip(tester);
+      await tester.tap(flipButton);
+      await tester.pump();
+
+      expect(_studyBoardFlipTooltip(tester), isNot(equals(initialFlipTooltip)));
     },
   );
 
@@ -472,6 +493,10 @@ void main() {
 
       expect(find.text('FOLLOW-UPS ON'), findsOneWidget);
       expect(find.text('SUGGESTIONS'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('quiz_study_follow_up_status_tags')),
+        findsNothing,
+      );
 
       await _tapStudyReplayControl(tester, 'BACK');
 
@@ -684,6 +709,31 @@ void main() {
       find.text('PARENT OPENING').evaluate().isNotEmpty ||
           find.text('SYSTEM').evaluate().isNotEmpty,
       isTrue,
+    );
+  });
+
+  testWidgets('study follow-up status tags stay visible on iPad layouts', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpOpeningsStudyLibrary(tester, size: const Size(1024, 768));
+    await _openFirstVariation(tester);
+    await _advanceStudyLineUntilFollowUpsUnlock(tester);
+
+    final followUpToggle = find.byKey(
+      const ValueKey<String>('quiz_study_follow_up_toggle'),
+    );
+    expect(followUpToggle, findsOneWidget);
+
+    await tester.tap(followUpToggle);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    expect(
+      find.byKey(const ValueKey<String>('quiz_study_follow_up_status_tags')),
+      findsOneWidget,
     );
   });
 }

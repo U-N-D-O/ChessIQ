@@ -624,6 +624,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _quizStudyExpandedFamily;
   Map<String, int> _quizStudyOpeningCounts = <String, int>{};
   int _quizStudyShownPly = 0;
+  bool _quizStudyBoardFlipped = false;
   bool _quizStudyFollowUpMode = false;
   bool _quizStudyFollowUpSuggestionsVisible = true;
   bool _quizStudyFollowUpEvalVisible = true;
@@ -12394,7 +12395,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             boxShadow: _editToolboxEraserSelected
                                 ? <BoxShadow>[
                                     BoxShadow(
-                                      color: accentColor.withOpacity(0.30),
+                                      color: accentColor.withValues(
+                                        alpha: 0.30,
+                                      ),
                                       blurRadius: 14,
                                       spreadRadius: 1.5,
                                     ),

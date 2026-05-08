@@ -370,6 +370,7 @@ Widget _buildQuizStudyTopBar(
       layout.mode == _QuizStudyLayoutMode.phoneLandscape &&
       !layout.isTablet &&
       showingDetail;
+  final selectedLine = showingDetail ? state._selectedQuizStudyLine() : null;
   final styleButton = _buildQuizStudyTopIconButton(
     state,
     palette: palette,
@@ -386,6 +387,19 @@ Widget _buildQuizStudyTopBar(
     tooltip: 'Stats',
     onTap: state._openQuizStatsSheet,
   );
+  final flipButton = selectedLine == null
+      ? null
+      : _buildQuizStudyTopIconButton(
+          state,
+          buttonKey: const ValueKey<String>('quiz_study_board_flip_button'),
+          palette: palette,
+          icon: Icons.swap_horiz_rounded,
+          accent: state._quizStudyBoardFlipped ? accent : palette.cyan,
+          tooltip: state._quizStudyBoardIsReversed(selectedLine)
+              ? 'Show white perspective'
+              : 'Show black perspective',
+          onTap: state._toggleQuizStudyBoardOrientation,
+        );
   final titleBlock = Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: useStackedLayout
@@ -468,6 +482,10 @@ Widget _buildQuizStudyTopBar(
                 ),
               ),
               const SizedBox(width: 10),
+              if (flipButton != null) ...<Widget>[
+                flipButton,
+                const SizedBox(width: 8),
+              ],
               styleButton,
               const SizedBox(width: 8),
               statsButton,
@@ -497,6 +515,10 @@ Widget _buildQuizStudyTopBar(
                 ),
               ),
               const SizedBox(width: 8),
+              if (flipButton != null) ...<Widget>[
+                flipButton,
+                const SizedBox(width: 8),
+              ],
               styleButton,
               const SizedBox(width: 8),
               statsButton,
@@ -518,6 +540,10 @@ Widget _buildQuizStudyTopBar(
               const SizedBox(width: 14),
               Expanded(child: titleBlock),
               const SizedBox(width: 14),
+              if (flipButton != null) ...<Widget>[
+                flipButton,
+                const SizedBox(width: 10),
+              ],
               styleButton,
               const SizedBox(width: 10),
               statsButton,
@@ -528,6 +554,7 @@ Widget _buildQuizStudyTopBar(
 
 Widget _buildQuizStudyTopIconButton(
   _QuizScreen state, {
+  Key? buttonKey,
   required _QuizAcademyPalette palette,
   required IconData icon,
   required Color accent,
@@ -535,6 +562,7 @@ Widget _buildQuizStudyTopIconButton(
   required VoidCallback onTap,
 }) {
   return Tooltip(
+    key: buttonKey,
     message: tooltip,
     child: Material(
       color: Colors.transparent,
@@ -1812,6 +1840,7 @@ Widget _buildQuizStudyDetailScreen(
     palette: palette,
     accent: accent,
     maxWidth: compactLandscape ? double.infinity : boardMaxWidth,
+    showFollowUpStatusTags: layout.isTablet,
   );
   final variationLabel = state._quizStudyVariationLabel(
     selectedLine,
@@ -1846,6 +1875,7 @@ Widget _buildQuizStudyDetailScreen(
     accent: accent,
     boardMaxWidth: boardMaxWidth,
     compactLandscape: compactLandscape,
+    showFollowUpStatusTags: layout.isTablet,
   );
 
   if (compactLandscape) {
@@ -1896,6 +1926,7 @@ Widget _buildQuizStudyDetailScreen(
                     accent: accent,
                     boardMaxWidth: boardSize,
                     compactLandscape: true,
+                    showFollowUpStatusTags: false,
                   );
                 },
               ),
@@ -2504,6 +2535,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
   required Color accent,
   required double boardMaxWidth,
   bool compactLandscape = false,
+  required bool showFollowUpStatusTags,
 }) {
   final previewUnavailableCopy =
       'This opening could not be replayed into a clean preview board, but the stored line is still available in Opening Details.';
@@ -2565,7 +2597,8 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
             ),
             const SizedBox(height: 14),
           ],
-          if (displayedBoardState != null && displayedWhiteToMove != null)
+          if (displayedBoardState != null &&
+              displayedWhiteToMove != null) ...<Widget>[
             Center(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -2682,8 +2715,8 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                   );
                 },
               ),
-            )
-          else
+            ),
+          ] else
             Container(
               width: double.infinity,
               padding: EdgeInsets.all(compactLandscape ? 12 : 14),
@@ -2715,6 +2748,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
               palette: palette,
               accent: accent,
               maxWidth: boardMaxWidth,
+              showFollowUpStatusTags: showFollowUpStatusTags,
             ),
             if (followUpActive) ...<Widget>[
               const SizedBox(height: 14),
@@ -2739,6 +2773,7 @@ Widget _buildQuizStudyReplayControls(
   required _QuizAcademyPalette palette,
   required Color accent,
   required double maxWidth,
+  required bool showFollowUpStatusTags,
 }) {
   final currentPly = preview?.shownPly ?? 0;
   final totalPly = preview?.totalPly ?? selectedLine.moveTokens.length;
@@ -2811,7 +2846,7 @@ Widget _buildQuizStudyReplayControls(
                 accent: accent,
                 activationEnabled: followUpControlsUnlocked,
               ),
-              if (followUpActive) ...<Widget>[
+              if (followUpActive && showFollowUpStatusTags) ...<Widget>[
                 const SizedBox(height: 10),
                 _buildQuizStudyFollowUpStatusTags(
                   state,

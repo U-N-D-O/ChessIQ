@@ -101,9 +101,9 @@ void main() {
 
     final provider = PuzzleAcademyProvider();
     provider.debugHydrateProgress(
-      PuzzleProgressModel.initial(nodes: _buildTestNodes()).copyWith(
-        completedDailyPuzzleIds: const <String>{'daily_0', 'daily_1'},
-      ),
+      PuzzleProgressModel.initial(
+        nodes: _buildTestNodes(),
+      ).copyWith(completedDailyPuzzleIds: const <String>{'daily_0', 'daily_1'}),
     );
     provider.debugSetDailyPuzzles(_buildDailyPuzzles(5));
 
