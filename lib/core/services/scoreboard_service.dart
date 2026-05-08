@@ -285,11 +285,14 @@ class ScoreboardService {
     final uri = await _authedUrl('academy_profile_owner/$uid');
     final response = await http
         .get(uri)
-        .timeout(const Duration(seconds: 20), onTimeout: () {
-          throw Exception(
-            'Timed out while loading the Academy ownership record.',
-          );
-        });
+        .timeout(
+          const Duration(seconds: 20),
+          onTimeout: () {
+            throw Exception(
+              'Timed out while loading the Academy ownership record.',
+            );
+          },
+        );
 
     if (response.statusCode != 200) {
       final message = _formatHttpFailure(
@@ -337,9 +340,12 @@ class ScoreboardService {
     final uri = await _authedUrl(path);
     final response = await http
         .delete(uri)
-        .timeout(const Duration(seconds: 20), onTimeout: () {
-          throw Exception('Timed out while trying to $action.');
-        });
+        .timeout(
+          const Duration(seconds: 20),
+          onTimeout: () {
+            throw Exception('Timed out while trying to $action.');
+          },
+        );
 
     if (response.statusCode != 200) {
       final message = _formatHttpFailure(action: action, response: response);
@@ -356,7 +362,7 @@ class ScoreboardService {
       final authError = FirebaseAuthService.instance.lastError;
       final message = authError != null && authError.isNotEmpty
           ? 'Authentication required before Academy profile deletion. '
-              '$authError'
+                '$authError'
           : 'Authentication required before Academy profile deletion.';
       _lastFunctionError = message;
       throw Exception(message);
@@ -391,8 +397,8 @@ class ScoreboardService {
 
     var authDeleted = false;
     if (deleteAnonymousIdentity) {
-      authDeleted =
-          await FirebaseAuthService.instance.deleteCurrentAnonymousIdentity();
+      authDeleted = await FirebaseAuthService.instance
+          .deleteCurrentAnonymousIdentity();
     }
 
     return DeleteProfileResult(authDeleted: authDeleted);
@@ -570,7 +576,9 @@ class ScoreboardService {
       final functionResult = await _callFunction('deleteAcademyProfile', {
         'deleteAnonymousAuth': deleteAnonymousIdentity,
       });
-      result = DeleteProfileResult(authDeleted: functionResult['authDeleted'] == true);
+      result = DeleteProfileResult(
+        authDeleted: functionResult['authDeleted'] == true,
+      );
     } catch (e) {
       final message = _lastFunctionError ?? e.toString();
       if (!_isFunctionAccessDeniedError(message)) {

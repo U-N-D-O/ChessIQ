@@ -21,7 +21,7 @@ class FirebaseAuthService {
 
   static const String _signInUrl =
       'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$_apiKey';
-    static const String _deleteUrl =
+  static const String _deleteUrl =
       'https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$_apiKey';
   static const String _refreshUrl =
       'https://securetoken.googleapis.com/v1/token?key=$_apiKey';
