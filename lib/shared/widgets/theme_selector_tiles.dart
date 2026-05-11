@@ -323,11 +323,11 @@ class _ArrowThemePreviewPainter extends CustomPainter {
           outlineColor: _previewOutlineColor,
         );
       case ArrowThemeMode.heavy3d:
+        final angle = atan2(end.dy - start.dy, end.dx - start.dx);
         const heavyPreviewHeadScale = 0.75;
-        final heavyPreviewHeadLen = 18.0 * heavyPreviewHeadScale;
-        final heavyPreviewHeadWing = 10.0 * heavyPreviewHeadScale;
-        final heavyPreviewHeadWaist = 9.0 * heavyPreviewHeadScale;
-        final heavyPreviewShaftStop = 12.0 * heavyPreviewHeadScale;
+        final heavyPreviewHeadLen = 18.0 * 1.35 * heavyPreviewHeadScale;
+        final heavyPreviewHeadWaist = heavyPreviewHeadLen * 0.78;
+        const heavyPreviewHeadAngle = 0.34;
         final shadowPaint = Paint()
           ..color = Colors.black.withValues(alpha: 0.28)
           ..strokeWidth = 11
@@ -336,7 +336,7 @@ class _ArrowThemePreviewPainter extends CustomPainter {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
         canvas.drawLine(
           start + const Offset(1.5, 2.5),
-          end - (unit * (heavyPreviewShaftStop - 2.0)),
+          end - (unit * max(0.0, heavyPreviewHeadWaist - 2.0)),
           shadowPaint,
         );
 
@@ -349,7 +349,7 @@ class _ArrowThemePreviewPainter extends CustomPainter {
           ..strokeWidth = 10
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke;
-        canvas.drawLine(start, end - (unit * heavyPreviewShaftStop), basePaint);
+        canvas.drawLine(start, end - (unit * heavyPreviewHeadWaist), basePaint);
 
         final corePaint = Paint()
           ..shader = _previewGradientShader(
@@ -360,10 +360,10 @@ class _ArrowThemePreviewPainter extends CustomPainter {
           ..strokeWidth = 7
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke;
-        canvas.drawLine(start, end - (unit * heavyPreviewShaftStop), corePaint);
+        canvas.drawLine(start, end - (unit * heavyPreviewHeadWaist), corePaint);
         canvas.drawLine(
           start - (perp * 1.8),
-          end - (unit * (heavyPreviewShaftStop + 1.0)) - (perp * 1.8),
+          end - (unit * (heavyPreviewHeadWaist + 1.0)) - (perp * 1.8),
           Paint()
             ..color = Colors.white.withValues(alpha: 0.60)
             ..strokeWidth = 2.2
@@ -373,24 +373,16 @@ class _ArrowThemePreviewPainter extends CustomPainter {
         final headPath = Path()
           ..moveTo(end.dx, end.dy)
           ..lineTo(
-            end.dx -
-                unit.dx * heavyPreviewHeadLen +
-                perp.dx * heavyPreviewHeadWing,
-            end.dy -
-                unit.dy * heavyPreviewHeadLen +
-                perp.dy * heavyPreviewHeadWing,
+            end.dx - heavyPreviewHeadLen * cos(angle - heavyPreviewHeadAngle),
+            end.dy - heavyPreviewHeadLen * sin(angle - heavyPreviewHeadAngle),
           )
           ..lineTo(
-            end.dx - unit.dx * heavyPreviewHeadWaist,
-            end.dy - unit.dy * heavyPreviewHeadWaist,
+            end.dx - heavyPreviewHeadWaist * cos(angle),
+            end.dy - heavyPreviewHeadWaist * sin(angle),
           )
           ..lineTo(
-            end.dx -
-                unit.dx * heavyPreviewHeadLen -
-                perp.dx * heavyPreviewHeadWing,
-            end.dy -
-                unit.dy * heavyPreviewHeadLen -
-                perp.dy * heavyPreviewHeadWing,
+            end.dx - heavyPreviewHeadLen * cos(angle + heavyPreviewHeadAngle),
+            end.dy - heavyPreviewHeadLen * sin(angle + heavyPreviewHeadAngle),
           )
           ..close();
 

@@ -223,7 +223,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const int _vsBotInterstitialMatchInterval = 3;
   static const int _bookOpeningPlyLimit = 6;
   static const int _sacrificeModePrice = 2850;
-  static const int _pixelArrowThemePrice = 200;
+  static const int _pixelArrowThemePrice = 850;
   static const int _heavyArrowThemePrice = 1200;
   static const int _moveQualityGradingMultiPv = 4;
   static const int _moveQualityInitialPublishDepth = 2;
