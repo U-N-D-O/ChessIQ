@@ -187,6 +187,7 @@ class EnergyArrowPainter extends CustomPainter {
 
       final pixelMode = themeMode == ArrowThemeMode.pixel;
       final heavyMode = themeMode == ArrowThemeMode.heavy3d;
+      const heavyLineScale = 0.75;
       final pixelStep = pixelMode ? max(3.0, min(4.5, sq * 0.08)) : 0.0;
       final renderStart = pixelMode ? _snapPoint(start, pixelStep) : start;
       final renderEnd = pixelMode ? _snapPoint(end, pixelStep) : end;
@@ -198,7 +199,7 @@ class EnergyArrowPainter extends CustomPainter {
               pixelStep,
               (strokeWidth / pixelStep).roundToDouble() * pixelStep,
             )
-          : (heavyMode ? strokeWidth * 1.55 : strokeWidth);
+          : (heavyMode ? strokeWidth * 1.55 * heavyLineScale : strokeWidth);
 
       if (pixelMode) {
         PixelArrowRenderer.paint(
@@ -228,15 +229,35 @@ class EnergyArrowPainter extends CustomPainter {
         continue;
       }
 
+      final angle = atan2(end.dy - start.dy, end.dx - start.dx);
+      final baseHeadLen = useStaticStyle
+          ? 18.0
+          : (isGambitMode && isFirstArrow ? 22.0 : 18.0);
+      final classicHeadLen = (!useStaticStyle && !isGambitMode && isFirstArrow)
+          ? (baseHeadLen * 1.30)
+          : baseHeadLen;
+      const heavyHeadScale = 0.75;
+      final headLen = heavyMode
+          ? classicHeadLen * 1.35 * heavyHeadScale
+          : classicHeadLen;
+      final headWaist = headLen * (heavyMode ? 0.78 : 2.0 / 3.0);
+      final headAngle = heavyMode ? 0.34 : 0.40;
+      final heavyShaftEnd = heavyMode
+          ? Offset(
+              renderEnd.dx - (unitX * headWaist),
+              renderEnd.dy - (unitY * headWaist),
+            )
+          : renderLineEnd;
+
       final path = Path()
         ..moveTo(renderStart.dx, renderStart.dy)
-        ..lineTo(renderLineEnd.dx, renderLineEnd.dy);
+        ..lineTo(heavyShaftEnd.dx, heavyShaftEnd.dy);
 
       if (heavyMode) {
         canvas.drawPath(
           path,
           Paint()
-            ..strokeWidth = renderStrokeWidth + 8
+            ..strokeWidth = renderStrokeWidth + (8 * heavyLineScale)
             ..strokeCap = StrokeCap.round
             ..style = PaintingStyle.stroke
             ..color = Colors.black.withValues(alpha: 0.24 * alphaScale)
@@ -245,7 +266,8 @@ class EnergyArrowPainter extends CustomPainter {
       }
 
       final outlineStrokeWidth =
-          renderStrokeWidth + (heavyMode ? 4.6 : (useStaticStyle ? 1.8 : 1.6));
+          renderStrokeWidth +
+          (heavyMode ? 4.6 * heavyLineScale : (useStaticStyle ? 1.8 : 1.6));
       final outlineColor = _darkenColor(baseColor, heavyMode ? 0.45 : 0.15)
           .withValues(
             alpha: heavyMode
@@ -363,16 +385,6 @@ class EnergyArrowPainter extends CustomPainter {
         canvas.drawPath(path, pulsePaint);
       }
 
-      final angle = atan2(end.dy - start.dy, end.dx - start.dx);
-      final baseHeadLen = useStaticStyle
-          ? 18.0
-          : (isGambitMode && isFirstArrow ? 22.0 : 18.0);
-      final classicHeadLen = (!useStaticStyle && !isGambitMode && isFirstArrow)
-          ? (baseHeadLen * 1.30)
-          : baseHeadLen;
-      final headLen = heavyMode ? classicHeadLen * 1.35 : classicHeadLen;
-      final headWaist = headLen * (heavyMode ? 0.78 : 2.0 / 3.0);
-      final headAngle = heavyMode ? 0.34 : 0.40;
       final headPoints = <Offset>[
         renderEnd,
         Offset(

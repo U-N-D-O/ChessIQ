@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/shared/graphics/pixel_arrow_renderer.dart';
@@ -221,7 +222,42 @@ class _ArrowThemePreviewPainter extends CustomPainter {
   _ArrowThemePreviewPainter({required this.mode})
     : super(repaint: PixelArrowRenderer.repaintListenable);
 
+  static const Color _previewTailColor = Color(0xFFFF4E4E);
+  static const Color _previewMidColor = Color(0xFFFFE55A);
+  static const Color _previewTipColor = Color(0xFF2FD46F);
+  static const Color _previewOutlineColor = Color(0xFF121212);
+
   final ArrowThemeMode mode;
+
+  Shader _previewGradientShader({
+    required Offset start,
+    required Offset end,
+    double darken = 0.0,
+    double lighten = 0.0,
+  }) {
+    Color adjust(Color color) {
+      var adjusted = color;
+      if (darken > 0) {
+        adjusted = Color.lerp(adjusted, Colors.black, darken)!;
+      }
+      if (lighten > 0) {
+        adjusted = Color.lerp(adjusted, Colors.white, lighten)!;
+      }
+      return adjusted;
+    }
+
+    return ui.Gradient.linear(
+      start,
+      end,
+      <Color>[
+        adjust(_previewTailColor),
+        adjust(_previewMidColor),
+        adjust(_previewTipColor),
+      ],
+      const <double>[0.0, 0.58, 1.0],
+      TileMode.clamp,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -245,9 +281,7 @@ class _ArrowThemePreviewPainter extends CustomPainter {
         canvas.drawLine(start, end - (unit * 8), shadowPaint);
 
         final bodyPaint = Paint()
-          ..shader = const LinearGradient(
-            colors: <Color>[Color(0xFFFFD166), Color(0xFFFF8A3D)],
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+          ..shader = _previewGradientShader(start: start, end: end)
           ..strokeWidth = 6
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke;
@@ -265,11 +299,14 @@ class _ArrowThemePreviewPainter extends CustomPainter {
             end.dy - 13 * cos(0.40) * unit.dy - 13 * sin(0.40) * perp.dy,
           )
           ..close();
-        canvas.drawPath(headPath, Paint()..color = const Color(0xFFFFB347));
+        canvas.drawPath(
+          headPath,
+          Paint()..shader = _previewGradientShader(start: start, end: end),
+        );
         canvas.drawPath(
           headPath,
           Paint()
-            ..color = const Color(0xFF7A3B00)
+            ..color = _previewOutlineColor
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.4,
         );
@@ -279,9 +316,18 @@ class _ArrowThemePreviewPainter extends CustomPainter {
           start: start,
           end: end,
           pixelSize: 2.6,
-          color: const Color(0xFFF4A544),
+          color: _previewTipColor,
+          tailColor: _previewTailColor,
+          midColor: _previewMidColor,
+          tipColor: _previewTipColor,
+          outlineColor: _previewOutlineColor,
         );
       case ArrowThemeMode.heavy3d:
+        const heavyPreviewHeadScale = 0.75;
+        final heavyPreviewHeadLen = 18.0 * heavyPreviewHeadScale;
+        final heavyPreviewHeadWing = 10.0 * heavyPreviewHeadScale;
+        final heavyPreviewHeadWaist = 9.0 * heavyPreviewHeadScale;
+        final heavyPreviewShaftStop = 12.0 * heavyPreviewHeadScale;
         final shadowPaint = Paint()
           ..color = Colors.black.withValues(alpha: 0.28)
           ..strokeWidth = 11
@@ -290,34 +336,34 @@ class _ArrowThemePreviewPainter extends CustomPainter {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
         canvas.drawLine(
           start + const Offset(1.5, 2.5),
-          end - (unit * 10),
+          end - (unit * (heavyPreviewShaftStop - 2.0)),
           shadowPaint,
         );
 
         final basePaint = Paint()
-          ..color = const Color(0xFF5A2E0A)
+          ..shader = _previewGradientShader(
+            start: start,
+            end: end,
+            darken: 0.55,
+          )
           ..strokeWidth = 10
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke;
-        canvas.drawLine(start, end - (unit * 12), basePaint);
+        canvas.drawLine(start, end - (unit * heavyPreviewShaftStop), basePaint);
 
         final corePaint = Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: const <Color>[
-              Color(0xFFFFE5A7),
-              Color(0xFFFFA03D),
-              Color(0xFF8A3B00),
-            ],
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+          ..shader = _previewGradientShader(
+            start: start,
+            end: end,
+            lighten: 0.05,
+          )
           ..strokeWidth = 7
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke;
-        canvas.drawLine(start, end - (unit * 12), corePaint);
+        canvas.drawLine(start, end - (unit * heavyPreviewShaftStop), corePaint);
         canvas.drawLine(
           start - (perp * 1.8),
-          end - (unit * 13) - (perp * 1.8),
+          end - (unit * (heavyPreviewShaftStop + 1.0)) - (perp * 1.8),
           Paint()
             ..color = Colors.white.withValues(alpha: 0.60)
             ..strokeWidth = 2.2
@@ -327,13 +373,24 @@ class _ArrowThemePreviewPainter extends CustomPainter {
         final headPath = Path()
           ..moveTo(end.dx, end.dy)
           ..lineTo(
-            end.dx - unit.dx * 18 + perp.dx * 10,
-            end.dy - unit.dy * 18 + perp.dy * 10,
+            end.dx -
+                unit.dx * heavyPreviewHeadLen +
+                perp.dx * heavyPreviewHeadWing,
+            end.dy -
+                unit.dy * heavyPreviewHeadLen +
+                perp.dy * heavyPreviewHeadWing,
           )
-          ..lineTo(end.dx - unit.dx * 9, end.dy - unit.dy * 9)
           ..lineTo(
-            end.dx - unit.dx * 18 - perp.dx * 10,
-            end.dy - unit.dy * 18 - perp.dy * 10,
+            end.dx - unit.dx * heavyPreviewHeadWaist,
+            end.dy - unit.dy * heavyPreviewHeadWaist,
+          )
+          ..lineTo(
+            end.dx -
+                unit.dx * heavyPreviewHeadLen -
+                perp.dx * heavyPreviewHeadWing,
+            end.dy -
+                unit.dy * heavyPreviewHeadLen -
+                perp.dy * heavyPreviewHeadWing,
           )
           ..close();
 
@@ -346,20 +403,16 @@ class _ArrowThemePreviewPainter extends CustomPainter {
         canvas.drawPath(
           headPath,
           Paint()
-            ..shader = const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: <Color>[
-                Color(0xFFFFF0C2),
-                Color(0xFFFFA848),
-                Color(0xFF7C3200),
-              ],
-            ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+            ..shader = _previewGradientShader(
+              start: start,
+              end: end,
+              lighten: 0.08,
+            ),
         );
         canvas.drawPath(
           headPath,
           Paint()
-            ..color = const Color(0xFF5A2E0A)
+            ..color = _previewOutlineColor
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.6,
         );

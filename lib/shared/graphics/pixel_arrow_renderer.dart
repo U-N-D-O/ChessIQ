@@ -19,6 +19,10 @@ class PixelArrowRenderer {
     required Offset end,
     required double pixelSize,
     required Color color,
+    Color? tailColor,
+    Color? midColor,
+    Color? tipColor,
+    Color? outlineColor,
     double alphaScale = 1.0,
     bool animatePulse = false,
     double progress = 0.0,
@@ -39,11 +43,19 @@ class PixelArrowRenderer {
     final diagonalLineInflate = headDirection.isDiagonal
         ? pixelSize * 0.125
         : 0.0;
+    final usesPreviewGradient =
+        tailColor != null && midColor != null && tipColor != null;
+    final previewTailColor = tailColor ?? color;
+    final previewMidColor = midColor ?? color;
+    final previewTipColor = tipColor ?? color;
 
-    final outlineColor = _darkenColor(
-      color,
-      0.76,
-    ).withValues(alpha: max(0.84, alphaScale));
+    final resolvedOutlineColor =
+        (outlineColor ??
+                _darkenColor(
+                  usesPreviewGradient ? previewTipColor : color,
+                  0.76,
+                ))
+            .withValues(alpha: max(0.84, alphaScale));
     final topLightColor = _lightenColor(
       color,
       0.24,
@@ -76,9 +88,16 @@ class PixelArrowRenderer {
 
     for (var index = 0; index < shaftCells.length; index++) {
       final t = shaftCells.length <= 1 ? 0.0 : index / (shaftCells.length - 1);
-      final shade = t < 0.22
-          ? Color.lerp(topLightColor, bodyColor, min(1.0, t / 0.22))!
-          : (t > 0.84 ? shadowColor : bodyColor);
+      final shade = usesPreviewGradient
+          ? _previewGradientColor(
+              t,
+              previewTailColor,
+              previewMidColor,
+              previewTipColor,
+            ).withValues(alpha: alphaScale)
+          : (t < 0.22
+                ? Color.lerp(topLightColor, bodyColor, min(1.0, t / 0.22))!
+                : (t > 0.84 ? shadowColor : bodyColor));
       fillCells[shaftCells[index]] = _PixelCellPaint(
         color: shade,
         progressT: t,
@@ -86,8 +105,16 @@ class PixelArrowRenderer {
     }
 
     if (fillCells.isEmpty) {
-      fillCells[_worldToCell(snappedStart, pixelSize)] = const _PixelCellPaint(
-        color: Colors.white,
+      final fallbackColor = usesPreviewGradient
+          ? _previewGradientColor(
+              0.0,
+              previewTailColor,
+              previewMidColor,
+              previewTipColor,
+            )
+          : Colors.white;
+      fillCells[_worldToCell(snappedStart, pixelSize)] = _PixelCellPaint(
+        color: fallbackColor,
         progressT: 0.0,
       );
     }
@@ -163,7 +190,7 @@ class PixelArrowRenderer {
     }
 
     for (final cell in outlineCells) {
-      drawCell(cell, outlineColor, inflate: diagonalLineInflate);
+      drawCell(cell, resolvedOutlineColor, inflate: diagonalLineInflate);
     }
     for (final entry in fillCells.entries) {
       drawCell(entry.key, entry.value.color, inflate: diagonalLineInflate);
@@ -185,9 +212,24 @@ class PixelArrowRenderer {
         pixelSize: pixelSize,
         direction: headDirection,
         headSprite: headSprite,
-        color: headTintColor,
+        color: usesPreviewGradient
+            ? previewTipColor.withValues(alpha: alphaScale)
+            : headTintColor,
       );
     }
+  }
+
+  static Color _previewGradientColor(
+    double t,
+    Color tailColor,
+    Color midColor,
+    Color tipColor,
+  ) {
+    final clampedT = t.clamp(0.0, 1.0);
+    if (clampedT <= 0.58) {
+      return Color.lerp(tailColor, midColor, clampedT / 0.58)!;
+    }
+    return Color.lerp(midColor, tipColor, (clampedT - 0.58) / 0.42)!;
   }
 
   static Color _lightenColor(Color color, double amount) {
