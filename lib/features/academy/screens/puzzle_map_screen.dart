@@ -3199,7 +3199,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                 shape: BoxShape.circle,
                 color:
                     (cinematic
-                            ? const Color(0xFFB6BCC5)
+                            ? AppThemeProvider.monochromeBlueOrbColor(
+                                isDark: isDark,
+                              )
                             : const Color(0xFF6FE7FF))
                         .withValues(
                           alpha: cinematic
@@ -3210,7 +3212,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   BoxShadow(
                     color:
                         (cinematic
-                                ? const Color(0xFFB6BCC5)
+                                ? AppThemeProvider.monochromeBlueOrbColor(
+                                    isDark: isDark,
+                                  )
                                 : const Color(0xFF0E7490))
                             .withValues(
                               alpha: cinematic
@@ -3233,7 +3237,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                   shape: BoxShape.circle,
                   color:
                       (cinematic
-                              ? const Color(0xFF9DA3AD)
+                              ? AppThemeProvider.monochromeYellowOrbColor(
+                                  isDark: isDark,
+                                )
                               : const Color(0xFFD8B640))
                           .withValues(
                             alpha: cinematic
@@ -3244,7 +3250,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                     BoxShadow(
                       color:
                           (cinematic
-                                  ? const Color(0xFF9DA3AD)
+                                  ? AppThemeProvider.monochromeYellowOrbColor(
+                                      isDark: isDark,
+                                    )
                                   : const Color(0xFFBF8C00))
                               .withValues(
                                 alpha: cinematic
@@ -3275,12 +3283,22 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                     height: 16,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                      color:
+                          (cinematic
+                                  ? AppThemeProvider.monochromeBlueOrbColor(
+                                      isDark: isDark,
+                                    )
+                                  : const Color(0xFF5AAEE8))
+                              .withValues(alpha: 0.92),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: isDark ? 0.45 : 0.80),
+                          color:
+                              (cinematic
+                                      ? AppThemeProvider.monochromeBlueOrbColor(
+                                          isDark: isDark,
+                                        )
+                                      : const Color(0xFF5AAEE8))
+                                  .withValues(alpha: isDark ? 0.45 : 0.80),
                           blurRadius: isDark ? 18 : 28,
                           spreadRadius: isDark ? 3 : 6,
                         ),
@@ -3300,12 +3318,22 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       height: 16,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF5AAEE8).withValues(alpha: 0.92),
+                        color:
+                            (cinematic
+                                    ? AppThemeProvider.monochromeBlueOrbColor(
+                                        isDark: isDark,
+                                      )
+                                    : const Color(0xFF5AAEE8))
+                                .withValues(alpha: 0.92),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFF5AAEE8,
-                            ).withValues(alpha: isDark ? 0.45 : 0.80),
+                            color:
+                                (cinematic
+                                        ? AppThemeProvider.monochromeBlueOrbColor(
+                                            isDark: isDark,
+                                          )
+                                        : const Color(0xFF5AAEE8))
+                                    .withValues(alpha: isDark ? 0.45 : 0.80),
                             blurRadius: isDark ? 18 : 28,
                             spreadRadius: isDark ? 3 : 6,
                           ),
@@ -3320,12 +3348,22 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       height: 18,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFFD8B640).withValues(alpha: 0.94),
+                        color:
+                            (cinematic
+                                    ? AppThemeProvider.monochromeYellowOrbColor(
+                                        isDark: isDark,
+                                      )
+                                    : const Color(0xFFD8B640))
+                                .withValues(alpha: 0.94),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFFD8B640,
-                            ).withValues(alpha: isDark ? 0.38 : 0.74),
+                            color:
+                                (cinematic
+                                        ? AppThemeProvider.monochromeYellowOrbColor(
+                                            isDark: isDark,
+                                          )
+                                        : const Color(0xFFD8B640))
+                                    .withValues(alpha: isDark ? 0.38 : 0.74),
                             blurRadius: isDark ? 18 : 26,
                             spreadRadius: isDark ? 3 : 5,
                           ),

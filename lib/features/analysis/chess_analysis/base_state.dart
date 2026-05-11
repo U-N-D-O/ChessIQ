@@ -9564,6 +9564,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       animation: _introController,
       builder: (context, child) {
         final t = _introController.value.clamp(0.0, 1.0);
+        final useMonochrome =
+            context.watch<AppThemeProvider>().isMonochrome ||
+            _isCinematicThemeEnabled;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final yellowOrbColor = useMonochrome
+            ? AppThemeProvider.monochromeYellowOrbColor(isDark: isDark)
+            : const Color(0xFFD8B640);
+        final blueOrbColor = useMonochrome
+            ? AppThemeProvider.monochromeBlueOrbColor(isDark: isDark)
+            : const Color(0xFF3F6ED8);
         final topInsetCompensation = MediaQuery.of(context).padding.top;
         final fade = (1.0 - ((t - 0.90) / 0.10).clamp(0.0, 1.0));
         final yellowOffset = _sceneDotOffset(
@@ -9595,12 +9605,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       height: 20,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFFD8B640),
+                        color: yellowOrbColor,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFFD8B640,
-                            ).withValues(alpha: 0.6),
+                            color: yellowOrbColor.withValues(alpha: 0.6),
                             blurRadius: 20,
                             spreadRadius: 1,
                           ),
@@ -9616,12 +9624,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       height: 20,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF3F6ED8),
+                        color: blueOrbColor,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFF3F6ED8,
-                            ).withValues(alpha: 0.6),
+                            color: blueOrbColor.withValues(alpha: 0.6),
                             blurRadius: 20,
                             spreadRadius: 1,
                           ),
@@ -10514,10 +10520,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       scheme.surface,
     );
     final leftBlob = useMonochrome
-        ? (isDark ? const Color(0xFF334B80) : const Color(0xFFDEE8FB))
+        ? AppThemeProvider.monochromeBlueOrbColor(isDark: isDark)
         : const Color(0xFF3F6ED8);
     final rightBlob = useMonochrome
-        ? (isDark ? const Color(0xFF6E6540) : const Color(0xFFF3EBCF))
+        ? AppThemeProvider.monochromeYellowOrbColor(isDark: isDark)
         : const Color(0xFFB9A46A);
 
     return Scaffold(

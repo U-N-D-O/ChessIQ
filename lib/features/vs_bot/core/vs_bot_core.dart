@@ -3989,9 +3989,19 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     height: 16,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: arcade.cyan.withValues(alpha: 0.92),
+                      color:
+                          (arcade.monochrome
+                                  ? AppThemeProvider.monochromeBlueOrbColor(
+                                      isDark: arcade.isDark,
+                                    )
+                                  : arcade.cyan)
+                              .withValues(alpha: 0.92),
                       boxShadow: puzzleAcademySurfaceGlow(
-                        arcade.cyan,
+                        arcade.monochrome
+                            ? AppThemeProvider.monochromeBlueOrbColor(
+                                isDark: arcade.isDark,
+                              )
+                            : arcade.cyan,
                         monochrome: arcade.monochrome,
                         strength: 0.36,
                       ),
