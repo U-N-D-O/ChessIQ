@@ -87,6 +87,29 @@ void main() {
 
       expect(request.goCommand, 'go infinite');
     });
+
+    test('keeps sacrifice scans below live analysis priority', () {
+      expect(
+        EngineRequestRole.sacrificeScan.priority,
+        lessThan(EngineRequestRole.liveAnalysis.priority),
+      );
+    });
+
+    test('round-trips engine lines with principal variation moves', () {
+      final line = EngineLine(
+        'e2e4',
+        42,
+        14,
+        1,
+        principalVariation: const <String>['e2e4', 'e7e5', 'g1f3'],
+      );
+
+      final restored = EngineLine.fromMap(line.toMap());
+
+      expect(restored, isNotNull);
+      expect(restored!.move, 'e2e4');
+      expect(restored.principalVariation, <String>['e2e4', 'e7e5', 'g1f3']);
+    });
   });
 
   group('Opening mode enum', () {

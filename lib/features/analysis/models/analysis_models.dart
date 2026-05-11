@@ -16,7 +16,8 @@ enum EngineRequestRole {
   liveAnalysis,
   botSearch,
   moveGrading,
-  backgroundConfirmation;
+  backgroundConfirmation,
+  sacrificeScan;
 
   int get priority {
     switch (this) {
@@ -28,6 +29,8 @@ enum EngineRequestRole {
         return 100;
       case EngineRequestRole.backgroundConfirmation:
         return 0;
+      case EngineRequestRole.sacrificeScan:
+        return -100;
     }
   }
 }
@@ -692,11 +695,24 @@ class EngineLine {
   final int eval;
   final int depth;
   final int multiPv;
+  final List<String> principalVariation;
 
-  EngineLine(this.move, this.eval, this.depth, this.multiPv);
+  EngineLine(
+    this.move,
+    this.eval,
+    this.depth,
+    this.multiPv, {
+    List<String> principalVariation = const <String>[],
+  }) : principalVariation = List<String>.unmodifiable(principalVariation);
 
   Map<String, dynamic> toMap() {
-    return {'move': move, 'eval': eval, 'depth': depth, 'multiPv': multiPv};
+    return {
+      'move': move,
+      'eval': eval,
+      'depth': depth,
+      'multiPv': multiPv,
+      if (principalVariation.isNotEmpty) 'pv': principalVariation,
+    };
   }
 
   static EngineLine? fromMap(Map<dynamic, dynamic> data) {
@@ -704,9 +720,21 @@ class EngineLine {
     final eval = (data['eval'] as num?)?.toInt();
     final depth = (data['depth'] as num?)?.toInt();
     final multiPv = (data['multiPv'] as num?)?.toInt();
+    final principalVariation =
+        (data['pv'] as List<dynamic>?)
+            ?.map((entry) => entry.toString())
+            .where((entry) => entry.length >= 4)
+            .toList(growable: false) ??
+        const <String>[];
     if (move == null || move.length < 4) return null;
     if (eval == null || depth == null || multiPv == null) return null;
-    return EngineLine(move, eval, depth, multiPv);
+    return EngineLine(
+      move,
+      eval,
+      depth,
+      multiPv,
+      principalVariation: principalVariation,
+    );
   }
 }
 

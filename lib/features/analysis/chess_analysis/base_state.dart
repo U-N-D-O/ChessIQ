@@ -164,6 +164,30 @@ class _GradingSearchSnapshot {
   final bool whiteToMove;
 }
 
+class _SacrificePreviewCandidate {
+  const _SacrificePreviewCandidate({
+    required this.line,
+    required this.materialLossCp,
+    required this.positionalCompensationCp,
+  });
+
+  final EngineLine line;
+  final int materialLossCp;
+  final int positionalCompensationCp;
+}
+
+class _SacrificePreviewPosition {
+  const _SacrificePreviewPosition({
+    required this.boardState,
+    required this.fen,
+    required this.whiteToMove,
+  });
+
+  final Map<String, String> boardState;
+  final String fen;
+  final bool whiteToMove;
+}
+
 class _BoardDragPayload {
   const _BoardDragPayload._({required this.piece, this.fromSquare});
 
@@ -247,6 +271,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   late Map<String, String> boardState;
   CoordinatedEngineService? _engine;
+  CoordinatedEngineService? _sacrificeScanEngine;
   String? _engineOwner;
   late AnimationController _pulseController;
   late AnimationController _introController;
@@ -402,6 +427,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _menuMusicPlaying = false;
   bool _isHotkeyResetting = false;
   Future<void>? _engineStartFuture;
+  Future<void>? _sacrificeScanEngineStartFuture;
   final GlobalKey _sceneKey = GlobalKey();
   final GlobalKey _boardKey = GlobalKey();
   final GlobalKey _suggestionButtonKey = GlobalKey();
@@ -489,6 +515,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int _moveQualityGradingGeneration = 0;
   bool _analysisRefreshQueuedWhileGrading = false;
   _PendingMoveQualityGrading? _pendingMoveQualityGrading;
+  Future<void> _sacrificePreviewScanOperation = Future<void>.value();
+  int _sacrificePreviewScanToken = 0;
+  String? _sacrificePreviewFen;
+  List<EngineLine> _sacrificePreviewLines = <EngineLine>[];
   static const double _botSetupDefaultViewportFraction = 0.60;
   PageController _botSetupPageController = PageController(
     viewportFraction: _botSetupDefaultViewportFraction,
@@ -3979,20 +4009,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _releaseEngineSession() async {
     _engineStartFuture = null;
     final engine = _engine;
+    final sacrificeEngine = _sacrificeScanEngine;
+    engine?.cancelSearches(
+      roles: <EngineRequestRole>{EngineRequestRole.sacrificeScan},
+      reason: 'engine session released',
+    );
+    sacrificeEngine?.cancelSearches(
+      roles: <EngineRequestRole>{EngineRequestRole.sacrificeScan},
+      reason: 'engine session released',
+    );
     _engine = null;
+    _sacrificeScanEngine = null;
     _engineOwner = null;
     _botSearchHandle = null;
     _currentEvalSnapshot = null;
+    _sacrificeScanEngineStartFuture = null;
     _cancelBackgroundMoveQualityConfirmations(
       reason: 'engine session released',
     );
     _clearPositionAnalysisCache();
-    if (engine == null) return;
-    try {
-      await engine.stop();
-    } catch (e) {
-      _addLog('Engine release failed: $e');
-      debugPrint('Engine release failed: $e');
+    if (engine != null) {
+      try {
+        await engine.stop();
+      } catch (e) {
+        _addLog('Engine release failed: $e');
+        debugPrint('Engine release failed: $e');
+      }
+    }
+    if (sacrificeEngine != null) {
+      try {
+        await sacrificeEngine.stop();
+      } catch (e) {
+        _addLog('Sacrifice engine release failed: $e');
+        debugPrint('Sacrifice engine release failed: $e');
+      }
     }
   }
 
@@ -4152,6 +4202,49 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  bool get _canUseDedicatedSacrificeScanEngine =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+  Future<CoordinatedEngineService?> _ensureSacrificeScanEngineStarted() async {
+    if (!_canUseDedicatedSacrificeScanEngine) {
+      return null;
+    }
+
+    final engine = _sacrificeScanEngine ??= createIndependentEngineService(
+      owner: '$_analysisEngineOwner.sacrifice',
+    );
+    _sacrificeScanEngineStartFuture ??= engine.startScheduler();
+    try {
+      await _sacrificeScanEngineStartFuture;
+      return engine;
+    } catch (error) {
+      if (identical(_sacrificeScanEngine, engine)) {
+        try {
+          await engine.stop();
+        } catch (_) {}
+        _sacrificeScanEngine = null;
+      }
+      _addLog('Sacrifice scan engine start failed: $error');
+      debugPrint('Sacrifice scan engine start failed: $error');
+      return null;
+    } finally {
+      _sacrificeScanEngineStartFuture = null;
+    }
+  }
+
+  void _cancelSacrificeScanSearches({
+    String reason = 'sacrifice scan refresh',
+  }) {
+    _engine?.cancelSearches(
+      roles: <EngineRequestRole>{EngineRequestRole.sacrificeScan},
+      reason: reason,
+    );
+    _sacrificeScanEngine?.cancelSearches(
+      roles: <EngineRequestRole>{EngineRequestRole.sacrificeScan},
+      reason: reason,
+    );
+  }
+
   void _send(String cmd) => _engine?.send(cmd);
 
   static const List<String> _analysisEngineRequestCommands = <String>[
@@ -4309,6 +4402,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return _playVsBot && !_isHumanTurnInBotGame;
       case EngineRequestRole.moveGrading:
       case EngineRequestRole.backgroundConfirmation:
+      case EngineRequestRole.sacrificeScan:
         return false;
     }
   }
@@ -4645,6 +4739,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _refreshAnalysisForCurrentPosition() {
     if (_engine != null || kIsWeb) {
       _analyze();
+      _scheduleSacrificePreviewScan();
       return;
     }
 
@@ -4654,6 +4749,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return;
       }
       _analyze();
+      _scheduleSacrificePreviewScan();
     }());
   }
 
@@ -4788,6 +4884,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required String fen,
     required bool whiteToMove,
     int multiPv = _moveQualityGradingMultiPv,
+    int depth = _moveQualityGradingDepth,
+    bool resumeAnalysis = true,
+    int? restoreMultiPv,
   }) async {
     await _ensureEngineStarted();
     if (_engine == null) {
@@ -4803,7 +4902,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _send('stop');
     _send('setoption name MultiPV value $multiPv');
     _send('position fen $fen');
-    _send('go depth $_moveQualityGradingDepth');
+    _send('go depth $depth');
 
     try {
       final gradingTimeout = _moveQualitySearchTimeout(
@@ -4825,12 +4924,261 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _shouldShowVisualSuggestions;
       _analysisRefreshQueuedWhileGrading = false;
       _send(
-        'setoption name MultiPV value ${_shouldShowVisualSuggestions ? _visualSuggestionLineCount : 1}',
+        'setoption name MultiPV value ${restoreMultiPv ?? (_shouldShowVisualSuggestions ? _visualSuggestionLineCount : 1)}',
       );
-      if (shouldResumeAnalysis) {
+      if (resumeAnalysis && shouldResumeAnalysis) {
         _analyze();
       }
     }
+  }
+
+  Future<_GradingSearchSnapshot?> _requestSacrificeScanSearch({
+    required String fen,
+    required bool whiteToMove,
+  }) async {
+    CoordinatedEngineService? resolvedEngine;
+    if (_canUseDedicatedSacrificeScanEngine) {
+      resolvedEngine = await _ensureSacrificeScanEngineStarted();
+    } else {
+      await _ensureEngineStarted();
+      resolvedEngine = _engine;
+    }
+    if (resolvedEngine == null) {
+      return null;
+    }
+
+    final handle = resolvedEngine.scheduleSearch(
+      EngineRequestSpec(
+        requestId: _nextEngineRequestId(EngineRequestRole.sacrificeScan),
+        role: EngineRequestRole.sacrificeScan,
+        fen: fen,
+        whiteToMove: whiteToMove,
+        multiPv: 1,
+        depth: _moveQualityGradingDepth,
+        timeout: _moveQualitySearchTimeout(
+          multiPv: 1,
+          backgroundConfirmation: true,
+        ),
+        firstInfoTimeout: _moveQualityFirstInfoTimeout(
+          backgroundConfirmation: true,
+        ),
+        preCommands: _analysisEngineRequestCommands,
+      ),
+    );
+    final result = await handle.result;
+    if (result.cancelled || result.failureReason != null) {
+      return null;
+    }
+    if (result.lines.isEmpty) {
+      return null;
+    }
+    return _GradingSearchSnapshot(
+      lines: result.lines,
+      whiteToMove: whiteToMove,
+    );
+  }
+
+  bool get _canEvaluateSacrificeAvailability =>
+      !_playVsBot && _sacrificeModeOwned;
+
+  bool get _hasAvailableSacrificePreview =>
+      _canEvaluateSacrificeAvailability &&
+      _sacrificePreviewFen == _genFen() &&
+      _sacrificePreviewLines.isNotEmpty;
+
+  void _scheduleSacrificePreviewScan() {
+    final fen = _genFen();
+    _sacrificePreviewScanToken += 1;
+    final scanToken = _sacrificePreviewScanToken;
+    _cancelSacrificeScanSearches();
+
+    if (!_canEvaluateSacrificeAvailability) {
+      if (_sacrificePreviewFen != null || _sacrificePreviewLines.isNotEmpty) {
+        setState(() {
+          _sacrificePreviewFen = null;
+          _sacrificePreviewLines = <EngineLine>[];
+        });
+      }
+      return;
+    }
+
+    if (_sacrificePreviewFen != fen) {
+      setState(() {
+        _sacrificePreviewFen = fen;
+        _sacrificePreviewLines = <EngineLine>[];
+      });
+    }
+
+    final moverIsWhite = _isWhiteTurn;
+    final boardSnapshot = Map<String, String>.from(boardState);
+    _sacrificePreviewScanOperation = _sacrificePreviewScanOperation
+        .catchError((_) {})
+        .then((_) async {
+          await _runSacrificePreviewScan(
+            scanToken: scanToken,
+            fen: fen,
+            moverIsWhite: moverIsWhite,
+            boardSnapshot: boardSnapshot,
+          );
+        });
+  }
+
+  Future<void> _runSacrificePreviewScan({
+    required int scanToken,
+    required String fen,
+    required bool moverIsWhite,
+    required Map<String, String> boardSnapshot,
+  }) async {
+    if (!_canEvaluateSacrificeAvailability ||
+        scanToken != _sacrificePreviewScanToken) {
+      return;
+    }
+
+    final baselineSnapshot = await _requestSacrificeScanSearch(
+      fen: fen,
+      whiteToMove: moverIsWhite,
+    );
+    if (!mounted ||
+        scanToken != _sacrificePreviewScanToken ||
+        _genFen() != fen) {
+      return;
+    }
+
+    final baselineLine = baselineSnapshot?.lines.isNotEmpty == true
+        ? baselineSnapshot!.lines.first
+        : null;
+    if (baselineLine == null) {
+      setState(() {
+        _sacrificePreviewFen = fen;
+        _sacrificePreviewLines = <EngineLine>[];
+      });
+      return;
+    }
+
+    final materialBefore = _materialCountForSide(boardSnapshot, moverIsWhite);
+    final rootMoves = _verboseMovesForFen(fen);
+    final sacrificeCandidates = <_SacrificePreviewCandidate>[];
+
+    for (final rootMove in rootMoves) {
+      if (!mounted ||
+          scanToken != _sacrificePreviewScanToken ||
+          _genFen() != fen) {
+        return;
+      }
+
+      final rootUci = _uciMoveFromVerboseMove(rootMove);
+      if (rootUci == null) {
+        continue;
+      }
+
+      final firstPosition = _simulateSacrificePreviewMove(
+        fen: fen,
+        state: Map<String, String>.from(boardSnapshot),
+        uciMove: rootUci,
+      );
+      if (firstPosition == null) {
+        continue;
+      }
+
+      final offeredSquare = rootUci.substring(2, 4);
+      final captureReplies = _verboseMovesForFen(
+        firstPosition.fen,
+      ).where((reply) => reply['to']?.toString() == offeredSquare);
+
+      for (final captureReply in captureReplies) {
+        if (!mounted ||
+            scanToken != _sacrificePreviewScanToken ||
+            _genFen() != fen) {
+          return;
+        }
+
+        final captureUci = _uciMoveFromVerboseMove(captureReply);
+        if (captureUci == null) {
+          continue;
+        }
+
+        final capturePosition = _simulateSacrificePreviewMove(
+          fen: firstPosition.fen,
+          state: firstPosition.boardState,
+          uciMove: captureUci,
+        );
+        if (capturePosition == null) {
+          continue;
+        }
+
+        final acceptanceSnapshot = await _requestSacrificeScanSearch(
+          fen: capturePosition.fen,
+          whiteToMove: moverIsWhite,
+        );
+        if (!mounted ||
+            scanToken != _sacrificePreviewScanToken ||
+            _genFen() != fen) {
+          return;
+        }
+
+        final acceptanceLine = acceptanceSnapshot?.lines.isNotEmpty == true
+            ? acceptanceSnapshot!.lines.first
+            : null;
+        if (acceptanceLine == null) {
+          continue;
+        }
+
+        final candidate = _sacrificePreviewCandidateForAcceptedCapture(
+          rootMoveUci: rootUci,
+          captureReplyUci: captureUci,
+          materialBefore: materialBefore,
+          materialAfterCapture: _materialCountForSide(
+            capturePosition.boardState,
+            moverIsWhite,
+          ),
+          baselineEvalCp: baselineLine.eval,
+          acceptedCaptureEvalCp: acceptanceLine.eval,
+          searchDepth: acceptanceLine.depth,
+        );
+        if (candidate != null) {
+          sacrificeCandidates.add(candidate);
+        }
+      }
+    }
+
+    if (!mounted ||
+        scanToken != _sacrificePreviewScanToken ||
+        _genFen() != fen) {
+      return;
+    }
+
+    setState(() {
+      _sacrificePreviewFen = fen;
+      _sacrificePreviewLines = _previewLinesFromSacrificeCandidates(
+        sacrificeCandidates,
+      );
+    });
+  }
+
+  List<Map<String, dynamic>> _verboseMovesForFen(String fen) {
+    try {
+      final game = chess.Chess.fromFEN(fen);
+      return game
+          .moves(<String, dynamic>{'verbose': true})
+          .whereType<Map>()
+          .map((move) => move.cast<String, dynamic>())
+          .toList(growable: false);
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  String? _uciMoveFromVerboseMove(Map<String, dynamic> move) {
+    final from = move['from']?.toString();
+    final to = move['to']?.toString();
+    if (from == null || from.length != 2 || to == null || to.length != 2) {
+      return null;
+    }
+    final promotion = move['promotion']?.toString().toLowerCase();
+    if (promotion == null || promotion.isEmpty) {
+      return '$from$to';
+    }
+    return '$from$to$promotion';
   }
 
   Future<void> _finalizePendingMoveQualityGrading(
@@ -5409,11 +5757,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final d = RegExp(r'depth (\d+)').firstMatch(line);
     final pv = RegExp(r'multipv (\d+)').firstMatch(line);
-    final m = RegExp(r'pv ([a-h][1-8][a-h][1-8][nbrq]?)').firstMatch(line);
+    final principalVariation =
+        RegExp(r'\bpv\s+(.+)$')
+            .firstMatch(line)
+            ?.group(1)
+            ?.split(RegExp(r'\s+'))
+            .where(
+              (move) => RegExp(r'^[a-h][1-8][a-h][1-8][nbrq]?$').hasMatch(move),
+            )
+            .toList(growable: false) ??
+        const <String>[];
     final sCp = RegExp(r'score cp (-?\d+)').firstMatch(line);
     final sMate = RegExp(r'score mate (-?\d+)').firstMatch(line);
 
-    if (d != null && m != null) {
+    if (d != null && principalVariation.isNotEmpty) {
       final depth = int.parse(d.group(1)!);
       final multiPv = int.tryParse(pv?.group(1) ?? '1') ?? 1;
       final maxMultiPvAllowed = gradingSearchActive
@@ -5424,7 +5781,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (multiPv > maxMultiPvAllowed) {
         return;
       }
-      final move = m.group(1)!;
+      final move = principalVariation.first;
 
       int cp;
       double normalizedEval;
@@ -5448,9 +5805,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         normalizedEval = 0.0;
       }
 
+      final parsedLine = EngineLine(
+        move,
+        cp,
+        depth,
+        multiPv,
+        principalVariation: principalVariation,
+      );
+
       if (gradingSearchActive) {
         if (multiPv <= _gradingSearchMultiPv) {
-          _gradingSearchLines[multiPv] = EngineLine(move, cp, depth, multiPv);
+          _gradingSearchLines[multiPv] = parsedLine;
         }
         return;
       }
@@ -5463,7 +5828,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         if (!_playVsBot || !_botThinking) {
           _botSearchCompleter = null;
         }
-        final parsedLine = EngineLine(move, cp, depth, multiPv);
         if (multiPv <= _botSearchMultiPv) {
           _botSearchLines[multiPv] = parsedLine;
         }
@@ -5501,7 +5865,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _analysisLines.removeWhere(
           (e) => e.multiPv == multiPv || e.multiPv > analysisMultiPvCount,
         );
-        _analysisLines.add(EngineLine(move, cp, depth, multiPv));
+        _analysisLines.add(parsedLine);
         _analysisLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
         if (shouldShowVisualSuggestions) {
           _topLines.removeWhere(
@@ -5509,7 +5873,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 e.multiPv == multiPv || e.multiPv > _visualSuggestionLineCount,
           );
           if (multiPv <= _visualSuggestionLineCount) {
-            _topLines.add(EngineLine(move, cp, depth, multiPv));
+            _topLines.add(parsedLine);
             _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
           }
         } else if (_topLines.isNotEmpty && multiPv == 1) {
@@ -5523,7 +5887,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _pendingMoveQualityGrading = null;
           _scheduleMoveQualityGrading(
             pending,
-            livePostMoveLine: EngineLine(move, cp, depth, multiPv),
+            livePostMoveLine: parsedLine,
             livePostMoveWhiteToMove: _isWhiteTurn,
           );
         }
@@ -6298,13 +6662,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final hasOpeningChoices = _sourceSquaresWithRegisteredOpenings(
       gambitsOnly: false,
     ).isNotEmpty;
+    final hasAvailableSacrifice = _hasAvailableSacrificePreview;
     String? feedbackLabel;
     Color? feedbackColor;
     bool refreshAnalysis = false;
     bool openSacrificeStore = false;
     if ((_openingMode == OpeningMode.off ||
             _openingMode == OpeningMode.violetGlow) &&
-        !hasOpeningChoices) {
+        !hasOpeningChoices &&
+        !hasAvailableSacrifice) {
       _flashOpeningButtonUnavailable(
         logMessage:
             'Opening select unavailable: no opening continuations remain in this position.',
@@ -6313,7 +6679,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
     setState(() {
       // Cycle: off -> yellow -> blue -> violet -> sacrifice -> yellow
-      if (_openingMode == OpeningMode.off) {
+      if (_openingMode == OpeningMode.off && hasAvailableSacrifice) {
+        _openingMode = OpeningMode.sacrificeGlow;
+        _selectedGambit = null;
+        _gambitPreviewLines = [];
+        _gambitSelectedFrom = null;
+        _legalTargets.clear();
+        _gambitAvailableTargets.clear();
+        refreshAnalysis = true;
+        _addLog('Opening mode enabled - red sacrifice scan');
+      } else if (_openingMode == OpeningMode.off) {
         // First press: enter yellow selection mode.
         _openingMode = OpeningMode.yellowGlow;
         _selectedGambit = null;
@@ -8127,57 +8502,133 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   List<EngineLine> _sacrificePreviewLinesForCurrentPosition() {
-    if (!_isSacrificeModeActive) {
+    if (!_isSacrificeModeActive || _sacrificePreviewFen != _genFen()) {
       return const <EngineLine>[];
     }
-    final currentFen = _genFen();
-    final liveLines = _analysisLinesFen == currentFen
-        ? _analysisLines
-        : const <EngineLine>[];
-    if (liveLines.isEmpty) {
-      return const <EngineLine>[];
+    return _sacrificePreviewLines;
+  }
+
+  String? _enPassantTargetFromFen(String fen) {
+    final parts = fen.split(' ');
+    if (parts.length < 4 || parts[3] == '-') {
+      return null;
     }
+    return parts[3];
+  }
 
-    final moverIsWhite = _isWhiteTurn;
-    final materialBefore = _materialCountForSide(boardState, moverIsWhite);
-    final baselineEvalCp = (_currentEval * 100).round();
-    final sacrificeLines = <EngineLine>[];
+  Map<String, String> _uciPayloadFromMove(String uciMove) {
+    final payload = <String, String>{
+      'from': uciMove.substring(0, 2),
+      'to': uciMove.substring(2, 4),
+    };
+    if (uciMove.length == 5) {
+      payload['promotion'] = uciMove[4];
+    }
+    return payload;
+  }
 
-    for (final line in liveLines) {
-      if (!_isLegalUciMove(line.move)) {
-        continue;
+  _SacrificePreviewPosition? _simulateSacrificePreviewMove({
+    required String fen,
+    required Map<String, String> state,
+    required String uciMove,
+  }) {
+    try {
+      final game = chess.Chess.fromFEN(fen);
+      final result = game.move(_uciPayloadFromMove(uciMove));
+      if (result == false) {
+        return null;
       }
-      final nextBoardState = _applyUciMove(
-        Map<String, String>.from(boardState),
-        line.move,
+      return _SacrificePreviewPosition(
+        boardState: _applyUciMove(
+          state,
+          uciMove,
+          enPassantTarget: _enPassantTargetFromFen(fen),
+        ),
+        fen: game.fen,
+        whiteToMove: game.turn == chess.Color.WHITE,
       );
-      final materialAfter = _materialCountForSide(nextBoardState, moverIsWhite);
-      final materialLoss = materialBefore - materialAfter;
-      if (materialLoss <= 0) {
-        continue;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  _SacrificePreviewCandidate? _sacrificePreviewCandidateForAcceptedCapture({
+    required String rootMoveUci,
+    required String captureReplyUci,
+    required double materialBefore,
+    required double materialAfterCapture,
+    required int baselineEvalCp,
+    required int acceptedCaptureEvalCp,
+    required int searchDepth,
+  }) {
+    final materialLossCp = max(
+      0,
+      ((materialBefore - materialAfterCapture) * 100).round(),
+    );
+    if (materialLossCp <= 0) {
+      return null;
+    }
+    final positionalCompensationCp = acceptedCaptureEvalCp - baselineEvalCp;
+    if (positionalCompensationCp <= 0) {
+      return null;
+    }
+    return _SacrificePreviewCandidate(
+      line: EngineLine(
+        rootMoveUci,
+        acceptedCaptureEvalCp,
+        searchDepth,
+        1,
+        principalVariation: <String>[rootMoveUci, captureReplyUci],
+      ),
+      materialLossCp: materialLossCp,
+      positionalCompensationCp: positionalCompensationCp,
+    );
+  }
+
+  int _compareSacrificePreviewCandidates(
+    _SacrificePreviewCandidate left,
+    _SacrificePreviewCandidate right,
+  ) {
+    final materialCompare = right.materialLossCp.compareTo(left.materialLossCp);
+    if (materialCompare != 0) {
+      return materialCompare;
+    }
+    final compensationCompare = right.positionalCompensationCp.compareTo(
+      left.positionalCompensationCp,
+    );
+    if (compensationCompare != 0) {
+      return compensationCompare;
+    }
+    final evalCompare = right.line.eval.compareTo(left.line.eval);
+    if (evalCompare != 0) {
+      return evalCompare;
+    }
+    return left.line.multiPv.compareTo(right.line.multiPv);
+  }
+
+  List<EngineLine> _previewLinesFromSacrificeCandidates(
+    Iterable<_SacrificePreviewCandidate> candidates,
+  ) {
+    final bestByMove = <String, _SacrificePreviewCandidate>{};
+    for (final candidate in candidates) {
+      final current = bestByMove[candidate.line.move];
+      if (current == null ||
+          _compareSacrificePreviewCandidates(candidate, current) < 0) {
+        bestByMove[candidate.line.move] = candidate;
       }
-      if (line.eval <= baselineEvalCp) {
-        continue;
-      }
-      sacrificeLines.add(line);
     }
 
-    sacrificeLines.sort((a, b) {
-      final evalCompare = b.eval.compareTo(a.eval);
-      if (evalCompare != 0) {
-        return evalCompare;
-      }
-      return a.multiPv.compareTo(b.multiPv);
-    });
-
-    final limited = sacrificeLines.take(3).toList(growable: false);
+    final rankedCandidates = bestByMove.values.toList(growable: false)
+      ..sort(_compareSacrificePreviewCandidates);
+    final limited = rankedCandidates.take(1).toList(growable: false);
     return <EngineLine>[
       for (int index = 0; index < limited.length; index++)
         EngineLine(
-          limited[index].move,
-          limited[index].eval,
-          limited[index].depth,
+          limited[index].line.move,
+          limited[index].line.eval,
+          limited[index].line.depth,
           index + 1,
+          principalVariation: limited[index].line.principalVariation,
         ),
     ];
   }
@@ -8878,14 +9329,27 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return topLeft & boardBox.size;
   }
 
-  double _boardGridInsetForContext(BuildContext context) {
+  bool _isCompactBotFrame(BuildContext context) {
     final media = MediaQuery.of(context);
-    final compactBotFrame =
-        _playVsBot &&
+    return _playVsBot &&
         (media.size.width <= 390 ||
             (media.orientation == Orientation.landscape &&
                 media.size.height <= 430));
-    return _playVsBot ? (compactBotFrame ? 6.0 : 8.0) : 0.0;
+  }
+
+  double _boardFrameBorderWidth() => _playVsBot ? 2.8 : 2.0;
+
+  double _boardInnerPaddingForContext(BuildContext context) {
+    if (!_playVsBot) {
+      return 0.0;
+    }
+    return _isCompactBotFrame(context) ? 6.0 : 8.0;
+  }
+
+  double _boardGridInsetForContext(BuildContext context) {
+    // Board overlays are painted against the outer board scene, while the
+    // playable 8x8 grid sits inside the frame border and any extra bot padding.
+    return _boardFrameBorderWidth() + _boardInnerPaddingForContext(context);
   }
 
   Rect? _squareRectInScene(
@@ -11698,16 +12162,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Widget _buildBoard(bool reverse) {
     final darkSquareColor = _darkSquareColorForTheme();
     final lightSquareColor = _lightSquareColorForTheme();
-    final media = MediaQuery.of(context);
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
     final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
-    final compactBotFrame =
-        _playVsBot &&
-        (media.size.width <= 390 ||
-            (media.orientation == Orientation.landscape &&
-                media.size.height <= 430));
+    final compactBotFrame = _isCompactBotFrame(context);
+    final boardBorderWidth = _boardFrameBorderWidth();
+    final boardInnerPadding = _boardInnerPaddingForContext(context);
     final boardAccent = _playVsBot
         ? (_selectedBot == null
               ? arcade.cyan
@@ -11745,16 +12206,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               palette: arcade,
               accent: boardAccent,
               radius: compactBotFrame ? 16 : 18,
-              borderWidth: 2.8,
+              borderWidth: boardBorderWidth,
               fillColor: arcade.panelAlt,
             )
           : BoxDecoration(
-              border: Border.all(color: Colors.white10, width: 2),
+              border: Border.all(
+                color: Colors.white10,
+                width: boardBorderWidth,
+              ),
               borderRadius: BorderRadius.circular(4),
             ),
-      padding: _playVsBot
-          ? EdgeInsets.all(compactBotFrame ? 6 : 8)
-          : EdgeInsets.zero,
+      padding: _playVsBot ? EdgeInsets.all(boardInnerPadding) : EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(innerBoardRadius),
         child: LayoutBuilder(
@@ -12658,13 +13120,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               _gambitPreviewLines.isNotEmpty
         ? const Color(0xFFFFD166)
         : null;
-    final media = MediaQuery.of(context);
-    final compactBotFrame =
-        _playVsBot &&
-        (media.size.width <= 390 ||
-            (media.orientation == Orientation.landscape &&
-                media.size.height <= 430));
-    final boardInset = _playVsBot ? (compactBotFrame ? 6.0 : 8.0) : 0.0;
+    final boardInset = _boardGridInsetForContext(context);
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) => IgnorePointer(
@@ -13461,12 +13917,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     child: AnimatedBuilder(
                       animation: _openingButtonFlashController,
                       builder: (context, child) {
+                        final hasAvailableSacrifice =
+                            _hasAvailableSacrificePreview;
                         final flashProgress =
                             _openingButtonFlashController.value;
                         // Blink: visible for first half, invisible for second half
                         final blink = (flashProgress * 4).floor().isEven;
+                        final sacrificeAlertActive =
+                            hasAvailableSacrifice &&
+                            _openingMode != OpeningMode.sacrificeGlow;
                         final Color activeColor = _openingButtonFlashRed
                             ? Colors.redAccent
+                            : sacrificeAlertActive
+                            ? _openingModeButtonColor(OpeningMode.sacrificeGlow)
                             : _openingModeButtonColor(_openingMode);
                         final Color glowColor =
                             !_openingButtonFlashRed &&
@@ -13475,6 +13938,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             : activeColor;
                         final bool isOn =
                             _openingButtonFlashRed ||
+                            sacrificeAlertActive ||
                             _openingMode != OpeningMode.off;
                         final idleBackground = Color.alphaBlend(
                           scheme.primary.withValues(
@@ -13527,6 +13991,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             Icons.auto_awesome,
                             color: _openingButtonFlashRed
                                 ? (blink ? Colors.redAccent : idleIconColor)
+                                : sacrificeAlertActive
+                                ? _openingModeButtonColor(
+                                    OpeningMode.sacrificeGlow,
+                                  )
                                 : _openingMode == OpeningMode.off
                                 ? idleIconColor
                                 : _openingModeButtonColor(_openingMode),
@@ -15706,6 +16174,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     await _saveStoreState();
     unawaited(_playStorePurchaseSound());
     _addLog('Sacrifice Mode unlocked');
+    _refreshAnalysisForCurrentPosition();
   }
 
   Future<void> _purchaseThemePack() async {
@@ -17656,8 +18125,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _checkAlertTimer?.cancel();
     _squareToastTimer?.cancel();
     _cancelPendingMoveQualityGrading();
+    _cancelSacrificeScanSearches(reason: 'analysis disposed');
     _clearBotGhostArrows();
     unawaited(_engine?.stop());
+    unawaited(_sacrificeScanEngine?.stop());
     _cancelIdleInterstitialTimer();
     _pulseController.removeListener(_updateBotSetupBlueDotScrollOffset);
     _pulseController.dispose();

@@ -981,3 +981,9 @@ class _ScheduledSearchTask {
 CoordinatedEngineService createEngineService({required String owner}) {
   return CoordinatedEngineService(owner: owner);
 }
+
+CoordinatedEngineService createIndependentEngineService({
+  required String owner,
+}) {
+  return CoordinatedEngineService.debug(owner: owner);
+}
