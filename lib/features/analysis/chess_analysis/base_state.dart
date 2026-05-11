@@ -7011,7 +7011,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _sacrificeModeOwned &&
       _openingMode == OpeningMode.sacrificeGlow;
 
-    bool get _blocksDirectBoardMoveSelection =>
+  bool get _blocksDirectBoardMoveSelection =>
       _isOpeningSelectionMode && _selectedGambit == null;
 
   Color get _openingSelectionAccent => _isGambitsOnlyOpeningMode
@@ -7323,10 +7323,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   String _normalizedOpeningSearchText(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .trim();
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
   }
 
   bool _openingNameMatchesSearchQuery(String openingName, String rawQuery) {
