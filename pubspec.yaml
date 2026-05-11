@@ -76,6 +76,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/academy/
+    - assets/arrows/
     - assets/sounds/
     - assets/bots/
     - assets/puzzles/

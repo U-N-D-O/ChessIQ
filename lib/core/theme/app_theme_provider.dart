@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppThemeStyle { standard, monochrome }
 
+enum ArrowThemeMode { classic, pixel, heavy3d }
+
 class AppBoardPalette {
   final Color darkSquare;
   final Color lightSquare;
@@ -21,6 +23,8 @@ class AppThemeUnlockState {
   final bool tuttiFruttiOwned;
   final bool spectralOwned;
   final bool monochromePiecesOwned;
+  final bool pixelArrowThemeOwned;
+  final bool heavyArrowThemeOwned;
 
   const AppThemeUnlockState({
     this.themePackOwned = false,
@@ -30,6 +34,8 @@ class AppThemeUnlockState {
     this.tuttiFruttiOwned = false,
     this.spectralOwned = false,
     this.monochromePiecesOwned = false,
+    this.pixelArrowThemeOwned = false,
+    this.heavyArrowThemeOwned = false,
   });
 }
 
@@ -86,22 +92,31 @@ class AppThemeProvider extends ChangeNotifier {
     'Spectral',
     'Monochrome',
   ];
+  static const List<String> _arrowThemeLabels = <String>[
+    'Classic',
+    '8-Bit',
+    '3D Mass',
+  ];
 
   ThemeMode _themeMode = ThemeMode.dark;
   AppThemeStyle _themeStyle = AppThemeStyle.standard;
   int _boardThemeIndex = 0;
   int _pieceThemeIndex = 0;
+  int _arrowThemeIndex = 0;
   bool _loaded = false;
 
   ThemeMode get themeMode => _themeMode;
   AppThemeStyle get themeStyle => _themeStyle;
   int get boardThemeIndex => _boardThemeIndex;
   int get pieceThemeIndex => _pieceThemeIndex;
+  int get arrowThemeIndex => _arrowThemeIndex;
+  ArrowThemeMode get arrowThemeMode => ArrowThemeMode.values[_arrowThemeIndex];
   bool get isLoaded => _loaded;
   bool get isMonochrome => _themeStyle == AppThemeStyle.monochrome;
 
   static int get boardThemeCount => _boardPalettes.length;
   static int get pieceThemeCount => _pieceThemeLabels.length;
+  static int get arrowThemeCount => _arrowThemeLabels.length;
 
   static AppBoardPalette boardPaletteForIndex(int index) {
     if (index < 0 || index >= _boardPalettes.length) {
@@ -122,6 +137,13 @@ class AppThemeProvider extends ChangeNotifier {
       return _pieceThemeLabels.first;
     }
     return _pieceThemeLabels[index];
+  }
+
+  static String arrowThemeLabelForIndex(int index) {
+    if (index < 0 || index >= _arrowThemeLabels.length) {
+      return _arrowThemeLabels.first;
+    }
+    return _arrowThemeLabels[index];
   }
 
   static bool isBoardThemeIndexUnlocked(
@@ -152,6 +174,19 @@ class AppThemeProvider extends ChangeNotifier {
       3 => tuttiFruttiOwned,
       4 => spectralOwned,
       5 => monochromePiecesOwned,
+      _ => false,
+    };
+  }
+
+  static bool isArrowThemeIndexUnlocked(
+    int index, {
+    required bool pixelArrowThemeOwned,
+    required bool heavyArrowThemeOwned,
+  }) {
+    return switch (index) {
+      0 => true,
+      1 => pixelArrowThemeOwned,
+      2 => heavyArrowThemeOwned,
       _ => false,
     };
   }
@@ -187,6 +222,21 @@ class AppThemeProvider extends ChangeNotifier {
             tuttiFruttiOwned: tuttiFruttiOwned,
             spectralOwned: spectralOwned,
             monochromePiecesOwned: monochromePiecesOwned,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  static List<int> availableArrowThemeIndices({
+    required bool pixelArrowThemeOwned,
+    required bool heavyArrowThemeOwned,
+  }) {
+    return List<int>.generate(arrowThemeCount, (index) => index)
+        .where(
+          (index) => isArrowThemeIndexUnlocked(
+            index,
+            pixelArrowThemeOwned: pixelArrowThemeOwned,
+            heavyArrowThemeOwned: heavyArrowThemeOwned,
           ),
         )
         .toList(growable: false);
@@ -278,11 +328,15 @@ class AppThemeProvider extends ChangeNotifier {
         if (decoded is Map<String, dynamic>) {
           final boardTheme = decoded['boardTheme'];
           final pieceTheme = decoded['pieceTheme'];
+          final arrowTheme = decoded['arrowTheme'];
           if (boardTheme is int) {
             _boardThemeIndex = boardTheme.clamp(0, boardThemeCount - 1);
           }
           if (pieceTheme is int) {
             _pieceThemeIndex = pieceTheme.clamp(0, pieceThemeCount - 1);
+          }
+          if (arrowTheme is int) {
+            _arrowThemeIndex = arrowTheme.clamp(0, arrowThemeCount - 1);
           }
         }
       } catch (_) {}
@@ -329,6 +383,12 @@ class AppThemeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setArrowThemeIndex(int value) async {
+    _arrowThemeIndex = value.clamp(0, arrowThemeCount - 1);
+    await _persistSnapshotThemeIndices();
+    notifyListeners();
+  }
+
   Future<AppThemeUnlockState> loadThemeUnlockState() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_sharedStoreStateKey);
@@ -349,6 +409,8 @@ class AppThemeProvider extends ChangeNotifier {
         tuttiFruttiOwned: decoded['tuttiFruttiOwned'] == true,
         spectralOwned: decoded['spectralOwned'] == true,
         monochromePiecesOwned: decoded['monochromePiecesOwned'] == true,
+        pixelArrowThemeOwned: decoded['pixelArrowThemeOwned'] == true,
+        heavyArrowThemeOwned: decoded['heavyArrowThemeOwned'] == true,
       );
     } catch (_) {
       return const AppThemeUnlockState();
@@ -359,6 +421,7 @@ class AppThemeProvider extends ChangeNotifier {
     bool? cinematicEnabled,
     int? boardThemeIndex,
     int? pieceThemeIndex,
+    int? arrowThemeIndex,
     bool notify = true,
   }) async {
     var changed = false;
@@ -377,6 +440,10 @@ class AppThemeProvider extends ChangeNotifier {
     }
     if (pieceThemeIndex != null && _pieceThemeIndex != pieceThemeIndex) {
       _pieceThemeIndex = pieceThemeIndex.clamp(0, pieceThemeCount - 1);
+      changed = true;
+    }
+    if (arrowThemeIndex != null && _arrowThemeIndex != arrowThemeIndex) {
+      _arrowThemeIndex = arrowThemeIndex.clamp(0, arrowThemeCount - 1);
       changed = true;
     }
     if (!changed) return;
@@ -404,6 +471,7 @@ class AppThemeProvider extends ChangeNotifier {
       if (decoded is! Map<String, dynamic>) return;
       decoded['boardTheme'] = _boardThemeIndex;
       decoded['pieceTheme'] = _pieceThemeIndex;
+      decoded['arrowTheme'] = _arrowThemeIndex;
       await prefs.setString(_savedDefaultSnapshotKey, jsonEncode(decoded));
     } catch (_) {}
   }

@@ -60,10 +60,12 @@ abstract class _StoreState extends _VsBotCore {
     Function setL, {
     Future<void> Function()? onBoardThemeUnlockTap,
     Future<void> Function()? onPieceThemeUnlockTap,
+    Future<void> Function(ArrowThemeMode mode)? onArrowThemeUnlockTap,
   }) => super._buildThemeVaultCard(
     setL,
     onBoardThemeUnlockTap: onBoardThemeUnlockTap,
     onPieceThemeUnlockTap: onPieceThemeUnlockTap,
+    onArrowThemeUnlockTap: onArrowThemeUnlockTap,
   );
 
   Widget _storeThemeCategoryHeader(String label) =>

@@ -2668,6 +2668,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                                             overrideColor: const Color(
                                               0xFF6D7482,
                                             ),
+                                            themeMode: state._arrowThemeMode,
                                           ),
                                         ),
                                       ),
@@ -2689,6 +2690,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
                                                     alpha: 0.88,
                                                   ),
                                             staticArrowStyle: true,
+                                            themeMode: state._arrowThemeMode,
                                           ),
                                         ),
                                       ),

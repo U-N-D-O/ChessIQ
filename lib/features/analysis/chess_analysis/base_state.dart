@@ -223,6 +223,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const int _vsBotInterstitialMatchInterval = 3;
   static const int _bookOpeningPlyLimit = 6;
   static const int _sacrificeModePrice = 2850;
+  static const int _pixelArrowThemePrice = 200;
+  static const int _heavyArrowThemePrice = 1200;
   static const int _moveQualityGradingMultiPv = 4;
   static const int _moveQualityInitialPublishDepth = 2;
   static const int _moveQualityGradingDepth = 10;
@@ -423,6 +425,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   BoardPerspective _perspective = _defaultPerspective;
   BoardThemeMode _boardThemeMode = _defaultBoardTheme;
   PieceThemeMode _pieceThemeMode = _defaultPieceTheme;
+  ArrowThemeMode _arrowThemeMode = ArrowThemeMode.classic;
   List<EngineLine> _topLines = [];
   List<EngineLine> _analysisLines = [];
   String? _analysisLinesFen;
@@ -534,6 +537,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _spectralOwned = false;
   bool _monochromePiecesOwned = false;
   bool _piecePackOwned = false;
+  bool _pixelArrowThemeOwned = false;
+  bool _heavyArrowThemeOwned = false;
   bool _sacrificeModeOwned = false;
   bool _adFreeOwned = false;
   bool _academyTuitionPassOwned = false;
@@ -2927,6 +2932,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             cinematicEnabled: _isCinematicThemeEnabled,
             boardThemeIndex: _boardThemeMode.index,
             pieceThemeIndex: _pieceThemeMode.index,
+            arrowThemeIndex: _arrowThemeMode.index,
             notify: false,
           ),
         );
@@ -3607,6 +3613,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  bool _isArrowThemeUnlocked(ArrowThemeMode mode) {
+    return AppThemeProvider.isArrowThemeIndexUnlocked(
+      mode.index,
+      pixelArrowThemeOwned: _pixelArrowThemeOwned,
+      heavyArrowThemeOwned: _heavyArrowThemeOwned,
+    );
+  }
+
   List<BoardThemeMode> get _availableBoardThemes => BoardThemeMode.values
       .where(_isBoardThemeUnlocked)
       .toList(growable: false);
@@ -3615,12 +3629,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       .where(_isPieceThemeUnlocked)
       .toList(growable: false);
 
+  List<ArrowThemeMode> get _availableArrowThemes => ArrowThemeMode.values
+      .where(_isArrowThemeUnlocked)
+      .toList(growable: false);
+
   void _normalizeUnlockedThemes() {
     if (!_isBoardThemeUnlocked(_boardThemeMode)) {
       _boardThemeMode = _defaultBoardTheme;
     }
     if (!_isPieceThemeUnlocked(_pieceThemeMode)) {
       _pieceThemeMode = _defaultPieceTheme;
+    }
+    if (!_isArrowThemeUnlocked(_arrowThemeMode)) {
+      _arrowThemeMode = ArrowThemeMode.classic;
     }
   }
 
@@ -3645,6 +3666,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final sakuraBoard = decoded['sakuraBoardOwned'];
       final tropicalBoard = decoded['tropicalBoardOwned'];
       final piecePack = decoded['piecePackOwned'];
+      final pixelArrowTheme = decoded['pixelArrowThemeOwned'];
+      final heavyArrowTheme = decoded['heavyArrowThemeOwned'];
       final sacrificeMode = decoded['sacrificeModeOwned'];
       final tuttiFrutti = decoded['tuttiFruttiOwned'];
       final spectral = decoded['spectralOwned'];
@@ -3661,6 +3684,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (sakuraBoard is bool) _sakuraBoardOwned = sakuraBoard;
       if (tropicalBoard is bool) _tropicalBoardOwned = tropicalBoard;
       if (piecePack is bool) _piecePackOwned = piecePack;
+      if (pixelArrowTheme is bool) _pixelArrowThemeOwned = pixelArrowTheme;
+      if (heavyArrowTheme is bool) _heavyArrowThemeOwned = heavyArrowTheme;
       if (sacrificeMode is bool) _sacrificeModeOwned = sacrificeMode;
       if (tuttiFrutti is bool) _tuttiFruttiOwned = tuttiFrutti;
       if (spectral is bool) _spectralOwned = spectral;
@@ -3678,6 +3703,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
       _multiPvCount = _multiPvCount.clamp(0, _maxSuggestionsAllowed);
       _normalizeUnlockedThemes();
+
+      if (mounted) {
+        unawaited(
+          context.read<AppThemeProvider>().syncLegacySettings(
+            boardThemeIndex: _boardThemeMode.index,
+            pieceThemeIndex: _pieceThemeMode.index,
+            arrowThemeIndex: _arrowThemeMode.index,
+            notify: false,
+          ),
+        );
+      }
 
       // ── Restore IAP-delivered non-consumable flags ────────────────────────
       if (await PurchaseService.instance.isOwned(IapProducts.resetBoardPass)) {
@@ -3705,6 +3741,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'spectralOwned': _spectralOwned,
       'monochromePiecesOwned': _monochromePiecesOwned,
       'piecePackOwned': _piecePackOwned,
+      'pixelArrowThemeOwned': _pixelArrowThemeOwned,
+      'heavyArrowThemeOwned': _heavyArrowThemeOwned,
       'sacrificeModeOwned': _sacrificeModeOwned,
       'adFreeOwned': _adFreeOwned,
       'academyTuitionPassOwned': _academyTuitionPassOwned,
@@ -3746,6 +3784,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedPerspective = decoded['perspective'];
       final savedTheme = decoded['boardTheme'];
       final savedPieceTheme = decoded['pieceTheme'];
+      final savedArrowTheme = decoded['arrowTheme'];
       final savedDepth = decoded['engineDepth'];
       final savedMultiPv = decoded['multiPvCount'];
       final savedWhiteTurn = decoded['isWhiteTurn'];
@@ -3783,14 +3822,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           savedPieceTheme < PieceThemeMode.values.length) {
         _pieceThemeMode = PieceThemeMode.values[savedPieceTheme];
       }
-      if (mounted) {
-        unawaited(
-          context.read<AppThemeProvider>().syncLegacySettings(
-            boardThemeIndex: _boardThemeMode.index,
-            pieceThemeIndex: _pieceThemeMode.index,
-            notify: false,
-          ),
-        );
+      if (savedArrowTheme is int &&
+          savedArrowTheme >= 0 &&
+          savedArrowTheme < ArrowThemeMode.values.length) {
+        _arrowThemeMode = ArrowThemeMode.values[savedArrowTheme];
       }
       if (savedDepth is int) {
         _engineDepth = savedDepth.clamp(10, _maxDepthAllowed);
@@ -3890,6 +3925,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _gambitAvailableTargets.clear();
       _selectedGambit = null;
       _normalizeUnlockedThemes();
+      if (mounted) {
+        unawaited(
+          context.read<AppThemeProvider>().syncLegacySettings(
+            boardThemeIndex: _boardThemeMode.index,
+            pieceThemeIndex: _pieceThemeMode.index,
+            arrowThemeIndex: _arrowThemeMode.index,
+            notify: false,
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Failed to load saved default snapshot: $e');
     }
@@ -12612,6 +12657,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 reverse: reverse,
                 showSequenceNumbers: showSequenceNumbers,
                 overrideColor: previewArrowColor,
+                themeMode: _arrowThemeMode,
                 boardInset: boardInset,
               ),
             ),
@@ -12629,6 +12675,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     reverse: reverse,
                     overrideColor: const Color(0xFF6D7482),
                     staticArrowStyle: true,
+                    themeMode: _arrowThemeMode,
                     boardInset: boardInset,
                   ),
                 ),
@@ -15384,6 +15431,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               .toList(),
         );
       },
+      arrowThemeSelectorBuilder: (setSheetState) {
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          alignment: WrapAlignment.center,
+          children: _availableArrowThemes
+              .map((mode) => _arrowThemeOption(mode, setSheetState))
+              .toList(growable: false),
+        );
+      },
       showBoardPerspectiveSection: showBoardPerspectiveSection,
       boardPerspectiveSectionBuilder: showBoardPerspectiveSection
           ? (setSheetState) {
@@ -15461,7 +15518,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
         final hasAllThemes =
             _availableBoardThemes.length >= BoardThemeMode.values.length &&
-            _availablePieceThemes.length >= PieceThemeMode.values.length;
+            _availablePieceThemes.length >= PieceThemeMode.values.length &&
+            _availableArrowThemes.length >= ArrowThemeMode.values.length;
         final hasAllStockfishUpgrades =
             _depthTier >= 3 && _maxSuggestionsAllowed >= 10;
 
@@ -15509,6 +15567,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'perspective': _perspective.index,
       'boardTheme': _boardThemeMode.index,
       'pieceTheme': _pieceThemeMode.index,
+      'arrowTheme': _arrowThemeMode.index,
       'engineDepth': _engineDepth,
       'multiPvCount': _multiPvCount,
       'isWhiteTurn': _isWhiteTurn,
@@ -15732,6 +15791,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _addLog('Tropical board unlocked');
   }
 
+  Future<void> _purchasePixelArrowTheme() async {
+    if (_pixelArrowThemeOwned) return;
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(_pixelArrowThemePrice)) {
+      _addLog('Not enough coins for 8-Bit arrows');
+      return;
+    }
+    setState(() {
+      _pixelArrowThemeOwned = true;
+    });
+    await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
+    _addLog('8-Bit arrows unlocked');
+  }
+
+  Future<void> _purchaseHeavyArrowTheme() async {
+    if (_heavyArrowThemeOwned) return;
+    final economy = context.read<EconomyProvider>();
+    if (!await economy.spendCoins(_heavyArrowThemePrice)) {
+      _addLog('Not enough coins for Massive 3D arrows');
+      return;
+    }
+    setState(() {
+      _heavyArrowThemeOwned = true;
+    });
+    await _saveStoreState();
+    unawaited(_playStorePurchaseSound());
+    _addLog('Massive 3D arrows unlocked');
+  }
+
   Future<void> _performResetWithSponsoredBreak() async {
     final adService = AdService.instance;
     final shouldAttemptAd =
@@ -15889,6 +15978,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           });
           final themePackCardKey = GlobalKey();
           final piecePackCardKey = GlobalKey();
+          final pixelArrowCardKey = GlobalKey();
+          final heavyArrowCardKey = GlobalKey();
           Future<void> scrollToPack(GlobalKey key) async {
             final targetContext = key.currentContext;
             if (targetContext != null) {
@@ -16124,6 +16215,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           scrollToPack(themePackCardKey),
                       onPieceThemeUnlockTap: () =>
                           scrollToPack(piecePackCardKey),
+                      onArrowThemeUnlockTap: (mode) => scrollToPack(
+                        mode == ArrowThemeMode.pixel
+                            ? pixelArrowCardKey
+                            : heavyArrowCardKey,
+                      ),
                     ),
                     _storeItemCard(
                       itemKey: themePackCardKey,
@@ -16251,6 +16347,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                       onTap: () async {
                         await _purchaseMonochromePieces();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      itemKey: pixelArrowCardKey,
+                      icon: Icons.grid_4x4_rounded,
+                      title: '8-Bit Arrows',
+                      subtitle: _pixelArrowThemeOwned
+                          ? 'Owned'
+                          : 'Unlock chunky pixel arrows across every board mode',
+                      priceLabel: '$_pixelArrowThemePrice c',
+                      enabled: !_pixelArrowThemeOwned,
+                      actionLabel: _pixelArrowThemeOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: const ArrowThemePreviewTile(arrowThemeIndex: 1),
+                      onTap: () async {
+                        await _purchasePixelArrowTheme();
+                        setL(() {});
+                      },
+                    ),
+                    _storeItemCard(
+                      itemKey: heavyArrowCardKey,
+                      icon: Icons.view_in_ar_rounded,
+                      title: 'Massive 3D Arrows',
+                      subtitle: _heavyArrowThemeOwned
+                          ? 'Owned'
+                          : 'Unlock weighty 3D arrows across every board mode',
+                      priceLabel: '$_heavyArrowThemePrice c',
+                      enabled: !_heavyArrowThemeOwned,
+                      actionLabel: _heavyArrowThemeOwned ? 'Owned' : 'Buy',
+                      actionColor: const Color(0xFFD8B640),
+                      preview: const ArrowThemePreviewTile(arrowThemeIndex: 2),
+                      onTap: () async {
+                        await _purchaseHeavyArrowTheme();
                         setL(() {});
                       },
                     ),
@@ -16516,6 +16646,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Function setL, {
     Future<void> Function()? onBoardThemeUnlockTap,
     Future<void> Function()? onPieceThemeUnlockTap,
+    Future<void> Function(ArrowThemeMode mode)? onArrowThemeUnlockTap,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -16544,7 +16675,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 4),
           Text(
-            'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
+            'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · Arrows: ${_arrowThemeLabel(_arrowThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
             style: TextStyle(
               color: scheme.onSurface.withValues(alpha: 0.64),
               fontSize: 12,
@@ -16578,6 +16709,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     mode,
                     setL,
                     onLockedTap: onPieceThemeUnlockTap,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 14),
+          _storeThemeCategoryHeader('Arrow Themes'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: ArrowThemeMode.values
+                .map(
+                  (mode) => _buildStoreArrowThemeCard(
+                    mode,
+                    setL,
+                    onLockedTap: onArrowThemeUnlockTap == null
+                        ? null
+                        : () => onArrowThemeUnlockTap(mode),
                   ),
                 )
                 .toList(growable: false),
@@ -16677,6 +16826,44 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 _persistCurrentSettings();
                 unawaited(
                   context.read<AppThemeProvider>().setPieceThemeIndex(
+                    mode.index,
+                  ),
+                );
+              }
+              setL(() {});
+            },
+    );
+  }
+
+  Widget _buildStoreArrowThemeCard(
+    ArrowThemeMode mode,
+    Function setL, {
+    Future<void> Function()? onLockedTap,
+  }) {
+    final unlocked = _isArrowThemeUnlocked(mode);
+    final selected = _arrowThemeMode == mode;
+    return _storeThemeChoiceCard(
+      label: _arrowThemeLabel(mode),
+      preview: _arrowThemePreview(mode),
+      selected: selected,
+      locked: !unlocked,
+      actionLabel: selected
+          ? 'Selected'
+          : unlocked
+          ? 'Select'
+          : 'Unlock',
+      onTap: selected
+          ? null
+          : () async {
+              if (!unlocked) {
+                if (onLockedTap != null) {
+                  await onLockedTap();
+                }
+              } else {
+                setState(() => _arrowThemeMode = mode);
+                _persistCurrentSettings();
+                unawaited(
+                  context.read<AppThemeProvider>().setArrowThemeIndex(
                     mode.index,
                   ),
                 );
@@ -17077,6 +17264,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Widget _arrowThemeOption(ArrowThemeMode mode, Function setL) {
+    final selected = _arrowThemeMode == mode;
+    return ThemeSelectorTile(
+      selected: selected,
+      onTap: () {
+        setState(() => _arrowThemeMode = mode);
+        setL(() {});
+        _persistCurrentSettings();
+        unawaited(
+          context.read<AppThemeProvider>().setArrowThemeIndex(mode.index),
+        );
+      },
+      child: _arrowThemePreview(mode),
+    );
+  }
+
   Widget _boardThemeSwatch(BoardThemeMode mode) {
     return BoardThemeSwatchPreview(
       palette: AppThemeProvider.boardPaletteForIndex(mode.index),
@@ -17088,6 +17291,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       pieceThemeIndex: mode.index,
       pieceSize: pieceSize,
     );
+  }
+
+  Widget _arrowThemePreview(ArrowThemeMode mode) {
+    return ArrowThemePreviewTile(arrowThemeIndex: mode.index);
   }
 
   Widget _themePackPreview() {
@@ -17393,6 +17600,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return 'Spectral';
       case PieceThemeMode.monochrome:
         return 'Monochrome';
+    }
+  }
+
+  String _arrowThemeLabel(ArrowThemeMode mode) {
+    switch (mode) {
+      case ArrowThemeMode.classic:
+        return 'Classic';
+      case ArrowThemeMode.pixel:
+        return '8-Bit';
+      case ArrowThemeMode.heavy3d:
+        return '3D Mass';
     }
   }
 

@@ -3050,7 +3050,14 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   bool _quizStudyBoardIsReversed(EcoLine line) {
-    return !_quizStudyLearnerIsWhite(line);
+    final defaultReversed = !_quizStudyLearnerIsWhite(line);
+    return _quizStudyBoardFlipped ? !defaultReversed : defaultReversed;
+  }
+
+  void _toggleQuizStudyBoardOrientation() {
+    setState(() {
+      _quizStudyBoardFlipped = !_quizStudyBoardFlipped;
+    });
   }
 
   void _syncQuizStudyFollowUpBasePosition(
@@ -7724,6 +7731,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                                         alpha: 0.92,
                                       ),
                                       staticArrowStyle: true,
+                                      themeMode: _arrowThemeMode,
                                     ),
                                   ),
                                 ),

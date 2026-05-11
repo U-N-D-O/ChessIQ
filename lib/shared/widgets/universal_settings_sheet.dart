@@ -33,6 +33,7 @@ Future<void> showUniversalSettingsSheet({
   FutureOr<void> Function(bool enabled)? onHapticsEnabledChanged,
   UniversalSettingsSelectorBuilder? boardThemeSelectorBuilder,
   UniversalSettingsSelectorBuilder? pieceThemeSelectorBuilder,
+  UniversalSettingsSelectorBuilder? arrowThemeSelectorBuilder,
   bool showBoardPerspectiveSection = false,
   UniversalSettingsSelectorBuilder? boardPerspectiveSectionBuilder,
   bool showEngineControlsSection = false,
@@ -82,6 +83,9 @@ Future<void> showUniversalSettingsSheet({
             setSheetState,
           );
           final pieceThemeSelector = pieceThemeSelectorBuilder?.call(
+            setSheetState,
+          );
+          final arrowThemeSelector = arrowThemeSelectorBuilder?.call(
             setSheetState,
           );
           final boardPerspectiveSelector = showBoardPerspective
@@ -224,6 +228,26 @@ Future<void> showUniversalSettingsSheet({
                           ),
                           const SizedBox(height: 10),
                           pieceThemeSelector,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  if (arrowThemeSelector != null) ...[
+                    _SettingsCard(
+                      backgroundColor: sectionColor,
+                      borderColor: scheme.outline.withValues(alpha: 0.24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Arrow Theme',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          arrowThemeSelector,
                         ],
                       ),
                     ),

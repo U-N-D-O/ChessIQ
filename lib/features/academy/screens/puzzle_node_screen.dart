@@ -13,6 +13,8 @@ import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart'
 import 'package:chessiq/features/academy/services/puzzle_engine_service.dart';
 import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
 import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
+import 'package:chessiq/features/analysis/models/analysis_models.dart';
+import 'package:chessiq/features/analysis/painters/energy_arrow_painter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2419,6 +2421,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
                         toSquare: _greyArrowTo,
                         flipped: _playerIsBlack,
                         opacity: opacity,
+                        themeMode: theme.arrowThemeMode,
                       ),
                     );
                   },

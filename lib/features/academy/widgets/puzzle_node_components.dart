@@ -84,12 +84,14 @@ class _GreyArrowPainter extends CustomPainter {
     required this.toSquare,
     required this.flipped,
     required this.opacity,
+    required this.themeMode,
   });
 
   final String? fromSquare;
   final String? toSquare;
   final bool flipped;
   final double opacity;
+  final ArrowThemeMode themeMode;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -99,49 +101,15 @@ class _GreyArrowPainter extends CustomPainter {
       return;
     }
 
-    final fromCenter = _squareCenter(size, from, flipped);
-    final toCenter = _squareCenter(size, to, flipped);
-    final direction = toCenter - fromCenter;
-    final length = direction.distance;
-    if (length <= 0.001) return;
-    final unit = direction / length;
-
-    final paint = Paint()
-      ..color = const Color(0xFFBFC5CE).withValues(alpha: opacity)
-      ..strokeWidth = size.width * 0.018
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final headBase = toCenter - unit * (size.width * 0.04);
-
-    // With round caps, trim by half the stroke so the visible shaft ends
-    // exactly at the arrowhead base instead of protruding into the tip.
-    final shaftEnd = headBase - unit * (paint.strokeWidth * 0.5);
-    canvas.drawLine(fromCenter, shaftEnd, paint);
-
-    final perp = Offset(-unit.dy, unit.dx);
-    final wing = size.width * 0.016;
-
-    final path = Path()
-      ..moveTo(toCenter.dx, toCenter.dy)
-      ..lineTo(headBase.dx + perp.dx * wing, headBase.dy + perp.dy * wing)
-      ..lineTo(headBase.dx - perp.dx * wing, headBase.dy - perp.dy * wing)
-      ..close();
-
-    final fill = Paint()
-      ..color = const Color(0xFFBFC5CE).withValues(alpha: opacity)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(path, fill);
-  }
-
-  Offset _squareCenter(Size size, String square, bool flipped) {
-    final file = square.codeUnitAt(0) - 97;
-    final rank = int.parse(square[1]);
-
-    final visualFile = flipped ? 7 - file : file;
-    final visualRankFromTop = flipped ? rank - 1 : 8 - rank;
-
-    final tile = size.width / 8;
-    return Offset((visualFile + 0.5) * tile, (visualRankFromTop + 0.5) * tile);
+    EnergyArrowPainter(
+      lines: <EngineLine>[EngineLine('$from$to', 0, 0, 1)],
+      bestEval: 0,
+      progress: 0,
+      reverse: flipped,
+      overrideColor: const Color(0xFFBFC5CE).withValues(alpha: opacity),
+      staticArrowStyle: true,
+      themeMode: themeMode,
+    ).paint(canvas, size);
   }
 
   @override
@@ -149,7 +117,8 @@ class _GreyArrowPainter extends CustomPainter {
     return oldDelegate.fromSquare != fromSquare ||
         oldDelegate.toSquare != toSquare ||
         oldDelegate.flipped != flipped ||
-        oldDelegate.opacity != opacity;
+        oldDelegate.opacity != opacity ||
+        oldDelegate.themeMode != themeMode;
   }
 }
 

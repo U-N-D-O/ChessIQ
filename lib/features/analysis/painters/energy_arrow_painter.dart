@@ -1,7 +1,9 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/analysis/models/analysis_models.dart';
+import 'package:chessiq/shared/graphics/pixel_arrow_renderer.dart';
 import 'package:flutter/material.dart';
 
 class EnergyArrowPainter extends CustomPainter {
@@ -13,6 +15,7 @@ class EnergyArrowPainter extends CustomPainter {
   final Color? overrideColor;
   final bool staticArrowStyle;
   final double boardInset;
+  final ArrowThemeMode themeMode;
 
   EnergyArrowPainter({
     required this.lines,
@@ -23,7 +26,8 @@ class EnergyArrowPainter extends CustomPainter {
     this.overrideColor,
     this.staticArrowStyle = false,
     this.boardInset = 0.0,
-  });
+    this.themeMode = ArrowThemeMode.classic,
+  }) : super(repaint: PixelArrowRenderer.repaintListenable);
 
   // Anchor colors for the strength gradient. Each anchor is fully saturated
   // so neighbouring bands stay clearly distinguishable, even when the renderer
@@ -181,15 +185,73 @@ class EnergyArrowPainter extends CustomPainter {
           ? (baseStrokeWidth * 1.30)
           : baseStrokeWidth;
 
-      final path = Path()
-        ..moveTo(start.dx, start.dy)
-        ..lineTo(lineEnd.dx, lineEnd.dy);
+      final pixelMode = themeMode == ArrowThemeMode.pixel;
+      final heavyMode = themeMode == ArrowThemeMode.heavy3d;
+      final pixelStep = pixelMode ? max(3.0, min(4.5, sq * 0.08)) : 0.0;
+      final renderStart = pixelMode ? _snapPoint(start, pixelStep) : start;
+      final renderEnd = pixelMode ? _snapPoint(end, pixelStep) : end;
+      final renderLineEnd = pixelMode
+          ? _snapPoint(lineEnd, pixelStep)
+          : lineEnd;
+      final renderStrokeWidth = pixelMode
+          ? max(
+              pixelStep,
+              (strokeWidth / pixelStep).roundToDouble() * pixelStep,
+            )
+          : (heavyMode ? strokeWidth * 1.55 : strokeWidth);
 
-      final outlineStrokeWidth = strokeWidth + (useStaticStyle ? 1.8 : 1.6);
-      final outlineColor = _darkenColor(
-        baseColor,
-        0.15,
-      ).withValues(alpha: useStaticStyle ? 0.72 : 0.45 * alphaScale);
+      if (pixelMode) {
+        PixelArrowRenderer.paint(
+          canvas: canvas,
+          start: renderStart,
+          end: renderEnd,
+          pixelSize: pixelStep,
+          color: baseColor,
+          alphaScale: alphaScale,
+          animatePulse: !useStaticStyle,
+          progress: progress,
+        );
+
+        if (isGambitMode) {
+          final markerCenter =
+              badgeCenters[line.multiPv] ?? Offset.lerp(start, lineEnd, 0.5)!;
+          _paintPixelBadge(
+            canvas: canvas,
+            center: markerCenter,
+            step: pixelStep,
+            label: line.multiPv.toString(),
+            color: baseColor,
+            alphaScale: alphaScale,
+            emphasized: isFirstArrow,
+          );
+        }
+        continue;
+      }
+
+      final path = Path()
+        ..moveTo(renderStart.dx, renderStart.dy)
+        ..lineTo(renderLineEnd.dx, renderLineEnd.dy);
+
+      if (heavyMode) {
+        canvas.drawPath(
+          path,
+          Paint()
+            ..strokeWidth = renderStrokeWidth + 8
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke
+            ..color = Colors.black.withValues(alpha: 0.24 * alphaScale)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        );
+      }
+
+      final outlineStrokeWidth =
+          renderStrokeWidth + (heavyMode ? 4.6 : (useStaticStyle ? 1.8 : 1.6));
+      final outlineColor = _darkenColor(baseColor, heavyMode ? 0.45 : 0.15)
+          .withValues(
+            alpha: heavyMode
+                ? max(0.58, alphaScale * 0.80)
+                : (useStaticStyle ? 0.72 : 0.45 * alphaScale),
+          );
       final outlinePaint = Paint()
         ..strokeWidth = outlineStrokeWidth
         ..strokeCap = StrokeCap.round
@@ -198,13 +260,75 @@ class EnergyArrowPainter extends CustomPainter {
       canvas.drawPath(path, outlinePaint);
 
       final basePaint = Paint()
-        ..strokeWidth = strokeWidth
+        ..strokeWidth = renderStrokeWidth
         ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke
-        ..color = baseColor.withValues(
+        ..style = PaintingStyle.stroke;
+      if (heavyMode) {
+        final bevelAxis = Offset(-unitY, unitX) * renderStrokeWidth;
+        basePaint.shader = ui.Gradient.linear(
+          renderStart - bevelAxis,
+          renderStart + bevelAxis,
+          <Color>[
+            Colors.white.withValues(alpha: useStaticStyle ? 0.92 : 0.80),
+            baseColor.withValues(alpha: useStaticStyle ? 0.88 : 0.76),
+            _darkenColor(
+              baseColor,
+              0.55,
+            ).withValues(alpha: useStaticStyle ? 0.92 : 0.86),
+          ],
+          const <double>[0.0, 0.42, 1.0],
+          TileMode.clamp,
+        );
+      } else {
+        basePaint.color = baseColor.withValues(
           alpha: useStaticStyle ? 0.58 : 0.30 * alphaScale,
         );
+      }
       canvas.drawPath(path, basePaint);
+
+      if (heavyMode) {
+        final bevelOffset = Offset(-unitY, unitX) * (renderStrokeWidth * 0.18);
+        final lowlightPath = Path()
+          ..moveTo(
+            renderStart.dx + bevelOffset.dx,
+            renderStart.dy + bevelOffset.dy,
+          )
+          ..lineTo(
+            renderLineEnd.dx + bevelOffset.dx,
+            renderLineEnd.dy + bevelOffset.dy,
+          );
+        canvas.drawPath(
+          lowlightPath,
+          Paint()
+            ..strokeWidth = renderStrokeWidth * 0.28
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke
+            ..color = _darkenColor(
+              baseColor,
+              0.52,
+            ).withValues(alpha: max(0.38, alphaScale * 0.62)),
+        );
+
+        final highlightPath = Path()
+          ..moveTo(
+            renderStart.dx - bevelOffset.dx,
+            renderStart.dy - bevelOffset.dy,
+          )
+          ..lineTo(
+            renderLineEnd.dx - bevelOffset.dx,
+            renderLineEnd.dy - bevelOffset.dy,
+          );
+        canvas.drawPath(
+          highlightPath,
+          Paint()
+            ..strokeWidth = renderStrokeWidth * 0.18
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke
+            ..color = Colors.white.withValues(
+              alpha: useStaticStyle ? 0.46 : 0.30 * alphaScale,
+            ),
+        );
+      }
 
       if (!useStaticStyle) {
         final pulseHalfLen = max(18.0, distance * 0.14);
@@ -220,18 +344,20 @@ class EnergyArrowPainter extends CustomPainter {
         );
 
         final pulsePaint = Paint()
-          ..strokeWidth = strokeWidth
+          ..strokeWidth = heavyMode
+              ? renderStrokeWidth * 0.44
+              : renderStrokeWidth
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke
           ..shader = ui.Gradient.linear(
             pulseStart,
             pulseEnd,
-            [
+            <Color>[
               baseColor.withValues(alpha: 0.0),
-              baseColor.withValues(alpha: alphaScale),
+              Colors.white.withValues(alpha: alphaScale),
               baseColor.withValues(alpha: 0.0),
             ],
-            const [0.0, 0.5, 1.0],
+            const <double>[0.0, 0.5, 1.0],
             TileMode.clamp,
           );
         canvas.drawPath(path, pulsePaint);
@@ -241,41 +367,75 @@ class EnergyArrowPainter extends CustomPainter {
       final baseHeadLen = useStaticStyle
           ? 18.0
           : (isGambitMode && isFirstArrow ? 22.0 : 18.0);
-      final headLen = (!useStaticStyle && !isGambitMode && isFirstArrow)
+      final classicHeadLen = (!useStaticStyle && !isGambitMode && isFirstArrow)
           ? (baseHeadLen * 1.30)
           : baseHeadLen;
-      final headWaist = headLen * (2.0 / 3.0);
+      final headLen = heavyMode ? classicHeadLen * 1.35 : classicHeadLen;
+      final headWaist = headLen * (heavyMode ? 0.78 : 2.0 / 3.0);
+      final headAngle = heavyMode ? 0.34 : 0.40;
+      final headPoints = <Offset>[
+        renderEnd,
+        Offset(
+          renderEnd.dx - headLen * cos(angle - headAngle),
+          renderEnd.dy - headLen * sin(angle - headAngle),
+        ),
+        Offset(
+          renderEnd.dx - headWaist * cos(angle),
+          renderEnd.dy - headWaist * sin(angle),
+        ),
+        Offset(
+          renderEnd.dx - headLen * cos(angle + headAngle),
+          renderEnd.dy - headLen * sin(angle + headAngle),
+        ),
+      ];
       final headPath = Path()
-        ..moveTo(end.dx, end.dy)
-        ..lineTo(
-          end.dx - headLen * cos(angle - 0.40),
-          end.dy - headLen * sin(angle - 0.40),
-        )
-        ..lineTo(
-          end.dx - headWaist * cos(angle),
-          end.dy - headWaist * sin(angle),
-        )
-        ..lineTo(
-          end.dx - headLen * cos(angle + 0.40),
-          end.dy - headLen * sin(angle + 0.40),
-        )
+        ..moveTo(headPoints.first.dx, headPoints.first.dy)
+        ..lineTo(headPoints[1].dx, headPoints[1].dy)
+        ..lineTo(headPoints[2].dx, headPoints[2].dy)
+        ..lineTo(headPoints[3].dx, headPoints[3].dy)
         ..close();
 
       final solidHeadColor = baseColor.withValues(alpha: alphaScale);
-      final headBorderColor = solidHeadColor.computeLuminance() > 0.62
-          ? const Color(
-              0xFF69727F,
+      final headBorderColor = heavyMode
+          ? _darkenColor(
+              baseColor,
+              0.48,
             ).withValues(alpha: useStaticStyle ? 0.96 : max(0.72, alphaScale))
-          : _darkenColor(
-              solidHeadColor,
-              0.15,
-            ).withValues(alpha: useStaticStyle ? 0.92 : max(0.62, alphaScale));
-      canvas.drawPath(
-        headPath,
-        Paint()
+          : (solidHeadColor.computeLuminance() > 0.62
+                ? const Color(0xFF69727F).withValues(
+                    alpha: useStaticStyle ? 0.96 : max(0.72, alphaScale),
+                  )
+                : _darkenColor(solidHeadColor, 0.15).withValues(
+                    alpha: useStaticStyle ? 0.92 : max(0.62, alphaScale),
+                  ));
+      if (heavyMode) {
+        canvas.drawShadow(
+          headPath,
+          Colors.black.withValues(alpha: 0.72),
+          4,
+          false,
+        );
+      }
+      final headFillPaint = Paint()..style = PaintingStyle.fill;
+      if (heavyMode) {
+        final headAxis = Offset(-unitY, unitX) * headLen;
+        headFillPaint.shader = ui.Gradient.linear(
+          renderEnd - headAxis,
+          renderEnd + headAxis,
+          <Color>[
+            Colors.white.withValues(alpha: useStaticStyle ? 0.98 : 0.92),
+            baseColor.withValues(alpha: useStaticStyle ? 0.94 : 0.88),
+            _darkenColor(baseColor, 0.55).withValues(alpha: 0.94),
+          ],
+          const <double>[0.0, 0.38, 1.0],
+          TileMode.clamp,
+        );
+      } else {
+        headFillPaint
           ..color = solidHeadColor
-          ..style = PaintingStyle.fill,
-      );
+          ..isAntiAlias = !pixelMode;
+      }
+      canvas.drawPath(headPath, headFillPaint);
       canvas.drawPath(
         headPath,
         Paint()
@@ -284,6 +444,25 @@ class EnergyArrowPainter extends CustomPainter {
           ..strokeWidth = useStaticStyle ? 1.8 : 1.4
           ..strokeJoin = StrokeJoin.round,
       );
+      if (heavyMode) {
+        final highlightPath = Path()
+          ..moveTo(
+            renderEnd.dx - headLen * cos(angle - headAngle * 0.72),
+            renderEnd.dy - headLen * sin(angle - headAngle * 0.72),
+          )
+          ..lineTo(
+            renderEnd.dx - headWaist * cos(angle) - unitY * 1.4,
+            renderEnd.dy - headWaist * sin(angle) + unitX * 1.4,
+          );
+        canvas.drawPath(
+          highlightPath,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.34 * alphaScale)
+            ..strokeWidth = 1.4
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke,
+        );
+      }
 
       if (isGambitMode) {
         const badgeRadius = 9.2;
@@ -295,7 +474,45 @@ class EnergyArrowPainter extends CustomPainter {
                   ? baseColor
                   : baseColor.withValues(alpha: alphaScale));
 
-        if (useStaticStyle) {
+        if (pixelMode) {
+          final badgeRect = RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: markerCenter,
+              width: badgeRadius * 2.15,
+              height: badgeRadius * 2.15,
+            ),
+            const Radius.circular(2),
+          );
+          canvas.drawRRect(
+            badgeRect,
+            Paint()
+              ..color = const Color(0xFF151A22).withValues(alpha: 0.96)
+              ..style = PaintingStyle.fill
+              ..isAntiAlias = false,
+          );
+        } else if (heavyMode) {
+          canvas.drawCircle(
+            markerCenter,
+            badgeRadius + 4.5,
+            Paint()
+              ..color = Colors.black.withValues(alpha: 0.22)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+          );
+          canvas.drawCircle(
+            markerCenter,
+            badgeRadius,
+            Paint()
+              ..shader = ui.Gradient.radial(
+                markerCenter,
+                badgeRadius,
+                <Color>[
+                  Colors.white.withValues(alpha: isFirstArrow ? 0.92 : 0.68),
+                  _darkenColor(baseColor, 0.58).withValues(alpha: 0.96),
+                ],
+                const <double>[0.0, 1.0],
+              ),
+          );
+        } else if (useStaticStyle) {
           canvas.drawCircle(
             markerCenter,
             badgeRadius,
@@ -334,16 +551,19 @@ class EnergyArrowPainter extends CustomPainter {
           Paint()
             ..color = badgeBorderColor
             ..style = PaintingStyle.stroke
-            ..strokeWidth = useStaticStyle ? 1.8 : (isFirstArrow ? 2.5 : 1.5),
+            ..strokeWidth = pixelMode
+                ? 2.0
+                : (useStaticStyle ? 1.8 : (isFirstArrow ? 2.5 : 1.5)),
         );
 
         final textPainter = TextPainter(
           text: TextSpan(
             text: line.multiPv.toString(),
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 10.0,
+              fontSize: pixelMode ? 8.2 : 10.0,
               fontWeight: FontWeight.w900,
+              fontFamily: pixelMode ? 'PressStart2P' : null,
             ),
           ),
           textDirection: TextDirection.ltr,
@@ -369,6 +589,120 @@ class EnergyArrowPainter extends CustomPainter {
       row = 7 - row;
     }
     return Offset(inset + col * sq + sq / 2, inset + row * sq + sq / 2);
+  }
+
+  Offset _snapPoint(Offset point, double step) {
+    if (step <= 0) {
+      return point;
+    }
+    return Offset(
+      (point.dx / step).roundToDouble() * step,
+      (point.dy / step).roundToDouble() * step,
+    );
+  }
+
+  Color _lightenColor(Color color, double amount) {
+    return Color.lerp(color, Colors.white, amount.clamp(0.0, 1.0))!;
+  }
+
+  void _paintPixelBadge({
+    required Canvas canvas,
+    required Offset center,
+    required double step,
+    required String label,
+    required Color color,
+    required double alphaScale,
+    required bool emphasized,
+  }) {
+    final snappedCenter = _snapPoint(center, step);
+    final outlineColor = _darkenColor(
+      color,
+      0.72,
+    ).withValues(alpha: max(0.88, alphaScale));
+    final lightColor = _lightenColor(
+      color,
+      emphasized ? 0.52 : 0.34,
+    ).withValues(alpha: alphaScale);
+    final midColor = _lightenColor(
+      color,
+      emphasized ? 0.20 : 0.08,
+    ).withValues(alpha: alphaScale);
+    final shadeColor = _darkenColor(
+      color,
+      emphasized ? 0.18 : 0.30,
+    ).withValues(alpha: alphaScale);
+    final outerRect = Rect.fromCenter(
+      center: snappedCenter,
+      width: step * 4.2,
+      height: step * 3.8,
+    );
+    final innerRect = outerRect.deflate(step * 0.55);
+    final outerRRect = RRect.fromRectAndRadius(
+      outerRect,
+      Radius.circular(step * 0.22),
+    );
+    final innerRRect = RRect.fromRectAndRadius(
+      innerRect,
+      Radius.circular(step * 0.16),
+    );
+
+    canvas.drawRRect(
+      outerRRect,
+      Paint()
+        ..color = outlineColor
+        ..style = PaintingStyle.fill
+        ..isAntiAlias = false,
+    );
+    canvas.drawRRect(
+      innerRRect,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          innerRect.topLeft,
+          innerRect.bottomRight,
+          <Color>[lightColor, midColor, shadeColor],
+          const <double>[0.0, 0.48, 1.0],
+          TileMode.clamp,
+        )
+        ..style = PaintingStyle.fill
+        ..isAntiAlias = false,
+    );
+
+    canvas.save();
+    canvas.clipRRect(innerRRect);
+    canvas.drawLine(
+      _snapPoint(innerRect.topLeft + Offset(step * 0.20, step * 0.35), step),
+      _snapPoint(innerRect.topRight + Offset(-step * 0.20, step * 0.35), step),
+      Paint()
+        ..color = _lightenColor(
+          color,
+          0.70,
+        ).withValues(alpha: 0.42 * alphaScale)
+        ..strokeWidth = max(step * 0.45, 1.0)
+        ..strokeCap = StrokeCap.square
+        ..style = PaintingStyle.stroke
+        ..isAntiAlias = false,
+    );
+    canvas.restore();
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: max(7.0, step * 0.75),
+          fontWeight: FontWeight.w900,
+          fontFamily: 'PressStart2P',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        snappedCenter.dx - (textPainter.width / 2),
+        snappedCenter.dy - (textPainter.height / 2),
+      ),
+    );
   }
 
   @override

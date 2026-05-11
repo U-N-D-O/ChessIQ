@@ -44,6 +44,7 @@ Future<void> showAcademyThemeSettingsSheet({
   Future<void> openSheet({
     UniversalSettingsSelectorBuilder? boardThemeSelectorBuilder,
     UniversalSettingsSelectorBuilder? pieceThemeSelectorBuilder,
+    UniversalSettingsSelectorBuilder? arrowThemeSelectorBuilder,
   }) {
     return showUniversalSettingsSheet(
       context: context,
@@ -65,9 +66,16 @@ Future<void> showAcademyThemeSettingsSheet({
       onHapticsEnabledChanged: onHapticsEnabledChanged,
       boardThemeSelectorBuilder: boardThemeSelectorBuilder,
       pieceThemeSelectorBuilder: pieceThemeSelectorBuilder,
+      arrowThemeSelectorBuilder: arrowThemeSelectorBuilder,
       extraSectionsBuilder: extraSectionsBuilder,
     );
   }
+
+  final availableArrowThemeIndices =
+      AppThemeProvider.availableArrowThemeIndices(
+        pixelArrowThemeOwned: unlockState.pixelArrowThemeOwned,
+        heavyArrowThemeOwned: unlockState.heavyArrowThemeOwned,
+      );
 
   try {
     await openSheet(
@@ -108,6 +116,26 @@ Future<void> showAcademyThemeSettingsSheet({
                     unawaited(themeProvider.setPieceThemeIndex(index));
                   },
                   child: PieceThemePreviewTile(pieceThemeIndex: index),
+                );
+              })
+              .toList(growable: false),
+        );
+      },
+      arrowThemeSelectorBuilder: (setSheetState) {
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          alignment: WrapAlignment.center,
+          children: availableArrowThemeIndices
+              .map((index) {
+                final selected = themeProvider.arrowThemeIndex == index;
+                return ThemeSelectorTile(
+                  selected: selected,
+                  onTap: () {
+                    setSheetState(() {});
+                    unawaited(themeProvider.setArrowThemeIndex(index));
+                  },
+                  child: ArrowThemePreviewTile(arrowThemeIndex: index),
                 );
               })
               .toList(growable: false),
