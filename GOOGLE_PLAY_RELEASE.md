@@ -18,7 +18,7 @@ For Google Play submission, each release should come from:
 - a signed Android App Bundle for `com.qila.chessiq`
 - matching in-app legal/privacy notices and Play Console disclosures
 - a public privacy notice URL based on `PRIVACY.md`:
-  `https://modus.qila.gl/ChessIQ/privacy-notice`
+  `https://modus.qila.gl/ChessIQ/privacy-notice/`
 
 ## Prerequisites
 

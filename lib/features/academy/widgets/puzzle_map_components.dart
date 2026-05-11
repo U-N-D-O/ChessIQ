@@ -138,12 +138,14 @@ class _DashboardPanel extends StatelessWidget {
     required this.title,
     required this.accent,
     required this.child,
+    this.trailing,
     this.monochrome = false,
   });
 
   final String title;
   final Color accent;
   final Widget child;
+  final Widget? trailing;
   final bool monochrome;
 
   @override
@@ -159,6 +161,7 @@ class _DashboardPanel extends StatelessWidget {
           PuzzleAcademySectionHeader(
             title: title,
             accent: accent,
+            trailing: trailing,
             titleSize: 14,
             monochromeOverride: monochrome,
           ),

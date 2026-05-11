@@ -1150,6 +1150,60 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
+  Future<void> _showCurrentTitleProfileInfoDialog() async {
+    await _showStatusDialog(
+      title: 'Profile Changes',
+      message:
+          'Manage nickname and country changes from the Academy Store. Delete the leaderboard profile from Academy settings if you need a clean start.',
+    );
+  }
+
+  Future<void> _showCurrentTitleCrownsInfoDialog() async {
+    await _showStatusDialog(
+      title: 'How Crowns Work',
+      message:
+          'Crowns are earned one Academy bracket at a time. Complete enough puzzles in a node to reach that bracket\'s mastery target, and the node awards a crown.',
+    );
+  }
+
+  Widget _buildCurrentTitleInfoButton({
+    required Color accent,
+    required String tooltip,
+    required VoidCallback onPressed,
+    bool compact = false,
+  }) {
+    final monochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        widget.cinematicThemeEnabled;
+
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      padding: EdgeInsets.zero,
+      splashRadius: compact ? 16 : 18,
+      constraints: BoxConstraints.tightFor(
+        width: compact ? 26 : 28,
+        height: compact ? 26 : 28,
+      ),
+      icon: Container(
+        width: compact ? 26 : 28,
+        height: compact ? 26 : 28,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color: accent.withValues(alpha: monochrome ? 0.16 : 0.10),
+          border: Border.all(
+            color: accent.withValues(alpha: monochrome ? 0.40 : 0.28),
+          ),
+        ),
+        child: Icon(
+          Icons.info_outline_rounded,
+          size: compact ? 15 : 16,
+          color: accent,
+        ),
+      ),
+    );
+  }
+
   Future<void> _showGrandmasterOracleDialog() async {
     final monochrome =
         context.read<AppThemeProvider>().isMonochrome ||
@@ -4412,6 +4466,15 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       title: 'Current Title',
       accent: const Color(0xFFD8B640),
       monochrome: monochrome,
+      trailing: needsProfile
+          ? null
+          : _buildCurrentTitleInfoButton(
+              accent: palette.amber,
+              tooltip: 'Profile changes',
+              onPressed: () {
+                unawaited(_showCurrentTitleProfileInfoDialog());
+              },
+            ),
       child: PuzzleAcademyAnimatedSwap(
         child: KeyedSubtree(
           key: ValueKey<String>(
@@ -4457,36 +4520,45 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Column(
                       children: [
-                        PuzzleAcademyTag(
-                          label: '${provider.totalSolved} solved',
-                          icon: Icons.bolt_rounded,
-                          accent: palette.cyan,
-                          compact: true,
-                          monochromeOverride: monochrome,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: PuzzleAcademyTag(
+                                label: '${provider.totalSolved} solved',
+                                icon: Icons.bolt_rounded,
+                                accent: palette.cyan,
+                                compact: true,
+                                monochromeOverride: monochrome,
+                              ),
+                            ),
+                          ],
                         ),
-                        PuzzleAcademyTag(
-                          label: '${provider.masteredNodeCount} crowns',
-                          icon: Icons.workspace_premium_outlined,
-                          accent: palette.amber,
-                          compact: true,
-                          monochromeOverride: monochrome,
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: PuzzleAcademyTag(
+                                label: '${provider.masteredNodeCount} crowns',
+                                icon: Icons.workspace_premium_outlined,
+                                accent: palette.amber,
+                                compact: true,
+                                monochromeOverride: monochrome,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildCurrentTitleInfoButton(
+                              accent: palette.amber,
+                              tooltip: 'How crowns work',
+                              compact: true,
+                              onPressed: () {
+                                unawaited(_showCurrentTitleCrownsInfoDialog());
+                              },
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Manage nickname and country changes from the Academy Store. Delete the leaderboard profile from Academy settings if you need a clean start.',
-                      style: puzzleAcademyHudStyle(
-                        palette: palette,
-                        size: 11.2,
-                        weight: FontWeight.w700,
-                        color: palette.textMuted,
-                        height: 1.4,
-                      ),
                     ),
                   ],
                 ),

@@ -1018,6 +1018,12 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'DELETE PROFILE'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, 'EDIT PROFILE'), findsNothing);
     expect(find.text('Current Title'), findsOneWidget);
+    expect(find.byTooltip('Profile changes'), findsOneWidget);
+    expect(find.byTooltip('How crowns work'), findsOneWidget);
+    expect(
+      find.textContaining('Manage nickname and country changes'),
+      findsNothing,
+    );
   });
 
   testWidgets(

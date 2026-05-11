@@ -13,6 +13,26 @@ List<String> _nicknameTokens(String value) {
       .toList(growable: false);
 }
 
+// The merged source list contains many harmless 1-3 character entries, so we
+// only allow embedded substring matches for a curated set of clearly explicit
+// short fragments that should still fail inside a nickname.
+const Set<String> _embeddedShortProfanityWords = <String>{'sex'};
+
+bool _matchesShortProfanity({
+  required String normalized,
+  required List<String> tokens,
+  required String forbidden,
+}) {
+  if (tokens.contains(forbidden)) {
+    return true;
+  }
+  if (normalized.contains('$forbidden$forbidden')) {
+    return true;
+  }
+  return _embeddedShortProfanityWords.contains(forbidden) &&
+      normalized.contains(forbidden);
+}
+
 bool containsProfanity(String value) {
   final normalized = _normalizeNickname(value);
   if (normalized.isEmpty) {
@@ -22,10 +42,11 @@ bool containsProfanity(String value) {
   final tokens = _nicknameTokens(value);
   for (final forbidden in profanityWords) {
     if (forbidden.length <= 3) {
-      if (tokens.contains(forbidden)) {
-        return true;
-      }
-      if (normalized.contains('$forbidden$forbidden')) {
+      if (_matchesShortProfanity(
+        normalized: normalized,
+        tokens: tokens,
+        forbidden: forbidden,
+      )) {
         return true;
       }
     } else {

@@ -29,7 +29,7 @@ Before submitting to Apple, make sure you have:
 - An Apple Distribution certificate and provisioning profile, or a confirmed
   automatic-signing setup in Xcode
 - A published privacy notice URL based on `PRIVACY.md`:
-  `https://modus.qila.gl/ChessIQ/privacy-notice`
+  `https://modus.qila.gl/ChessIQ/privacy-notice/`
 - A public source tag and release notes for the shipped build
 
 ## GitHub Signed IPA Workflow
@@ -110,6 +110,8 @@ Use the narrower statement that network metadata such as IP address is not
 shown on the public leaderboard.
 
 ## Release Checklist
+
+For the feature and backend preflight list, use `APPLE_PRE_SUBMISSION_CHECKLIST.md` alongside this document.
 
 Before submission, confirm:
 

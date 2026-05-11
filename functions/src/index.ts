@@ -72,6 +72,7 @@ type PublicAcademyProfile = {
     country: string;
     score: number;
     title: string;
+    moderated: boolean;
     updatedAt: string;
 };
 
@@ -122,6 +123,7 @@ function buildPublicProfile(params: {
         country: params.country,
         score: params.score,
         title: params.title,
+        moderated: false,
         updatedAt: new Date().toISOString(),
     };
 }
@@ -494,19 +496,42 @@ function buildModeratedHandleError(
 async function removePublicAcademyProfile(handleKey: string): Promise<void> {
     const globalSnap = await db.ref(`academy_scoreboard/global/${handleKey}`).once("value");
     const entry = globalSnap.val() as Record<string, unknown> | null;
-    if (!entry) {
+    const registrySnap = await db.ref(`handle_registry/${handleKey}`).once("value");
+    const ownerUid = typeof registrySnap.val() === "string"
+        ? registrySnap.val() as string
+        : null;
+    const ownerSnap = ownerUid
+        ? await db.ref(`academy_profile_owner/${ownerUid}`).once("value")
+        : null;
+    const ownerRecord = ownerSnap?.val() as AcademyOwnerRecord | null;
+
+    const countryKeys = new Set<string>();
+    if (entry) {
+        const country =
+            typeof entry.country === "string" && entry.country.trim().length > 0
+                ? entry.country
+                : "Unknown";
+        countryKeys.add(sanitizeCountryKey(country));
+    }
+    if (ownerRecord && ownerRecord.handleKey === handleKey) {
+        countryKeys.add(ownerRecord.countryKey);
+    }
+    if (countryKeys.size === 0 && ownerUid === null) {
         return;
     }
 
-    const country =
-        typeof entry.country === "string" && entry.country.trim().length > 0
-            ? entry.country
-            : "Unknown";
-
-    await db.ref().update({
+    const updates: Record<string, unknown> = {
         [`academy_scoreboard/global/${handleKey}`]: null,
-        [`academy_scoreboard/by_country/${sanitizeCountryKey(country)}/${handleKey}`]: null,
-    });
+        [`handle_registry/${handleKey}`]: null,
+    };
+    for (const countryKey of countryKeys) {
+        updates[`academy_scoreboard/by_country/${countryKey}/${handleKey}`] = null;
+    }
+    if (ownerUid !== null && ownerRecord && ownerRecord.handleKey === handleKey) {
+        updates[`academy_profile_owner/${ownerUid}`] = null;
+    }
+
+    await db.ref().update(updates);
 }
 
 async function loadLegacyOwnedEntries(uid: string): Promise<LegacyOwnedEntry[]> {
