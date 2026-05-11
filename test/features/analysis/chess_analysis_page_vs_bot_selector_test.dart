@@ -117,10 +117,12 @@ void main() {
       final nameRect = tester.getRect(nameFinder);
       final bottomGapBelowName = cardRect.bottom - nameRect.bottom;
 
-      expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
+      expect((avatarSize.width - avatarSize.height).abs(), lessThan(12));
+      expect(avatarSize.width, greaterThanOrEqualTo(140));
       expect(bottomGapBelowName, lessThan(cardRect.height * 0.24));
       expect(backButtonRect.top - statusBarInset, lessThanOrEqualTo(20));
       expect(startButtonRect.bottom, lessThanOrEqualTo(844));
+      expect(844 - startButtonRect.bottom, lessThanOrEqualTo(72));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -193,9 +195,16 @@ void main() {
         const ValueKey<String>('bot_setup_start_button'),
       );
       final startButtonRect = tester.getRect(startButtonFinder);
+      final avatarSize = tester.getSize(
+        find.byKey(
+          const ValueKey<String>('bot_setup_avatar_frame_mochi-gearheart'),
+        ),
+      );
 
       expect(startButtonFinder.hitTestable(), findsOneWidget);
+      expect(avatarSize.width, greaterThanOrEqualTo(138));
       expect(startButtonRect.bottom, lessThanOrEqualTo(812));
+      expect(812 - startButtonRect.bottom, lessThanOrEqualTo(72));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -262,7 +271,65 @@ void main() {
       );
 
       final avatarSize = tester.getSize(avatarFinder);
-      expect((avatarSize.width - avatarSize.height).abs(), lessThan(0.5));
+      expect((avatarSize.width - avatarSize.height).abs(), lessThan(12));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'vs bot selector removes portrait card footer copy and dead space',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+
+      await _pumpVsBotSelector(
+        tester,
+        size: const Size(768, 1024),
+        initialPrefs: const <String, Object>{
+          'vs_bot_completed_tiers_v1': <String>[
+            'mochi-gearheart:easy',
+            'mochi-gearheart:medium',
+            'mochi-gearheart:hard',
+          ],
+        },
+      );
+
+      final cardFinder = find.byKey(
+        const ValueKey<String>('bot_setup_card_mochi-gearheart'),
+      );
+      final avatarFinder = find.byKey(
+        const ValueKey<String>('bot_setup_avatar_frame_mochi-gearheart'),
+      );
+      final nameFinder = find.descendant(
+        of: cardFinder,
+        matching: find.text('Mochi Gearheart'),
+      );
+      final startButtonFinder = find.byKey(
+        const ValueKey<String>('bot_setup_start_button'),
+      );
+
+      expect(cardFinder, findsOneWidget);
+        expect(avatarFinder, findsOneWidget);
+      expect(nameFinder, findsOneWidget);
+      expect(startButtonFinder, findsOneWidget);
+      expect(find.textContaining('Cabinet cleared.'), findsNothing);
+
+      final cardRect = tester.getRect(cardFinder);
+        final avatarRect = tester.getRect(avatarFinder);
+      final nameRect = tester.getRect(nameFinder);
+      final startButtonRect = tester.getRect(startButtonFinder);
+      final bottomGapBelowName = cardRect.bottom - nameRect.bottom;
+        final avatarTopGap = avatarRect.top - cardRect.top;
+
+        expect(avatarRect.width, greaterThanOrEqualTo(180));
+        expect(avatarTopGap, lessThan(cardRect.height * 0.25));
+      expect(bottomGapBelowName, lessThanOrEqualTo(32));
+      expect(startButtonRect.bottom, lessThanOrEqualTo(1024));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

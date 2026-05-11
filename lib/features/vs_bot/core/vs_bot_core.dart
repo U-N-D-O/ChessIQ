@@ -109,7 +109,7 @@ class _VsBotSetupLayoutSpec {
       cardViewportHeight: cardViewportHeight,
       portraitCompression: portraitCompression,
       sectionGap: !isLandscape && compactPortrait
-          ? ui.lerpDouble(12.0, 6.0, portraitCompression)!
+          ? ui.lerpDouble(10.0, 4.0, portraitCompression)!
           : compactPhoneLayout
           ? 12.0
           : 14.0,
@@ -2341,7 +2341,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     final previewSettings = bot.settingsFor(previewDifficulty);
     final avatarAsset = _botSetupAvatarAsset(bot, index);
     final locked = !_isBotUnlocked(bot);
-    final clearedTierCount = _clearedTierCountForBot(bot);
     final difficultyTone = locked
         ? null
         : _botDifficultyToneFor(bot, previewDifficulty, arcade);
@@ -2356,6 +2355,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     final shellGlowAccent = locked
         ? shellAccent
         : Color.lerp(profileAccent, difficultyGlowAccent, 0.35)!;
+    final avatarPanelPadding = compactLandscape
+      ? 4.0
+      : compact
+      ? 6.0
+      : 8.0;
     final cardMaxWidth = layout.compactLandscape
         ? 292.0
         : layout.isLandscape
@@ -2365,14 +2369,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         : layout.compactPortrait
         ? 252.0
         : 236.0;
-    final showCardStatus = !layout.isLandscape && !layout.compactPhoneLayout;
-    final showCardDescription =
-        !layout.isLandscape && !layout.compactPhoneLayout;
-    final statusText = locked
-        ? 'Clear all ${_botCharacters[max(0, index - 1)].name} tiers first.'
-        : clearedTierCount == 3
-        ? 'Cabinet cleared. Replay any tier or jump back in for a rematch.'
-        : 'Approx. ${previewSettings.elo} Elo | $clearedTierCount/3 tiers cleared';
     final filledTagForeground = arcade.monochrome
         ? arcade.text
         : const Color(0xFF0B0F16);
@@ -2390,281 +2386,241 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             horizontal: compact ? 8 : 10,
             vertical: compact ? 6 : 12,
           ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: cardMaxWidth),
-            child: Container(
-              key: ValueKey<String>('bot_setup_card_${bot.id}'),
-              decoration: _vsBotArcadePanelDecoration(
-                palette: arcade,
-                accent: shellAccent,
-                glowAccent: shellGlowAccent,
-                radius: compact ? 26 : 30,
-                borderWidth: 2.8,
-                fillColor: arcade.marquee,
-              ),
-              padding: EdgeInsets.fromLTRB(
-                compact ? 10 : 12,
-                compact ? 10 : 12,
-                compact ? 10 : 12,
-                compact ? 12 : 14,
-              ),
-              child: LayoutBuilder(
-                builder: (context, cardConstraints) {
-                  final footerMetadataGapReserve =
-                      showCardStatus || showCardDescription
-                      ? (compactLandscape
-                            ? 4.0
-                            : compact
-                            ? 6.0
-                            : 8.0)
-                      : 0.0;
-                  final footerReserve =
-                      (layout.isLandscape
-                          ? (compactLandscape ? 84.0 : 74.0)
-                          : compact
-                          ? 92.0
-                          : 116.0) +
-                      footerMetadataGapReserve +
-                      (showCardStatus ? 36.0 : 0.0) +
-                      (showCardDescription
-                          ? (layout.isLandscape ? 32.0 : 48.0)
-                          : 0.0);
-                  final avatarExtent = max(
-                    0.0,
-                    min(
-                      cardConstraints.maxWidth - (compact ? 12.0 : 16.0),
-                      cardConstraints.maxHeight - footerReserve,
-                    ),
-                  ).toDouble();
+          child: LayoutBuilder(
+            builder: (context, viewportConstraints) {
+              final footerReserve = layout.isLandscape
+                  ? (compactLandscape ? 84.0 : 74.0)
+                  : compact
+                  ? 92.0
+                  : 116.0;
+              final cardWidth = min(
+                cardMaxWidth,
+                viewportConstraints.maxWidth,
+              ).toDouble();
+              final avatarExtent = max(
+                0.0,
+                min(
+                  cardWidth -
+                      (compact ? 20.0 : 24.0) -
+                      (avatarPanelPadding * 2),
+                  viewportConstraints.maxHeight -
+                      (compact ? 30.0 : 30.0) -
+                      footerReserve,
+                ),
+              ).toDouble();
 
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: PuzzleAcademyTag(
-                              label: locked
-                                  ? 'LOCKED'
-                                  : '${previewSettings.elo} ELO',
-                              accent: locked ? arcade.line : difficultyAccent,
-                              compact: true,
-                              filled: true,
-                              foregroundColor: locked
-                                  ? arcade.text
-                                  : filledTagForeground,
+              return Align(
+                alignment: Alignment.center,
+                child: SizedBox(
+                  width: cardWidth,
+                  child: Container(
+                    key: ValueKey<String>('bot_setup_card_${bot.id}'),
+                    decoration: _vsBotArcadePanelDecoration(
+                      palette: arcade,
+                      accent: shellAccent,
+                      glowAccent: shellGlowAccent,
+                      radius: compact ? 26 : 30,
+                      borderWidth: 2.8,
+                      fillColor: arcade.marquee,
+                    ),
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 10 : 12,
+                      compact ? 10 : 12,
+                      compact ? 10 : 12,
+                      compact ? 12 : 14,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: PuzzleAcademyTag(
+                                label: locked
+                                    ? 'LOCKED'
+                                    : '${previewSettings.elo} ELO',
+                                accent: locked ? arcade.line : difficultyAccent,
+                                compact: true,
+                                filled: true,
+                                foregroundColor: locked
+                                    ? arcade.text
+                                    : filledTagForeground,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: PuzzleAcademyTag(
-                              label: _vsBotProfileLabel(
-                                bot.profile,
-                              ).toUpperCase(),
-                              accent: profileAccent,
-                              compact: true,
-                              filled:
-                                  !compact && index == _botSetupSelectedIndex,
-                              foregroundColor:
-                                  !compact && index == _botSetupSelectedIndex
-                                  ? filledTagForeground
-                                  : null,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: PuzzleAcademyTag(
+                                label: _vsBotProfileLabel(
+                                  bot.profile,
+                                ).toUpperCase(),
+                                accent: profileAccent,
+                                compact: true,
+                                filled:
+                                    !compact && index == _botSetupSelectedIndex,
+                                foregroundColor:
+                                    !compact && index == _botSetupSelectedIndex
+                                    ? filledTagForeground
+                                    : null,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(
-                        height: compactLandscape
-                            ? 6
-                            : compact
-                            ? 8
-                            : 10,
-                      ),
-                      GestureDetector(
-                        onTap: () =>
-                            unawaited(_launchBotFromSelector(bot, index)),
-                        child: Container(
-                          decoration: _vsBotArcadePanelDecoration(
-                            palette: arcade,
-                            accent: shellAccent,
-                            glowAccent: shellGlowAccent,
-                            radius: 22,
-                            borderWidth: 2.2,
-                            inset: true,
-                            elevated: !locked,
-                            fillColor: arcade.panelAlt,
-                          ),
-                          padding: EdgeInsets.all(
-                            compactLandscape
-                                ? 4
-                                : compact
-                                ? 6
-                                : 8,
-                          ),
-                          child: Center(
-                            child: SizedBox(
-                              width: avatarExtent,
-                              height: avatarExtent,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(
-                                  compact ? 18 : 16,
-                                ),
-                                child: SizedBox.expand(
-                                  key: ValueKey<String>(
-                                    'bot_setup_avatar_frame_${bot.id}',
+                          ],
+                        ),
+                        SizedBox(
+                          height: compactLandscape
+                              ? 6
+                              : compact
+                              ? 8
+                              : 10,
+                        ),
+                        GestureDetector(
+                          onTap: () =>
+                              unawaited(_launchBotFromSelector(bot, index)),
+                          child: Container(
+                            decoration: _vsBotArcadePanelDecoration(
+                              palette: arcade,
+                              accent: shellAccent,
+                              glowAccent: shellGlowAccent,
+                              radius: 22,
+                              borderWidth: 2.2,
+                              inset: true,
+                              elevated: !locked,
+                              fillColor: arcade.panelAlt,
+                            ),
+                            padding: EdgeInsets.all(avatarPanelPadding),
+                            child: Center(
+                              child: SizedBox(
+                                width: avatarExtent,
+                                height: avatarExtent,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    compact ? 18 : 16,
                                   ),
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: avatarAsset != null
-                                            ? Image.asset(
-                                                avatarAsset,
-                                                fit: BoxFit.cover,
-                                                alignment: Alignment.topCenter,
-                                              )
-                                            : Container(
-                                                color: arcade.shell,
-                                                alignment: Alignment.center,
-                                                child: Text(
-                                                  '#${bot.rank}',
-                                                  style:
-                                                      puzzleAcademyDisplayStyle(
-                                                        palette: arcade.base,
-                                                        size: compact ? 32 : 38,
-                                                        color: arcade.text,
-                                                      ),
-                                                ),
-                                              ),
-                                      ),
-                                      Positioned.fill(
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                              colors: <Color>[
-                                                Colors.black.withValues(
-                                                  alpha: 0.10,
-                                                ),
-                                                Colors.transparent,
-                                                Colors.black.withValues(
-                                                  alpha: 0.20,
-                                                ),
-                                              ],
-                                              stops: const <double>[
-                                                0.0,
-                                                0.48,
-                                                1.0,
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (locked)
+                                  child: SizedBox.expand(
+                                    key: ValueKey<String>(
+                                      'bot_setup_avatar_frame_${bot.id}',
+                                    ),
+                                    child: Stack(
+                                      children: [
                                         Positioned.fill(
-                                          child: Container(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.58,
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.lock_outline_rounded,
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.92),
-                                                  size: compact ? 26 : 30,
+                                          child: avatarAsset != null
+                                              ? Image.asset(
+                                                  avatarAsset,
+                                                  fit: BoxFit.cover,
+                                                  alignment:
+                                                      Alignment.topCenter,
+                                                )
+                                              : Container(
+                                                  color: arcade.shell,
+                                                  alignment: Alignment.center,
+                                                  child: Text(
+                                                    '#${bot.rank}',
+                                                    style:
+                                                        puzzleAcademyDisplayStyle(
+                                                          palette: arcade.base,
+                                                          size:
+                                                              compact ? 32 : 38,
+                                                          color: arcade.text,
+                                                        ),
+                                                  ),
                                                 ),
-                                                SizedBox(
-                                                  height: compact ? 6 : 8,
-                                                ),
-                                                Text(
-                                                  'LOCKED',
-                                                  style:
-                                                      puzzleAcademyDisplayStyle(
-                                                        palette: arcade.base,
-                                                        size: compact ? 14 : 16,
-                                                        color: Colors.white,
-                                                        withGlow: true,
-                                                      ),
-                                                ),
-                                              ],
+                                        ),
+                                        Positioned.fill(
+                                          child: DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: <Color>[
+                                                  Colors.black.withValues(
+                                                    alpha: 0.10,
+                                                  ),
+                                                  Colors.transparent,
+                                                  Colors.black.withValues(
+                                                    alpha: 0.20,
+                                                  ),
+                                                ],
+                                                stops: const <double>[
+                                                  0.0,
+                                                  0.48,
+                                                  1.0,
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ),
-                                    ],
+                                        if (locked)
+                                          Positioned.fill(
+                                            child: Container(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.58,
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(
+                                                    Icons.lock_outline_rounded,
+                                                    color: Colors.white
+                                                        .withValues(
+                                                          alpha: 0.92,
+                                                        ),
+                                                    size: compact ? 26 : 30,
+                                                  ),
+                                                  SizedBox(
+                                                    height: compact ? 6 : 8,
+                                                  ),
+                                                  Text(
+                                                    'LOCKED',
+                                                    style:
+                                                        puzzleAcademyDisplayStyle(
+                                                          palette: arcade.base,
+                                                          size:
+                                                              compact ? 14 : 16,
+                                                          color: Colors.white,
+                                                          withGlow: true,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      SizedBox(
-                        height: compactLandscape
-                            ? 8
-                            : compact
-                            ? 10
-                            : 12,
-                      ),
-                      Text(
-                        bot.name,
-                        textAlign: TextAlign.center,
-                        maxLines: compactLandscape ? 1 : 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: puzzleAcademyDisplayStyle(
-                          palette: arcade.base,
-                          size: compactLandscape
-                              ? 16
-                              : compact
-                              ? 18
-                              : 20,
-                          color: arcade.text,
-                        ),
-                      ),
-                      if (showCardStatus || showCardDescription)
                         SizedBox(
                           height: compactLandscape
-                              ? 4
+                              ? 8
                               : compact
-                              ? 6
-                              : 8,
+                              ? 10
+                              : 12,
                         ),
-                      if (showCardStatus) ...[
-                        SizedBox(height: compact ? 8 : 10),
                         Text(
-                          statusText,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          bot.name,
                           textAlign: TextAlign.center,
-                          style: puzzleAcademyHudStyle(
+                          maxLines: compactLandscape ? 1 : 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: puzzleAcademyDisplayStyle(
                             palette: arcade.base,
-                            size: compact ? 10.0 : 10.8,
-                            color: arcade.text.withValues(alpha: 0.86),
+                            size: compactLandscape
+                                ? 16
+                                : compact
+                                ? 18
+                                : 20,
+                            color: arcade.text,
                           ),
                         ),
                       ],
-                      if (showCardDescription) ...[
-                        SizedBox(height: compact ? 6 : 8),
-                        Text(
-                          bot.description,
-                          maxLines: layout.isLandscape ? 2 : 3,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: puzzleAcademyCompactStyle(
-                            palette: arcade.base,
-                            size: compact ? 10.2 : 10.8,
-                            color: arcade.textMuted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-            ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -2833,6 +2789,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     bool compact = false,
     int? captionMaxLines,
     int? labelMaxLines,
+    bool clipWrappedCaption = false,
   }) {
     final fillColor = selected
         ? Color.alphaBlend(
@@ -2883,7 +2840,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     child: Text(
                       caption.toUpperCase(),
                       maxLines: resolvedCaptionMaxLines,
-                      overflow: TextOverflow.ellipsis,
+                      overflow: clipWrappedCaption
+                          ? TextOverflow.clip
+                          : TextOverflow.ellipsis,
+                      softWrap: resolvedCaptionMaxLines > 1,
                       style: puzzleAcademyIdentityStyle(
                         palette: arcade.base,
                         size: compact ? 7.2 : 7.8,
@@ -2959,6 +2919,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         final showTierStatusText = !compactPhoneLayout || layout.isLandscape;
         final denseSelectorTiles = compactPhoneLayout || splitLandscapeControls;
         final compactSelectorTiles = compactPhoneLayout;
+        final compactSelectorVerticalPadding = layout.shortPortrait ? 6.0 : 10.0;
+        final selectorDotGap = layout.shortPortrait ? 6.0 : 12.0;
         final landscapeControlWidth = splitLandscapeControls
             ? (layout.compactLandscape
                       ? (media.size.width * 0.382).clamp(324.0, 336.0)
@@ -2967,15 +2929,12 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             : 0.0;
         final selectorActionHeight = splitLandscapeControls
             ? 48.0
-            : (compactPhoneLayout ? 50.0 : 56.0);
-        final selectorViewportHeight = splitLandscapeControls
+          : (compactPhoneLayout ? 48.0 : 56.0);
+        final baseSelectorViewportHeight = splitLandscapeControls
             ? cardViewportHeight + 8
             : layout.isLandscape
             ? cardViewportHeight + 12
             : cardViewportHeight;
-        final splitLandscapePanelHeight = splitLandscapeControls
-            ? selectorViewportHeight + 48.0
-            : 0.0;
         final profileAccent = _vsBotProfileAccent(selectedBot.profile, arcade);
         final marqueeAccent = Color.lerp(
           profileAccent,
@@ -3009,7 +2968,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                  ? 12
+                ? 8
                   : 14,
               splitLandscapeControls
                   ? 14
@@ -3019,7 +2978,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                  ? 12
+                ? 10
                   : 16,
             ),
             child: Column(
@@ -3190,7 +3149,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                  ? 12
+                ? 8
                   : 14,
               splitLandscapeControls
                   ? 14
@@ -3200,7 +3159,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                  ? 12
+                ? 10
                   : 16,
             ),
             child: Column(
@@ -3233,7 +3192,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                             selected: _botSideChoice == BotSideChoice.white,
                             enabled: true,
                             compact: denseSelectorTiles,
-                            captionMaxLines: splitLandscapeControls ? 2 : null,
+                            captionMaxLines:
+                                compactSelectorTiles || splitLandscapeControls
+                                ? 2
+                                : null,
+                            clipWrappedCaption: compactSelectorTiles,
                             onTap: () {
                               setState(
                                 () => _botSideChoice = BotSideChoice.white,
@@ -3260,7 +3223,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                             selected: _botSideChoice == BotSideChoice.random,
                             enabled: true,
                             compact: denseSelectorTiles,
-                            captionMaxLines: splitLandscapeControls ? 2 : null,
+                            captionMaxLines:
+                                compactSelectorTiles || splitLandscapeControls
+                                ? 2
+                                : null,
+                            clipWrappedCaption: compactSelectorTiles,
                             onTap: () {
                               setState(
                                 () => _botSideChoice = BotSideChoice.random,
@@ -3283,7 +3250,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                             selected: _botSideChoice == BotSideChoice.black,
                             enabled: true,
                             compact: denseSelectorTiles,
-                            captionMaxLines: splitLandscapeControls ? 2 : null,
+                            captionMaxLines:
+                                compactSelectorTiles || splitLandscapeControls
+                                ? 2
+                                : null,
+                            clipWrappedCaption: compactSelectorTiles,
                             onTap: () {
                               setState(
                                 () => _botSideChoice = BotSideChoice.black,
@@ -3361,22 +3332,22 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                  ? 14
+                ? 12
                   : 18,
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                  ? 14
+                ? 10
                   : 18,
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                  ? 14
+                ? 12
                   : 18,
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                  ? 14
+                ? 10
                   : 18,
             ),
             child: SizedBox(
@@ -3498,6 +3469,31 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   }
 
                   final contentMaxWidth = layout.contentMaxWidth;
+                  final pageLeftPadding = max(
+                    tightPortrait ? 12.0 : 16.0,
+                    media.viewPadding.left + 10,
+                  );
+                    final pageTopPadding = layout.isLandscape
+                      ? max(
+                        compactPhoneLayout ? 12.0 : 14.0,
+                        media.padding.top + 8,
+                      )
+                      : max(tightPortrait ? 4.0 : 6.0, media.padding.top);
+                  final pageRightPadding = max(
+                    tightPortrait ? 12.0 : 16.0,
+                    media.viewPadding.right + 10,
+                  );
+                    final pageBottomPadding = max(
+                    compactPhoneLayout ? 14.0 : 18.0,
+                    media.viewPadding.bottom + 10,
+                    );
+                  final portraitContentHeight = max(
+                    0.0,
+                    constraints.maxHeight - pageTopPadding - pageBottomPadding,
+                  );
+                    final splitLandscapePanelHeight = splitLandscapeControls
+                      ? baseSelectorViewportHeight + 48.0
+                      : 0.0;
 
                   IconButton buildChromeButton({
                     required VoidCallback onPressed,
@@ -3564,275 +3560,276 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   }
 
                   Widget buildSelectorPanel() {
-                    final compactSelectorVerticalPadding = layout.shortPortrait
-                        ? 6.0
-                        : 10.0;
-                    final selectorDotGap = layout.shortPortrait ? 6.0 : 12.0;
+                    final panelHorizontalPadding = compactPhoneLayout ? 12.0 : 14.0;
+                    final panelVerticalPadding = splitLandscapeControls
+                        ? 10.0
+                        : compactPhoneLayout
+                        ? compactSelectorVerticalPadding
+                        : 14.0;
+                    final indicatorGap = splitLandscapeControls ? 8.0 : selectorDotGap;
 
-                    return Container(
-                      key: const ValueKey<String>('bot_setup_selector_panel'),
-                      decoration: _vsBotArcadePanelDecoration(
-                        palette: arcade,
-                        accent: marqueeAccent,
-                        radius: 32,
-                        borderWidth: 3.4,
-                        fillColor: arcade.shell,
-                      ),
-                      padding: EdgeInsets.fromLTRB(
-                        compactPhoneLayout ? 12 : 14,
-                        splitLandscapeControls
-                            ? 10
-                            : compactPhoneLayout
-                            ? compactSelectorVerticalPadding
-                            : 14,
-                        compactPhoneLayout ? 12 : 14,
-                        splitLandscapeControls
-                            ? 10
-                            : compactPhoneLayout
-                            ? compactSelectorVerticalPadding
-                            : 14,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(
-                            height: selectorViewportHeight,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Positioned.fill(
+                    return LayoutBuilder(
+                      builder: (context, panelConstraints) {
+                        final hasBoundedHeight =
+                            panelConstraints.hasBoundedHeight &&
+                            panelConstraints.maxHeight.isFinite;
+
+                        Widget buildViewport() {
+                          return Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: _vsBotArcadePanelDecoration(
+                                    palette: arcade,
+                                    accent: profileAccent,
+                                    radius: 26,
+                                    borderWidth: 2.2,
+                                    inset: true,
+                                    elevated: false,
+                                    fillColor: arcade.panelAlt,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                left: 8,
+                                top: 18,
+                                bottom: 18,
+                                child: IgnorePointer(
                                   child: Container(
-                                    decoration: _vsBotArcadePanelDecoration(
-                                      palette: arcade,
-                                      accent: profileAccent,
-                                      radius: 26,
-                                      borderWidth: 2.2,
-                                      inset: true,
-                                      elevated: false,
-                                      fillColor: arcade.panelAlt,
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  left: 8,
-                                  top: 18,
-                                  bottom: 18,
-                                  child: IgnorePointer(
-                                    child: Container(
-                                      width: 14,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: <Color>[
-                                            marqueeAccent.withValues(
-                                              alpha: 0.92,
-                                            ),
-                                            arcade.crimson.withValues(
-                                              alpha: 0.30,
-                                            ),
-                                            Colors.black.withValues(
-                                              alpha: 0.12,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  right: 8,
-                                  top: 18,
-                                  bottom: 18,
-                                  child: IgnorePointer(
-                                    child: Container(
-                                      width: 14,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                          colors: <Color>[
-                                            profileAccent.withValues(
-                                              alpha: 0.92,
-                                            ),
-                                            arcade.cyan.withValues(alpha: 0.28),
-                                            Colors.black.withValues(
-                                              alpha: 0.12,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Positioned.fill(
-                                  child: DecoratedBox(
+                                    width: 14,
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(26),
-                                      gradient: RadialGradient(
-                                        center: Alignment(
-                                          sin(pulse * pi * 2) * 0.08,
-                                          -0.18 + cos(pulse * pi * 2) * 0.05,
-                                        ),
-                                        radius: 1.02,
+                                      borderRadius: BorderRadius.circular(999),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
                                         colors: <Color>[
                                           marqueeAccent.withValues(
-                                            alpha: arcade.reducedEffects
-                                                ? 0.08
-                                                : 0.18,
+                                            alpha: 0.92,
                                           ),
-                                          Colors.transparent,
+                                          arcade.crimson.withValues(
+                                            alpha: 0.30,
+                                          ),
+                                          Colors.black.withValues(
+                                            alpha: 0.12,
+                                          ),
                                         ],
                                       ),
                                     ),
                                   ),
                                 ),
-                                PageView.builder(
-                                  controller: _botSetupPageController,
-                                  itemCount: _botCharacters.length,
-                                  physics: const BouncingScrollPhysics(),
-                                  allowImplicitScrolling: true,
-                                  onPageChanged: (index) {
-                                    setState(
-                                      () => _setBotSetupSelectionFields(index),
-                                    );
-                                    _saveLastBotIndex(index);
-                                  },
-                                  itemBuilder: (context, index) =>
-                                      _buildBotSetupCard(
-                                        _botCharacters[index],
-                                        index,
-                                        layout: layout,
-                                      ),
-                                ),
-                                Positioned(
-                                  left: tightPortrait ? 8 : 12,
-                                  child: buildNavButton(
-                                    icon: Icons.chevron_left_rounded,
-                                    onPressed: _botSetupSelectedIndex == 0
-                                        ? null
-                                        : () => _animateBotSetupTo(
-                                            _botSetupSelectedIndex - 1,
+                              ),
+                              Positioned(
+                                right: 8,
+                                top: 18,
+                                bottom: 18,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: 14,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(999),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: <Color>[
+                                          profileAccent.withValues(
+                                            alpha: 0.92,
                                           ),
-                                  ),
-                                ),
-                                Positioned(
-                                  right: tightPortrait ? 8 : 12,
-                                  child: buildNavButton(
-                                    icon: Icons.chevron_right_rounded,
-                                    onPressed:
-                                        _botSetupSelectedIndex ==
-                                            _botCharacters.length - 1
-                                        ? null
-                                        : () => _animateBotSetupTo(
-                                            _botSetupSelectedIndex + 1,
+                                          arcade.cyan.withValues(alpha: 0.28),
+                                          Colors.black.withValues(
+                                            alpha: 0.12,
                                           ),
-                                  ),
-                                ),
-                                Positioned(
-                                  left: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: IgnorePointer(
-                                    child: Container(
-                                      width: compactPhoneLayout ? 44 : 52,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(24),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.centerLeft,
-                                          end: Alignment.centerRight,
-                                          colors: <Color>[
-                                            arcade.shell.withValues(
-                                              alpha: 0.94,
-                                            ),
-                                            arcade.shell.withValues(alpha: 0.0),
-                                          ],
-                                        ),
+                                        ],
                                       ),
                                     ),
                                   ),
                                 ),
-                                Positioned(
-                                  right: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: IgnorePointer(
-                                    child: Container(
-                                      width: compactPhoneLayout ? 44 : 52,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(24),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.centerRight,
-                                          end: Alignment.centerLeft,
-                                          colors: <Color>[
-                                            arcade.shell.withValues(
-                                              alpha: 0.94,
-                                            ),
-                                            arcade.shell.withValues(alpha: 0.0),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            height: splitLandscapeControls ? 8 : selectorDotGap,
-                          ),
-                          Align(
-                            alignment: Alignment.center,
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: List.generate(_botCharacters.length, (
-                                index,
-                              ) {
-                                final bot = _botCharacters[index];
-                                final active = index == _botSetupSelectedIndex;
-                                final unlocked = _isBotUnlocked(bot);
-                                final cleared = _isBotFullyCleared(bot);
-                                final dotColor = active
-                                    ? marqueeAccent
-                                    : cleared
-                                    ? arcade.victory
-                                    : unlocked
-                                    ? arcade.text.withValues(alpha: 0.44)
-                                    : arcade.text.withValues(alpha: 0.18);
-                                return AnimatedContainer(
-                                  duration: puzzleAcademyMotionDuration(
-                                    reducedEffects: arcade.reducedEffects,
-                                    milliseconds: 220,
-                                  ),
-                                  curve: puzzleAcademyMotionCurve(
-                                    reducedEffects: arcade.reducedEffects,
-                                  ),
-                                  width: active ? 22 : 8,
-                                  height: 8,
+                              ),
+                              Positioned.fill(
+                                child: DecoratedBox(
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    color: dotColor,
-                                    boxShadow: active
-                                        ? puzzleAcademySurfaceGlow(
-                                            dotColor,
-                                            monochrome: arcade.monochrome,
-                                            strength: 0.26,
-                                          )
-                                        : null,
+                                    borderRadius: BorderRadius.circular(26),
+                                    gradient: RadialGradient(
+                                      center: Alignment(
+                                        sin(pulse * pi * 2) * 0.08,
+                                        -0.18 + cos(pulse * pi * 2) * 0.05,
+                                      ),
+                                      radius: 1.02,
+                                      colors: <Color>[
+                                        marqueeAccent.withValues(
+                                          alpha: arcade.reducedEffects
+                                              ? 0.08
+                                              : 0.18,
+                                        ),
+                                        Colors.transparent,
+                                      ],
+                                    ),
                                   ),
-                                );
-                              }),
-                            ),
+                                ),
+                              ),
+                              PageView.builder(
+                                controller: _botSetupPageController,
+                                itemCount: _botCharacters.length,
+                                physics: const BouncingScrollPhysics(),
+                                allowImplicitScrolling: true,
+                                onPageChanged: (index) {
+                                  setState(
+                                    () => _setBotSetupSelectionFields(index),
+                                  );
+                                  _saveLastBotIndex(index);
+                                },
+                                itemBuilder: (context, index) =>
+                                    _buildBotSetupCard(
+                                      _botCharacters[index],
+                                      index,
+                                      layout: layout,
+                                    ),
+                              ),
+                              Positioned(
+                                left: tightPortrait ? 8 : 12,
+                                child: buildNavButton(
+                                  icon: Icons.chevron_left_rounded,
+                                  onPressed: _botSetupSelectedIndex == 0
+                                      ? null
+                                      : () => _animateBotSetupTo(
+                                          _botSetupSelectedIndex - 1,
+                                        ),
+                                ),
+                              ),
+                              Positioned(
+                                right: tightPortrait ? 8 : 12,
+                                child: buildNavButton(
+                                  icon: Icons.chevron_right_rounded,
+                                  onPressed:
+                                      _botSetupSelectedIndex ==
+                                          _botCharacters.length - 1
+                                      ? null
+                                      : () => _animateBotSetupTo(
+                                          _botSetupSelectedIndex + 1,
+                                        ),
+                                ),
+                              ),
+                              Positioned(
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: compactPhoneLayout ? 44 : 52,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.centerLeft,
+                                        end: Alignment.centerRight,
+                                        colors: <Color>[
+                                          arcade.shell.withValues(alpha: 0.94),
+                                          arcade.shell.withValues(alpha: 0.0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: compactPhoneLayout ? 44 : 52,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.centerRight,
+                                        end: Alignment.centerLeft,
+                                        colors: <Color>[
+                                          arcade.shell.withValues(alpha: 0.94),
+                                          arcade.shell.withValues(alpha: 0.0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Container(
+                          key: const ValueKey<String>('bot_setup_selector_panel'),
+                          decoration: _vsBotArcadePanelDecoration(
+                            palette: arcade,
+                            accent: marqueeAccent,
+                            radius: 32,
+                            borderWidth: 3.4,
+                            fillColor: arcade.shell,
                           ),
-                        ],
-                      ),
+                          padding: EdgeInsets.fromLTRB(
+                            panelHorizontalPadding,
+                            panelVerticalPadding,
+                            panelHorizontalPadding,
+                            panelVerticalPadding,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (hasBoundedHeight)
+                                Expanded(child: buildViewport())
+                              else
+                                SizedBox(
+                                  height: baseSelectorViewportHeight,
+                                  child: buildViewport(),
+                                ),
+                              SizedBox(height: indicatorGap),
+                              Align(
+                                alignment: Alignment.center,
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: List.generate(_botCharacters.length, (
+                                    index,
+                                  ) {
+                                    final bot = _botCharacters[index];
+                                    final active = index == _botSetupSelectedIndex;
+                                    final unlocked = _isBotUnlocked(bot);
+                                    final cleared = _isBotFullyCleared(bot);
+                                    final dotColor = active
+                                        ? marqueeAccent
+                                        : cleared
+                                        ? arcade.victory
+                                        : unlocked
+                                        ? arcade.text.withValues(alpha: 0.44)
+                                        : arcade.text.withValues(alpha: 0.18);
+                                    return AnimatedContainer(
+                                      duration: puzzleAcademyMotionDuration(
+                                        reducedEffects: arcade.reducedEffects,
+                                        milliseconds: 220,
+                                      ),
+                                      curve: puzzleAcademyMotionCurve(
+                                        reducedEffects: arcade.reducedEffects,
+                                      ),
+                                      width: active ? 22 : 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                        color: dotColor,
+                                        boxShadow: active
+                                            ? puzzleAcademySurfaceGlow(
+                                                dotColor,
+                                                monochrome: arcade.monochrome,
+                                                strength: 0.26,
+                                              )
+                                            : null,
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     );
                   }
 
@@ -3862,27 +3859,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         ),
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
-                            max(
-                              tightPortrait ? 12.0 : 16.0,
-                              media.viewPadding.left + 10,
-                            ),
-                            layout.isLandscape
-                                ? max(
-                                    compactPhoneLayout ? 12.0 : 14.0,
-                                    media.padding.top + 8,
-                                  )
-                                : max(
-                                    tightPortrait ? 4.0 : 6.0,
-                                    media.padding.top,
-                                  ),
-                            max(
-                              tightPortrait ? 12.0 : 16.0,
-                              media.viewPadding.right + 10,
-                            ),
-                            max(
-                              compactPhoneLayout ? 14.0 : 18.0,
-                              media.viewPadding.bottom + 10,
-                            ),
+                            pageLeftPadding,
+                            pageTopPadding,
+                            pageRightPadding,
+                            pageBottomPadding,
                           ),
                           child: Align(
                             alignment: layout.isLandscape
@@ -3892,74 +3872,116 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                               constraints: BoxConstraints(
                                 maxWidth: contentMaxWidth,
                               ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      buildChromeButton(
-                                        onPressed: _goToMenu,
-                                        icon: Icons.arrow_back_rounded,
-                                        tooltip: 'Back to menu',
-                                        accent: arcade.cyan,
-                                      ),
-                                      const Spacer(),
-                                      buildChromeButton(
-                                        onPressed: () => _openSettings(),
-                                        icon: Icons.settings_outlined,
-                                        tooltip: 'Settings',
-                                        accent: arcade.amber,
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: sectionGap),
-                                  if (splitLandscapeControls)
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: SizedBox(
-                                            height: splitLandscapePanelHeight,
-                                            child: buildSelectorPanel(),
-                                          ),
-                                        ),
-                                        SizedBox(width: sectionGap),
-                                        SizedBox(
-                                          width: landscapeControlWidth,
-                                          height: splitLandscapePanelHeight,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
+                              child: !layout.isLandscape
+                                  ? SizedBox(
+                                      height: portraitContentHeight,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Row(
                                             children: [
-                                              Expanded(
-                                                flex: 11,
-                                                child: buildDifficultyPanel(),
+                                              buildChromeButton(
+                                                onPressed: _goToMenu,
+                                                icon: Icons.arrow_back_rounded,
+                                                tooltip: 'Back to menu',
+                                                accent: arcade.cyan,
                                               ),
-                                              SizedBox(height: sectionGap),
-                                              Expanded(
-                                                flex: 10,
-                                                child: buildSidePanel(
-                                                  includeLaunch: true,
-                                                ),
+                                              const Spacer(),
+                                              buildChromeButton(
+                                                onPressed: () => _openSettings(),
+                                                icon: Icons.settings_outlined,
+                                                tooltip: 'Settings',
+                                                accent: arcade.amber,
                                               ),
                                             ],
                                           ),
-                                        ),
-                                      ],
+                                          SizedBox(height: sectionGap),
+                                          Expanded(child: buildSelectorPanel()),
+                                          SizedBox(height: sectionGap),
+                                          buildDifficultyPanel(),
+                                          SizedBox(height: sectionGap),
+                                          buildSidePanel(),
+                                          SizedBox(height: sectionGap),
+                                          buildStartPanel(),
+                                        ],
+                                      ),
                                     )
-                                  else ...[
-                                    buildSelectorPanel(),
-                                    SizedBox(height: sectionGap),
-                                    buildDifficultyPanel(),
-                                    SizedBox(height: sectionGap),
-                                    buildSidePanel(),
-                                    SizedBox(height: sectionGap),
-                                    buildStartPanel(),
-                                  ],
-                                ],
-                              ),
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            buildChromeButton(
+                                              onPressed: _goToMenu,
+                                              icon: Icons.arrow_back_rounded,
+                                              tooltip: 'Back to menu',
+                                              accent: arcade.cyan,
+                                            ),
+                                            const Spacer(),
+                                            buildChromeButton(
+                                              onPressed: () => _openSettings(),
+                                              icon: Icons.settings_outlined,
+                                              tooltip: 'Settings',
+                                              accent: arcade.amber,
+                                            ),
+                                          ],
+                                        ),
+                                        SizedBox(height: sectionGap),
+                                        if (splitLandscapeControls)
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(
+                                                child: SizedBox(
+                                                  height:
+                                                      splitLandscapePanelHeight,
+                                                  child: buildSelectorPanel(),
+                                                ),
+                                              ),
+                                              SizedBox(width: sectionGap),
+                                              SizedBox(
+                                                width: landscapeControlWidth,
+                                                height:
+                                                    splitLandscapePanelHeight,
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .stretch,
+                                                  children: [
+                                                    Expanded(
+                                                      flex: 11,
+                                                      child:
+                                                          buildDifficultyPanel(),
+                                                    ),
+                                                    SizedBox(
+                                                      height: sectionGap,
+                                                    ),
+                                                    Expanded(
+                                                      flex: 10,
+                                                      child: buildSidePanel(
+                                                        includeLaunch: true,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        else ...[
+                                          buildSelectorPanel(),
+                                          SizedBox(height: sectionGap),
+                                          buildDifficultyPanel(),
+                                          SizedBox(height: sectionGap),
+                                          buildSidePanel(),
+                                          SizedBox(height: sectionGap),
+                                          buildStartPanel(),
+                                        ],
+                                      ],
+                                    ),
                             ),
                           ),
                         ),
