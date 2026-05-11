@@ -15,6 +15,7 @@ class EnergyArrowPainter extends CustomPainter {
   final bool reverse;
   final bool showSequenceNumbers;
   final Color? overrideColor;
+  final Color? glowColor;
   final bool staticArrowStyle;
   final double boardInset;
   final ArrowThemeMode themeMode;
@@ -26,6 +27,7 @@ class EnergyArrowPainter extends CustomPainter {
     required this.reverse,
     this.showSequenceNumbers = false,
     this.overrideColor,
+    this.glowColor,
     this.staticArrowStyle = false,
     this.boardInset = 0.0,
     this.themeMode = ArrowThemeMode.classic,
@@ -217,6 +219,9 @@ class EnergyArrowPainter extends CustomPainter {
       final heavyMode = themeMode == ArrowThemeMode.heavy3d;
       const heavyLineScale = 0.75;
       final pixelStep = pixelMode ? max(3.0, min(4.5, sq * 0.08)) : 0.0;
+      final auraColor = glowColor?.withValues(
+        alpha: (isFirstArrow ? 0.34 : 0.24) * alphaScale,
+      );
       final themedStartInset = (pixelMode || heavyMode)
           ? min(sq * 0.36, distance * 0.32)
           : 0.0;
@@ -239,6 +244,19 @@ class EnergyArrowPainter extends CustomPainter {
           : (heavyMode ? strokeWidth * 1.55 * heavyLineScale : strokeWidth);
 
       if (pixelMode) {
+        if (auraColor != null) {
+          PixelArrowRenderer.paint(
+            canvas: canvas,
+            start: renderStart,
+            end: renderEnd,
+            pixelSize: pixelStep,
+            color: auraColor,
+            alphaScale: 1.0,
+            animatePulse: !useStaticStyle,
+            progress: progress,
+          );
+        }
+
         PixelArrowRenderer.paint(
           canvas: canvas,
           start: renderStart,
@@ -290,6 +308,18 @@ class EnergyArrowPainter extends CustomPainter {
         ..moveTo(renderStart.dx, renderStart.dy)
         ..lineTo(heavyShaftEnd.dx, heavyShaftEnd.dy);
       final heavyShaftLength = (heavyShaftEnd - renderStart).distance;
+
+      if (auraColor != null) {
+        canvas.drawPath(
+          path,
+          Paint()
+            ..strokeWidth = renderStrokeWidth + (heavyMode ? 10.0 : 8.0)
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke
+            ..color = auraColor
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        );
+      }
 
       if (heavyMode) {
         canvas.drawPath(
@@ -450,6 +480,16 @@ class EnergyArrowPainter extends CustomPainter {
         ..lineTo(headPoints[2].dx, headPoints[2].dy)
         ..lineTo(headPoints[3].dx, headPoints[3].dy)
         ..close();
+
+      if (auraColor != null) {
+        canvas.drawPath(
+          headPath,
+          Paint()
+            ..style = PaintingStyle.fill
+            ..color = auraColor
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        );
+      }
 
       final solidHeadColor = baseColor.withValues(alpha: alphaScale);
       final headBorderColor = heavyMode

@@ -2893,6 +2893,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
+  @override
   Map<String, String> _uciPayloadFromMove(String uciMove) {
     final payload = <String, String>{
       'from': uciMove.substring(0, 2),

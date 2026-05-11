@@ -169,11 +169,27 @@ class _SacrificePreviewCandidate {
     required this.line,
     required this.materialLossCp,
     required this.positionalCompensationCp,
+    required this.offeredExchangeCp,
+    required this.hasImmediateRecapture,
   });
 
   final EngineLine line;
   final int materialLossCp;
   final int positionalCompensationCp;
+  final int offeredExchangeCp;
+  final bool hasImmediateRecapture;
+}
+
+class _SacrificeRecapturePreview {
+  const _SacrificeRecapturePreview({
+    required this.uciMove,
+    required this.evalCp,
+    required this.searchDepth,
+  });
+
+  final String uciMove;
+  final int evalCp;
+  final int searchDepth;
 }
 
 class _SacrificePreviewPosition {
@@ -517,8 +533,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   _PendingMoveQualityGrading? _pendingMoveQualityGrading;
   Future<void> _sacrificePreviewScanOperation = Future<void>.value();
   int _sacrificePreviewScanToken = 0;
+  String? _lastSacrificeAnalysisSignature;
+  bool _preferOpeningModeOnNextToggleAfterSacrifice = false;
   String? _sacrificePreviewFen;
   List<EngineLine> _sacrificePreviewLines = <EngineLine>[];
+  static const int _sacrificeRelativeEvalAllowanceCp = 100;
+  static const int _sacrificeAcceptanceReplyAllowanceCp = 150;
+  static const int _sacrificePreviewLineLimit = 3;
+  static const int _sacrificeEligibleRootMoveLimit = 5;
+  static const int _sacrificeFastConfirmationDepth = 15;
+  static const Duration _sacrificeFastPathBudget = Duration(seconds: 5);
+  static const Duration _sacrificeFastPathSearchTimeout = Duration(
+    milliseconds: 900,
+  );
   static const double _botSetupDefaultViewportFraction = 0.60;
   PageController _botSetupPageController = PageController(
     viewportFraction: _botSetupDefaultViewportFraction,
@@ -3062,7 +3089,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final visibleCount = _shouldShowVisualSuggestions
         ? _visualSuggestionLineCount
         : 1;
-    return _isSacrificeModeActive ? max(3, visibleCount) : max(1, visibleCount);
+    return _isSacrificeModeActive
+        ? max(_sacrificeEligibleRootMoveLimit, visibleCount)
+        : max(1, visibleCount);
   }
 
   bool get _isEngineActive =>
@@ -3418,6 +3447,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       total += _pieceMaterialValue(piece);
     }
     return total;
+  }
+
+  double _materialBalanceForSide(Map<String, String> state, bool whiteSide) {
+    return _materialCountForSide(state, whiteSide) -
+        _materialCountForSide(state, !whiteSide);
   }
 
   double _moverEvalPawnsFromWhiteEval(
@@ -3837,7 +3871,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedCurrentEval = decoded['currentEval'];
       final savedCurrentDepth = decoded['currentDepth'];
       final savedEvalWhiteTurn = decoded['evalWhiteTurn'];
-      final savedCurrentOpening = decoded['currentOpening'];
       final savedWhiteKingMoved = decoded['whiteKingMoved'];
       final savedBlackKingMoved = decoded['blackKingMoved'];
       final savedWhiteKingsideRookMoved = decoded['whiteKingsideRookMoved'];
@@ -3955,9 +3988,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       // leaving and re-entering the analysis board.
       _gambitPreviewLines = <EngineLine>[];
 
-      _currentOpening = savedCurrentOpening is String
-          ? savedCurrentOpening
-          : '';
+      _currentOpening = _findOpeningFromHistory();
       _gambitSelectedFrom = null;
       _holdSelectedFrom = null;
       _legalTargets.clear();
@@ -4358,6 +4389,53 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _rememberPositionAnalysis(fen, cached.mergedWithAnalysisLines(lines));
   }
 
+  List<EngineLine> _currentPositionAnalysisLines(String fen) {
+    final liveLines = _analysisLinesFen == fen
+        ? _analysisLines
+        : const <EngineLine>[];
+    final cachedLines =
+        _cachedPositionAnalysisForFen(fen)?.analysisLines ??
+        const <EngineLine>[];
+    return preferDeeperAnalysisLines(liveLines, cachedLines);
+  }
+
+  String? _confirmedSacrificeAnalysisSignature(String fen) {
+    final lines = _currentPositionAnalysisLines(fen).toList(growable: false)
+      ..sort((a, b) => a.multiPv.compareTo(b.multiPv));
+    if (lines.length < _sacrificeEligibleRootMoveLimit) {
+      return null;
+    }
+    final confirmedLines = lines
+        .take(_sacrificeEligibleRootMoveLimit)
+        .toList(growable: false);
+    if (confirmedLines.any(
+      (line) => line.depth < _sacrificeFastConfirmationDepth,
+    )) {
+      return null;
+    }
+    return '$fen|${confirmedLines.map((line) => '${line.multiPv}:${line.move}').join(',')}';
+  }
+
+  void _maybeRescheduleSacrificePreviewFromAnalysis(String fen) {
+    if (!_shouldRunSacrificeScan) {
+      return;
+    }
+    final signature = _confirmedSacrificeAnalysisSignature(fen);
+    if (signature == null || signature == _lastSacrificeAnalysisSignature) {
+      return;
+    }
+    _lastSacrificeAnalysisSignature = signature;
+    _scheduleSacrificePreviewScan();
+  }
+
+  Map<String, int> _moveEvalCpByUci(Iterable<EngineLine> lines) {
+    final evalsByUci = <String, int>{};
+    for (final line in lines) {
+      evalsByUci.putIfAbsent(line.move, () => line.eval);
+    }
+    return evalsByUci;
+  }
+
   void _clearPositionAnalysisCache() {
     _positionAnalysisCacheByFen.clear();
     _primaryEngineUpdateByFen.clear();
@@ -4482,6 +4560,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ? _analysisLines
           : const <EngineLine>[],
     );
+    _maybeRescheduleSacrificePreviewFromAnalysis(update.request.fen);
   }
 
   void _handleBotSearchUpdate(EngineSearchUpdate update) {
@@ -4935,6 +5014,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<_GradingSearchSnapshot?> _requestSacrificeScanSearch({
     required String fen,
     required bool whiteToMove,
+    required int depth,
+    Duration? timeout,
   }) async {
     CoordinatedEngineService? resolvedEngine;
     if (_canUseDedicatedSacrificeScanEngine) {
@@ -4954,11 +5035,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         fen: fen,
         whiteToMove: whiteToMove,
         multiPv: 1,
-        depth: _moveQualityGradingDepth,
-        timeout: _moveQualitySearchTimeout(
-          multiPv: 1,
-          backgroundConfirmation: true,
-        ),
+        depth: depth,
+        timeout: timeout ?? _sacrificeScanSearchTimeout(depth: depth),
         firstInfoTimeout: _moveQualityFirstInfoTimeout(
           backgroundConfirmation: true,
         ),
@@ -4976,6 +5054,45 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       lines: result.lines,
       whiteToMove: whiteToMove,
     );
+  }
+
+  int get _sacrificeScanSearchDepth {
+    final preferredDepth = _usesInfiniteAnalysisDepth
+        ? _defaultEngineDepth
+        : min(_engineDepth, _defaultEngineDepth);
+    return max(_moveQualityGradingDepth, preferredDepth);
+  }
+
+  Duration _sacrificeScanSearchTimeout({required int depth}) {
+    final liveBudgetMs = _analysisLiveCompletionTimeout(
+      depth: depth,
+      multiPv: 1,
+    ).inMilliseconds;
+    final scaledBudgetMs = (liveBudgetMs * 0.45).round();
+    return Duration(milliseconds: min(30000, max(6000, scaledBudgetMs)));
+  }
+
+  int? _cachedSacrificeScanBaselineEvalCp(String fen, bool moverIsWhite) {
+    final liveSnapshot =
+        _currentEvalSnapshot != null && _currentEvalSnapshot!.matchesFen(fen)
+        ? _currentEvalSnapshot
+        : null;
+    final cached = _cachedPositionAnalysisForFen(fen);
+    final snapshot = preferBestEvalSnapshot(cached?.evalSnapshot, liveSnapshot);
+    return snapshot?.centipawnsForPov(moverIsWhite);
+  }
+
+  int? _searchSnapshotEvalCpForPov(
+    _GradingSearchSnapshot? snapshot,
+    bool povIsWhite,
+  ) {
+    final line = snapshot?.lines.isNotEmpty == true
+        ? snapshot!.lines.first
+        : null;
+    if (line == null) {
+      return null;
+    }
+    return snapshot!.whiteToMove == povIsWhite ? line.eval : -line.eval;
   }
 
   bool get _canEvaluateSacrificeAvailability =>
@@ -5029,25 +5146,61 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool moverIsWhite,
     required Map<String, String> boardSnapshot,
   }) async {
+    final currentPositionAnalysisLines = _currentPositionAnalysisLines(fen);
+    final prioritizedRootLines = currentPositionAnalysisLines.toList(
+      growable: false,
+    )..sort((left, right) => left.multiPv.compareTo(right.multiPv));
+    final confirmedFastPath =
+        currentPositionAnalysisLines.isNotEmpty &&
+        currentPositionAnalysisLines.first.depth >=
+            _sacrificeFastConfirmationDepth;
+    final scanDepth = confirmedFastPath
+        ? min(_sacrificeScanSearchDepth, _sacrificeFastConfirmationDepth)
+        : _sacrificeScanSearchDepth;
+    final fastPathDeadline = confirmedFastPath
+        ? DateTime.now().add(_sacrificeFastPathBudget)
+        : null;
+    final rootEnPassantTarget = _enPassantTargetFromFen(fen);
     if (!_canEvaluateSacrificeAvailability ||
         scanToken != _sacrificePreviewScanToken) {
       return;
     }
 
-    final baselineSnapshot = await _requestSacrificeScanSearch(
-      fen: fen,
-      whiteToMove: moverIsWhite,
+    Duration? remainingFastPathTimeout() {
+      if (fastPathDeadline == null) {
+        return null;
+      }
+      final remaining = fastPathDeadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        return Duration.zero;
+      }
+      return remaining < _sacrificeFastPathSearchTimeout
+          ? remaining
+          : _sacrificeFastPathSearchTimeout;
+    }
+
+    final cachedBaselineEvalCp = _cachedSacrificeScanBaselineEvalCp(
+      fen,
+      moverIsWhite,
     );
+    final baselineSnapshot = cachedBaselineEvalCp == null
+        ? await _requestSacrificeScanSearch(
+            fen: fen,
+            whiteToMove: moverIsWhite,
+            depth: scanDepth,
+            timeout: remainingFastPathTimeout(),
+          )
+        : null;
     if (!mounted ||
         scanToken != _sacrificePreviewScanToken ||
         _genFen() != fen) {
       return;
     }
 
-    final baselineLine = baselineSnapshot?.lines.isNotEmpty == true
-        ? baselineSnapshot!.lines.first
-        : null;
-    if (baselineLine == null) {
+    final baselineEvalCp =
+        cachedBaselineEvalCp ??
+        _searchSnapshotEvalCpForPov(baselineSnapshot, moverIsWhite);
+    if (baselineEvalCp == null) {
       setState(() {
         _sacrificePreviewFen = fen;
         _sacrificePreviewLines = <EngineLine>[];
@@ -5055,21 +5208,86 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    final materialBefore = _materialCountForSide(boardSnapshot, moverIsWhite);
-    final rootMoves = _verboseMovesForFen(fen);
+    final materialBalanceBefore = _materialBalanceForSide(
+      boardSnapshot,
+      moverIsWhite,
+    );
+    final rootMoveEvalsCpByUci = _moveEvalCpByUci(currentPositionAnalysisLines);
+    final allRootMoves = _verboseMovesForFen(fen).toList(growable: false);
+    final eligibleRootUcis = confirmedFastPath
+        ? prioritizedRootLines
+              .take(_sacrificeEligibleRootMoveLimit)
+              .map((line) => line.move)
+              .toSet()
+        : const <String>{};
+    final rootMoves =
+        (confirmedFastPath && eligibleRootUcis.isNotEmpty
+                ? allRootMoves.where((move) {
+                    final uciMove = _uciMoveFromVerboseMove(move);
+                    return uciMove != null &&
+                        eligibleRootUcis.contains(uciMove);
+                  })
+                : allRootMoves)
+            .toList(growable: true);
+    rootMoves.sort((left, right) {
+      final leftUci = _uciMoveFromVerboseMove(left);
+      final rightUci = _uciMoveFromVerboseMove(right);
+      final leftEval = leftUci == null ? null : rootMoveEvalsCpByUci[leftUci];
+      final rightEval = rightUci == null
+          ? null
+          : rootMoveEvalsCpByUci[rightUci];
+      if (leftEval != null || rightEval != null) {
+        if (leftEval == null) {
+          return 1;
+        }
+        if (rightEval == null) {
+          return -1;
+        }
+        final evalCompare = rightEval.compareTo(leftEval);
+        if (evalCompare != 0) {
+          return evalCompare;
+        }
+      }
+      if (leftUci == null) {
+        return 1;
+      }
+      if (rightUci == null) {
+        return -1;
+      }
+      return leftUci.compareTo(rightUci);
+    });
     final sacrificeCandidates = <_SacrificePreviewCandidate>[];
 
+    rootMoveLoop:
     for (final rootMove in rootMoves) {
       if (!mounted ||
           scanToken != _sacrificePreviewScanToken ||
           _genFen() != fen) {
         return;
       }
+      if (fastPathDeadline != null &&
+          !fastPathDeadline.isAfter(DateTime.now())) {
+        break;
+      }
 
       final rootUci = _uciMoveFromVerboseMove(rootMove);
       if (rootUci == null) {
         continue;
       }
+      final rootMovedPiece = boardSnapshot[rootUci.substring(0, 2)];
+      if (rootMovedPiece == null) {
+        continue;
+      }
+      final rootCapturedPiece = _capturedPieceForUciMove(
+        state: boardSnapshot,
+        uciMove: rootUci,
+        enPassantTarget: rootEnPassantTarget,
+      );
+      final rootMoveEvalCp = rootMoveEvalsCpByUci[rootUci];
+      final movingPieceValueCp = _pieceValueCp(rootMovedPiece);
+      final rootCapturedPieceValueCp = rootCapturedPiece == null
+          ? 0
+          : _pieceValueCp(rootCapturedPiece);
 
       final firstPosition = _simulateSacrificePreviewMove(
         fen: fen,
@@ -5080,16 +5298,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         continue;
       }
 
-      final offeredSquare = rootUci.substring(2, 4);
-      final captureReplies = _verboseMovesForFen(
-        firstPosition.fen,
-      ).where((reply) => reply['to']?.toString() == offeredSquare);
+      final captureReplies = _verboseMovesForFen(firstPosition.fen).where((
+        reply,
+      ) {
+        final captureUci = _uciMoveFromVerboseMove(reply);
+        if (captureUci == null) {
+          return false;
+        }
+        return _isRelevantSacrificeCaptureReply(
+          firstPosition: firstPosition,
+          rootToSquare: rootUci.substring(2, 4),
+          moverIsWhite: moverIsWhite,
+          captureReplyUci: captureUci,
+        );
+      });
 
       for (final captureReply in captureReplies) {
         if (!mounted ||
             scanToken != _sacrificePreviewScanToken ||
             _genFen() != fen) {
           return;
+        }
+        if (fastPathDeadline != null &&
+            !fastPathDeadline.isAfter(DateTime.now())) {
+          break rootMoveLoop;
         }
 
         final captureUci = _uciMoveFromVerboseMove(captureReply);
@@ -5106,9 +5338,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           continue;
         }
 
+        final acceptanceTimeout = remainingFastPathTimeout();
+        if (acceptanceTimeout != null && acceptanceTimeout <= Duration.zero) {
+          break rootMoveLoop;
+        }
+
         final acceptanceSnapshot = await _requestSacrificeScanSearch(
           fen: capturePosition.fen,
           whiteToMove: moverIsWhite,
+          depth: scanDepth,
+          timeout: acceptanceTimeout,
         );
         if (!mounted ||
             scanToken != _sacrificePreviewScanToken ||
@@ -5116,27 +5355,71 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           return;
         }
 
-        final acceptanceLine = acceptanceSnapshot?.lines.isNotEmpty == true
-            ? acceptanceSnapshot!.lines.first
+        final acceptanceDepth = acceptanceSnapshot?.lines.isNotEmpty == true
+            ? acceptanceSnapshot!.lines.first.depth
+            : scanDepth;
+        final acceptedCaptureEvalCp = _searchSnapshotEvalCpForPov(
+          acceptanceSnapshot,
+          moverIsWhite,
+        );
+        final isHigherPieceForSmallerTrade =
+            movingPieceValueCp > rootCapturedPieceValueCp;
+
+        final shouldProbeImmediateRecapture =
+            !confirmedFastPath &&
+            ((acceptedCaptureEvalCp != null &&
+                    acceptedCaptureEvalCp < baselineEvalCp) ||
+                isHigherPieceForSmallerTrade);
+        final immediateRecapture = shouldProbeImmediateRecapture
+            ? await _bestImmediateRecaptureAfterAcceptedCapture(
+                scanToken: scanToken,
+                rootFen: fen,
+                moverIsWhite: moverIsWhite,
+                capturePosition: capturePosition,
+                captureReplyUci: captureUci,
+                scanDepth: scanDepth,
+              )
             : null;
-        if (acceptanceLine == null) {
-          continue;
+        if (!mounted ||
+            scanToken != _sacrificePreviewScanToken ||
+            _genFen() != fen) {
+          return;
         }
 
         final candidate = _sacrificePreviewCandidateForAcceptedCapture(
           rootMoveUci: rootUci,
           captureReplyUci: captureUci,
-          materialBefore: materialBefore,
-          materialAfterCapture: _materialCountForSide(
+          materialBalanceBefore: materialBalanceBefore,
+          materialBalanceAfterCapture: _materialBalanceForSide(
             capturePosition.boardState,
             moverIsWhite,
           ),
-          baselineEvalCp: baselineLine.eval,
-          acceptedCaptureEvalCp: acceptanceLine.eval,
-          searchDepth: acceptanceLine.depth,
+          baselineEvalCp: baselineEvalCp,
+          acceptedCaptureEvalCp: acceptedCaptureEvalCp,
+          rootMoveEvalCp: rootMoveEvalCp,
+          movingPieceValueCp: movingPieceValueCp,
+          rootCapturedPieceValueCp: rootCapturedPieceValueCp,
+          immediateRecapture: immediateRecapture,
+          searchDepth: max(
+            acceptanceDepth,
+            immediateRecapture?.searchDepth ?? acceptanceDepth,
+          ),
         );
         if (candidate != null) {
           sacrificeCandidates.add(candidate);
+          final previewLines = _previewLinesFromSacrificeCandidates(
+            sacrificeCandidates,
+          );
+          if (previewLines.isNotEmpty) {
+            setState(() {
+              _sacrificePreviewFen = fen;
+              _sacrificePreviewLines = previewLines;
+            });
+            if (confirmedFastPath &&
+                previewLines.length >= _sacrificePreviewLineLimit) {
+              break rootMoveLoop;
+            }
+          }
         }
       }
     }
@@ -5179,6 +5462,152 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return '$from$to';
     }
     return '$from$to$promotion';
+  }
+
+  int _pieceValueCp(String piece) => (_pieceMaterialValue(piece) * 100).round();
+
+  String _capturedSquareForUciMove({
+    required Map<String, String> state,
+    required String uciMove,
+    required String? enPassantTarget,
+  }) {
+    final from = uciMove.substring(0, 2);
+    final to = uciMove.substring(2, 4);
+    final movingPiece = state[from];
+    if (movingPiece == null) {
+      return to;
+    }
+    final enPassantCaptureSquare = _enPassantCaptureSquare(
+      state,
+      from,
+      to,
+      movingPiece,
+      enPassantTarget: enPassantTarget,
+    );
+    return enPassantCaptureSquare ?? to;
+  }
+
+  String? _capturedPieceForUciMove({
+    required Map<String, String> state,
+    required String uciMove,
+    required String? enPassantTarget,
+  }) {
+    final from = uciMove.substring(0, 2);
+    final to = uciMove.substring(2, 4);
+    final movingPiece = state[from];
+    if (movingPiece == null) {
+      return null;
+    }
+    final enPassantCaptureSquare = _enPassantCaptureSquare(
+      state,
+      from,
+      to,
+      movingPiece,
+      enPassantTarget: enPassantTarget,
+    );
+    if (enPassantCaptureSquare != null) {
+      return state[enPassantCaptureSquare];
+    }
+    return state[to];
+  }
+
+  bool _isRelevantSacrificeCaptureReply({
+    required _SacrificePreviewPosition firstPosition,
+    required String rootToSquare,
+    required bool moverIsWhite,
+    required String captureReplyUci,
+  }) {
+    final firstPositionEnPassantTarget = _enPassantTargetFromFen(
+      firstPosition.fen,
+    );
+    final capturedPiece = _capturedPieceForUciMove(
+      state: firstPosition.boardState,
+      uciMove: captureReplyUci,
+      enPassantTarget: firstPositionEnPassantTarget,
+    );
+    if (capturedPiece == null || capturedPiece.endsWith('_w') != moverIsWhite) {
+      return false;
+    }
+
+    final capturedSquare = _capturedSquareForUciMove(
+      state: firstPosition.boardState,
+      uciMove: captureReplyUci,
+      enPassantTarget: firstPositionEnPassantTarget,
+    );
+    return capturedSquare == rootToSquare;
+  }
+
+  Future<_SacrificeRecapturePreview?>
+  _bestImmediateRecaptureAfterAcceptedCapture({
+    required int scanToken,
+    required String rootFen,
+    required bool moverIsWhite,
+    required _SacrificePreviewPosition capturePosition,
+    required String captureReplyUci,
+    required int scanDepth,
+  }) async {
+    final captureSquare = captureReplyUci.substring(2, 4);
+    _SacrificeRecapturePreview? bestRecapture;
+    final recaptureReplies = _verboseMovesForFen(
+      capturePosition.fen,
+    ).where((reply) => reply['to']?.toString() == captureSquare);
+
+    for (final recaptureReply in recaptureReplies) {
+      if (!mounted ||
+          scanToken != _sacrificePreviewScanToken ||
+          _genFen() != rootFen) {
+        return bestRecapture;
+      }
+
+      final recaptureUci = _uciMoveFromVerboseMove(recaptureReply);
+      if (recaptureUci == null) {
+        continue;
+      }
+
+      final recapturePosition = _simulateSacrificePreviewMove(
+        fen: capturePosition.fen,
+        state: capturePosition.boardState,
+        uciMove: recaptureUci,
+      );
+      if (recapturePosition == null) {
+        continue;
+      }
+
+      final recaptureSnapshot = await _requestSacrificeScanSearch(
+        fen: recapturePosition.fen,
+        whiteToMove: recapturePosition.whiteToMove,
+        depth: scanDepth,
+      );
+      if (!mounted ||
+          scanToken != _sacrificePreviewScanToken ||
+          _genFen() != rootFen) {
+        return bestRecapture;
+      }
+
+      final recaptureLine = recaptureSnapshot?.lines.isNotEmpty == true
+          ? recaptureSnapshot!.lines.first
+          : null;
+      final recaptureEvalCp = _searchSnapshotEvalCpForPov(
+        recaptureSnapshot,
+        moverIsWhite,
+      );
+      if (recaptureLine == null || recaptureEvalCp == null) {
+        continue;
+      }
+
+      if (bestRecapture == null ||
+          recaptureEvalCp > bestRecapture.evalCp ||
+          (recaptureEvalCp == bestRecapture.evalCp &&
+              recaptureLine.depth > bestRecapture.searchDepth)) {
+        bestRecapture = _SacrificeRecapturePreview(
+          uciMove: recaptureUci,
+          evalCp: recaptureEvalCp,
+          searchDepth: recaptureLine.depth,
+        );
+      }
+    }
+
+    return bestRecapture;
   }
 
   Future<void> _finalizePendingMoveQualityGrading(
@@ -6582,6 +7011,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _sacrificeModeOwned &&
       _openingMode == OpeningMode.sacrificeGlow;
 
+    bool get _blocksDirectBoardMoveSelection =>
+      _isOpeningSelectionMode && _selectedGambit == null;
+
   Color get _openingSelectionAccent => _isGambitsOnlyOpeningMode
       ? const Color(0xFFB16CFF)
       : const Color(0xFFFFD166);
@@ -6615,6 +7047,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Set<String> _sourceSquaresWithRegisteredOpenings({bool gambitsOnly = false}) {
+    if (!_isCurrentPositionOnOpeningPrefix()) {
+      return const <String>{};
+    }
     final availableSources = <String>{};
     for (final entry in boardState.entries) {
       final square = entry.key;
@@ -6635,6 +7070,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     }
     return availableSources;
+  }
+
+  bool _isCurrentPositionOnOpeningPrefix() {
+    if (_moveHistory.isEmpty) {
+      return true;
+    }
+    return matchesRegisteredOpeningPrefix(
+      _ecoLines,
+      _openingMoveTokensThrough(_moveHistory.length - 1),
+    );
   }
 
   String? _openingModeFeedbackLabelFor(OpeningMode mode) {
@@ -6667,20 +7112,91 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Color? feedbackColor;
     bool refreshAnalysis = false;
     bool openSacrificeStore = false;
-    if ((_openingMode == OpeningMode.off ||
-            _openingMode == OpeningMode.violetGlow) &&
-        !hasOpeningChoices &&
-        !hasAvailableSacrifice) {
-      _flashOpeningButtonUnavailable(
-        logMessage:
-            'Opening select unavailable: no opening continuations remain in this position.',
-      );
+    bool turnedSacrificeOff = false;
+    if (!hasOpeningChoices) {
+      if (!_sacrificeModeOwned) {
+        setState(() {
+          _openingMode = OpeningMode.off;
+          _preferOpeningModeOnNextToggleAfterSacrifice = false;
+          _gambitSelectedFrom = null;
+          _legalTargets.clear();
+          _gambitAvailableTargets.clear();
+          _selectedGambit = null;
+          _gambitPreviewLines = [];
+          feedbackLabel = _openingModeFeedbackLabelFor(
+            OpeningMode.sacrificeGlow,
+          );
+          feedbackColor = _openingModeButtonColor(OpeningMode.sacrificeGlow);
+          _openingModeFeedbackLabel = feedbackLabel;
+          _openingModeFeedbackColor = feedbackColor;
+          openSacrificeStore = true;
+          _addLog(
+            'Sacrifice mode locked - unlock it in the store for $_sacrificeModePrice coins.',
+          );
+        });
+        if (feedbackLabel != null && feedbackColor != null) {
+          _scheduleOpeningModeFeedbackDismiss();
+        }
+        unawaited(_openStore(initialSection: StoreSection.general));
+        return;
+      }
+
+      setState(() {
+        _openingMode = _openingMode == OpeningMode.sacrificeGlow
+            ? OpeningMode.off
+            : OpeningMode.sacrificeGlow;
+        _preferOpeningModeOnNextToggleAfterSacrifice = false;
+        _gambitSelectedFrom = null;
+        _legalTargets.clear();
+        _gambitAvailableTargets.clear();
+        _selectedGambit = null;
+        _gambitPreviewLines = [];
+        refreshAnalysis = true;
+        feedbackLabel = _openingModeFeedbackLabelFor(_openingMode);
+        feedbackColor = _openingModeButtonColor(
+          _openingMode == OpeningMode.off
+              ? OpeningMode.sacrificeGlow
+              : _openingMode,
+        );
+        _openingModeFeedbackLabel = feedbackLabel;
+        _openingModeFeedbackColor = feedbackColor;
+        _addLog(
+          _openingMode == OpeningMode.sacrificeGlow
+              ? 'Opening mode enabled - red sacrifice scan'
+              : 'Sacrifice mode turned off - no opening continuations remain',
+        );
+      });
+
+      if (feedbackLabel != null && feedbackColor != null) {
+        _scheduleOpeningModeFeedbackDismiss();
+      }
+      if (refreshAnalysis || hasAvailableSacrifice) {
+        _refreshAnalysisForCurrentPosition();
+      }
       return;
     }
+
     setState(() {
-      // Cycle: off -> yellow -> blue -> violet -> sacrifice -> yellow
-      if (_openingMode == OpeningMode.off && hasAvailableSacrifice) {
+      // Cycle: off -> sacrifice -> off -> yellow -> blue -> violet ->
+      // sacrifice. Sacrifice should be directly toggleable off without
+      // forcing opening-selection lock.
+      if (_openingMode == OpeningMode.off &&
+          _preferOpeningModeOnNextToggleAfterSacrifice) {
+        _openingMode = OpeningMode.yellowGlow;
+        _preferOpeningModeOnNextToggleAfterSacrifice = false;
+        _selectedGambit = null;
+        _gambitPreviewLines = [];
+        _gambitSelectedFrom = null;
+        _legalTargets.clear();
+        _gambitAvailableTargets.clear();
+        final selected = _holdSelectedFrom;
+        if (selected != null && _isCurrentTurnPiece(boardState[selected])) {
+          _selectGambitSource(selected);
+        }
+        _addLog('Opening mode enabled - yellow glow');
+      } else if (_openingMode == OpeningMode.off && hasAvailableSacrifice) {
         _openingMode = OpeningMode.sacrificeGlow;
+        _preferOpeningModeOnNextToggleAfterSacrifice = false;
         _selectedGambit = null;
         _gambitPreviewLines = [];
         _gambitSelectedFrom = null;
@@ -6691,6 +7207,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       } else if (_openingMode == OpeningMode.off) {
         // First press: enter yellow selection mode.
         _openingMode = OpeningMode.yellowGlow;
+        _preferOpeningModeOnNextToggleAfterSacrifice = false;
         _selectedGambit = null;
         _gambitPreviewLines = [];
         _gambitSelectedFrom = null;
@@ -6704,11 +7221,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       } else if (_openingMode == OpeningMode.yellowGlow) {
         // Second press: show all available openings list.
         _openingMode = OpeningMode.blueGlow;
+        _preferOpeningModeOnNextToggleAfterSacrifice = false;
         _addLog('Opening mode - blue glow - showing all possible openings');
         _showAllPossibleOpenings();
       } else if (_openingMode == OpeningMode.blueGlow) {
         // Third press: switch to gambits-only selection mode.
         _openingMode = OpeningMode.violetGlow;
+        _preferOpeningModeOnNextToggleAfterSacrifice = false;
         _selectedGambit = null;
         _gambitPreviewLines = [];
         _gambitSelectedFrom = null;
@@ -6722,6 +7241,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       } else if (_openingMode == OpeningMode.violetGlow) {
         if (!_sacrificeModeOwned) {
           _openingMode = OpeningMode.yellowGlow;
+          _preferOpeningModeOnNextToggleAfterSacrifice = false;
           _gambitSelectedFrom = null;
           _legalTargets.clear();
           _gambitAvailableTargets.clear();
@@ -6733,6 +7253,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           );
         } else {
           _openingMode = OpeningMode.sacrificeGlow;
+          _preferOpeningModeOnNextToggleAfterSacrifice = false;
           _gambitSelectedFrom = null;
           _legalTargets.clear();
           _gambitAvailableTargets.clear();
@@ -6742,18 +7263,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _addLog('Opening mode enabled - red sacrifice scan');
         }
       } else {
-        // Next press: back to yellow selection mode.
-        _openingMode = OpeningMode.yellowGlow;
+        _openingMode = OpeningMode.off;
+        _preferOpeningModeOnNextToggleAfterSacrifice = hasOpeningChoices;
         _gambitSelectedFrom = null;
         _legalTargets.clear();
         _gambitAvailableTargets.clear();
         _selectedGambit = null;
         _gambitPreviewLines = [];
         refreshAnalysis = true;
-        _addLog('Opening mode back to yellow');
+        turnedSacrificeOff = true;
+        _addLog('Sacrifice mode turned off');
       }
 
-      final feedbackMode = openSacrificeStore
+      final feedbackMode = openSacrificeStore || turnedSacrificeOff
           ? OpeningMode.sacrificeGlow
           : _openingMode;
       feedbackLabel = _openingModeFeedbackLabelFor(feedbackMode);
@@ -6800,6 +7322,47 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return openingsList;
   }
 
+  String _normalizedOpeningSearchText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+  }
+
+  bool _openingNameMatchesSearchQuery(String openingName, String rawQuery) {
+    final normalizedName = _normalizedOpeningSearchText(openingName);
+    final normalizedQuery = _normalizedOpeningSearchText(rawQuery);
+    if (normalizedQuery.isEmpty) {
+      return true;
+    }
+    if (normalizedName.contains(normalizedQuery)) {
+      return true;
+    }
+
+    final nameTokens = normalizedName
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+    final queryTokens = normalizedQuery
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+
+    if (queryTokens.isEmpty) {
+      return true;
+    }
+
+    for (final queryToken in queryTokens) {
+      final matched = nameTokens.any(
+        (nameToken) => nameToken.contains(queryToken),
+      );
+      if (!matched) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _showAllPossibleOpenings() {
     final openingsList = _allPossibleOpeningsFromCurrentPosition();
 
@@ -6813,171 +7376,304 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _addLog('Found ${openingsList.length} possible openings');
 
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF0E0F17),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5AAEE8).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFF5AAEE8).withValues(alpha: 0.30),
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.menu_book_outlined,
-                      color: Color(0xFF5AAEE8),
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
+    final searchController = TextEditingController();
+    var searchQuery = '';
+
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFF0E0F17),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
+        builder: (context) => StatefulBuilder(
+          builder: (context, bottomSheetSetState) {
+            final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+            final normalizedQuery = searchQuery.trim().toLowerCase();
+            final filteredOpenings = normalizedQuery.isEmpty
+                ? openingsList
+                : openingsList
+                      .where(
+                        (opening) => _openingNameMatchesSearchQuery(
+                          opening.name,
+                          normalizedQuery,
+                        ),
+                      )
+                      .toList(growable: false);
+
+            return SafeArea(
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(bottom: bottomInset),
+                child: FractionallySizedBox(
+                  heightFactor: 0.78,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'All Possible Openings',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${openingsList.length} lines available',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white.withValues(alpha: 0.55),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              const Divider(color: Colors.white10, height: 1),
-              const SizedBox(height: 4),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: openingsList.length,
-                  itemBuilder: (context, index) {
-                    final opening = openingsList[index];
-                    final moveCount = opening.moveTokens.length;
-                    return InkWell(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        _activateGambit(opening, turnOffOpeningMode: true);
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF141622),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border(
-                            left: BorderSide(
-                              color: const Color(
-                                0xFF5AAEE8,
-                              ).withValues(alpha: 0.55),
-                              width: 3,
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
                         ),
-                        child: Row(
+                        const SizedBox(height: 14),
+                        Row(
                           children: [
+                            Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF5AAEE8,
+                                ).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF5AAEE8,
+                                  ).withValues(alpha: 0.30),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.menu_book_outlined,
+                                color: Color(0xFF5AAEE8),
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    opening.name,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                                  const Text(
+                                    'All Possible Openings',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(height: 3),
-                                  _buildMoveSequenceText(
-                                    opening.normalizedMoves,
-                                    fontSize: 11.5,
-                                    color: Colors.white.withValues(alpha: 0.72),
-                                    fontWeight: FontWeight.w500,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    normalizedQuery.isEmpty
+                                        ? '${openingsList.length} lines available'
+                                        : '${filteredOpenings.length} of ${openingsList.length} lines match',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF5AAEE8,
-                                ).withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFF5AAEE8,
-                                  ).withValues(alpha: 0.25),
-                                ),
-                              ),
-                              child: Text(
-                                '$moveCount ply',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF5AAEE8),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
-                      ),
-                    );
-                  },
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: searchController,
+                          textInputAction: TextInputAction.search,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          cursorColor: const Color(0xFF5AAEE8),
+                          decoration: InputDecoration(
+                            hintText: 'Search openings by name',
+                            hintStyle: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.42),
+                              fontSize: 13,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              color: Color(0xFF5AAEE8),
+                              size: 20,
+                            ),
+                            suffixIcon: searchQuery.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      searchController.clear();
+                                      bottomSheetSetState(() {
+                                        searchQuery = '';
+                                      });
+                                    },
+                                    icon: const Icon(
+                                      Icons.close,
+                                      color: Colors.white70,
+                                      size: 18,
+                                    ),
+                                  ),
+                            filled: true,
+                            fillColor: const Color(0xFF141622),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF5AAEE8),
+                                width: 1.1,
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            bottomSheetSetState(() {
+                              searchQuery = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        const Divider(color: Colors.white10, height: 1),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: filteredOpenings.isEmpty
+                              ? Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: Text(
+                                      'No openings match "$searchQuery".',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.64,
+                                        ),
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: filteredOpenings.length,
+                                  itemBuilder: (context, index) {
+                                    final opening = filteredOpenings[index];
+                                    final moveCount = opening.moveTokens.length;
+                                    return InkWell(
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        _activateGambit(
+                                          opening,
+                                          turnOffOpeningMode: true,
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF141622),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border(
+                                            left: BorderSide(
+                                              color: const Color(
+                                                0xFF5AAEE8,
+                                              ).withValues(alpha: 0.55),
+                                              width: 3,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    opening.name,
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  _buildMoveSequenceText(
+                                                    opening.normalizedMoves,
+                                                    fontSize: 11.5,
+                                                    color: Colors.white
+                                                        .withValues(
+                                                          alpha: 0.72,
+                                                        ),
+                                                    fontWeight: FontWeight.w500,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 7,
+                                                    vertical: 3,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(
+                                                  0xFF5AAEE8,
+                                                ).withValues(alpha: 0.10),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFF5AAEE8,
+                                                  ).withValues(alpha: 0.25),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                '$moveCount ply',
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  color: Color(0xFF5AAEE8),
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
-      ),
+      ).whenComplete(searchController.dispose),
     );
   }
 
@@ -8083,8 +8779,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       return;
     }
-    if (_openingMode != OpeningMode.off &&
-        !(_isOpeningSelectionMode && _selectedGambit != null)) {
+    if (_blocksDirectBoardMoveSelection) {
       return;
     }
 
@@ -8450,14 +9145,43 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _applyManualBoardEdit(nextBoardState);
   }
 
+  bool _selectedGambitFullyPlayedOut(EcoLine gambit) {
+    final currentMoves = _currentMoveSequence();
+    final currentTokens = currentMoves.isEmpty
+        ? const <String>[]
+        : currentMoves.split(' ');
+    if (currentTokens.length != gambit.moveTokens.length) {
+      return false;
+    }
+    for (int index = 0; index < currentTokens.length; index++) {
+      if (gambit.moveTokens[index] != currentTokens[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _refreshGambitPreview() {
-    if (_selectedGambit == null) return;
-    final preview = _buildGambitPreviewLines(_selectedGambit!);
+    final selectedGambit = _selectedGambit;
+    if (selectedGambit == null) return;
+    final openingFullyPlayedOut = _selectedGambitFullyPlayedOut(selectedGambit);
+    final preview = _buildGambitPreviewLines(selectedGambit);
     _gambitPreviewLines = preview;
-    if (preview.isEmpty && _selectedGambit != null) {
+    if (preview.isEmpty) {
       _addLog(
-        'Clearing gambit preview: no remaining moves from current position',
+        openingFullyPlayedOut
+            ? 'Clearing opening selection: selected line fully played out'
+            : 'Clearing gambit preview: no remaining moves from current position',
       );
+      if (openingFullyPlayedOut) {
+        _openingMode = OpeningMode.off;
+        _openingModeFeedbackLabel = null;
+        _openingModeFeedbackColor = null;
+        _gambitSelectedFrom = null;
+        _holdSelectedFrom = null;
+        _legalTargets.clear();
+        _gambitAvailableTargets.clear();
+      }
       _selectedGambit = null;
     }
   }
@@ -8555,33 +9279,72 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   _SacrificePreviewCandidate? _sacrificePreviewCandidateForAcceptedCapture({
     required String rootMoveUci,
     required String captureReplyUci,
-    required double materialBefore,
-    required double materialAfterCapture,
+    required double materialBalanceBefore,
+    required double materialBalanceAfterCapture,
     required int baselineEvalCp,
-    required int acceptedCaptureEvalCp,
+    required int? acceptedCaptureEvalCp,
+    required int? rootMoveEvalCp,
+    required int movingPieceValueCp,
+    required int rootCapturedPieceValueCp,
+    required _SacrificeRecapturePreview? immediateRecapture,
     required int searchDepth,
   }) {
     final materialLossCp = max(
       0,
-      ((materialBefore - materialAfterCapture) * 100).round(),
+      ((materialBalanceBefore - materialBalanceAfterCapture) * 100).round(),
     );
     if (materialLossCp <= 0) {
       return null;
     }
-    final positionalCompensationCp = acceptedCaptureEvalCp - baselineEvalCp;
-    if (positionalCompensationCp <= 0) {
+    final offeredExchangeCp = max(
+      0,
+      movingPieceValueCp - rootCapturedPieceValueCp,
+    );
+    if (acceptedCaptureEvalCp == null) {
+      return null;
+    }
+    final acceptedSequenceEvalCp = acceptedCaptureEvalCp;
+    final tacticalSequenceEvalCp = immediateRecapture == null
+        ? acceptedSequenceEvalCp
+        : max(acceptedSequenceEvalCp, immediateRecapture.evalCp);
+    final previewEvalCp = rootMoveEvalCp ?? tacticalSequenceEvalCp;
+    final acceptanceLooksPlausible =
+        rootMoveEvalCp == null ||
+        tacticalSequenceEvalCp <=
+            rootMoveEvalCp + _sacrificeAcceptanceReplyAllowanceCp;
+    final positionalCompensationCp = acceptedSequenceEvalCp - baselineEvalCp;
+    final hasImmediateRecapture = immediateRecapture != null;
+    final withinRelativeEvalBand =
+        tacticalSequenceEvalCp >=
+        baselineEvalCp - _sacrificeRelativeEvalAllowanceCp;
+    if (!withinRelativeEvalBand) {
+      return null;
+    }
+    if (!acceptanceLooksPlausible) {
+      return null;
+    }
+    if (positionalCompensationCp < 0 &&
+        rootMoveEvalCp == null &&
+        !hasImmediateRecapture &&
+        offeredExchangeCp <= 0) {
       return null;
     }
     return _SacrificePreviewCandidate(
       line: EngineLine(
         rootMoveUci,
-        acceptedCaptureEvalCp,
+        previewEvalCp,
         searchDepth,
         1,
-        principalVariation: <String>[rootMoveUci, captureReplyUci],
+        principalVariation: <String>[
+          rootMoveUci,
+          captureReplyUci,
+          if (immediateRecapture != null) immediateRecapture.uciMove,
+        ],
       ),
       materialLossCp: materialLossCp,
-      positionalCompensationCp: positionalCompensationCp,
+      positionalCompensationCp: tacticalSequenceEvalCp - baselineEvalCp,
+      offeredExchangeCp: offeredExchangeCp,
+      hasImmediateRecapture: hasImmediateRecapture,
     );
   }
 
@@ -8589,15 +9352,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _SacrificePreviewCandidate left,
     _SacrificePreviewCandidate right,
   ) {
-    final materialCompare = right.materialLossCp.compareTo(left.materialLossCp);
-    if (materialCompare != 0) {
-      return materialCompare;
+    final recaptureCompare =
+        right.hasImmediateRecapture == left.hasImmediateRecapture
+        ? 0
+        : (right.hasImmediateRecapture ? 1 : -1);
+    if (recaptureCompare != 0) {
+      return recaptureCompare;
+    }
+    final exchangeCompare = right.offeredExchangeCp.compareTo(
+      left.offeredExchangeCp,
+    );
+    if (exchangeCompare != 0) {
+      return exchangeCompare;
     }
     final compensationCompare = right.positionalCompensationCp.compareTo(
       left.positionalCompensationCp,
     );
     if (compensationCompare != 0) {
       return compensationCompare;
+    }
+    final materialCompare = right.materialLossCp.compareTo(left.materialLossCp);
+    if (materialCompare != 0) {
+      return materialCompare;
     }
     final evalCompare = right.line.eval.compareTo(left.line.eval);
     if (evalCompare != 0) {
@@ -8620,7 +9396,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final rankedCandidates = bestByMove.values.toList(growable: false)
       ..sort(_compareSacrificePreviewCandidates);
-    final limited = rankedCandidates.take(1).toList(growable: false);
+    final limited = rankedCandidates
+        .take(_sacrificePreviewLineLimit)
+        .toList(growable: false);
     return <EngineLine>[
       for (int index = 0; index < limited.length; index++)
         EngineLine(
@@ -12195,9 +12973,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : _sourceSquaresWithRegisteredOpenings(
             gambitsOnly: _isGambitsOnlyOpeningMode,
           );
-    final previewMoveSquares = _gambitPreviewLines.isEmpty
+    final previewLines = _openingPreviewArrowLines();
+    final hasSacrificePreview =
+        _isSacrificeModeActive && previewLines.isNotEmpty;
+    final previewMoveSquares = previewLines.isEmpty
         ? const <String>{}
-        : _getPreviewMoveSqares();
+        : _getPreviewMoveSqares(previewLines);
     final checkedKingSquares = _currentCheckedKingSquares();
 
     return Container(
@@ -12313,13 +13094,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           ),
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
-                            onTap: () =>
-                                (_isOpeningSelectionMode &&
-                                    _selectedGambit == null)
+                            onTap: () => _blocksDirectBoardMoveSelection
                                 ? _handleBoardTap(sq)
                                 : _handleHoldTap(sq),
                             onLongPress: () {
-                              if (_openingMode != OpeningMode.off) return;
+                              if (_blocksDirectBoardMoveSelection) return;
                               if (!canHumanDragPiece) return;
                               setState(() {
                                 _holdSelectedFrom = sq;
@@ -12560,10 +13339,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                           glowColor = _isGambitsOnlyOpeningMode
                                               ? 'violet'
                                               : 'yellow';
-                                        } else if (_gambitPreviewLines
-                                                .isNotEmpty &&
-                                            previewMoveSquares.contains(sq)) {
-                                          glowColor = _isGambitsOnlyOpeningMode
+                                        } else if (previewMoveSquares.contains(
+                                          sq,
+                                        )) {
+                                          glowColor = hasSacrificePreview
+                                              ? 'red'
+                                              : _isGambitsOnlyOpeningMode
                                               ? 'violet'
                                               : 'yellow';
                                         } else if (openingOptionSourceSquares
@@ -13065,9 +13846,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Set<String> _getPreviewMoveSqares() {
+  Set<String> _getPreviewMoveSqares([Iterable<EngineLine>? previewLines]) {
     final squares = <String>{};
-    for (final line in _openingPreviewArrowLines()) {
+    for (final line in previewLines ?? _openingPreviewArrowLines()) {
       if (line.move.length >= 4) {
         final from = line.move.substring(0, 2);
         final to = line.move.substring(2, 4);
@@ -13091,6 +13872,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? const Color(0xFFFFD166)
         : selectedGlowColor == 'violet'
         ? const Color(0xFFB16CFF)
+        : selectedGlowColor == 'red'
+        ? const Color(0xFFE65151)
         : const Color(0xFF5AAEE8);
 
     return Container(
@@ -13112,13 +13895,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final previewLines = _openingPreviewArrowLines();
     final lines = previewLines.isNotEmpty ? previewLines : _topLines;
     final showSequenceNumbers = previewLines.isNotEmpty;
-    final previewArrowColor = _isSacrificeModeActive
-        ? const Color(0xFFE65151)
-        : _isGambitsOnlyOpeningMode && _gambitPreviewLines.isNotEmpty
+    final hasSacrificePreview =
+        _isSacrificeModeActive && previewLines.isNotEmpty;
+    final previewArrowColor =
+        _isGambitsOnlyOpeningMode && _gambitPreviewLines.isNotEmpty
         ? const Color(0xFFB16CFF)
         : _openingMode == OpeningMode.yellowGlow &&
               _gambitPreviewLines.isNotEmpty
         ? const Color(0xFFFFD166)
+        : null;
+    final previewArrowGlowColor = hasSacrificePreview
+        ? const Color(0xFFE65151)
         : null;
     final boardInset = _boardGridInsetForContext(context);
     return AnimatedBuilder(
@@ -13136,6 +13923,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 reverse: reverse,
                 showSequenceNumbers: showSequenceNumbers,
                 overrideColor: previewArrowColor,
+                glowColor: previewArrowGlowColor,
                 themeMode: _arrowThemeMode,
                 boardInset: boardInset,
               ),
@@ -13915,26 +14703,43 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     key: const ValueKey<String>('analysis_opening_mode_button'),
                     onTap: _toggleGambitMode,
                     child: AnimatedBuilder(
-                      animation: _openingButtonFlashController,
+                      animation: Listenable.merge(<Listenable>[
+                        _openingButtonFlashController,
+                        _pulseController,
+                      ]),
                       builder: (context, child) {
                         final hasAvailableSacrifice =
                             _hasAvailableSacrificePreview;
                         final flashProgress =
                             _openingButtonFlashController.value;
+                        final pulseProgress =
+                            (sin(_pulseController.value * pi * 2) + 1) / 2;
+                        final alertBlink =
+                            sin(_pulseController.value * pi * 8) >= 0;
                         // Blink: visible for first half, invisible for second half
                         final blink = (flashProgress * 4).floor().isEven;
+                        final scannerPulseActive =
+                            _openingMode == OpeningMode.sacrificeGlow;
                         final sacrificeAlertActive =
-                            hasAvailableSacrifice &&
-                            _openingMode != OpeningMode.sacrificeGlow;
+                            hasAvailableSacrifice && !scannerPulseActive;
+                        final pulseRed = Color.lerp(
+                          const Color(0xFF7A1414),
+                          const Color(0xFFE65151),
+                          0.35 + (pulseProgress * 0.65),
+                        )!;
+                        final alertRed = alertBlink
+                            ? const Color(0xFFFF382B)
+                            : pulseRed;
                         final Color activeColor = _openingButtonFlashRed
                             ? Colors.redAccent
                             : sacrificeAlertActive
-                            ? _openingModeButtonColor(OpeningMode.sacrificeGlow)
+                            ? alertRed
+                            : scannerPulseActive
+                            ? pulseRed
                             : _openingModeButtonColor(_openingMode);
                         final Color glowColor =
-                            !_openingButtonFlashRed &&
-                                _openingMode == OpeningMode.sacrificeGlow
-                            ? const Color(0xFFFFD166)
+                            !_openingButtonFlashRed && scannerPulseActive
+                            ? pulseRed
                             : activeColor;
                         final bool isOn =
                             _openingButtonFlashRed ||
@@ -13949,55 +14754,89 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         final idleIconColor = scheme.onSurface.withValues(
                           alpha: isLight ? 0.78 : 0.54,
                         );
+                        final fireAuraAlpha = sacrificeAlertActive
+                            ? 0.34 + (pulseProgress * 0.34)
+                            : scannerPulseActive
+                            ? 0.18 + (pulseProgress * 0.18)
+                            : 0.0;
+                        final iconColor = _openingButtonFlashRed
+                            ? (blink ? Colors.redAccent : idleIconColor)
+                            : sacrificeAlertActive
+                            ? (alertBlink
+                                  ? const Color(0xFFFFF0F0)
+                                  : const Color(0xFFFFD0D0))
+                            : scannerPulseActive
+                            ? const Color(0xFFFFD7D7)
+                            : _openingMode == OpeningMode.off
+                            ? idleIconColor
+                            : _openingModeButtonColor(_openingMode);
 
-                        return Container(
-                          width: 40,
-                          height: 40,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isOn
-                                ? Color.alphaBlend(
-                                    activeColor.withValues(
-                                      alpha: isLight ? 0.18 : 0.10,
-                                    ),
-                                    scheme.surface,
-                                  )
-                                : idleBackground,
-                            border: Border.all(
+                        return Transform.scale(
+                          scale: sacrificeAlertActive
+                              ? 1.0 + (pulseProgress * 0.06)
+                              : scannerPulseActive
+                              ? 1.0 + (pulseProgress * 0.03)
+                              : 1.0,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
                               color: isOn
-                                  ? activeColor.withValues(
-                                      alpha: isLight ? 0.56 : 0.36,
-                                    )
-                                  : scheme.outline.withValues(
-                                      alpha: isLight ? 0.38 : 0.24,
-                                    ),
-                            ),
-                            boxShadow: isOn
-                                ? [
-                                    BoxShadow(
-                                      color: glowColor.withValues(
-                                        alpha: _openingButtonFlashRed
-                                            ? (blink ? 0.7 : 0.0)
-                                            : 0.5,
+                                  ? Color.alphaBlend(
+                                      activeColor.withValues(
+                                        alpha: isLight ? 0.18 : 0.10,
                                       ),
-                                      blurRadius: 15,
-                                      spreadRadius: 2,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Icon(
-                            Icons.auto_awesome,
-                            color: _openingButtonFlashRed
-                                ? (blink ? Colors.redAccent : idleIconColor)
-                                : sacrificeAlertActive
-                                ? _openingModeButtonColor(
-                                    OpeningMode.sacrificeGlow,
-                                  )
-                                : _openingMode == OpeningMode.off
-                                ? idleIconColor
-                                : _openingModeButtonColor(_openingMode),
+                                      scheme.surface,
+                                    )
+                                  : idleBackground,
+                              border: Border.all(
+                                color: isOn
+                                    ? activeColor.withValues(
+                                        alpha: isLight ? 0.56 : 0.36,
+                                      )
+                                    : scheme.outline.withValues(
+                                        alpha: isLight ? 0.38 : 0.24,
+                                      ),
+                              ),
+                              boxShadow: isOn
+                                  ? <BoxShadow>[
+                                      BoxShadow(
+                                        color: glowColor.withValues(
+                                          alpha: _openingButtonFlashRed
+                                              ? (blink ? 0.7 : 0.0)
+                                              : sacrificeAlertActive
+                                              ? (alertBlink ? 0.72 : 0.18)
+                                              : 0.30 + (pulseProgress * 0.16),
+                                        ),
+                                        blurRadius: sacrificeAlertActive
+                                            ? 18 + (pulseProgress * 8)
+                                            : 14 + (pulseProgress * 4),
+                                        spreadRadius: sacrificeAlertActive
+                                            ? 2.5 + pulseProgress
+                                            : 1.6 + (pulseProgress * 0.6),
+                                      ),
+                                      if (fireAuraAlpha > 0)
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFFFF6B3D,
+                                          ).withValues(alpha: fireAuraAlpha),
+                                          blurRadius: 28 + (pulseProgress * 10),
+                                          spreadRadius: 3 + (pulseProgress * 2),
+                                        ),
+                                      if (sacrificeAlertActive)
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFF761010,
+                                          ).withValues(alpha: 0.34),
+                                          blurRadius: 10,
+                                          spreadRadius: 1,
+                                        ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Icon(Icons.auto_awesome, color: iconColor),
                           ),
                         );
                       },

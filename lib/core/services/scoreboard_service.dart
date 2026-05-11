@@ -64,6 +64,7 @@ class ScoreboardService {
   static const String _prefHandle = 'sb_last_handle';
   static const String _prefCountry = 'sb_last_country';
   static const String _prefScore = 'sb_last_score';
+  static const String _prefEvidenceCount = 'sb_last_evidence_count';
 
   String? _lastFunctionError;
 
@@ -404,11 +405,21 @@ class ScoreboardService {
     return DeleteProfileResult(authDeleted: authDeleted);
   }
 
+  List<Map<String, dynamic>>? _scoreEvidencePayload(
+    Iterable<AcademyExamResult>? scoreEvidence,
+  ) {
+    if (scoreEvidence == null) return null;
+    final evidence = scoreEvidence.toList(growable: false);
+    if (evidence.isEmpty) return null;
+    return evidence.map((result) => result.toMap()).toList(growable: false);
+  }
+
   Future<void> submitScore({
     required String handle,
     required String country,
     required int score,
     required String title,
+    Iterable<AcademyExamResult>? scoreEvidence,
   }) async {
     try {
       final trimmedHandle = handle.trim().isEmpty
@@ -418,28 +429,41 @@ class ScoreboardService {
       final normalizedCountry = country.trim().isEmpty
           ? 'Unknown'
           : country.trim();
+      final scoreEvidencePayload = _scoreEvidencePayload(scoreEvidence);
+      final evidenceCount = scoreEvidencePayload?.length;
 
       // ── Skip write if nothing changed since last submission ────────────────
       final prefs = await SharedPreferences.getInstance();
       final cachedHandle = prefs.getString(_prefHandle);
       final cachedCountry = prefs.getString(_prefCountry);
       final cachedScore = prefs.getInt(_prefScore);
+      final cachedEvidenceCount = prefs.getInt(_prefEvidenceCount);
 
       if (cachedHandle == handleKey &&
           cachedCountry == normalizedCountry &&
-          cachedScore == score) {
+          cachedScore == score &&
+          cachedEvidenceCount == evidenceCount) {
         return;
       }
+
+      final data = <String, dynamic>{
+        'handle': trimmedHandle,
+        'country': normalizedCountry,
+        'score': score,
+        'title': title,
+      };
+      if (scoreEvidencePayload != null) {
+        data['scoreEvidence'] = scoreEvidencePayload;
+      }
+
+      final persistEvidenceCount = evidenceCount == null
+          ? prefs.remove(_prefEvidenceCount)
+          : prefs.setInt(_prefEvidenceCount, evidenceCount);
 
       await _callPreferredFunction(
         primary: _submitAcademyScoreFunction,
         fallback: _submitAcademyScoreFallbackFunction,
-        data: {
-          'handle': trimmedHandle,
-          'country': normalizedCountry,
-          'score': score,
-          'title': title,
-        },
+        data: data,
       );
 
       // ── Persist cache ─────────────────────────────────────────────────────
@@ -447,6 +471,7 @@ class ScoreboardService {
         prefs.setString(_prefHandle, handleKey),
         prefs.setString(_prefCountry, normalizedCountry),
         prefs.setInt(_prefScore, score),
+        persistEvidenceCount,
       ]);
     } catch (e) {
       debugPrint('Scoreboard submit failed: $e');
@@ -463,6 +488,7 @@ class ScoreboardService {
     required String country,
     required int score,
     required String title,
+    Iterable<AcademyExamResult>? scoreEvidence,
   }) async {
     final trimmedHandle = handle.trim();
     if (trimmedHandle.isEmpty) {
@@ -472,17 +498,22 @@ class ScoreboardService {
     final normalizedCountry = country.trim().isEmpty
         ? 'Unknown'
         : country.trim();
+    final scoreEvidencePayload = _scoreEvidencePayload(scoreEvidence);
+    final data = <String, dynamic>{
+      'handle': trimmedHandle,
+      'country': normalizedCountry,
+      'score': score,
+      'title': title,
+    };
+    if (scoreEvidencePayload != null) {
+      data['scoreEvidence'] = scoreEvidencePayload;
+    }
 
     try {
       await _callPreferredFunction(
         primary: _submitAcademyScoreFunction,
         fallback: _submitAcademyScoreFallbackFunction,
-        data: {
-          'handle': trimmedHandle,
-          'country': normalizedCountry,
-          'score': score,
-          'title': title,
-        },
+        data: data,
       );
       return HandleAvailabilityStatus.available;
     } catch (e) {

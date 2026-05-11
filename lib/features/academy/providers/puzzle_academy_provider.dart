@@ -493,26 +493,15 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     required String country,
   }) async {
     _lastRegistrationError = null;
-    final bestResultsByNode = <String, AcademyExamResult>{};
-    for (final result in progress.examResults) {
-      final existing = bestResultsByNode[result.nodeKey];
-      if (existing == null ||
-          _effectiveLeaderboardScore(result) >
-              _effectiveLeaderboardScore(existing)) {
-        bestResultsByNode[result.nodeKey] = result;
-      }
-    }
-
-    final totalScore = bestResultsByNode.values.fold<int>(
-      0,
-      (sum, result) => sum + _effectiveLeaderboardScore(result),
-    );
+    final bestResults = _bestLeaderboardExamResults();
+    final totalScore = _leaderboardTotalScore(bestResults);
 
     final status = await ScoreboardService.instance.registerProfile(
       handle: handle,
       country: country,
       score: totalScore,
-      title: '${bestResultsByNode.length} exams counted',
+      title: '${bestResults.length} exams counted',
+      scoreEvidence: bestResults,
     );
     if (status == HandleAvailabilityStatus.verificationUnavailable ||
         status == HandleAvailabilityStatus.renameRequired) {
@@ -1282,6 +1271,34 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     );
   }
 
+  List<AcademyExamResult> _bestLeaderboardExamResults() {
+    final bestResultsByNode = <String, AcademyExamResult>{};
+    for (final result in progress.examResults) {
+      final existing = bestResultsByNode[result.nodeKey];
+      final resultScore = _effectiveLeaderboardScore(result);
+      final existingScore = existing == null
+          ? -1
+          : _effectiveLeaderboardScore(existing);
+      if (existing == null ||
+          resultScore > existingScore ||
+          (resultScore == existingScore &&
+              result.completedAtMs > existing.completedAtMs)) {
+        bestResultsByNode[result.nodeKey] = result;
+      }
+    }
+
+    final results = bestResultsByNode.values.toList(growable: false)
+      ..sort((a, b) => a.nodeKey.compareTo(b.nodeKey));
+    return results;
+  }
+
+  int _leaderboardTotalScore(Iterable<AcademyExamResult> results) {
+    return results.fold<int>(
+      0,
+      (sum, result) => sum + _effectiveLeaderboardScore(result),
+    );
+  }
+
   int calculateExamScore({
     required int correctCount,
     required int totalCount,
@@ -1333,19 +1350,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     if (progress.handle.trim().isEmpty || progress.country.trim().isEmpty) {
       return;
     }
-    final bestResultsByNode = <String, AcademyExamResult>{};
-    for (final result in progress.examResults) {
-      final existing = bestResultsByNode[result.nodeKey];
-      if (existing == null ||
-          _effectiveLeaderboardScore(result) >
-              _effectiveLeaderboardScore(existing)) {
-        bestResultsByNode[result.nodeKey] = result;
-      }
-    }
-    final totalScore = bestResultsByNode.values.fold<int>(
-      0,
-      (sum, result) => sum + _effectiveLeaderboardScore(result),
-    );
+    final bestResults = _bestLeaderboardExamResults();
+    final totalScore = _leaderboardTotalScore(bestResults);
     if (totalScore <= 0) return;
 
     try {
@@ -1355,7 +1361,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
             : progress.handle.trim(),
         country: progress.country.trim(),
         score: totalScore,
-        title: '${bestResultsByNode.length} exams counted',
+        title: '${bestResults.length} exams counted',
+        scoreEvidence: bestResults,
       );
     } catch (_) {
       final error = ScoreboardService.instance.lastFunctionError;

@@ -14,6 +14,15 @@ const HANDLE_MAX = 20;
 // Letters, digits, spaces, underscores, hyphens only
 const HANDLE_RE = /^[a-zA-Z0-9_\- ]+$/;
 const HANDLE_MODERATED_PREFIX = "ACADEMY_HANDLE_MODERATED:";
+const ACADEMY_MAX_SCORE_PER_NODE = 15000;
+const ACADEMY_MAX_TRACKED_NODES = 80;
+const ACADEMY_MAX_TOTAL_SCORE =
+    ACADEMY_MAX_SCORE_PER_NODE * ACADEMY_MAX_TRACKED_NODES;
+const ACADEMY_MAX_EXAM_SCORE = 10000;
+const ACADEMY_MAX_EXAM_TOTAL_COUNT = 50;
+const ACADEMY_MAX_EXAM_DURATION_MS = 60 * 60 * 1000;
+const ACADEMY_NODE_MIN_ELO = 450;
+const ACADEMY_NODE_MAX_ELO = 3999;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,6 +90,17 @@ type LegacyOwnedEntry = {
     country: string;
     countryKey: string;
     score: number;
+};
+
+type AcademyScoreEvidenceEntry = {
+    nodeKey: string;
+    score: number;
+    leaderboardScore: number;
+    correctCount: number;
+    totalCount: number;
+    elapsedMs: number;
+    timeLimitMs: number;
+    completedAtMs: number;
 };
 
 type AcademyHandleModerationRecord = {
@@ -206,6 +226,262 @@ async function activateHandleModeration(handleKey: string): Promise<void> {
     });
 }
 
+function calculateAcademyExamScore(params: {
+    correctCount: number;
+    totalCount: number;
+    elapsedMs: number;
+    timeLimitMs: number;
+}): number {
+    if (params.totalCount <= 0) {
+        return 0;
+    }
+
+    const boundedElapsedMs = Math.min(
+        Math.max(0, params.elapsedMs),
+        params.timeLimitMs,
+    );
+    const remainingMs = Math.max(0, params.timeLimitMs - boundedElapsedMs);
+    const accuracyRatio = Math.min(
+        1,
+        Math.max(0, params.correctCount / params.totalCount),
+    );
+    const speedRatio = params.timeLimitMs <= 0
+        ? 0
+        : remainingMs / params.timeLimitMs;
+    return Math.round((accuracyRatio * 8000) + (speedRatio * 2000));
+}
+
+function calculateAcademyLeaderboardScore(
+    examScore: number,
+    nodeElo: number,
+): number {
+    const normalizedElo = Math.min(
+        ACADEMY_NODE_MAX_ELO,
+        Math.max(ACADEMY_NODE_MIN_ELO, nodeElo),
+    );
+    const weight =
+        0.5 +
+        ((normalizedElo - ACADEMY_NODE_MIN_ELO) /
+            (ACADEMY_NODE_MAX_ELO - ACADEMY_NODE_MIN_ELO));
+    return Math.round(examScore * weight);
+}
+
+function parseAcademyNodeKey(nodeKey: string): { startElo: number; endElo: number } | null {
+    const match = /^(\d+)_(\d+)$/.exec(nodeKey.trim());
+    if (!match) {
+        return null;
+    }
+
+    const startElo = Number(match[1]);
+    const endElo = Number(match[2]);
+    if (!Number.isInteger(startElo) || !Number.isInteger(endElo)) {
+        return null;
+    }
+    if (startElo < ACADEMY_NODE_MIN_ELO || startElo > ACADEMY_NODE_MAX_ELO) {
+        return null;
+    }
+    if (endElo <= startElo) {
+        return null;
+    }
+    return { startElo, endElo };
+}
+
+function readIntegerField(
+    value: unknown,
+    fieldName: string,
+    min: number,
+    max: number,
+): number {
+    if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Score evidence field ${fieldName} must be an integer.`,
+        );
+    }
+    if (value < min || value > max) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Score evidence field ${fieldName} is out of range.`,
+        );
+    }
+    return value;
+}
+
+function validateAcademyScoreEvidence(
+    rawEvidence: unknown,
+): { totalScore: number; examCount: number } | null {
+    if (rawEvidence === null || rawEvidence === undefined) {
+        return null;
+    }
+    if (!Array.isArray(rawEvidence)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Score evidence must be an array.",
+        );
+    }
+    if (rawEvidence.length === 0) {
+        return null;
+    }
+    if (rawEvidence.length > ACADEMY_MAX_TRACKED_NODES) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Score evidence contains too many node results.",
+        );
+    }
+
+    const seenNodeKeys = new Set<string>();
+    let totalScore = 0;
+
+    for (const rawEntry of rawEvidence) {
+        if (!rawEntry || typeof rawEntry !== "object") {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Each score evidence entry must be an object.",
+            );
+        }
+
+        const entry = rawEntry as Record<string, unknown>;
+        const nodeKey = typeof entry.nodeKey === "string"
+            ? entry.nodeKey.trim()
+            : "";
+        const nodeInfo = parseAcademyNodeKey(nodeKey);
+        if (!nodeInfo) {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Score evidence contains an invalid node key.",
+            );
+        }
+        if (seenNodeKeys.has(nodeKey)) {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Score evidence contains duplicate node results.",
+            );
+        }
+        seenNodeKeys.add(nodeKey);
+
+        const correctCount = readIntegerField(
+            entry.correctCount,
+            "correctCount",
+            0,
+            ACADEMY_MAX_EXAM_TOTAL_COUNT,
+        );
+        const totalCount = readIntegerField(
+            entry.totalCount,
+            "totalCount",
+            1,
+            ACADEMY_MAX_EXAM_TOTAL_COUNT,
+        );
+        if (correctCount > totalCount) {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Score evidence has correctCount above totalCount.",
+            );
+        }
+
+        const timeLimitMs = readIntegerField(
+            entry.timeLimitMs,
+            "timeLimitMs",
+            1,
+            ACADEMY_MAX_EXAM_DURATION_MS,
+        );
+        const elapsedMs = readIntegerField(
+            entry.elapsedMs,
+            "elapsedMs",
+            0,
+            timeLimitMs,
+        );
+        readIntegerField(
+            entry.completedAtMs,
+            "completedAtMs",
+            0,
+            Number.MAX_SAFE_INTEGER,
+        );
+
+        const examScore = readIntegerField(
+            entry.score,
+            "score",
+            0,
+            ACADEMY_MAX_EXAM_SCORE,
+        );
+        const expectedExamScore = calculateAcademyExamScore({
+            correctCount,
+            totalCount,
+            elapsedMs,
+            timeLimitMs,
+        });
+        if (examScore !== expectedExamScore) {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Score evidence exam score does not match ChessIQ exam rules.",
+            );
+        }
+
+        const leaderboardScore = readIntegerField(
+            entry.leaderboardScore,
+            "leaderboardScore",
+            0,
+            ACADEMY_MAX_SCORE_PER_NODE,
+        );
+        const expectedLeaderboardScore = calculateAcademyLeaderboardScore(
+            examScore,
+            nodeInfo.startElo,
+        );
+        if (leaderboardScore !== expectedLeaderboardScore) {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Score evidence leaderboard score does not match ChessIQ weighting rules.",
+            );
+        }
+
+        totalScore += leaderboardScore;
+        if (totalScore > ACADEMY_MAX_TOTAL_SCORE) {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Score evidence total exceeds the Academy leaderboard range.",
+            );
+        }
+    }
+
+    return {
+        totalScore,
+        examCount: rawEvidence.length,
+    };
+}
+
+function academyLeaderboardTitleForExamCount(examCount: number): string {
+    return `${examCount} exams counted`;
+}
+
+async function auditRejectedAcademyScoreAttempt(params: {
+    uid: string;
+    handleKey: string;
+    requestedScore: number;
+    currentScore: number;
+    allowedScore: number;
+    reasonCode: string;
+    examCount?: number | null;
+    detail?: string | null;
+}) {
+    try {
+        await db.ref(`academy_scoreboard_security_audit/${params.uid}`).push({
+            createdAt: new Date().toISOString(),
+            handleKey: params.handleKey,
+            requestedScore: params.requestedScore,
+            currentScore: params.currentScore,
+            allowedScore: params.allowedScore,
+            reasonCode: params.reasonCode,
+            examCount: params.examCount ?? null,
+            detail: params.detail ?? null,
+        });
+    } catch (error) {
+        console.warn("[submitAcademyScore] Failed to write security audit", {
+            uid: params.uid,
+            reasonCode: params.reasonCode,
+            error,
+        });
+    }
+}
+
 function buildModeratedHandleError(
     record: AcademyHandleModerationRecord,
 ): string {
@@ -300,10 +576,19 @@ async function submitAcademyScoreImpl(
         typeof data?.country === "string" && data.country.trim()
             ? data.country.trim().substring(0, 40)
             : "Unknown";
-    const score =
-        typeof data?.score === "number" ? Math.max(0, Math.floor(data.score)) : 0;
-    const title =
+    if (typeof data?.score !== "number" || !Number.isFinite(data.score)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Score must be a finite number.",
+        );
+    }
+    const score = Math.max(0, Math.floor(data.score));
+    const submittedTitle =
         typeof data?.title === "string" ? data.title.substring(0, 40) : "";
+    const scoreEvidence = validateAcademyScoreEvidence(data?.scoreEvidence);
+    const title = scoreEvidence
+        ? academyLeaderboardTitleForExamCount(scoreEvidence.examCount)
+        : submittedTitle;
 
     const handleKey = sanitizeHandleKey(handle);
     const countryKey = sanitizeCountryKey(country);
@@ -367,10 +652,59 @@ async function submitAcademyScoreImpl(
         }
     }
 
+    if (score > ACADEMY_MAX_TOTAL_SCORE) {
+        await auditRejectedAcademyScoreAttempt({
+            uid,
+            handleKey,
+            requestedScore: score,
+            currentScore: maxExistingScore,
+            allowedScore: ACADEMY_MAX_TOTAL_SCORE,
+            reasonCode: "score_out_of_range",
+            examCount: scoreEvidence?.examCount,
+        });
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Score is outside the Academy leaderboard range.",
+        );
+    }
+
     if (score < maxExistingScore) {
         throw new functions.https.HttpsError(
             "failed-precondition",
             "Score cannot decrease.",
+        );
+    }
+
+    if (score > maxExistingScore && !scoreEvidence) {
+        await auditRejectedAcademyScoreAttempt({
+            uid,
+            handleKey,
+            requestedScore: score,
+            currentScore: maxExistingScore,
+            allowedScore: maxExistingScore,
+            reasonCode: "missing_score_evidence",
+            detail: "Positive leaderboard score updates now require validated exam evidence.",
+        });
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This ChessIQ version cannot sync Academy score increases yet. Update the app and try again.",
+        );
+    }
+
+    if (scoreEvidence && score !== scoreEvidence.totalScore) {
+        await auditRejectedAcademyScoreAttempt({
+            uid,
+            handleKey,
+            requestedScore: score,
+            currentScore: maxExistingScore,
+            allowedScore: scoreEvidence.totalScore,
+            reasonCode: "score_mismatch_with_evidence",
+            examCount: scoreEvidence.examCount,
+            detail: "Submitted score did not match the validated evidence total.",
+        });
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Submitted score does not match the Academy exam evidence.",
         );
     }
 
@@ -466,6 +800,8 @@ async function checkHandleAvailabilityImpl(
 //   • Valid authenticated identity (uid required).
 //   • Handle format rules.
 //   • Score cannot decrease for an existing entry.
+//   • Score must remain inside the Academy range.
+//   • When score evidence is provided, totals must match validated exam data.
 //   • Handle can only be owned by one uid (first-write wins).
 //
 // On success writes atomically to:
