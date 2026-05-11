@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -45,6 +46,17 @@ class AppThemeProvider extends ChangeNotifier {
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
   static const String _legacyCinematicThemeKey = 'cinematic_theme_enabled_v1';
   static const String _sharedStoreStateKey = 'store_state_v1';
+  static const String _storeIntegrityScope = 'economy_store';
+  static const List<Offset> darkPieceOutlineOffsets = <Offset>[
+    Offset(-0.9375, 0),
+    Offset(0.9375, 0),
+    Offset(0, -0.9375),
+    Offset(0, 0.9375),
+    Offset(-0.71875, -0.71875),
+    Offset(0.71875, -0.71875),
+    Offset(-0.71875, 0.71875),
+    Offset(0.71875, 0.71875),
+  ];
   static const List<AppBoardPalette> _boardPalettes = <AppBoardPalette>[
     AppBoardPalette(
       darkSquare: Color.fromARGB(198, 42, 76, 112),
@@ -288,6 +300,14 @@ class AppThemeProvider extends ChangeNotifier {
     return piece;
   }
 
+  static Color monochromeBlueOrbColor({required bool isDark}) {
+    return isDark ? const Color(0xFF59606A) : const Color(0xFF545B63);
+  }
+
+  static Color monochromeYellowOrbColor({required bool isDark}) {
+    return isDark ? const Color(0xFFD6DBE1) : const Color(0xFFCFD4DA);
+  }
+
   static Color _brighten(Color color, double amount) {
     final hsl = HSLColor.fromColor(color);
     return hsl
@@ -391,30 +411,26 @@ class AppThemeProvider extends ChangeNotifier {
 
   Future<AppThemeUnlockState> loadThemeUnlockState() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_sharedStoreStateKey);
-    if (raw == null || raw.trim().isEmpty) {
+    final signed = LocalIntegrityService.decodeJson(
+      prefs.getString(_sharedStoreStateKey),
+      scope: _storeIntegrityScope,
+    );
+    if (signed.data == null || (signed.isSigned && !signed.isValid)) {
       return const AppThemeUnlockState();
     }
 
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return const AppThemeUnlockState();
-      }
-      return AppThemeUnlockState(
-        themePackOwned: decoded['themePackOwned'] == true,
-        piecePackOwned: decoded['piecePackOwned'] == true,
-        sakuraBoardOwned: decoded['sakuraBoardOwned'] == true,
-        tropicalBoardOwned: decoded['tropicalBoardOwned'] == true,
-        tuttiFruttiOwned: decoded['tuttiFruttiOwned'] == true,
-        spectralOwned: decoded['spectralOwned'] == true,
-        monochromePiecesOwned: decoded['monochromePiecesOwned'] == true,
-        pixelArrowThemeOwned: decoded['pixelArrowThemeOwned'] == true,
-        heavyArrowThemeOwned: decoded['heavyArrowThemeOwned'] == true,
-      );
-    } catch (_) {
-      return const AppThemeUnlockState();
-    }
+    final decoded = signed.data!;
+    return AppThemeUnlockState(
+      themePackOwned: decoded['themePackOwned'] == true,
+      piecePackOwned: decoded['piecePackOwned'] == true,
+      sakuraBoardOwned: decoded['sakuraBoardOwned'] == true,
+      tropicalBoardOwned: decoded['tropicalBoardOwned'] == true,
+      tuttiFruttiOwned: decoded['tuttiFruttiOwned'] == true,
+      spectralOwned: decoded['spectralOwned'] == true,
+      monochromePiecesOwned: decoded['monochromePiecesOwned'] == true,
+      pixelArrowThemeOwned: decoded['pixelArrowThemeOwned'] == true,
+      heavyArrowThemeOwned: decoded['heavyArrowThemeOwned'] == true,
+    );
   }
 
   Future<void> syncLegacySettings({

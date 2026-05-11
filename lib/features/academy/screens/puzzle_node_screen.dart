@@ -2664,8 +2664,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
   Widget _buildPiece(String square, chess.Piece piece, AppThemeProvider theme) {
     final canDrag = _canMove && _isPieceTurnColor(piece);
-    final assetId = _pieceAssetId(piece);
-    final pieceWidget = _buildPieceImage(theme, assetId);
+    final pieceId = _pieceAssetId(piece);
+    final pieceWidget = _buildPieceImage(theme, pieceId);
 
     if (!canDrag) return pieceWidget;
 
@@ -2679,22 +2679,26 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     );
   }
 
-  Widget _buildPieceImage(AppThemeProvider theme, String assetId) {
+  Widget _buildPieceImage(AppThemeProvider theme, String pieceId) {
+    final displayAssetId = AppThemeProvider.pieceAssetForIndex(
+      theme.pieceThemeIndex,
+      pieceId,
+    );
     final baseImage = Image.asset(
-      'assets/pieces/$assetId.png',
+      'assets/pieces/$displayAssetId.png',
       fit: BoxFit.contain,
     );
     final tinted = theme.useClassicPieces
         ? baseImage
         : ColorFiltered(
             colorFilter: ColorFilter.mode(
-              theme.pieceTintColor(assetId),
+              theme.pieceTintColor(pieceId),
               BlendMode.modulate,
             ),
             child: baseImage,
           );
 
-    final isBlackPiece = assetId.endsWith('_b');
+    final isBlackPiece = pieceId.endsWith('_b');
     if (!isBlackPiece) {
       return Padding(padding: const EdgeInsets.all(2), child: tinted);
     }
@@ -2704,22 +2708,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          for (final offset in const [
-            Offset(-0.65, 0),
-            Offset(0.65, 0),
-            Offset(0, -0.65),
-            Offset(0, 0.65),
-            Offset(-0.5, -0.5),
-            Offset(0.5, -0.5),
-            Offset(-0.5, 0.5),
-            Offset(0.5, 0.5),
-          ])
+          for (final offset in AppThemeProvider.darkPieceOutlineOffsets)
             Transform.translate(
               offset: offset,
               child: Opacity(
                 opacity: 0.18,
                 child: Image.asset(
-                  'assets/pieces/$assetId.png',
+                  'assets/pieces/$displayAssetId.png',
                   fit: BoxFit.contain,
                   color: const Color(0xFFF7FBFF),
                   colorBlendMode: BlendMode.srcIn,

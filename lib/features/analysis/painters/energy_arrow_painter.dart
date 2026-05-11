@@ -7,6 +7,8 @@ import 'package:chessiq/shared/graphics/pixel_arrow_renderer.dart';
 import 'package:flutter/material.dart';
 
 class EnergyArrowPainter extends CustomPainter {
+  static const Color _lightMonoOutline = Color(0xFFF7FBFF);
+
   final List<EngineLine> lines;
   final int bestEval;
   final double progress;
@@ -76,6 +78,32 @@ class EnergyArrowPainter extends CustomPainter {
       (color.g * factor).round().clamp(0, 255),
       (color.b * factor).round().clamp(0, 255),
     );
+  }
+
+  bool _usesLightOutline(Color color) {
+    final channelValues = <int>[
+      color.r.toInt(),
+      color.g.toInt(),
+      color.b.toInt(),
+    ]..sort();
+    final channelSpread = channelValues.last - channelValues.first;
+    return color.computeLuminance() < 0.22 && channelSpread <= 26;
+  }
+
+  Color _classicOutlineColor(
+    Color color, {
+    required bool useStaticStyle,
+    required double alphaScale,
+  }) {
+    if (_usesLightOutline(color)) {
+      return _lightMonoOutline.withValues(
+        alpha: useStaticStyle ? 0.94 : max(0.76, alphaScale),
+      );
+    }
+    return _darkenColor(
+      color,
+      0.15,
+    ).withValues(alpha: useStaticStyle ? 0.72 : 0.45 * alphaScale);
   }
 
   @override
@@ -189,7 +217,16 @@ class EnergyArrowPainter extends CustomPainter {
       final heavyMode = themeMode == ArrowThemeMode.heavy3d;
       const heavyLineScale = 0.75;
       final pixelStep = pixelMode ? max(3.0, min(4.5, sq * 0.08)) : 0.0;
-      final renderStart = pixelMode ? _snapPoint(start, pixelStep) : start;
+      final themedStartInset = (pixelMode || heavyMode)
+          ? min(sq * 0.36, distance * 0.32)
+          : 0.0;
+      final themedStart = Offset(
+        start.dx + (unitX * themedStartInset),
+        start.dy + (unitY * themedStartInset),
+      );
+      final renderStart = pixelMode
+          ? _snapPoint(themedStart, pixelStep)
+          : (heavyMode ? themedStart : start);
       final renderEnd = pixelMode ? _snapPoint(end, pixelStep) : end;
       final renderLineEnd = pixelMode
           ? _snapPoint(lineEnd, pixelStep)
@@ -252,6 +289,7 @@ class EnergyArrowPainter extends CustomPainter {
       final path = Path()
         ..moveTo(renderStart.dx, renderStart.dy)
         ..lineTo(heavyShaftEnd.dx, heavyShaftEnd.dy);
+      final heavyShaftLength = (heavyShaftEnd - renderStart).distance;
 
       if (heavyMode) {
         canvas.drawPath(
@@ -268,12 +306,16 @@ class EnergyArrowPainter extends CustomPainter {
       final outlineStrokeWidth =
           renderStrokeWidth +
           (heavyMode ? 4.6 * heavyLineScale : (useStaticStyle ? 1.8 : 1.6));
-      final outlineColor = _darkenColor(baseColor, heavyMode ? 0.45 : 0.15)
-          .withValues(
-            alpha: heavyMode
-                ? max(0.58, alphaScale * 0.80)
-                : (useStaticStyle ? 0.72 : 0.45 * alphaScale),
-          );
+      final outlineColor = heavyMode
+          ? _darkenColor(
+              baseColor,
+              0.45,
+            ).withValues(alpha: max(0.58, alphaScale * 0.80))
+          : _classicOutlineColor(
+              baseColor,
+              useStaticStyle: useStaticStyle,
+              alphaScale: alphaScale,
+            );
       final outlinePaint = Paint()
         ..strokeWidth = outlineStrokeWidth
         ..strokeCap = StrokeCap.round
@@ -316,8 +358,8 @@ class EnergyArrowPainter extends CustomPainter {
             renderStart.dy + bevelOffset.dy,
           )
           ..lineTo(
-            renderLineEnd.dx + bevelOffset.dx,
-            renderLineEnd.dy + bevelOffset.dy,
+            heavyShaftEnd.dx + bevelOffset.dx,
+            heavyShaftEnd.dy + bevelOffset.dy,
           );
         canvas.drawPath(
           lowlightPath,
@@ -337,8 +379,8 @@ class EnergyArrowPainter extends CustomPainter {
             renderStart.dy - bevelOffset.dy,
           )
           ..lineTo(
-            renderLineEnd.dx - bevelOffset.dx,
-            renderLineEnd.dy - bevelOffset.dy,
+            heavyShaftEnd.dx - bevelOffset.dx,
+            heavyShaftEnd.dy - bevelOffset.dy,
           );
         canvas.drawPath(
           highlightPath,
@@ -353,16 +395,18 @@ class EnergyArrowPainter extends CustomPainter {
       }
 
       if (!useStaticStyle) {
-        final pulseHalfLen = max(18.0, distance * 0.14);
-        final travel = distance + (pulseHalfLen * 2);
+        final pulsePathStart = heavyMode ? renderStart : start;
+        final pulsePathDistance = heavyMode ? heavyShaftLength : distance;
+        final pulseHalfLen = max(18.0, pulsePathDistance * 0.14);
+        final travel = pulsePathDistance + (pulseHalfLen * 2);
         final pulseCenter = (-pulseHalfLen) + (travel * (progress % 1.0));
         final pulseStart = Offset(
-          start.dx + unitX * (pulseCenter - pulseHalfLen),
-          start.dy + unitY * (pulseCenter - pulseHalfLen),
+          pulsePathStart.dx + unitX * (pulseCenter - pulseHalfLen),
+          pulsePathStart.dy + unitY * (pulseCenter - pulseHalfLen),
         );
         final pulseEnd = Offset(
-          start.dx + unitX * (pulseCenter + pulseHalfLen),
-          start.dy + unitY * (pulseCenter + pulseHalfLen),
+          pulsePathStart.dx + unitX * (pulseCenter + pulseHalfLen),
+          pulsePathStart.dy + unitY * (pulseCenter + pulseHalfLen),
         );
 
         final pulsePaint = Paint()
@@ -417,8 +461,10 @@ class EnergyArrowPainter extends CustomPainter {
                 ? const Color(0xFF69727F).withValues(
                     alpha: useStaticStyle ? 0.96 : max(0.72, alphaScale),
                   )
-                : _darkenColor(solidHeadColor, 0.15).withValues(
-                    alpha: useStaticStyle ? 0.92 : max(0.62, alphaScale),
+                : _classicOutlineColor(
+                    solidHeadColor,
+                    useStaticStyle: useStaticStyle,
+                    alphaScale: max(0.62, alphaScale),
                   ));
       if (heavyMode) {
         canvas.drawShadow(

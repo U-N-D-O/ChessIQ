@@ -1444,6 +1444,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Widget _buildMenuBackgroundLayer({
     required Alignment blueDotAlignment,
     required Alignment yellowDotAlignment,
+    required Color blueDotColor,
+    required Color yellowDotColor,
     required _VsBotArcadePalette arcade,
     required bool reducedEffects,
     required bool isMono,
@@ -1463,8 +1465,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   yellowDotAlignment.x,
                   yellowDotAlignment.y,
                 ),
-                cyan: arcade.cyan,
-                amber: arcade.amber,
+                cyan: blueDotColor,
+                amber: yellowDotColor,
                 pink: arcade.pink,
                 crimson: arcade.crimson,
                 lineColor: arcade.line,
@@ -10142,14 +10144,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           arcade.panelAlt.withValues(alpha: isMono ? 0.04 : 0.18),
           scheme.surfaceContainerHighest,
         );
+        final monoBlueDotColor = AppThemeProvider.monochromeBlueOrbColor(
+          isDark: theme.brightness == Brightness.dark,
+        );
+        final monoYellowDotColor = AppThemeProvider.monochromeYellowOrbColor(
+          isDark: theme.brightness == Brightness.dark,
+        );
         final blueDotColor = isMono
-            ? scheme.onSurface.withValues(alpha: 0.52)
+            ? monoBlueDotColor
             : Color.alphaBlend(
                 arcade.cyan.withValues(alpha: 0.34),
                 const Color(0xFF5AAEE8),
               );
         final yellowDotColor = isMono
-            ? scheme.onSurface.withValues(alpha: 0.50)
+            ? monoYellowDotColor
             : Color.alphaBlend(
                 arcade.amber.withValues(alpha: 0.28),
                 const Color(0xFFD8B640),
@@ -10254,6 +10262,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             _buildMenuBackgroundLayer(
               blueDotAlignment: blueDotAlignment,
               yellowDotAlignment: yellowDotAlignment,
+              blueDotColor: blueDotColor,
+              yellowDotColor: yellowDotColor,
               arcade: arcade,
               reducedEffects: reducedEffects,
               isMono: isMono,
@@ -13532,6 +13542,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _isCinematicThemeEnabled;
 
     if (useMonochrome) {
+      final blueOrbColor = AppThemeProvider.monochromeBlueOrbColor(
+        isDark: true,
+      );
+      final yellowOrbColor = AppThemeProvider.monochromeYellowOrbColor(
+        isDark: true,
+      );
       return _SuggestionButtonPalette(
         useMonochrome: true,
         isDark: true,
@@ -13541,9 +13557,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         powerShadow: const Color(0xFF6D7681).withValues(alpha: 0.08),
         surfaceCore: const Color(0xFF232A32),
         surfaceBase: const Color(0xFF0F1318),
-        energyPrimary: const Color(0xFF98A1AC),
-        energySecondary: const Color(0xFF626B76),
-        activationGlow: const Color(0xFF9AA3AD),
+        energyPrimary: blueOrbColor,
+        energySecondary: yellowOrbColor,
+        activationGlow: Color.lerp(blueOrbColor, yellowOrbColor, 0.72)!,
         boltColor: const Color(0xFFE7EBF0),
         borderAccent: const Color(0xFF939DA8),
         glyphShell: const Color(0xFF0C1014),
@@ -17439,16 +17455,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
                 ),
               ),
-          for (final offset in const [
-            Offset(-0.65, 0),
-            Offset(0.65, 0),
-            Offset(0, -0.65),
-            Offset(0, 0.65),
-            Offset(-0.5, -0.5),
-            Offset(0.5, -0.5),
-            Offset(-0.5, 0.5),
-            Offset(0.5, 0.5),
-          ])
+          for (final offset in AppThemeProvider.darkPieceOutlineOffsets)
             Transform.translate(
               offset: offset + outlineCenterShift,
               child: Opacity(

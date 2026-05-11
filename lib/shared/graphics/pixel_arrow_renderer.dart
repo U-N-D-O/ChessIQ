@@ -23,6 +23,8 @@ class PixelArrowRenderer {
     Color? midColor,
     Color? tipColor,
     Color? outlineColor,
+    double baseFadeDistance = 0.0,
+    double baseFadeOpacity = 0.40,
     double alphaScale = 1.0,
     bool animatePulse = false,
     double progress = 0.0,
@@ -39,6 +41,10 @@ class PixelArrowRenderer {
 
     final unit = direction / length;
     final headDirection = _PixelArrowHeadDirection.fromOffset(direction);
+    final headRotationAngle = _knightHeadRotationAngle(
+      direction,
+      headDirection,
+    );
     final headSprite = _headSprites[headDirection];
     final diagonalLineInflate = headDirection.isDiagonal
         ? pixelSize * 0.125
@@ -85,19 +91,40 @@ class PixelArrowRenderer {
       end: shaftEnd,
       pixelSize: pixelSize,
     );
+    final shaftLength = (shaftEnd - snappedStart).distance;
+    final fadeEndT = (baseFadeDistance <= 0.0 || shaftLength <= 0.001)
+        ? 0.0
+        : min(1.0, baseFadeDistance / shaftLength);
 
     for (var index = 0; index < shaftCells.length; index++) {
       final t = shaftCells.length <= 1 ? 0.0 : index / (shaftCells.length - 1);
+      final fadeMultiplier = _baseFadeMultiplier(
+        progressT: t,
+        fadeEndT: fadeEndT,
+        minimumOpacity: baseFadeOpacity,
+      );
       final shade = usesPreviewGradient
           ? _previewGradientColor(
               t,
               previewTailColor,
               previewMidColor,
               previewTipColor,
-            ).withValues(alpha: alphaScale)
+            ).withValues(alpha: alphaScale * fadeMultiplier)
           : (t < 0.22
-                ? Color.lerp(topLightColor, bodyColor, min(1.0, t / 0.22))!
-                : (t > 0.84 ? shadowColor : bodyColor));
+                    ? Color.lerp(topLightColor, bodyColor, min(1.0, t / 0.22))!
+                    : (t > 0.84 ? shadowColor : bodyColor))
+                .withValues(
+                  alpha:
+                      (t < 0.22
+                              ? Color.lerp(
+                                  topLightColor,
+                                  bodyColor,
+                                  min(1.0, t / 0.22),
+                                )!
+                              : (t > 0.84 ? shadowColor : bodyColor))
+                          .a *
+                      fadeMultiplier,
+                );
       fillCells[shaftCells[index]] = _PixelCellPaint(
         color: shade,
         progressT: t,
@@ -105,26 +132,36 @@ class PixelArrowRenderer {
     }
 
     if (fillCells.isEmpty) {
+      final fadeMultiplier = _baseFadeMultiplier(
+        progressT: 0.0,
+        fadeEndT: fadeEndT,
+        minimumOpacity: baseFadeOpacity,
+      );
       final fallbackColor = usesPreviewGradient
           ? _previewGradientColor(
               0.0,
               previewTailColor,
               previewMidColor,
               previewTipColor,
-            )
-          : Colors.white;
+            ).withValues(alpha: alphaScale * fadeMultiplier)
+          : Colors.white.withValues(alpha: fadeMultiplier);
       fillCells[_worldToCell(snappedStart, pixelSize)] = _PixelCellPaint(
         color: fallbackColor,
         progressT: 0.0,
       );
     }
 
-    final outlineCells = <Point<int>>{};
-    for (final key in fillCells.keys) {
+    final outlineCells = <Point<int>, double>{};
+    for (final entry in fillCells.entries) {
+      final key = entry.key;
       for (final neighbor in _cardinalNeighbors) {
         final edge = Point<int>(key.x + neighbor.x, key.y + neighbor.y);
         if (!fillCells.containsKey(edge)) {
-          outlineCells.add(edge);
+          final existingProgress = outlineCells[edge];
+          if (existingProgress == null ||
+              entry.value.progressT < existingProgress) {
+            outlineCells[edge] = entry.value.progressT;
+          }
         }
       }
     }
@@ -143,17 +180,35 @@ class PixelArrowRenderer {
         if (glowIntensity <= 0) {
           continue;
         }
+        final fadeMultiplier = _baseFadeMultiplier(
+          progressT: entry.value.progressT,
+          fadeEndT: fadeEndT,
+          minimumOpacity: baseFadeOpacity,
+        );
 
-        pulseCells[entry.key] = Color.lerp(
-          entry.value.color,
-          pulseColor,
-          glowIntensity.clamp(0.0, 1.0) * 0.92,
-        )!;
+        pulseCells[entry.key] =
+            Color.lerp(
+              entry.value.color,
+              pulseColor,
+              glowIntensity.clamp(0.0, 1.0) * 0.92,
+            )!.withValues(
+              alpha:
+                  Color.lerp(
+                    entry.value.color,
+                    pulseColor,
+                    glowIntensity.clamp(0.0, 1.0) * 0.92,
+                  )!.a *
+                  fadeMultiplier,
+            );
 
         final coreIntensity = 1.0 - (distanceFromCenter / pulseCoreReach);
         if (coreIntensity > 0) {
           pulseCoreCells[entry.key] = Colors.white.withValues(
-            alpha: coreIntensity.clamp(0.0, 1.0) * 0.88 * alphaScale,
+            alpha:
+                coreIntensity.clamp(0.0, 1.0) *
+                0.88 *
+                alphaScale *
+                fadeMultiplier,
           );
 
           for (final neighbor in _cardinalNeighbors) {
@@ -165,7 +220,11 @@ class PixelArrowRenderer {
               continue;
             }
             final existingAura = pulseAuraCells[edge];
-            final auraAlpha = coreIntensity.clamp(0.0, 1.0) * 0.22 * alphaScale;
+            final auraAlpha =
+                coreIntensity.clamp(0.0, 1.0) *
+                0.22 *
+                alphaScale *
+                fadeMultiplier;
             if (existingAura == null || auraAlpha > existingAura.a) {
               pulseAuraCells[edge] = pulseColor.withValues(alpha: auraAlpha);
             }
@@ -189,8 +248,19 @@ class PixelArrowRenderer {
       );
     }
 
-    for (final cell in outlineCells) {
-      drawCell(cell, resolvedOutlineColor, inflate: diagonalLineInflate);
+    for (final entry in outlineCells.entries) {
+      final fadeMultiplier = _baseFadeMultiplier(
+        progressT: entry.value,
+        fadeEndT: fadeEndT,
+        minimumOpacity: baseFadeOpacity,
+      );
+      drawCell(
+        entry.key,
+        resolvedOutlineColor.withValues(
+          alpha: resolvedOutlineColor.a * fadeMultiplier,
+        ),
+        inflate: diagonalLineInflate,
+      );
     }
     for (final entry in fillCells.entries) {
       drawCell(entry.key, entry.value.color, inflate: diagonalLineInflate);
@@ -211,6 +281,7 @@ class PixelArrowRenderer {
         end: snappedEnd,
         pixelSize: pixelSize,
         direction: headDirection,
+        rotationAngle: headRotationAngle,
         headSprite: headSprite,
         color: usesPreviewGradient
             ? previewTipColor.withValues(alpha: alphaScale)
@@ -230,6 +301,18 @@ class PixelArrowRenderer {
       return Color.lerp(tailColor, midColor, clampedT / 0.58)!;
     }
     return Color.lerp(midColor, tipColor, (clampedT - 0.58) / 0.42)!;
+  }
+
+  static double _baseFadeMultiplier({
+    required double progressT,
+    required double fadeEndT,
+    required double minimumOpacity,
+  }) {
+    if (fadeEndT <= 0.0) {
+      return 1.0;
+    }
+    final normalized = (progressT / fadeEndT).clamp(0.0, 1.0);
+    return ui.lerpDouble(minimumOpacity, 1.0, normalized)!;
   }
 
   static Color _lightenColor(Color color, double amount) {
@@ -465,30 +548,81 @@ class PixelArrowRenderer {
     required Offset end,
     required double pixelSize,
     required _PixelArrowHeadDirection direction,
+    required double rotationAngle,
     required _PixelArrowHeadSprite headSprite,
     required Color color,
   }) {
     final scale = _headScale(direction, headSprite, pixelSize);
     final destinationRect = Rect.fromLTWH(
-      end.dx - (headSprite.tip.dx * scale),
-      end.dy - (headSprite.tip.dy * scale),
+      -(headSprite.tip.dx * scale),
+      -(headSprite.tip.dy * scale),
       headSprite.image.width * scale,
       headSprite.image.height * scale,
     );
-    canvas.drawImageRect(
-      headSprite.image,
-      Rect.fromLTWH(
-        0,
-        0,
-        headSprite.image.width.toDouble(),
-        headSprite.image.height.toDouble(),
-      ),
-      destinationRect,
-      Paint()
-        ..filterQuality = FilterQuality.none
-        ..isAntiAlias = false
-        ..colorFilter = ColorFilter.mode(color, BlendMode.modulate),
+    final sourceRect = Rect.fromLTWH(
+      0,
+      0,
+      headSprite.image.width.toDouble(),
+      headSprite.image.height.toDouble(),
     );
+    final paint = Paint()
+      ..filterQuality = FilterQuality.none
+      ..isAntiAlias = false
+      ..colorFilter = ColorFilter.mode(color, BlendMode.modulate);
+
+    canvas.save();
+    canvas.translate(end.dx, end.dy);
+    if (rotationAngle != 0.0) {
+      canvas.rotate(rotationAngle);
+    }
+    canvas.drawImageRect(headSprite.image, sourceRect, destinationRect, paint);
+    canvas.restore();
+  }
+
+  static double _knightHeadRotationAngle(
+    Offset direction,
+    _PixelArrowHeadDirection headDirection,
+  ) {
+    final dx = direction.dx.abs();
+    final dy = direction.dy.abs();
+    if (dx <= 0.001 || dy <= 0.001) {
+      return 0.0;
+    }
+
+    final longSide = max(dx, dy);
+    final shortSide = min(dx, dy);
+    if (shortSide <= 0.001) {
+      return 0.0;
+    }
+
+    final ratio = longSide / shortSide;
+    if ((ratio - 2.0).abs() > 0.18) {
+      return 0.0;
+    }
+
+    final actualAngle = atan2(direction.dy, direction.dx);
+    final snappedAngle = atan2(
+      headDirection.vector.dy,
+      headDirection.vector.dx,
+    );
+    final angleDelta = _normalizeAngle(actualAngle - snappedAngle);
+    if (angleDelta.abs() < 0.001) {
+      return 0.0;
+    }
+
+    const knightHeadTurn = pi / 12;
+    return angleDelta.isNegative ? -knightHeadTurn : knightHeadTurn;
+  }
+
+  static double _normalizeAngle(double angle) {
+    var normalized = angle;
+    while (normalized <= -pi) {
+      normalized += pi * 2;
+    }
+    while (normalized > pi) {
+      normalized -= pi * 2;
+    }
+    return normalized;
   }
 
   static const List<Point<int>> _cardinalNeighbors = <Point<int>>[

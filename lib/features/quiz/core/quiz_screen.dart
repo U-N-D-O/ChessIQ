@@ -4371,37 +4371,25 @@ abstract class _QuizScreen extends _AnalysisPageShared {
             child: SizedBox(
               height: screenHeight,
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        tooltip: 'Close stats',
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ),
-                    _buildQuizStatsCard(
-                      filter: filter,
-                      difficultyFilter: difficultyFilter,
-                      days: days,
-                      onFilterChanged: (next) {
-                        setSheetState(() => filter = next);
-                      },
-                      onDifficultyFilterChanged: (next) {
-                        setSheetState(() => difficultyFilter = next);
-                      },
-                      onDaysChanged: (next) {
-                        setSheetState(() => days = next);
-                      },
-                      onReset: () async {
-                        await _resetQuizStats();
-                        setSheetState(() {});
-                      },
-                    ),
-                  ],
+                padding: const EdgeInsets.fromLTRB(14, 18, 14, 24),
+                child: _buildQuizStatsCard(
+                  filter: filter,
+                  difficultyFilter: difficultyFilter,
+                  days: days,
+                  onFilterChanged: (next) {
+                    setSheetState(() => filter = next);
+                  },
+                  onDifficultyFilterChanged: (next) {
+                    setSheetState(() => difficultyFilter = next);
+                  },
+                  onDaysChanged: (next) {
+                    setSheetState(() => days = next);
+                  },
+                  onReset: () async {
+                    await _resetQuizStats();
+                    setSheetState(() {});
+                  },
+                  onClose: () => Navigator.of(ctx).pop(),
                 ),
               ),
             ),
@@ -8442,6 +8430,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     required ValueChanged<QuizStatsDifficultyFilter> onDifficultyFilterChanged,
     required ValueChanged<int?> onDaysChanged,
     required Future<void> Function() onReset,
+    VoidCallback? onClose,
   });
 
   Widget _buildQuizBoard({

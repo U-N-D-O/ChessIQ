@@ -189,16 +189,7 @@ class _ThemePreviewPiece extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        for (final offset in const <Offset>[
-          Offset(-0.65, 0),
-          Offset(0.65, 0),
-          Offset(0, -0.65),
-          Offset(0, 0.65),
-          Offset(-0.5, -0.5),
-          Offset(0.5, -0.5),
-          Offset(-0.5, 0.5),
-          Offset(0.5, 0.5),
-        ])
+        for (final offset in AppThemeProvider.darkPieceOutlineOffsets)
           Transform.translate(
             offset: offset,
             child: Opacity(
@@ -225,6 +216,7 @@ class _ArrowThemePreviewPainter extends CustomPainter {
   static const Color _previewTailColor = Color(0xFFFF4E4E);
   static const Color _previewMidColor = Color(0xFFFFE55A);
   static const Color _previewTipColor = Color(0xFF2FD46F);
+  static const Color _previewHeavyTipColor = Color(0xFF16E25B);
   static const Color _previewOutlineColor = Color(0xFF121212);
 
   final ArrowThemeMode mode;
@@ -234,6 +226,8 @@ class _ArrowThemePreviewPainter extends CustomPainter {
     required Offset end,
     double darken = 0.0,
     double lighten = 0.0,
+    Color? tipColor,
+    double midStop = 0.58,
   }) {
     Color adjust(Color color) {
       var adjusted = color;
@@ -252,9 +246,9 @@ class _ArrowThemePreviewPainter extends CustomPainter {
       <Color>[
         adjust(_previewTailColor),
         adjust(_previewMidColor),
-        adjust(_previewTipColor),
+        adjust(tipColor ?? _previewTipColor),
       ],
-      const <double>[0.0, 0.58, 1.0],
+      <double>[0.0, midStop, 1.0],
       TileMode.clamp,
     );
   }
@@ -345,6 +339,8 @@ class _ArrowThemePreviewPainter extends CustomPainter {
             start: start,
             end: end,
             darken: 0.55,
+            tipColor: _previewHeavyTipColor,
+            midStop: 0.46,
           )
           ..strokeWidth = 10
           ..strokeCap = StrokeCap.round
@@ -356,6 +352,8 @@ class _ArrowThemePreviewPainter extends CustomPainter {
             start: start,
             end: end,
             lighten: 0.05,
+            tipColor: _previewHeavyTipColor,
+            midStop: 0.46,
           )
           ..strokeWidth = 7
           ..strokeCap = StrokeCap.round
@@ -399,6 +397,8 @@ class _ArrowThemePreviewPainter extends CustomPainter {
               start: start,
               end: end,
               lighten: 0.08,
+              tipColor: _previewHeavyTipColor,
+              midStop: 0.46,
             ),
         );
         canvas.drawPath(

@@ -1,4 +1,4 @@
-﻿part of '../../analysis/screens/chess_analysis_page.dart';
+part of '../../analysis/screens/chess_analysis_page.dart';
 
 abstract class _QuizComponents extends _QuizScreen {
   @override
@@ -10,6 +10,7 @@ abstract class _QuizComponents extends _QuizScreen {
     required ValueChanged<QuizStatsDifficultyFilter> onDifficultyFilterChanged,
     required ValueChanged<int?> onDaysChanged,
     required Future<void> Function() onReset,
+    VoidCallback? onClose,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -76,6 +77,88 @@ abstract class _QuizComponents extends _QuizScreen {
         ? 0.0
         : questionsAskedValues.reduce((a, b) => a + b) /
               questionsAskedValues.length;
+
+    Future<void> handleResetTap() async {
+      final shouldReset =
+          await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: _academyPixelPanel(
+                  palette: palette,
+                  accent: palette.signal,
+                  fillColor: palette.panel,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'RESET ALL STATS?',
+                        style: _academyDisplayStyle(
+                          palette: palette,
+                          size: 20,
+                          weight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Are you sure you want to reset all your stats?',
+                        style: _academyHudStyle(
+                          palette: palette,
+                          size: 12.4,
+                          weight: FontWeight.w600,
+                          color: palette.text,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.end,
+                        children: <Widget>[
+                          _academyHudButton(
+                            palette: palette,
+                            icon: Icons.close_rounded,
+                            label: 'CANCEL',
+                            accent: palette.line,
+                            onTap: () => Navigator.of(dialogContext).pop(false),
+                          ),
+                          _academyHudButton(
+                            palette: palette,
+                            icon: Icons.undo_rounded,
+                            label: 'NO',
+                            accent: palette.amber,
+                            onTap: () => Navigator.of(dialogContext).pop(false),
+                          ),
+                          _academyHudButton(
+                            palette: palette,
+                            icon: Icons.check_rounded,
+                            label: 'YES',
+                            accent: palette.signal,
+                            filled: true,
+                            onTap: () => Navigator.of(dialogContext).pop(true),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ) ??
+          false;
+      if (!shouldReset) {
+        return;
+      }
+      await onReset();
+    }
 
     Widget buildSectionHeading(String label, Color accent) {
       return Text(
@@ -145,237 +228,271 @@ abstract class _QuizComponents extends _QuizScreen {
       accent: palette.amber,
       fillColor: palette.panel,
       padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compactHeader = constraints.maxWidth < 520;
+          final headerInfo = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'QUIZ STATS',
-                      style: _academyDisplayStyle(
-                        palette: palette,
-                        size: 22,
-                        weight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Track score, streaks, filters, and academy unlock progress from one retro dashboard.',
-                      style: _academyHudStyle(
-                        palette: palette,
-                        size: 12.3,
-                        weight: FontWeight.w600,
-                        color: palette.text,
-                      ),
-                    ),
-                  ],
+            children: <Widget>[
+              Text(
+                'QUIZ STATS',
+                style: _academyDisplayStyle(
+                  palette: palette,
+                  size: 22,
+                  weight: FontWeight.w700,
+                  letterSpacing: 0.8,
                 ),
               ),
-              if (latest != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Track score, streaks, filters, and academy unlock progress from one retro dashboard.',
+                style: _academyHudStyle(
+                  palette: palette,
+                  size: 12.3,
+                  weight: FontWeight.w600,
+                  color: palette.text,
+                ),
+              ),
+            ],
+          );
+          final headerActions = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: compactHeader ? WrapAlignment.start : WrapAlignment.end,
+            children: <Widget>[
+              if (latest != null)
                 _academyTag(
                   palette: palette,
                   label: 'LATEST ${latest.toStringAsFixed(1)}%',
                   accent: palette.cyan,
                 ),
-                const SizedBox(width: 10),
-              ],
               _academyHudButton(
                 palette: palette,
                 icon: Icons.refresh_rounded,
                 label: 'RESET',
                 accent: palette.signal,
                 onTap: () {
-                  unawaited(onReset());
+                  unawaited(handleResetTap());
                 },
               ),
+              if (onClose != null)
+                _academyHudButton(
+                  palette: palette,
+                  icon: Icons.close_rounded,
+                  label: 'CLOSE',
+                  accent: palette.amber,
+                  onTap: onClose,
+                ),
             ],
-          ),
-          const SizedBox(height: 14),
-          buildSectionHeading('Session Metrics', palette.cyan),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _quizMetricChip('Score', _quizScore.toString(), palette.amber),
-              _quizMetricChip(
-                'Streak',
-                _quizStreak.toString(),
-                palette.emerald,
-              ),
-              _quizMetricChip(
-                'Best Streak',
-                _quizBestStreak.toString(),
-                palette.cyan,
-              ),
-              _quizMetricChip(
-                'Accuracy',
-                '${accuracy.toStringAsFixed(1)}%',
-                palette.signal,
-              ),
-              _quizMetricChip(
-                'Avg Lines/Day',
-                avgQuestionsAsked.toStringAsFixed(1),
-                Color.lerp(palette.cyan, palette.amber, 0.45)!,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          buildSectionHeading('Academy Progress', palette.amber),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              _quizMetricChip(
-                'Unlocked',
-                _quizAcademyBracketShortName(
-                  _quizAcademyProgress.highestUnlockedDifficulty(),
-                ),
-                palette.cyan,
-              ),
-              ...QuizDifficulty.values.map(
-                (difficulty) => _quizMetricChip(
-                  _quizAcademyBracketShortName(difficulty),
-                  '${_quizPerfectSessionsFor(difficulty)}/${_quizAcademyProgress.requiredPerfectSessions}',
-                  _quizDifficultyColor(difficulty),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          buildSectionHeading('Mode Filter', palette.cyan),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: QuizTrendFilter.values
-                .map(
-                  (entry) => buildFilterButton(
-                    label: _quizTrendFilterLabel(entry),
-                    selected: entry == filter,
-                    accent: palette.cyan,
-                    onTap: () => onFilterChanged(entry),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 12),
-          buildSectionHeading('Difficulty Filter', palette.amber),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: QuizStatsDifficultyFilter.values
-                .map(
-                  (entry) => buildFilterButton(
-                    label: _statsDifficultyFilterLabel(entry),
-                    selected: entry == difficultyFilter,
-                    accent: palette.amber,
-                    onTap: () => onDifficultyFilterChanged(entry),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 12),
-          buildSectionHeading('Window', palette.emerald),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: const <int?>[7, 30, 365, null]
-                .map(
-                  (entry) => buildFilterButton(
-                    label: entry == null
-                        ? 'Max'
-                        : entry == 7
-                        ? '1 Week'
-                        : entry == 30
-                        ? '1 Month'
-                        : '1 Year',
-                    selected: entry == days,
-                    accent: palette.emerald,
-                    onTap: () => onDaysChanged(entry),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 14),
-          if (recentKeys.isNotEmpty)
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: <Widget>[
-                _quizMetricChip(
-                  'Window Accuracy',
-                  '${windowAccuracy.toStringAsFixed(1)}%',
-                  palette.cyan,
-                ),
-                _quizMetricChip(
-                  'Attempts/Day',
-                  attemptsPerDay.toStringAsFixed(1),
-                  palette.emerald,
-                ),
-                _quizMetricChip(
-                  'Best Day',
-                  '$bestDayLabel (${bestDayAccuracy.toStringAsFixed(0)}%)',
-                  palette.amber,
-                ),
-              ],
-            ),
-          if (recentKeys.isNotEmpty) const SizedBox(height: 14),
-          if (series.isEmpty)
-            Text(
-              'Play sessions in this mode to build your accuracy trend.',
-              style: _academyHudStyle(
-                palette: palette,
-                color: palette.textMuted,
-                size: 11.6,
-                weight: FontWeight.w600,
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-              decoration: BoxDecoration(
-                color: palette.shell,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: palette.line, width: 2),
-              ),
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: 132,
-                    child: CustomPaint(
-                      painter: QuizAccuracyTrendPainter(
-                        accuracySeries: series,
-                        amountSeries: amountSeries,
-                        isDarkMode: isDark,
+              if (compactHeader) ...<Widget>[
+                headerInfo,
+                const SizedBox(height: 10),
+                headerActions,
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(child: headerInfo),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: headerActions,
                       ),
-                      child: const SizedBox.expand(),
                     ),
+                  ],
+                ),
+              const SizedBox(height: 14),
+              buildSectionHeading('Session Metrics', palette.cyan),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  _quizMetricChip(
+                    'Score',
+                    _quizScore.toString(),
+                    palette.amber,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Blue/green line: accuracy. Gold line: attempts. Use filters and date range above to compare progress.',
-                    style: _academyHudStyle(
-                      palette: palette,
-                      color: palette.textMuted,
-                      size: 10.8,
-                      weight: FontWeight.w600,
-                      letterSpacing: 0.18,
+                  _quizMetricChip(
+                    'Streak',
+                    _quizStreak.toString(),
+                    palette.emerald,
+                  ),
+                  _quizMetricChip(
+                    'Best Streak',
+                    _quizBestStreak.toString(),
+                    palette.cyan,
+                  ),
+                  _quizMetricChip(
+                    'Accuracy',
+                    '${accuracy.toStringAsFixed(1)}%',
+                    palette.signal,
+                  ),
+                  _quizMetricChip(
+                    'Avg Lines/Day',
+                    avgQuestionsAsked.toStringAsFixed(1),
+                    Color.lerp(palette.cyan, palette.amber, 0.45)!,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              buildSectionHeading('Academy Progress', palette.amber),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  _quizMetricChip(
+                    'Unlocked',
+                    _quizAcademyBracketShortName(
+                      _quizAcademyProgress.highestUnlockedDifficulty(),
+                    ),
+                    palette.cyan,
+                  ),
+                  ...QuizDifficulty.values.map(
+                    (difficulty) => _quizMetricChip(
+                      _quizAcademyBracketShortName(difficulty),
+                      '${_quizPerfectSessionsFor(difficulty)}/${_quizAcademyProgress.requiredPerfectSessions}',
+                      _quizDifficultyColor(difficulty),
                     ),
                   ),
                 ],
               ),
-            ),
-        ],
+              const SizedBox(height: 14),
+              buildSectionHeading('Mode Filter', palette.cyan),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: QuizTrendFilter.values
+                    .map(
+                      (entry) => buildFilterButton(
+                        label: _quizTrendFilterLabel(entry),
+                        selected: entry == filter,
+                        accent: palette.cyan,
+                        onTap: () => onFilterChanged(entry),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 12),
+              buildSectionHeading('Difficulty Filter', palette.amber),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: QuizStatsDifficultyFilter.values
+                    .map(
+                      (entry) => buildFilterButton(
+                        label: _statsDifficultyFilterLabel(entry),
+                        selected: entry == difficultyFilter,
+                        accent: palette.amber,
+                        onTap: () => onDifficultyFilterChanged(entry),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 12),
+              buildSectionHeading('Window', palette.emerald),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: const <int?>[7, 30, 365, null]
+                    .map(
+                      (entry) => buildFilterButton(
+                        label: entry == null
+                            ? 'Max'
+                            : entry == 7
+                            ? '1 Week'
+                            : entry == 30
+                            ? '1 Month'
+                            : '1 Year',
+                        selected: entry == days,
+                        accent: palette.emerald,
+                        onTap: () => onDaysChanged(entry),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 14),
+              if (recentKeys.isNotEmpty)
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: <Widget>[
+                    _quizMetricChip(
+                      'Window Accuracy',
+                      '${windowAccuracy.toStringAsFixed(1)}%',
+                      palette.cyan,
+                    ),
+                    _quizMetricChip(
+                      'Attempts/Day',
+                      attemptsPerDay.toStringAsFixed(1),
+                      palette.emerald,
+                    ),
+                    _quizMetricChip(
+                      'Best Day',
+                      '$bestDayLabel (${bestDayAccuracy.toStringAsFixed(0)}%)',
+                      palette.amber,
+                    ),
+                  ],
+                ),
+              if (recentKeys.isNotEmpty) const SizedBox(height: 14),
+              if (series.isEmpty)
+                Text(
+                  'Play sessions in this mode to build your accuracy trend.',
+                  style: _academyHudStyle(
+                    palette: palette,
+                    color: palette.textMuted,
+                    size: 11.6,
+                    weight: FontWeight.w600,
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                  decoration: BoxDecoration(
+                    color: palette.shell,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: palette.line, width: 2),
+                  ),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: 132,
+                        child: CustomPaint(
+                          painter: QuizAccuracyTrendPainter(
+                            accuracySeries: series,
+                            amountSeries: amountSeries,
+                            isDarkMode: isDark,
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Blue/green line: accuracy. Gold line: attempts. Use filters and date range above to compare progress.',
+                        style: _academyHudStyle(
+                          palette: palette,
+                          color: palette.textMuted,
+                          size: 10.8,
+                          weight: FontWeight.w600,
+                          letterSpacing: 0.18,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }

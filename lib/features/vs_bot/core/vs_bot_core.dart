@@ -633,11 +633,17 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     _VsBotArcadePalette arcade,
   ) {
     if (arcade.monochrome) {
+      final darkOrbColor = AppThemeProvider.monochromeBlueOrbColor(
+        isDark: arcade.isDark,
+      );
+      final lightOrbColor = AppThemeProvider.monochromeYellowOrbColor(
+        isDark: arcade.isDark,
+      );
       return _VsBotDifficultyPalette(
-        easy: arcade.text.withValues(alpha: 0.72),
-        medium: arcade.text.withValues(alpha: 0.84),
-        hard: arcade.text,
-        hardAura: arcade.line,
+        easy: darkOrbColor,
+        medium: Color.lerp(darkOrbColor, lightOrbColor, 0.56)!,
+        hard: lightOrbColor,
+        hardAura: Color.lerp(darkOrbColor, lightOrbColor, 0.76)!,
       );
     }
 
