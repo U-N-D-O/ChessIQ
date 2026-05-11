@@ -2356,10 +2356,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         ? shellAccent
         : Color.lerp(profileAccent, difficultyGlowAccent, 0.35)!;
     final avatarPanelPadding = compactLandscape
-      ? 4.0
-      : compact
-      ? 6.0
-      : 8.0;
+        ? 4.0
+        : compact
+        ? 6.0
+        : 8.0;
     final cardMaxWidth = layout.compactLandscape
         ? 292.0
         : layout.isLandscape
@@ -2517,8 +2517,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                                     style:
                                                         puzzleAcademyDisplayStyle(
                                                           palette: arcade.base,
-                                                          size:
-                                                              compact ? 32 : 38,
+                                                          size: compact
+                                                              ? 32
+                                                              : 38,
                                                           color: arcade.text,
                                                         ),
                                                   ),
@@ -2575,8 +2576,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                                     style:
                                                         puzzleAcademyDisplayStyle(
                                                           palette: arcade.base,
-                                                          size:
-                                                              compact ? 14 : 16,
+                                                          size: compact
+                                                              ? 14
+                                                              : 16,
                                                           color: Colors.white,
                                                           withGlow: true,
                                                         ),
@@ -2919,7 +2921,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         final showTierStatusText = !compactPhoneLayout || layout.isLandscape;
         final denseSelectorTiles = compactPhoneLayout || splitLandscapeControls;
         final compactSelectorTiles = compactPhoneLayout;
-        final compactSelectorVerticalPadding = layout.shortPortrait ? 6.0 : 10.0;
+        final compactSelectorVerticalPadding = layout.shortPortrait
+            ? 6.0
+            : 10.0;
         final selectorDotGap = layout.shortPortrait ? 6.0 : 12.0;
         final landscapeControlWidth = splitLandscapeControls
             ? (layout.compactLandscape
@@ -2929,7 +2933,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             : 0.0;
         final selectorActionHeight = splitLandscapeControls
             ? 48.0
-          : (compactPhoneLayout ? 48.0 : 56.0);
+            : (compactPhoneLayout ? 48.0 : 56.0);
         final baseSelectorViewportHeight = splitLandscapeControls
             ? cardViewportHeight + 8
             : layout.isLandscape
@@ -2968,7 +2972,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                ? 8
+                  ? 8
                   : 14,
               splitLandscapeControls
                   ? 14
@@ -2978,7 +2982,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                ? 10
+                  ? 10
                   : 16,
             ),
             child: Column(
@@ -3149,7 +3153,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                ? 8
+                  ? 8
                   : 14,
               splitLandscapeControls
                   ? 14
@@ -3159,7 +3163,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 8
                   : compactPhoneLayout
-                ? 10
+                  ? 10
                   : 16,
             ),
             child: Column(
@@ -3332,22 +3336,22 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                ? 12
+                  ? 12
                   : 18,
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                ? 10
+                  ? 10
                   : 18,
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                ? 12
+                  ? 12
                   : 18,
               splitLandscapeControls
                   ? 14
                   : compactPhoneLayout
-                ? 10
+                  ? 10
                   : 18,
             ),
             child: SizedBox(
@@ -3473,25 +3477,25 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     tightPortrait ? 12.0 : 16.0,
                     media.viewPadding.left + 10,
                   );
-                    final pageTopPadding = layout.isLandscape
+                  final pageTopPadding = layout.isLandscape
                       ? max(
-                        compactPhoneLayout ? 12.0 : 14.0,
-                        media.padding.top + 8,
-                      )
+                          compactPhoneLayout ? 12.0 : 14.0,
+                          media.padding.top + 8,
+                        )
                       : max(tightPortrait ? 4.0 : 6.0, media.padding.top);
                   final pageRightPadding = max(
                     tightPortrait ? 12.0 : 16.0,
                     media.viewPadding.right + 10,
                   );
-                    final pageBottomPadding = max(
+                  final pageBottomPadding = max(
                     compactPhoneLayout ? 14.0 : 18.0,
                     media.viewPadding.bottom + 10,
-                    );
+                  );
                   final portraitContentHeight = max(
                     0.0,
                     constraints.maxHeight - pageTopPadding - pageBottomPadding,
                   );
-                    final splitLandscapePanelHeight = splitLandscapeControls
+                  final splitLandscapePanelHeight = splitLandscapeControls
                       ? baseSelectorViewportHeight + 48.0
                       : 0.0;
 
@@ -3560,13 +3564,17 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   }
 
                   Widget buildSelectorPanel() {
-                    final panelHorizontalPadding = compactPhoneLayout ? 12.0 : 14.0;
+                    final panelHorizontalPadding = compactPhoneLayout
+                        ? 12.0
+                        : 14.0;
                     final panelVerticalPadding = splitLandscapeControls
                         ? 10.0
                         : compactPhoneLayout
                         ? compactSelectorVerticalPadding
                         : 14.0;
-                    final indicatorGap = splitLandscapeControls ? 8.0 : selectorDotGap;
+                    final indicatorGap = splitLandscapeControls
+                        ? 8.0
+                        : selectorDotGap;
 
                     return LayoutBuilder(
                       builder: (context, panelConstraints) {
@@ -3604,15 +3612,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: <Color>[
-                                          marqueeAccent.withValues(
-                                            alpha: 0.92,
-                                          ),
+                                          marqueeAccent.withValues(alpha: 0.92),
                                           arcade.crimson.withValues(
                                             alpha: 0.30,
                                           ),
-                                          Colors.black.withValues(
-                                            alpha: 0.12,
-                                          ),
+                                          Colors.black.withValues(alpha: 0.12),
                                         ],
                                       ),
                                     ),
@@ -3632,13 +3636,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: <Color>[
-                                          profileAccent.withValues(
-                                            alpha: 0.92,
-                                          ),
+                                          profileAccent.withValues(alpha: 0.92),
                                           arcade.cyan.withValues(alpha: 0.28),
-                                          Colors.black.withValues(
-                                            alpha: 0.12,
-                                          ),
+                                          Colors.black.withValues(alpha: 0.12),
                                         ],
                                       ),
                                     ),
@@ -3756,7 +3756,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         }
 
                         return Container(
-                          key: const ValueKey<String>('bot_setup_selector_panel'),
+                          key: const ValueKey<String>(
+                            'bot_setup_selector_panel',
+                          ),
                           decoration: _vsBotArcadePanelDecoration(
                             palette: arcade,
                             accent: marqueeAccent,
@@ -3786,44 +3788,47 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                 child: Wrap(
                                   spacing: 6,
                                   runSpacing: 6,
-                                  children: List.generate(_botCharacters.length, (
-                                    index,
-                                  ) {
-                                    final bot = _botCharacters[index];
-                                    final active = index == _botSetupSelectedIndex;
-                                    final unlocked = _isBotUnlocked(bot);
-                                    final cleared = _isBotFullyCleared(bot);
-                                    final dotColor = active
-                                        ? marqueeAccent
-                                        : cleared
-                                        ? arcade.victory
-                                        : unlocked
-                                        ? arcade.text.withValues(alpha: 0.44)
-                                        : arcade.text.withValues(alpha: 0.18);
-                                    return AnimatedContainer(
-                                      duration: puzzleAcademyMotionDuration(
-                                        reducedEffects: arcade.reducedEffects,
-                                        milliseconds: 220,
-                                      ),
-                                      curve: puzzleAcademyMotionCurve(
-                                        reducedEffects: arcade.reducedEffects,
-                                      ),
-                                      width: active ? 22 : 8,
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                        borderRadius:
-                                            BorderRadius.circular(999),
-                                        color: dotColor,
-                                        boxShadow: active
-                                            ? puzzleAcademySurfaceGlow(
-                                                dotColor,
-                                                monochrome: arcade.monochrome,
-                                                strength: 0.26,
-                                              )
-                                            : null,
-                                      ),
-                                    );
-                                  }),
+                                  children: List.generate(
+                                    _botCharacters.length,
+                                    (index) {
+                                      final bot = _botCharacters[index];
+                                      final active =
+                                          index == _botSetupSelectedIndex;
+                                      final unlocked = _isBotUnlocked(bot);
+                                      final cleared = _isBotFullyCleared(bot);
+                                      final dotColor = active
+                                          ? marqueeAccent
+                                          : cleared
+                                          ? arcade.victory
+                                          : unlocked
+                                          ? arcade.text.withValues(alpha: 0.44)
+                                          : arcade.text.withValues(alpha: 0.18);
+                                      return AnimatedContainer(
+                                        duration: puzzleAcademyMotionDuration(
+                                          reducedEffects: arcade.reducedEffects,
+                                          milliseconds: 220,
+                                        ),
+                                        curve: puzzleAcademyMotionCurve(
+                                          reducedEffects: arcade.reducedEffects,
+                                        ),
+                                        width: active ? 22 : 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                          color: dotColor,
+                                          boxShadow: active
+                                              ? puzzleAcademySurfaceGlow(
+                                                  dotColor,
+                                                  monochrome: arcade.monochrome,
+                                                  strength: 0.26,
+                                                )
+                                              : null,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ],
@@ -3889,7 +3894,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                                               ),
                                               const Spacer(),
                                               buildChromeButton(
-                                                onPressed: () => _openSettings(),
+                                                onPressed: () =>
+                                                    _openSettings(),
                                                 icon: Icons.settings_outlined,
                                                 tooltip: 'Settings',
                                                 accent: arcade.amber,

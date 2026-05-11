@@ -314,20 +314,20 @@ void main() {
       );
 
       expect(cardFinder, findsOneWidget);
-        expect(avatarFinder, findsOneWidget);
+      expect(avatarFinder, findsOneWidget);
       expect(nameFinder, findsOneWidget);
       expect(startButtonFinder, findsOneWidget);
       expect(find.textContaining('Cabinet cleared.'), findsNothing);
 
       final cardRect = tester.getRect(cardFinder);
-        final avatarRect = tester.getRect(avatarFinder);
+      final avatarRect = tester.getRect(avatarFinder);
       final nameRect = tester.getRect(nameFinder);
       final startButtonRect = tester.getRect(startButtonFinder);
       final bottomGapBelowName = cardRect.bottom - nameRect.bottom;
-        final avatarTopGap = avatarRect.top - cardRect.top;
+      final avatarTopGap = avatarRect.top - cardRect.top;
 
-        expect(avatarRect.width, greaterThanOrEqualTo(180));
-        expect(avatarTopGap, lessThan(cardRect.height * 0.25));
+      expect(avatarRect.width, greaterThanOrEqualTo(180));
+      expect(avatarTopGap, lessThan(cardRect.height * 0.25));
       expect(bottomGapBelowName, lessThanOrEqualTo(32));
       expect(startButtonRect.bottom, lessThanOrEqualTo(1024));
       expect(tester.takeException(), isNull);
