@@ -211,6 +211,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const int _defaultMultiPvCount = 1;
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
   static const String _storeStateKey = 'store_state_v1';
+  static const String _storeIntegrityScope = 'economy_store';
   static const String _storeVsBotMatchStartCountKey = 'vsBotMatchStartCount';
   static const String _cleanPlayPassTitle = 'Clean Play No-Ad Pass';
   static const String _cleanPlayPassBenefit =
@@ -3651,16 +3652,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     try {
       await context.read<EconomyProvider>().refresh(notify: false);
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_storeStateKey);
-      if (raw == null || raw.isEmpty) {
-        _engineDepth = _engineDepth.clamp(10, _maxDepthAllowed);
-        _multiPvCount = _multiPvCount.clamp(0, _maxSuggestionsAllowed);
-        return;
-      }
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return;
-      }
+      final decoded = _readStorePayload(prefs);
 
       final tier = decoded['depthTier'];
       final extraSuggestions = decoded['extraSuggestions'];
@@ -3729,10 +3721,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  Map<String, dynamic> _readStorePayload(SharedPreferences prefs) {
+    final signed = LocalIntegrityService.decodeJson(
+      prefs.getString(_storeStateKey),
+      scope: _storeIntegrityScope,
+    );
+    if (signed.data == null || (signed.isSigned && !signed.isValid)) {
+      return <String, dynamic>{};
+    }
+    return signed.data!;
+  }
+
   Future<void> _saveStoreState() async {
     final economy = context.read<EconomyProvider>();
     final prefs = await SharedPreferences.getInstance();
-    final payload = {
+    final payload = <String, dynamic>{
+      ..._readStorePayload(prefs),
       'coins': economy.coins,
       'depthTier': _depthTier,
       'extraSuggestions': _extraSuggestionPurchases,
@@ -3750,7 +3754,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'academyTuitionPassOwned': _academyTuitionPassOwned,
       _storeVsBotMatchStartCountKey: _vsBotMatchStartCount,
     };
-    await prefs.setString(_storeStateKey, jsonEncode(payload));
+    await prefs.setString(
+      _storeStateKey,
+      LocalIntegrityService.wrapJson(payload, scope: _storeIntegrityScope),
+    );
   }
 
   String _storeRewardAdCountdownLabel(Duration remaining) {

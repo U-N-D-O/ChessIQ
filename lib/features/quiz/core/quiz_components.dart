@@ -231,6 +231,42 @@ abstract class _QuizComponents extends _QuizScreen {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compactHeader = constraints.maxWidth < 520;
+          final closeButton = onClose == null
+              ? null
+              : Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onClose,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Ink(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          palette.amber.withValues(alpha: 0.08),
+                          palette.shell,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: palette.amber.withValues(alpha: 0.48),
+                          width: 2,
+                        ),
+                        boxShadow: <BoxShadow>[
+                          ...puzzleAcademyRoundedDropShadow(
+                            palette.shadow.withValues(alpha: 0.22),
+                            blurRadius: 7,
+                            offsetY: 3,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: palette.amber,
+                      ),
+                    ),
+                  ),
+                );
           final headerInfo = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -275,38 +311,29 @@ abstract class _QuizComponents extends _QuizScreen {
                   unawaited(handleResetTap());
                 },
               ),
-              if (onClose != null)
-                _academyHudButton(
-                  palette: palette,
-                  icon: Icons.close_rounded,
-                  label: 'CLOSE',
-                  accent: palette.amber,
-                  onTap: onClose,
-                ),
             ],
           );
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              if (compactHeader) ...<Widget>[
-                headerInfo,
-                const SizedBox(height: 10),
-                headerActions,
-              ] else
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(child: headerInfo),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(child: headerInfo),
+                  if (closeButton != null) ...<Widget>[
                     const SizedBox(width: 12),
-                    Flexible(
-                      child: Align(
-                        alignment: Alignment.topRight,
-                        child: headerActions,
-                      ),
-                    ),
+                    closeButton,
                   ],
-                ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: compactHeader
+                    ? Alignment.centerLeft
+                    : Alignment.centerRight,
+                child: headerActions,
+              ),
               const SizedBox(height: 14),
               buildSectionHeading('Session Metrics', palette.cyan),
               const SizedBox(height: 8),

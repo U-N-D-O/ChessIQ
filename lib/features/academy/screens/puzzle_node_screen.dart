@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
+import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
@@ -201,6 +201,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
   static const String _storeStateKey = 'store_state_v1';
+  static const String _storeIntegrityScope = 'economy_store';
   static const String _academyTuitionPassKey = 'academyTuitionPassOwned';
   static const int _boardSfxPlayerPoolSize = 4;
 
@@ -1585,11 +1586,14 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     if (raw == null || raw.isEmpty) {
       return false;
     }
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
+    final signed = LocalIntegrityService.decodeJson(
+      raw,
+      scope: _storeIntegrityScope,
+    );
+    if (signed.data == null || (signed.isSigned && !signed.isValid)) {
       return false;
     }
-    final owned = decoded[_academyTuitionPassKey];
+    final owned = signed.data![_academyTuitionPassKey];
     return owned == true;
   }
 

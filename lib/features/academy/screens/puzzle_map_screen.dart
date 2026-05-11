@@ -7,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:chessiq/core/constants/legal_links.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
+import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/services/scoreboard_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
@@ -266,6 +267,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
   static const String _storeStateKey = 'store_state_v1';
+  static const String _storeIntegrityScope = 'economy_store';
   static const String _academyTuitionPassKey = 'academyTuitionPassOwned';
   static const String _quizStatsStorageKey = 'quiz_stats_v1';
   static const Set<String> _academyHubShinyCardIds = <String>{'quiz', 'exams'};
@@ -1092,11 +1094,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     if (raw == null || raw.isEmpty) {
       return false;
     }
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
+    final signed = LocalIntegrityService.decodeJson(
+      raw,
+      scope: _storeIntegrityScope,
+    );
+    if (signed.data == null || (signed.isSigned && !signed.isValid)) {
       return false;
     }
-    final owned = decoded[_academyTuitionPassKey];
+    final owned = signed.data![_academyTuitionPassKey];
     return owned == true;
   }
 
