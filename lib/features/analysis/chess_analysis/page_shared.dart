@@ -19,34 +19,41 @@ enum _MenuSparkVisual { pixel, shard, sprite }
 enum _MenuBackdropSpriteRole { king, queen, rook, bishop, knight, pawn }
 
 class _MenuSparkParticle {
+  final Offset origin;
   Offset position;
   Offset velocity;
   double age = 0.0;
   double rotation;
   final double angularVelocity;
   final double life;
+  final double maxTravelDistance;
   final double size;
   final _MenuSparkVisual visual;
   final _MenuAccentSlot accent;
   final _MenuBackdropSpriteRole? spriteRole;
+  final PieceThemeMode? spriteTheme;
   final bool useDarkSprite;
   final bool mirrorX;
 
   _MenuSparkParticle({
+    required this.origin,
     required this.position,
     required this.velocity,
     required this.life,
+    required this.maxTravelDistance,
     required this.size,
     required this.visual,
     required this.accent,
     required this.rotation,
     required this.angularVelocity,
     this.spriteRole,
+    this.spriteTheme,
     this.useDarkSprite = false,
     this.mirrorX = false,
   }) : assert(
-         visual != _MenuSparkVisual.sprite || spriteRole != null,
-         'Sprite particles require a sprite role.',
+         visual != _MenuSparkVisual.sprite ||
+             (spriteRole != null && spriteTheme != null),
+         'Sprite particles require a sprite role and theme.',
        );
 
   double get progress {
@@ -68,9 +75,8 @@ class _MenuBackdropSpritePlacement {
     required this.driftRadius,
     required this.driftSpeed,
     required this.rotation,
-    this.useDarkSprite = false,
-    this.mirrorX = false,
-  });
+  }) : useDarkSprite = false,
+       mirrorX = false;
 
   final Alignment alignment;
   final _MenuBackdropSpriteRole role;
@@ -97,7 +103,17 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     required this.crimson,
     required this.lineColor,
     required this.reducedEffects,
+    required this.monochrome,
   });
+
+  static final List<AppBoardPalette> _checkerboardPalettes =
+      List<AppBoardPalette>.generate(
+        AppThemeProvider.boardThemeCount,
+        AppThemeProvider.boardPaletteForIndex,
+        growable: false,
+      );
+  static const int _checkerPaletteBandRows = 8;
+  static const int _checkerWorldRowOffset = 2048;
 
   final double time;
   final double impact;
@@ -109,6 +125,7 @@ class _MenuBlastBackdropPainter extends CustomPainter {
   final Color crimson;
   final Color lineColor;
   final bool reducedEffects;
+  final bool monochrome;
 
   double _unit(double value) {
     if (value <= 0.0) return 0.0;
@@ -123,46 +140,106 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     );
   }
 
-  void _paintCheckerBurst(
-    Canvas canvas,
-    Offset center,
-    double innerRadius,
-    double outerRadius,
-  ) {
-    final rayCount = reducedEffects ? 12 : 18;
-    final delta = (2 * pi) / rayCount;
-    final rotation = time * 0.18;
-    final colors = <Color>[cyan, amber, pink, crimson];
+  double _floorYForProgress(Size size, double horizonY, double progress) {
+    final eased = pow(progress.clamp(0.0, 1.0), 2.16).toDouble();
+    return ui.lerpDouble(
+      horizonY + (reducedEffects ? 16.0 : 12.0),
+      size.height * 1.02,
+      eased,
+    )!;
+  }
 
-    for (var index = 0; index < rayCount; index++) {
-      final startAngle = rotation + index * delta;
-      final endAngle = startAngle + delta * 0.58;
-      final sweepPulse = (sin(time * 0.9 + index * 0.6) + 1.0) * 0.5;
-      final burstOuter =
-          outerRadius * (0.90 + sweepPulse * 0.10 + impact * 0.12);
-      final color = colors[index % colors.length].withValues(
-        alpha: _unit((reducedEffects ? 0.04 : 0.08) + impact * 0.05),
-      );
-      final path = Path()
-        ..moveTo(
-          center.dx + cos(startAngle) * innerRadius,
-          center.dy + sin(startAngle) * innerRadius,
-        )
-        ..lineTo(
-          center.dx + cos(startAngle) * burstOuter,
-          center.dy + sin(startAngle) * burstOuter,
-        )
-        ..lineTo(
-          center.dx + cos(endAngle) * burstOuter,
-          center.dy + sin(endAngle) * burstOuter,
-        )
-        ..lineTo(
-          center.dx + cos(endAngle) * (innerRadius * 1.06),
-          center.dy + sin(endAngle) * (innerRadius * 1.06),
-        )
-        ..close();
-      canvas.drawPath(path, Paint()..color = color);
+  double _floorHalfWidthForProgress(
+    Size size,
+    double outerRadius,
+    double progress,
+  ) {
+    final eased = pow(progress.clamp(0.0, 1.0), 0.92).toDouble();
+    return ui.lerpDouble(outerRadius * 0.16, size.width * 0.58, eased)!;
+  }
+
+  double _checkerHash(int a, int b, int c) {
+    final value =
+        sin(
+          (a + 1) * 127.1 + (b + 1) * 311.7 + (c + 1) * 74.7 + 0.61803398875,
+        ) *
+        43758.5453123;
+    return value - value.floorToDouble();
+  }
+
+  double get _checkerStartProgress => reducedEffects ? 0.11 : 0.08;
+
+  double get _checkerTileCapProgress => reducedEffects ? 0.20 : 0.16;
+
+  int _checkerPaletteIndexForBand(int bandIndex, int salt) {
+    return (_checkerHash(bandIndex, salt, bandIndex ^ salt) *
+            _checkerboardPalettes.length)
+        .floor()
+        .clamp(0, _checkerboardPalettes.length - 1);
+  }
+
+  double _checkerTileNoise(int row, int column) {
+    final wave = sin((row + 1) * 12.9898 + (column + 1) * 78.233 + 0.915);
+    return (wave + 1.0) * 0.5;
+  }
+
+  double _checkerTileVisibility(int row, int column) {
+    if (reducedEffects) {
+      return 1.0;
     }
+    final seed = _checkerTileNoise(row, column);
+    if (seed < 0.80) {
+      return 1.0;
+    }
+    final blinkTime = time * (0.32 + seed * 0.20) + seed * 4.0;
+    final epoch = blinkTime.floor();
+    final phase = blinkTime - epoch;
+    final currentState = _checkerHash(row, column, epoch) > 0.36 ? 1.0 : 0.0;
+    final nextState = _checkerHash(row, column, epoch + 1) > 0.36 ? 1.0 : 0.0;
+    final transition = Curves.easeInOut.transform(
+      ((phase - 0.76) / 0.24).clamp(0.0, 1.0),
+    );
+    return ui.lerpDouble(currentState, nextState, transition)!;
+  }
+
+  Color _checkerTileColor({
+    required int worldRow,
+    required bool lightTile,
+    required double depthProgress,
+  }) {
+    final bandIndex = worldRow ~/ _checkerPaletteBandRows;
+    final darkPalette =
+        _checkerboardPalettes[_checkerPaletteIndexForBand(bandIndex, 17)];
+    var lightPaletteIndex = _checkerPaletteIndexForBand(bandIndex, 53);
+    if (lightPaletteIndex == _checkerPaletteIndexForBand(bandIndex, 17)) {
+      lightPaletteIndex =
+          (lightPaletteIndex + 1 + (bandIndex % _checkerboardPalettes.length)) %
+          _checkerboardPalettes.length;
+    }
+    final lightPalette = _checkerboardPalettes[lightPaletteIndex];
+    final baseColor = monochrome
+        ? Color.lerp(lineColor, Colors.white, lightTile ? 0.16 : 0.02)!
+        : (lightTile ? lightPalette.lightSquare : darkPalette.darkSquare);
+    final themedColor = monochrome
+        ? baseColor
+        : Color.alphaBlend(
+            lineColor.withValues(alpha: lightTile ? 0.04 : 0.07),
+            baseColor,
+          );
+    final shadedColor = Color.alphaBlend(
+      Colors.black.withValues(
+        alpha: lightTile
+            ? ui.lerpDouble(0.06, 0.16, 1.0 - depthProgress)!
+            : ui.lerpDouble(0.10, 0.24, 1.0 - depthProgress)!,
+      ),
+      themedColor,
+    );
+    final alpha = ui.lerpDouble(
+      reducedEffects ? 0.10 : 0.14,
+      reducedEffects ? 0.22 : 0.38,
+      depthProgress,
+    )!;
+    return shadedColor.withValues(alpha: _unit(alpha + impact * 0.05));
   }
 
   void _paintSteppedSquareRing(
@@ -296,41 +373,189 @@ class _MenuBlastBackdropPainter extends CustomPainter {
         const <double>[0.0, 0.5, 1.0],
       );
 
-    final laneCount = reducedEffects ? 7 : 11;
-    for (var lane = 0; lane < laneCount; lane++) {
-      final t = laneCount == 1 ? 0.5 : lane / (laneCount - 1);
-      final normalized = t - 0.5;
-      final topX = center.dx + normalized * outerRadius * 0.34;
-      final controlX = center.dx + normalized * outerRadius * 0.82;
-      final bottomX = center.dx + normalized * size.width * 1.22;
-      final controlY = ui.lerpDouble(horizonY, size.height, 0.54)!;
-      final path = Path()
-        ..moveTo(topX, horizonY)
-        ..quadraticBezierTo(controlX, controlY, bottomX, size.height);
-      canvas.drawPath(path, gridPaint);
-    }
+    final tileMotion = time * (reducedEffects ? 0.16 : 0.24);
+    final worldRowBase = tileMotion.floor();
+    final phase = tileMotion - worldRowBase;
+    const columnCount = 7;
+    final visibleRowCount = reducedEffects ? 9 : 12;
+    final capStartY = _floorYForProgress(size, horizonY, _checkerStartProgress);
+    final capStartHalfWidth = _floorHalfWidthForProgress(
+      size,
+      outerRadius,
+      _checkerStartProgress,
+    );
 
-    final rowCount = reducedEffects ? 4 : 6;
-    for (var row = 0; row < rowCount; row++) {
-      final progress = (row + 1) / rowCount;
-      final eased = progress * progress;
-      final y = ui.lerpDouble(horizonY + 14, size.height * 0.98, eased)!;
-      final halfWidth = ui.lerpDouble(
-        outerRadius * 0.18,
-        size.width * 0.52,
-        eased,
+    final tileCapY = _floorYForProgress(
+      size,
+      horizonY,
+      _checkerTileCapProgress,
+    );
+    final tileCapHalfWidth = _floorHalfWidthForProgress(
+      size,
+      outerRadius,
+      _checkerTileCapProgress,
+    );
+    final tileRowProgresses = <double>[_checkerTileCapProgress];
+    final tileRowYs = <double>[tileCapY];
+    final tileRowHalfWidths = <double>[tileCapHalfWidth];
+
+    for (var row = 1; row <= visibleRowCount + 1; row++) {
+      final progress = ui.lerpDouble(
+        _checkerTileCapProgress,
+        1.0,
+        ((row - 1 + phase) / (visibleRowCount + 1)).clamp(0.0, 1.0),
       )!;
-      canvas.drawLine(
-        Offset(center.dx - halfWidth, y),
-        Offset(center.dx + halfWidth, y),
-        gridPaint,
+      if (progress >= 1.0) {
+        continue;
+      }
+      tileRowProgresses.add(progress);
+      tileRowYs.add(_floorYForProgress(size, horizonY, progress));
+      tileRowHalfWidths.add(
+        _floorHalfWidthForProgress(size, outerRadius, progress),
       );
     }
+
+    double exitRowY;
+    double exitRowHalfWidth;
+    double extraExitRowY;
+    double extraExitRowHalfWidth;
+    if (tileRowHalfWidths.length >= 2 && tileRowYs.length >= 2) {
+      final lastIndex = tileRowHalfWidths.length - 1;
+      final lastHalfWidth = tileRowHalfWidths[lastIndex];
+      final previousHalfWidth = tileRowHalfWidths[lastIndex - 1];
+      final lastY = tileRowYs[lastIndex];
+      final previousY = tileRowYs[lastIndex - 1];
+      final lastSegmentHeight = max(1.0, lastY - previousY);
+      final lastHalfWidthDelta = lastHalfWidth - previousHalfWidth;
+      exitRowY = lastY + lastSegmentHeight;
+      exitRowHalfWidth = max(lastHalfWidth, lastHalfWidth + lastHalfWidthDelta);
+      extraExitRowY = exitRowY + lastSegmentHeight;
+      extraExitRowHalfWidth = max(
+        exitRowHalfWidth,
+        exitRowHalfWidth + lastHalfWidthDelta,
+      );
+    } else {
+      exitRowY = size.height * 1.02;
+      exitRowHalfWidth = _floorHalfWidthForProgress(size, outerRadius, 1.0);
+      extraExitRowY = exitRowY + size.height * 0.12;
+      extraExitRowHalfWidth = exitRowHalfWidth;
+    }
+    tileRowProgresses.add(1.0);
+    tileRowYs.add(exitRowY);
+    tileRowHalfWidths.add(exitRowHalfWidth);
+    tileRowProgresses.add(1.0);
+    tileRowYs.add(extraExitRowY);
+    tileRowHalfWidths.add(extraExitRowHalfWidth);
+
+    final floorMask = Path()
+      ..moveTo(center.dx - tileCapHalfWidth, tileCapY)
+      ..lineTo(center.dx + tileCapHalfWidth, tileCapY)
+      ..lineTo(size.width + 24, size.height + 24)
+      ..lineTo(-24, size.height + 24)
+      ..close();
+    final floorFillPaint = Paint()
+      ..shader = ui.Gradient.linear(
+        Offset(0, tileCapY),
+        Offset(0, size.height),
+        <Color>[
+          lineColor.withValues(alpha: reducedEffects ? 0.03 : 0.06),
+          lineColor.withValues(alpha: reducedEffects ? 0.08 : 0.14),
+          Colors.black.withValues(alpha: reducedEffects ? 0.10 : 0.18),
+        ],
+        const <double>[0.0, 0.35, 1.0],
+      );
+    final floorCapPaint = Paint()
+      ..shader = ui.Gradient.linear(
+        Offset(0, capStartY),
+        Offset(0, tileCapY),
+        <Color>[
+          lineColor.withValues(alpha: reducedEffects ? 0.02 : 0.05),
+          Colors.black.withValues(alpha: reducedEffects ? 0.08 : 0.14),
+          Colors.black.withValues(alpha: reducedEffects ? 0.12 : 0.18),
+        ],
+        const <double>[0.0, 0.55, 1.0],
+      );
 
     canvas.drawRect(
       Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
       glowPaint,
     );
+
+    final floorCapPath = Path()
+      ..moveTo(center.dx - capStartHalfWidth, capStartY)
+      ..lineTo(center.dx + capStartHalfWidth, capStartY)
+      ..lineTo(center.dx + tileCapHalfWidth, tileCapY)
+      ..lineTo(center.dx - tileCapHalfWidth, tileCapY)
+      ..close();
+    canvas.drawPath(floorCapPath, floorCapPaint);
+
+    canvas.save();
+    canvas.clipPath(floorMask);
+    canvas.drawPath(floorMask, floorFillPaint);
+
+    for (var row = 0; row < tileRowYs.length - 1; row++) {
+      final topY = tileRowYs[row];
+      final bottomY = tileRowYs[row + 1];
+      if (bottomY - topY <= 0.6) {
+        continue;
+      }
+      final topHalfWidth = tileRowHalfWidths[row];
+      final bottomHalfWidth = tileRowHalfWidths[row + 1];
+      final worldRow = _checkerWorldRowOffset + worldRowBase - row;
+      final depthProgress =
+          ((tileRowProgresses[row] + tileRowProgresses[row + 1]) * 0.5).clamp(
+            0.0,
+            1.0,
+          );
+
+      for (var column = 0; column < columnCount; column++) {
+        final leftT = (column / columnCount) * 2 - 1;
+        final rightT = ((column + 1) / columnCount) * 2 - 1;
+        final tilePath = Path()
+          ..moveTo(center.dx + leftT * topHalfWidth, topY)
+          ..lineTo(center.dx + rightT * topHalfWidth, topY)
+          ..lineTo(center.dx + rightT * bottomHalfWidth, bottomY)
+          ..lineTo(center.dx + leftT * bottomHalfWidth, bottomY)
+          ..close();
+        final tileVisibility = _checkerTileVisibility(worldRow, column);
+        if (tileVisibility <= 0.0) {
+          continue;
+        }
+
+        final baseTileColor = _checkerTileColor(
+          worldRow: worldRow,
+          lightTile: (worldRow + column).isEven,
+          depthProgress: depthProgress,
+        );
+        final tileColor = baseTileColor.withValues(
+          alpha: baseTileColor.a * tileVisibility,
+        );
+        canvas.drawPath(tilePath, Paint()..color = tileColor);
+      }
+    }
+
+    for (var row = 0; row < tileRowYs.length; row++) {
+      canvas.drawLine(
+        Offset(center.dx - tileRowHalfWidths[row], tileRowYs[row]),
+        Offset(center.dx + tileRowHalfWidths[row], tileRowYs[row]),
+        gridPaint,
+      );
+    }
+
+    for (var lane = 0; lane <= columnCount; lane++) {
+      final t = lane / columnCount;
+      final normalized = t * 2 - 1;
+      final path = Path()
+        ..moveTo(center.dx + normalized * tileCapHalfWidth, tileCapY);
+      for (var row = 0; row < tileRowYs.length; row++) {
+        path.lineTo(
+          center.dx + normalized * tileRowHalfWidths[row],
+          tileRowYs[row],
+        );
+      }
+      canvas.drawPath(path, gridPaint);
+    }
+    canvas.restore();
 
     if (!reducedEffects) {
       canvas.drawLine(
@@ -505,8 +730,6 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     _paintPerspectiveGrid(canvas, size, center, outerRadius);
     _paintAmbientGlitchStrips(canvas, size);
 
-    _paintCheckerBurst(canvas, center, innerRadius, outerRadius);
-
     for (var ring = 0; ring < (reducedEffects ? 1 : 2); ring++) {
       final progress = ((time * (0.16 + ring * 0.05)) + ring * 0.33) % 1.0;
       final extent = ui.lerpDouble(
@@ -555,7 +778,8 @@ class _MenuBlastBackdropPainter extends CustomPainter {
         old.pink != pink ||
         old.crimson != crimson ||
         old.lineColor != lineColor ||
-        old.reducedEffects != reducedEffects;
+        old.reducedEffects != reducedEffects ||
+        old.monochrome != monochrome;
   }
 }
 

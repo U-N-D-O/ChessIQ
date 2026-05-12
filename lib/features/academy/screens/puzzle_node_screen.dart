@@ -842,7 +842,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final isWhite = color == chess.Color.WHITE;
     final options = <({String value, String label, String assetId})>[
       (value: 'q', label: 'Queen', assetId: 'q_${isWhite ? 'w' : 'b'}'),
-      (value: 'r', label: 'Rook', assetId: 't_${isWhite ? 'w' : 'b'}'),
+      (value: 'r', label: 'Rook', assetId: 'r_${isWhite ? 'w' : 'b'}'),
       (value: 'b', label: 'Bishop', assetId: 'b_${isWhite ? 'w' : 'b'}'),
       (value: 'n', label: 'Knight', assetId: 'n_${isWhite ? 'w' : 'b'}'),
     ];
@@ -2735,7 +2735,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final fenType = _pieceTypeFenChar(piece.type);
     final assetType = switch (fenType) {
       'p' => 'p',
-      'r' => 't',
+      'r' => 'r',
       'n' => 'n',
       'b' => 'b',
       'q' => 'q',

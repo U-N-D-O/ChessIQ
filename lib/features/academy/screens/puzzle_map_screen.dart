@@ -1992,7 +1992,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
             alignment: Alignment.center,
             child: GestureDetector(
               key: const ValueKey<String>('academy_hub_logo'),
-              onTap: widget.onShowCredits,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -4249,7 +4248,6 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
-            onTap: widget.onShowCredits,
             child: Image.asset(
               'assets/ChessIQ.png',
               width: compact ? 58 : 72,

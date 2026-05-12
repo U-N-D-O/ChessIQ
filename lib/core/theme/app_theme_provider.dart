@@ -290,14 +290,15 @@ class AppThemeProvider extends ChangeNotifier {
   }
 
   static String pieceAssetForIndex(int pieceThemeIndex, String piece) {
+    final assetPiece = piece.replaceFirst(RegExp(r'^t(?=_)'), 'r');
     if ((pieceThemeIndex == 1 ||
             pieceThemeIndex == 2 ||
             pieceThemeIndex == 3 ||
             pieceThemeIndex == 5) &&
-        piece.endsWith('_b')) {
-      return piece.replaceFirst(RegExp(r'_b$'), '_w');
+        assetPiece.endsWith('_b')) {
+      return assetPiece.replaceFirst(RegExp(r'_b$'), '_w');
     }
-    return piece;
+    return assetPiece;
   }
 
   static Color monochromeBlueOrbColor({required bool isDark}) {

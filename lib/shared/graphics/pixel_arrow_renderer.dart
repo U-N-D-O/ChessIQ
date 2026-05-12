@@ -26,6 +26,7 @@ class PixelArrowRenderer {
     double baseFadeDistance = 0.0,
     double baseFadeOpacity = 0.40,
     double alphaScale = 1.0,
+    double knightTurnedHeadScale = 1.0,
     bool animatePulse = false,
     double progress = 0.0,
   }) {
@@ -45,6 +46,9 @@ class PixelArrowRenderer {
       direction,
       headDirection,
     );
+    final turnedKnightHeadScale = headRotationAngle == 0.0
+        ? 1.0
+        : knightTurnedHeadScale;
     final headSprite = _headSprites[headDirection];
     final diagonalLineInflate = headDirection.isDiagonal
         ? pixelSize * 0.125
@@ -85,6 +89,7 @@ class PixelArrowRenderer {
       unit: unit,
       direction: headDirection,
       headSprite: headSprite,
+      headScaleMultiplier: turnedKnightHeadScale,
     );
     final shaftCells = _rasterizeLine(
       start: snappedStart,
@@ -283,6 +288,7 @@ class PixelArrowRenderer {
         direction: headDirection,
         rotationAngle: headRotationAngle,
         headSprite: headSprite,
+        headScaleMultiplier: turnedKnightHeadScale,
         color: usesPreviewGradient
             ? previewTipColor.withValues(alpha: alphaScale)
             : headTintColor,
@@ -466,6 +472,7 @@ class PixelArrowRenderer {
     required Offset unit,
     required _PixelArrowHeadDirection direction,
     required _PixelArrowHeadSprite? headSprite,
+    required double headScaleMultiplier,
   }) {
     if (headSprite == null) {
       return end;
@@ -473,7 +480,12 @@ class PixelArrowRenderer {
 
     final baseDistance =
         headSprite.tipToBackDistance *
-        _headScale(direction, headSprite, pixelSize);
+        _headScale(
+          direction,
+          headSprite,
+          pixelSize,
+          headScaleMultiplier: headScaleMultiplier,
+        );
     final totalLength = (end - start).distance;
     final isShortDiagonal =
         direction.isDiagonal && totalLength <= pixelSize * 20.0;
@@ -488,11 +500,13 @@ class PixelArrowRenderer {
   static double _headScale(
     _PixelArrowHeadDirection direction,
     _PixelArrowHeadSprite headSprite,
-    double pixelSize,
-  ) {
+    double pixelSize, {
+    required double headScaleMultiplier,
+  }) {
     final desiredHeadCells = direction.isDiagonal ? 3.9 : 4.4;
-    return (pixelSize * desiredHeadCells) /
-        max(1.0, headSprite.tipToBackDistance);
+    return ((pixelSize * desiredHeadCells) /
+            max(1.0, headSprite.tipToBackDistance)) *
+        max(0.01, headScaleMultiplier);
   }
 
   static List<Point<int>> _rasterizeLine({
@@ -550,9 +564,15 @@ class PixelArrowRenderer {
     required _PixelArrowHeadDirection direction,
     required double rotationAngle,
     required _PixelArrowHeadSprite headSprite,
+    required double headScaleMultiplier,
     required Color color,
   }) {
-    final scale = _headScale(direction, headSprite, pixelSize);
+    final scale = _headScale(
+      direction,
+      headSprite,
+      pixelSize,
+      headScaleMultiplier: headScaleMultiplier,
+    );
     final destinationRect = Rect.fromLTWH(
       -(headSprite.tip.dx * scale),
       -(headSprite.tip.dy * scale),

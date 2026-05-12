@@ -111,7 +111,6 @@ class MoveQualityClassificationContext {
     this.analyzedLegalMoveCount,
     this.insideOpeningExemption = false,
     this.confidence = MoveQualityConfidence.high,
-    this.playerStrengthEstimate,
     this.isSacrifice = false,
     this.preservingNonLosingContinuationCount,
     this.preservingWinningContinuationCount,
@@ -132,7 +131,6 @@ class MoveQualityClassificationContext {
   final int? analyzedLegalMoveCount;
   final bool insideOpeningExemption;
   final MoveQualityConfidence confidence;
-  final int? playerStrengthEstimate;
   final bool isSacrifice;
   final int? preservingNonLosingContinuationCount;
   final int? preservingWinningContinuationCount;
@@ -281,7 +279,7 @@ _moveQualityPresentations = <MoveQuality, MoveQualityPresentation>{
     displaySymbol: '!',
     icon: Icons.trending_up_rounded,
     color: Color(0xFF2D88FF),
-    chargeDelta: 15,
+    chargeDelta: 10,
   ),
   MoveQuality.solid: MoveQualityPresentation(
     label: 'Solid',
@@ -307,7 +305,7 @@ _moveQualityPresentations = <MoveQuality, MoveQualityPresentation>{
     displaySymbol: '?',
     icon: Icons.error_outline_rounded,
     color: Color(0xFFF28C28),
-    chargeDelta: -25,
+    chargeDelta: -15,
   ),
   MoveQuality.criticalFailure: MoveQualityPresentation(
     label: 'Critical Failure',
@@ -406,15 +404,6 @@ double deltaWpLoss({
   return normalizeWinProbabilityLoss(math.max(0.0, rawLoss));
 }
 
-MoveQualityThresholds scaledMoveQualityThresholds({
-  int? playerStrengthEstimate,
-}) {
-  if (playerStrengthEstimate != null && playerStrengthEstimate < 1000) {
-    return moveQualityBaseThresholds.scale(1.2);
-  }
-  return moveQualityBaseThresholds;
-}
-
 bool isNonLosingWinProbability(double winProbability) {
   return winProbability >= moveQualityNonLosingWinProbability;
 }
@@ -423,13 +412,8 @@ bool isWinningWinProbability(double winProbability) {
   return winProbability >= moveQualityWinningWinProbability;
 }
 
-MoveQuality classifyBaselineMoveQuality(
-  double deltaWpLossValue, {
-  int? playerStrengthEstimate,
-}) {
-  final thresholds = scaledMoveQualityThresholds(
-    playerStrengthEstimate: playerStrengthEstimate,
-  );
+MoveQuality classifyBaselineMoveQuality(double deltaWpLossValue) {
+  final thresholds = moveQualityBaseThresholds;
   final normalizedLoss = normalizeWinProbabilityLoss(deltaWpLossValue);
   if (normalizedLoss <= thresholds.optimal) {
     return MoveQuality.optimal;
@@ -496,6 +480,35 @@ bool _allowsStrongPromotion(MoveQuality baseline) {
 bool _allowsSolidPromotion(MoveQuality baseline) {
   return baseline != MoveQuality.error &&
       baseline != MoveQuality.criticalFailure;
+}
+
+MoveQuality _capNonBestOptimalBaseline(
+  MoveQualityClassificationContext context,
+  MoveQuality baseline,
+) {
+  if (baseline != MoveQuality.optimal || context.insideOpeningExemption) {
+    return baseline;
+  }
+  if (context.playedMoveRank == 1) {
+    return baseline;
+  }
+
+  final cpGapFromBest = context.cpGapFromBest;
+  if (cpGapFromBest != null) {
+    if (cpGapFromBest <= moveQualityEqualPositionEquivalentCpGap) {
+      return MoveQuality.strong;
+    }
+    return MoveQuality.solid;
+  }
+
+  final playedMoveRank = context.playedMoveRank;
+  if (playedMoveRank != null) {
+    return playedMoveRank <= 2 ? MoveQuality.strong : MoveQuality.solid;
+  }
+
+  return context.confidence == MoveQualityConfidence.high
+      ? MoveQuality.strong
+      : MoveQuality.solid;
 }
 
 MoveQualityAssessment? _engineLineAssessment(
@@ -579,10 +592,7 @@ MoveQualityAssessment classifyMoveQuality(
     return _assessment(MoveQuality.oversight, context);
   }
 
-  final baseline = classifyBaselineMoveQuality(
-    context.deltaWpLoss,
-    playerStrengthEstimate: context.playerStrengthEstimate,
-  );
+  final baseline = classifyBaselineMoveQuality(context.deltaWpLoss);
 
   final engineLineAssessment = _engineLineAssessment(context, baseline);
   if (engineLineAssessment != null) {
@@ -648,7 +658,7 @@ MoveQualityAssessment classifyMoveQuality(
     );
   }
 
-  return _assessment(baseline, context);
+  return _assessment(_capNonBestOptimalBaseline(context, baseline), context);
 }
 
 int updatedMoveQualityCharge({

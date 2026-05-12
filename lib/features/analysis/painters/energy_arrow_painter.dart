@@ -19,6 +19,7 @@ class EnergyArrowPainter extends CustomPainter {
   final bool staticArrowStyle;
   final double boardInset;
   final ArrowThemeMode themeMode;
+  final double pixelKnightTurnedHeadScale;
 
   EnergyArrowPainter({
     required this.lines,
@@ -31,6 +32,7 @@ class EnergyArrowPainter extends CustomPainter {
     this.staticArrowStyle = false,
     this.boardInset = 0.0,
     this.themeMode = ArrowThemeMode.classic,
+    this.pixelKnightTurnedHeadScale = 1.0,
   }) : super(repaint: PixelArrowRenderer.repaintListenable);
 
   // Anchor colors for the strength gradient. Each anchor is fully saturated
@@ -252,6 +254,7 @@ class EnergyArrowPainter extends CustomPainter {
             pixelSize: pixelStep,
             color: auraColor,
             alphaScale: 1.0,
+            knightTurnedHeadScale: pixelKnightTurnedHeadScale,
             animatePulse: !useStaticStyle,
             progress: progress,
           );
@@ -264,6 +267,7 @@ class EnergyArrowPainter extends CustomPainter {
           pixelSize: pixelStep,
           color: baseColor,
           alphaScale: alphaScale,
+          knightTurnedHeadScale: pixelKnightTurnedHeadScale,
           animatePulse: !useStaticStyle,
           progress: progress,
         );

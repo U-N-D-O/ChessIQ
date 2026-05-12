@@ -60,15 +60,8 @@ void main() {
       expect(classifyBaselineMoveQuality(0.20), MoveQuality.criticalFailure);
     });
 
-    test('scales thresholds for sub-1000 strength estimates only', () {
-      expect(
-        classifyBaselineMoveQuality(0.021, playerStrengthEstimate: 900),
-        MoveQuality.strong,
-      );
-      expect(
-        classifyBaselineMoveQuality(0.021, playerStrengthEstimate: 1200),
-        MoveQuality.solid,
-      );
+    test('does not depend on Elo or strength estimates', () {
+      expect(classifyBaselineMoveQuality(0.021), MoveQuality.solid);
     });
   });
 
@@ -238,6 +231,22 @@ void main() {
       );
 
       expect(assessment.quality, MoveQuality.criticalFailure);
+    });
+
+    test('does not label far-from-best tiny-loss moves as best', () {
+      final assessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.0,
+          preMoveMoverWinProbability: 0.52,
+          postMoveMoverWinProbability: 0.52,
+          preMoveMoverEvalPawns: 0.15,
+          playedMoveRank: 15,
+          cpGapFromBest: 52,
+        ),
+      );
+
+      expect(assessment.quality, MoveQuality.solid);
+      expect(assessment.quality, isNot(MoveQuality.optimal));
     });
 
     test('downgrades the worst fully covered third move to slip', () {
@@ -453,6 +462,7 @@ void main() {
   group('charge mapping', () {
     test('maps charge deltas and clamps to the valid range', () {
       expect(MoveQuality.masterstroke.chargeDelta, 50);
+      expect(MoveQuality.strong.chargeDelta, 10);
       expect(MoveQuality.oversight.chargeDelta, 0);
       final openingAssessment = classifyMoveQuality(
         const MoveQualityClassificationContext(
@@ -498,6 +508,25 @@ void main() {
       expect(
         updatedMoveQualityCharge(current: 40, assessment: hardStrongMove),
         55,
+      );
+    });
+
+    test('strong moves add only 10 charge', () {
+      final strongAssessment = classifyMoveQuality(
+        const MoveQualityClassificationContext(
+          deltaWpLoss: 0.18,
+          preMoveMoverWinProbability: 0.71,
+          postMoveMoverWinProbability: 0.53,
+          preMoveMoverEvalPawns: 1.6,
+          playedMoveRank: 2,
+          cpGapFromBest: 14,
+        ),
+      );
+
+      expect(strongAssessment.quality, MoveQuality.strong);
+      expect(
+        updatedMoveQualityCharge(current: 40, assessment: strongAssessment),
+        50,
       );
     });
   });
