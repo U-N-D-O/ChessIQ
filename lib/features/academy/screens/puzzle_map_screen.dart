@@ -5366,7 +5366,7 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'If you join the Academy leaderboard, your chosen nickname and country or region may be shown publicly with your score and title. ChessIQ also sends an anonymous Firebase ID and update metadata to the backend to manage the entry. No email, real name, or precise location is requested, and network metadata such as IP addresses is not shown on the public leaderboard.',
+              'If you join the Academy leaderboard, your chosen nickname and country or region may be shown publicly with your score and title. ChessIQ also sends an anonymous Firebase ID and update metadata to the backend to manage the entry. If you redeem a promo code and have an Academy nickname, ChessIQ may store that nickname privately with the anonymous Firebase ID, redeemed code, and claim timestamp so operators can track redemptions. No email, real name, or precise location is requested, and network metadata such as IP addresses is not shown on the public leaderboard.',
               style: puzzleAcademyHudStyle(
                 palette: palette,
                 size: 12.0,

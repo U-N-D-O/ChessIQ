@@ -55,3 +55,15 @@ android/app/google-services.json
 # Firebase Functions generated artifacts
 functions/node_modules/
 functions/lib/
+
+# Local scratch and debug outputs
+diff.txt
+error.txt
+output.txt
+temp.txt
+test_output.txt
+puzzle_map_manual_stdout.txt
+puzzle_map_manual_stderr.txt
+.an_base_state.txt
+.tmp_puzzle_map_test_output.txt
+pglite-debug.log

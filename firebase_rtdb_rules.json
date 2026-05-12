@@ -35,6 +35,16 @@
             "$handleKey": {
                 ".write": "auth != null && !newData.exists() && data.val() == auth.uid"
             }
+        },
+        "promo_codes": {
+            ".read": false,
+            ".write": false
+        },
+        "promo_code_claims": {
+            "$uid": {
+                ".read": "auth != null && auth.uid == $uid",
+                ".write": false
+            }
         }
     }
 }

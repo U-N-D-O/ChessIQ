@@ -1,7 +1,11 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
 
-admin.initializeApp();
+const DATABASE_URL = "https://chessiq-89b45-default-rtdb.firebaseio.com";
+
+admin.initializeApp({
+    databaseURL: DATABASE_URL,
+});
 
 const db = admin.database();
 
@@ -23,6 +27,22 @@ const ACADEMY_MAX_EXAM_TOTAL_COUNT = 50;
 const ACADEMY_MAX_EXAM_DURATION_MS = 60 * 60 * 1000;
 const ACADEMY_NODE_MIN_ELO = 450;
 const ACADEMY_NODE_MAX_ELO = 3999;
+const PROMO_CODE_MIN = 3;
+const PROMO_CODE_MAX = 32;
+const PROMO_UNLOCK_KEYS = [
+    "themePackOwned",
+    "sakuraBoardOwned",
+    "tropicalBoardOwned",
+    "piecePackOwned",
+    "tuttiFruttiOwned",
+    "spectralOwned",
+    "monochromePiecesOwned",
+    "pixelArrowThemeOwned",
+    "heavyArrowThemeOwned",
+    "sacrificeModeOwned",
+    "adFreeOwned",
+    "academyTuitionPassOwned",
+] as const;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,6 +62,46 @@ function sanitizeCountryKey(country: string): string {
     return encodeURIComponent(
         (country.trim() || "Unknown").replace(/[.#$[\]/]/g, "_"),
     );
+}
+
+function normalizePromoCodeKey(code: string): string {
+    return encodeURIComponent(
+        code
+            .trim()
+            .toUpperCase()
+            .replace(/\s+/g, " ")
+            .replace(/[^A-Z0-9 _\-]/g, "_")
+            .replace(/ /g, "_"),
+    );
+}
+
+function validatePromoCodeInput(rawCode: unknown): string {
+    if (typeof rawCode !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Promo code must be a string.",
+        );
+    }
+
+    const code = rawCode.trim().replace(/\s+/g, " ");
+    if (code.length < PROMO_CODE_MIN || code.length > PROMO_CODE_MAX) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Promo code must be ${PROMO_CODE_MIN}-${PROMO_CODE_MAX} characters.`,
+        );
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9 _\-]*$/.test(code)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Promo code may only contain letters, numbers, spaces, underscores, and hyphens.",
+        );
+    }
+
+    return code.toUpperCase();
+}
+
+function isPromoUnlockKey(value: string): value is PromoUnlockKey {
+    return PROMO_UNLOCK_KEYS.includes(value as PromoUnlockKey);
 }
 
 function validateHandle(handle: unknown): string {
@@ -111,6 +171,35 @@ type AcademyHandleModerationRecord = {
     reasonCode?: string;
     updatedAt?: string;
 };
+
+type PromoUnlockKey = typeof PROMO_UNLOCK_KEYS[number];
+
+type PromoReward = {
+    coinAmount: number;
+    unlockKey: PromoUnlockKey | null;
+};
+
+type PromoClaimIdentity = {
+    academyHandle?: string;
+    academyTitle?: string;
+    academyCountry?: string;
+};
+
+type PromoClaimRecord = {
+    claimedAt: string;
+} & PromoClaimIdentity;
+
+type StoredPromoCode = {
+    code: string;
+    isActive: boolean;
+    reward: PromoReward;
+    expiresAt: string | null;
+    maxUses: number | null;
+    usedCount: number;
+    claimedBy: Record<string, PromoClaimRecord>;
+};
+
+type PromoCodesRoot = Record<string, unknown>;
 
 function buildPublicProfile(params: {
     handle: string;
@@ -266,6 +355,187 @@ function calculateAcademyLeaderboardScore(
         ((normalizedElo - ACADEMY_NODE_MIN_ELO) /
             (ACADEMY_NODE_MAX_ELO - ACADEMY_NODE_MIN_ELO));
     return Math.round(examScore * weight);
+}
+
+function readPromoPositiveInteger(
+    value: unknown,
+    fieldName: string,
+    max: number,
+): number {
+    if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new Error(`Promo field ${fieldName} must be an integer.`);
+    }
+    if (value < 0 || value > max) {
+        throw new Error(`Promo field ${fieldName} is out of range.`);
+    }
+    return value;
+}
+
+function parseStoredPromoCode(value: unknown): StoredPromoCode {
+    if (!value || typeof value !== "object") {
+        throw new Error("Promo code record is missing.");
+    }
+
+    const record = value as Record<string, unknown>;
+    const code = typeof record.code === "string"
+        ? validatePromoCodeInput(record.code)
+        : "";
+    if (code.length === 0) {
+        throw new Error("Promo code record must include a valid code.");
+    }
+
+    const isActive = record.isActive !== false;
+    const rewardValue = record.reward;
+    if (!rewardValue || typeof rewardValue !== "object") {
+        throw new Error("Promo code reward configuration is missing.");
+    }
+
+    const rewardRecord = rewardValue as Record<string, unknown>;
+    const coinAmountRaw = rewardRecord.coinAmount;
+    const coinAmount = coinAmountRaw == null
+        ? 0
+        : readPromoPositiveInteger(coinAmountRaw, "reward.coinAmount", 1000000);
+
+    const rawUnlockKey = rewardRecord.unlockKey;
+    const unlockKey = rawUnlockKey == null
+        ? null
+        : typeof rawUnlockKey === "string" && isPromoUnlockKey(rawUnlockKey)
+            ? rawUnlockKey
+            : null;
+    if (rawUnlockKey != null && unlockKey == null) {
+        throw new Error("Promo code unlock reward is not allowlisted.");
+    }
+    if (coinAmount <= 0 && unlockKey == null) {
+        throw new Error("Promo code reward must grant coins or one unlock.");
+    }
+
+    const rawExpiresAt = record.expiresAt;
+    let expiresAt: string | null = null;
+    if (rawExpiresAt != null) {
+        if (typeof rawExpiresAt !== "string") {
+            throw new Error("Promo code expiry must be a string.");
+        }
+        const parsedExpiresAt = Date.parse(rawExpiresAt);
+        if (Number.isNaN(parsedExpiresAt)) {
+            throw new Error("Promo code expiry is not a valid ISO date.");
+        }
+        expiresAt = new Date(parsedExpiresAt).toISOString();
+    }
+
+    const maxUsesRaw = record.maxUses;
+    const maxUses = maxUsesRaw == null
+        ? null
+        : readPromoPositiveInteger(maxUsesRaw, "maxUses", 1000000);
+    if (maxUses === 0) {
+        throw new Error("Promo code maxUses must be at least 1 when provided.");
+    }
+
+    const usedCountRaw = record.usedCount;
+    const usedCount = usedCountRaw == null
+        ? 0
+        : readPromoPositiveInteger(usedCountRaw, "usedCount", 1000000);
+    if (maxUses != null && usedCount > maxUses) {
+        throw new Error("Promo code usedCount exceeds maxUses.");
+    }
+
+    const claimedByRaw = record.claimedBy;
+    const claimedBy: Record<string, PromoClaimRecord> = {};
+    if (claimedByRaw != null) {
+        if (!claimedByRaw || typeof claimedByRaw !== "object") {
+            throw new Error("Promo code claimedBy must be an object.");
+        }
+
+        for (const [uid, claimValue] of Object.entries(claimedByRaw)) {
+            if (!claimValue || typeof claimValue !== "object") {
+                throw new Error("Promo code claim entries must be objects.");
+            }
+            const claimRecord = claimValue as Record<string, unknown>;
+            const claimedAt = typeof claimRecord.claimedAt === "string"
+                ? claimRecord.claimedAt
+                : "";
+            if (!claimedAt || Number.isNaN(Date.parse(claimedAt))) {
+                throw new Error("Promo code claim entries must include a valid claimedAt.");
+            }
+
+            const academyHandle =
+                typeof claimRecord.academyHandle === "string" &&
+                    claimRecord.academyHandle.trim().length > 0
+                    ? claimRecord.academyHandle.trim().substring(0, HANDLE_MAX)
+                    : undefined;
+            const academyTitle =
+                typeof claimRecord.academyTitle === "string" &&
+                    claimRecord.academyTitle.trim().length > 0
+                    ? claimRecord.academyTitle.trim().substring(0, 40)
+                    : undefined;
+            const academyCountry =
+                typeof claimRecord.academyCountry === "string" &&
+                    claimRecord.academyCountry.trim().length > 0
+                    ? claimRecord.academyCountry.trim().substring(0, 40)
+                    : undefined;
+
+            claimedBy[uid] = {
+                claimedAt,
+                ...(academyHandle ? { academyHandle } : {}),
+                ...(academyTitle ? { academyTitle } : {}),
+                ...(academyCountry ? { academyCountry } : {}),
+            };
+        }
+    }
+
+    return {
+        code,
+        isActive,
+        reward: {
+            coinAmount,
+            unlockKey,
+        },
+        expiresAt,
+        maxUses,
+        usedCount,
+        claimedBy,
+    };
+}
+
+function findPromoCodeEntry(params: {
+    rootValue: unknown;
+    requestedCode: string;
+    preferredKey: string;
+}): { key: string; value: unknown } | null {
+    if (!params.rootValue || typeof params.rootValue !== "object") {
+        return null;
+    }
+
+    const promoCodes = params.rootValue as PromoCodesRoot;
+    if (Object.prototype.hasOwnProperty.call(promoCodes, params.preferredKey)) {
+        return {
+            key: params.preferredKey,
+            value: promoCodes[params.preferredKey],
+        };
+    }
+
+    for (const [entryKey, entryValue] of Object.entries(promoCodes)) {
+        if (!entryValue || typeof entryValue !== "object") {
+            continue;
+        }
+
+        const rawCode = (entryValue as Record<string, unknown>).code;
+        if (typeof rawCode !== "string") {
+            continue;
+        }
+
+        try {
+            if (validatePromoCodeInput(rawCode) === params.requestedCode) {
+                return {
+                    key: entryKey,
+                    value: entryValue,
+                };
+            }
+        } catch {
+            continue;
+        }
+    }
+
+    return null;
 }
 
 function parseAcademyNodeKey(nodeKey: string): { startElo: number; endElo: number } | null {
@@ -818,6 +1088,194 @@ async function checkHandleAvailabilityImpl(
     return { available: false };
 }
 
+async function redeemPromoCodeImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Must be signed in.",
+        );
+    }
+
+    const uid = context.auth.uid;
+    const requestedCode = validatePromoCodeInput(data?.code);
+    const codeKey = normalizePromoCodeKey(requestedCode);
+    const promoCodesRef = db.ref("promo_codes");
+    const claimedAt = new Date().toISOString();
+    const ownerSnap = await db.ref(`academy_profile_owner/${uid}`).once("value");
+    const ownerRecord = ownerSnap.val() as AcademyOwnerRecord | null;
+    const claimIdentity: PromoClaimIdentity = {
+        ...(ownerRecord != null && ownerRecord.handle.trim().length > 0
+            ? { academyHandle: ownerRecord.handle.trim().substring(0, HANDLE_MAX) }
+            : {}),
+        ...(ownerRecord != null && ownerRecord.title.trim().length > 0
+            ? { academyTitle: ownerRecord.title.trim().substring(0, 40) }
+            : {}),
+        ...(ownerRecord != null && ownerRecord.country.trim().length > 0
+            ? { academyCountry: ownerRecord.country.trim().substring(0, 40) }
+            : {}),
+    };
+
+    const preflightSnapshot = await promoCodesRef.once("value");
+    const preflightRootValue = preflightSnapshot.val();
+    const preflightEntry = findPromoCodeEntry({
+        rootValue: preflightRootValue,
+        requestedCode,
+        preferredKey: codeKey,
+    });
+    if (preflightEntry == null) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "Incorrect promo code.",
+        );
+    }
+
+    let transactionFailureCode: string = "not-found";
+    let transactionFailureMessage = "Incorrect promo code.";
+
+    const transactionResult = await promoCodesRef.transaction((currentValue) => {
+        const baseRootValue = currentValue ?? preflightRootValue;
+        const promoEntry = findPromoCodeEntry({
+            rootValue: baseRootValue,
+            requestedCode,
+            preferredKey: codeKey,
+        });
+
+        if (promoEntry == null) {
+            transactionFailureCode = "not-found";
+            transactionFailureMessage = "Incorrect promo code.";
+            return;
+        }
+
+        try {
+            const storedPromo = parseStoredPromoCode(promoEntry.value);
+
+            if (!storedPromo.isActive) {
+                transactionFailureCode = "inactive";
+                transactionFailureMessage = "This promo code is inactive.";
+                return;
+            }
+
+            if (storedPromo.expiresAt != null && Date.parse(storedPromo.expiresAt) <= Date.now()) {
+                transactionFailureCode = "expired";
+                transactionFailureMessage = "This promo code has expired.";
+                return;
+            }
+
+            if (Object.prototype.hasOwnProperty.call(storedPromo.claimedBy, uid)) {
+                transactionFailureCode = "already-claimed";
+                transactionFailureMessage = "Promo code already used on this account.";
+                return;
+            }
+
+            if (storedPromo.maxUses != null && storedPromo.usedCount >= storedPromo.maxUses) {
+                transactionFailureCode = "exhausted";
+                transactionFailureMessage = "This promo code has no uses left.";
+                return;
+            }
+
+            const currentPromoCodes = baseRootValue as PromoCodesRoot;
+            const updatedPromoCode = {
+                ...(promoEntry.value as Record<string, unknown>),
+                code: storedPromo.code,
+                usedCount: storedPromo.usedCount + 1,
+                updatedAt: claimedAt,
+                claimedBy: {
+                    ...storedPromo.claimedBy,
+                    [uid]: {
+                        claimedAt,
+                        ...claimIdentity,
+                    },
+                },
+            };
+
+            const nextPromoCodes: PromoCodesRoot = {
+                ...currentPromoCodes,
+                [codeKey]: updatedPromoCode,
+            };
+            if (promoEntry.key !== codeKey) {
+                delete nextPromoCodes[promoEntry.key];
+            }
+
+            return {
+                ...nextPromoCodes,
+            };
+        } catch (error) {
+            transactionFailureCode = "invalid-config";
+            transactionFailureMessage = error instanceof Error
+                ? error.message
+                : "This promo code is not set up correctly yet.";
+            return;
+        }
+    });
+
+    if (!transactionResult.committed) {
+        switch (transactionFailureCode) {
+            case "already-claimed":
+                throw new functions.https.HttpsError(
+                    "already-exists",
+                    transactionFailureMessage,
+                );
+            case "inactive":
+            case "expired":
+            case "exhausted":
+            case "invalid-config":
+                throw new functions.https.HttpsError(
+                    "failed-precondition",
+                    transactionFailureMessage,
+                );
+            case "not-found":
+            default:
+                throw new functions.https.HttpsError(
+                    "not-found",
+                    transactionFailureMessage,
+                );
+        }
+    }
+
+    const committedPromoEntry = findPromoCodeEntry({
+        rootValue: transactionResult.snapshot.val(),
+        requestedCode,
+        preferredKey: codeKey,
+    });
+    if (committedPromoEntry == null) {
+        throw new functions.https.HttpsError(
+            "internal",
+            "Promo code redemption could not be verified after commit.",
+        );
+    }
+
+    const storedPromo = parseStoredPromoCode(committedPromoEntry.value);
+    const claimRecord = {
+        claimedAt,
+        code: storedPromo.code,
+        ...claimIdentity,
+        reward: {
+            coinAmount: storedPromo.reward.coinAmount,
+            unlockKey: storedPromo.reward.unlockKey,
+        },
+    };
+
+    try {
+        await db.ref(`promo_code_claims/${uid}/${codeKey}`).set(claimRecord);
+    } catch (error) {
+        console.warn("[redeemPromoCode] Failed to write claim ledger", {
+            uid,
+            codeKey,
+            error,
+        });
+    }
+
+    return {
+        success: true,
+        code: storedPromo.code,
+        reward: claimRecord.reward,
+        claimedAt,
+    };
+}
+
 // ---------------------------------------------------------------------------
 // submitAcademyScore
 //
@@ -857,6 +1315,28 @@ export const checkHandleAvailability = functions.https.onCall(
 
 export const checkHandleAvailabilityV2 = functions.https.onCall(
     async (data, context) => checkHandleAvailabilityImpl(data, context, true),
+);
+
+// ---------------------------------------------------------------------------
+// redeemPromoCode
+//
+// Redeems a server-managed promo code for the authenticated user.
+// Promo definitions live in RTDB under `promo_codes/{codeKey}` and writes are
+// blocked to clients by security rules. The function enforces:
+//   • Authenticated identity is present.
+//   • Code exists and is active.
+//   • Code has not expired.
+//   • Caller has not redeemed the code before.
+//   • Global maxUses has not been exhausted.
+//   • Reward configuration only grants allowlisted store unlock keys.
+//
+// On success the function increments `usedCount`, records the uid under
+// `promo_codes/{codeKey}/claimedBy/{uid}`, and writes a best-effort audit copy
+// to `promo_code_claims/{uid}/{codeKey}`.
+// ---------------------------------------------------------------------------
+
+export const redeemPromoCode = functions.https.onCall(
+    async (data, context) => redeemPromoCodeImpl(data, context),
 );
 
 // ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/services/engine_service.dart';
 import 'package:chessiq/core/services/local_integrity_service.dart';
+import 'package:chessiq/core/services/promo_code_service.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_map_screen.dart';

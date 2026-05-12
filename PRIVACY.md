@@ -2,13 +2,13 @@
 
 Published notice: https://modus.qila.gl/ChessIQ/privacy-notice/
 
-This notice explains what information ChessIQ may show publicly for the Academy leaderboard, what data may be sent to QILA Modus backend services, and how third-party advertising partners may process advertising-related data if you consent in the app's advertising popup.
+This notice explains what information ChessIQ may show publicly for the Academy leaderboard, what data may be sent to QILA Modus backend services for leaderboard and promo code redemption features, and how third-party advertising partners may process advertising-related data if you consent in the app's advertising popup.
 
 Separated by design. ChessIQ keeps leaderboard profile data intentionally minimal. Optional ad personalization is handled separately through third-party advertising SDKs and only after consent where required.
 
 ## Applies To
 
-- Academy leaderboard profile setup and optional advertising consent
+- Academy leaderboard profile setup, promo code redemption, and optional advertising consent
 
 ## Operator
 
@@ -16,11 +16,11 @@ Separated by design. ChessIQ keeps leaderboard profile data intentionally minima
 
 ## Last Updated
 
-- May 2, 2026
+- May 12, 2026
 
 ## Information Used Or Processed
 
-Leaderboard data supports core features. Advertising-related data may also be processed by ad partners if you consent to personalized ads.
+Leaderboard data and promo redemption tracking support core features. Advertising-related data may also be processed by ad partners if you consent to personalized ads.
 
 - Nickname
 - Country or region
@@ -28,6 +28,8 @@ Leaderboard data supports core features. Advertising-related data may also be pr
 - Title
 - Update timestamp
 - Anonymous Firebase user ID
+- Redeemed promo code and promo claim timestamp
+- Academy nickname, title, and country or region in private promo claim records when that Academy profile is already attached to the same anonymous Firebase user ID
 - Advertising identifier via ad partner, if consented
 - Ad/device interaction data via ad partner, if consented
 
@@ -62,6 +64,16 @@ When the app registers or updates an Academy leaderboard profile, ChessIQ may se
 - Anonymous Firebase user ID
 
 The anonymous Firebase user ID is used to manage ownership of a leaderboard entry and related backend checks.
+
+When the app redeems a promo code, ChessIQ may send or store the following data in private backend redemption records:
+
+- Redeemed promo code
+- Claim timestamp
+- Anonymous Firebase user ID
+- Academy nickname, title, and country or region already attached to that anonymous Firebase user ID, if available
+- Promo reward details needed to fulfill the redemption
+
+These promo redemption records are used to prevent duplicate claims and to help QILA Modus review who redeemed a code. They are not shown publicly in the leaderboard.
 
 ## Information We Do Not Request For The Leaderboard
 
