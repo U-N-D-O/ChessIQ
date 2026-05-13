@@ -2627,6 +2627,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
           renderables.sort((a, b) => a.depthY.compareTo(b.depthY));
           return Stack(
+            clipBehavior: Clip.none,
             children: renderables
                 .map((entry) => entry.widget)
                 .toList(growable: false),
@@ -2649,6 +2650,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return Positioned.fill(
       child: IgnorePointer(
         child: Stack(
+          clipBehavior: Clip.none,
           fit: StackFit.expand,
           children: [
             CustomPaint(
@@ -13102,6 +13104,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         );
 
         return Stack(
+          clipBehavior: Clip.none,
           children: [
             Positioned.fill(
               child: DecoratedBox(
@@ -13230,47 +13233,50 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ),
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () => _setMute(!_muteSounds),
-                        icon: Icon(
-                          _muteSounds
-                              ? Icons.volume_off_rounded
-                              : Icons.volume_up_rounded,
-                        ),
-                        label: Text(
-                          _muteSounds ? 'Muted' : 'Sound On',
-                          style: _mainMenuPixelStyle(
-                            color: scheme.onSurface,
-                            size: 8.4,
-                            height: 1.12,
+                  Padding(
+                    padding: EdgeInsets.only(bottom: media.viewPadding.bottom),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => _setMute(!_muteSounds),
+                          icon: Icon(
+                            _muteSounds
+                                ? Icons.volume_off_rounded
+                                : Icons.volume_up_rounded,
+                          ),
+                          label: Text(
+                            _muteSounds ? 'Muted' : 'Sound On',
+                            style: _mainMenuPixelStyle(
+                              color: scheme.onSurface,
+                              size: 8.4,
+                              height: 1.12,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: controlSurface,
+                            foregroundColor: scheme.onSurface,
                           ),
                         ),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: controlSurface,
-                          foregroundColor: scheme.onSurface,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton.icon(
-                        onPressed: () => _openSettings(),
-                        icon: const Icon(Icons.settings_outlined),
-                        label: Text(
-                          'Settings',
-                          style: _mainMenuPixelStyle(
-                            color: scheme.onSurface,
-                            size: 8.4,
-                            height: 1.12,
+                        const SizedBox(width: 10),
+                        FilledButton.icon(
+                          onPressed: () => _openSettings(),
+                          icon: const Icon(Icons.settings_outlined),
+                          label: Text(
+                            'Settings',
+                            style: _mainMenuPixelStyle(
+                              color: scheme.onSurface,
+                              size: 8.4,
+                              height: 1.12,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: controlSurface,
+                            foregroundColor: scheme.onSurface,
                           ),
                         ),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: controlSurface,
-                          foregroundColor: scheme.onSurface,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),

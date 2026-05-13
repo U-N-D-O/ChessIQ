@@ -221,6 +221,7 @@ class EnergyArrowPainter extends CustomPainter {
       final heavyMode = themeMode == ArrowThemeMode.heavy3d;
       const heavyLineScale = 0.75;
       final pixelStep = pixelMode ? max(3.0, min(4.5, sq * 0.08)) : 0.0;
+      final pixelSnapOrigin = Offset(boardInset, boardInset);
       final auraColor = glowColor?.withValues(
         alpha: (isFirstArrow ? 0.34 : 0.24) * alphaScale,
       );
@@ -232,11 +233,13 @@ class EnergyArrowPainter extends CustomPainter {
         start.dy + (unitY * themedStartInset),
       );
       final renderStart = pixelMode
-          ? _snapPoint(themedStart, pixelStep)
+          ? _snapPoint(themedStart, pixelStep, origin: pixelSnapOrigin)
           : (heavyMode ? themedStart : start);
-      final renderEnd = pixelMode ? _snapPoint(end, pixelStep) : end;
+      final renderEnd = pixelMode
+          ? _snapPoint(end, pixelStep, origin: pixelSnapOrigin)
+          : end;
       final renderLineEnd = pixelMode
-          ? _snapPoint(lineEnd, pixelStep)
+          ? _snapPoint(lineEnd, pixelStep, origin: pixelSnapOrigin)
           : lineEnd;
       final renderStrokeWidth = pixelMode
           ? max(
@@ -253,6 +256,7 @@ class EnergyArrowPainter extends CustomPainter {
             end: renderEnd,
             pixelSize: pixelStep,
             color: auraColor,
+            snapOrigin: pixelSnapOrigin,
             alphaScale: 1.0,
             knightTurnedHeadScale: pixelKnightTurnedHeadScale,
             animatePulse: !useStaticStyle,
@@ -266,6 +270,7 @@ class EnergyArrowPainter extends CustomPainter {
           end: renderEnd,
           pixelSize: pixelStep,
           color: baseColor,
+          snapOrigin: pixelSnapOrigin,
           alphaScale: alphaScale,
           knightTurnedHeadScale: pixelKnightTurnedHeadScale,
           animatePulse: !useStaticStyle,
@@ -693,13 +698,13 @@ class EnergyArrowPainter extends CustomPainter {
     return Offset(inset + col * sq + sq / 2, inset + row * sq + sq / 2);
   }
 
-  Offset _snapPoint(Offset point, double step) {
+  Offset _snapPoint(Offset point, double step, {Offset origin = Offset.zero}) {
     if (step <= 0) {
       return point;
     }
     return Offset(
-      (point.dx / step).roundToDouble() * step,
-      (point.dy / step).roundToDouble() * step,
+      (((point.dx - origin.dx) / step).roundToDouble() * step) + origin.dx,
+      (((point.dy - origin.dy) / step).roundToDouble() * step) + origin.dy,
     );
   }
 
@@ -716,7 +721,11 @@ class EnergyArrowPainter extends CustomPainter {
     required double alphaScale,
     required bool emphasized,
   }) {
-    final snappedCenter = _snapPoint(center, step);
+    final snappedCenter = _snapPoint(
+      center,
+      step,
+      origin: Offset(boardInset, boardInset),
+    );
     final outlineColor = _darkenColor(
       color,
       0.72,

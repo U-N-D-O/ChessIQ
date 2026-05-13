@@ -23,6 +23,7 @@ class PixelArrowRenderer {
     Color? midColor,
     Color? tipColor,
     Color? outlineColor,
+    Offset snapOrigin = Offset.zero,
     double baseFadeDistance = 0.0,
     double baseFadeOpacity = 0.40,
     double alphaScale = 1.0,
@@ -32,8 +33,8 @@ class PixelArrowRenderer {
   }) {
     _ensureHeadSpritesLoaded();
 
-    final snappedStart = _snapToCellCenter(start, pixelSize);
-    final snappedEnd = _snapToCellCenter(end, pixelSize);
+    final snappedStart = _snapToCellCenter(start, pixelSize, snapOrigin);
+    final snappedEnd = _snapToCellCenter(end, pixelSize, snapOrigin);
     final direction = snappedEnd - snappedStart;
     final length = direction.distance;
     if (length <= pixelSize * 5) {
@@ -95,6 +96,7 @@ class PixelArrowRenderer {
       start: snappedStart,
       end: shaftEnd,
       pixelSize: pixelSize,
+      snapOrigin: snapOrigin,
     );
     final shaftLength = (shaftEnd - snappedStart).distance;
     final fadeEndT = (baseFadeDistance <= 0.0 || shaftLength <= 0.001)
@@ -150,10 +152,8 @@ class PixelArrowRenderer {
               previewTipColor,
             ).withValues(alpha: alphaScale * fadeMultiplier)
           : Colors.white.withValues(alpha: fadeMultiplier);
-      fillCells[_worldToCell(snappedStart, pixelSize)] = _PixelCellPaint(
-        color: fallbackColor,
-        progressT: 0.0,
-      );
+      fillCells[_worldToCell(snappedStart, pixelSize, snapOrigin)] =
+          _PixelCellPaint(color: fallbackColor, progressT: 0.0);
     }
 
     final outlineCells = <Point<int>, double>{};
@@ -241,8 +241,8 @@ class PixelArrowRenderer {
     void drawCell(Point<int> cell, Color shade, {double inflate = 0.0}) {
       canvas.drawRect(
         Rect.fromLTWH(
-          cell.x.toDouble() * pixelSize - inflate,
-          cell.y.toDouble() * pixelSize - inflate,
+          snapOrigin.dx + (cell.x.toDouble() * pixelSize) - inflate,
+          snapOrigin.dy + (cell.y.toDouble() * pixelSize) - inflate,
           pixelSize + (inflate * 2),
           pixelSize + (inflate * 2),
         ),
@@ -329,10 +329,18 @@ class PixelArrowRenderer {
     return Color.lerp(color, Colors.black, amount.clamp(0.0, 1.0))!;
   }
 
-  static Offset _snapToCellCenter(Offset point, double pixelSize) {
+  static Offset _snapToCellCenter(
+    Offset point,
+    double pixelSize,
+    Offset snapOrigin,
+  ) {
     return Offset(
-      (point.dx / pixelSize).roundToDouble() * pixelSize + (pixelSize / 2),
-      (point.dy / pixelSize).roundToDouble() * pixelSize + (pixelSize / 2),
+      (((point.dx - snapOrigin.dx) / pixelSize).roundToDouble() * pixelSize) +
+          snapOrigin.dx +
+          (pixelSize / 2),
+      (((point.dy - snapOrigin.dy) / pixelSize).roundToDouble() * pixelSize) +
+          snapOrigin.dy +
+          (pixelSize / 2),
     );
   }
 
@@ -513,9 +521,10 @@ class PixelArrowRenderer {
     required Offset start,
     required Offset end,
     required double pixelSize,
+    required Offset snapOrigin,
   }) {
-    final startCell = _worldToCell(start, pixelSize);
-    final endCell = _worldToCell(end, pixelSize);
+    final startCell = _worldToCell(start, pixelSize, snapOrigin);
+    final endCell = _worldToCell(end, pixelSize, snapOrigin);
     final cells = <Point<int>>[];
 
     var x0 = startCell.x;
@@ -550,10 +559,14 @@ class PixelArrowRenderer {
     return cells;
   }
 
-  static Point<int> _worldToCell(Offset point, double pixelSize) {
+  static Point<int> _worldToCell(
+    Offset point,
+    double pixelSize,
+    Offset snapOrigin,
+  ) {
     return Point<int>(
-      ((point.dx - (pixelSize / 2)) / pixelSize).round(),
-      ((point.dy - (pixelSize / 2)) / pixelSize).round(),
+      ((point.dx - snapOrigin.dx - (pixelSize / 2)) / pixelSize).round(),
+      ((point.dy - snapOrigin.dy - (pixelSize / 2)) / pixelSize).round(),
     );
   }
 

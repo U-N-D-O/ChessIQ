@@ -314,7 +314,7 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     double innerRadius,
     double outerRadius,
   ) {
-    final debrisCount = reducedEffects ? 12 : 22;
+    final debrisCount = 0;
     final colors = <Color>[cyan, amber, pink, crimson, lineColor];
 
     for (var index = 0; index < debrisCount; index++) {
@@ -665,7 +665,7 @@ class _MenuBlastBackdropPainter extends CustomPainter {
   }
 
   void _paintAmbientGlitchStrips(Canvas canvas, Size size) {
-    final stripCount = reducedEffects ? 3 : 6;
+    final stripCount = 0;
     for (var index = 0; index < stripCount; index++) {
       final progress = ((time * 0.05) + index * 0.17) % 1.0;
       final y = ui.lerpDouble(
@@ -696,7 +696,7 @@ class _MenuBlastBackdropPainter extends CustomPainter {
     }
 
     if (!reducedEffects) {
-      final blockCount = 7;
+      final blockCount = 0;
       for (var index = 0; index < blockCount; index++) {
         final x =
             size.width *
