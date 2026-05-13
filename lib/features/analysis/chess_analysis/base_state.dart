@@ -15577,6 +15577,51 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : suggestedLines.take(maxVisibleMoves).toList(growable: false);
     final showSuggestions =
         _shouldShowVisualSuggestions && visibleLines.isNotEmpty;
+    final usePixelSuggestionFont = _arrowThemeMode == ArrowThemeMode.pixel;
+    const suggestionShadows = <Shadow>[
+      Shadow(
+        color: Color(0xFF757575),
+        offset: Offset(0.5, 0.5),
+        blurRadius: 0.8,
+      ),
+      Shadow(
+        color: Color(0xFF757575),
+        offset: Offset(-0.5, 0.5),
+        blurRadius: 0.8,
+      ),
+      Shadow(
+        color: Color(0xFF757575),
+        offset: Offset(0.5, -0.5),
+        blurRadius: 0.8,
+      ),
+      Shadow(
+        color: Color(0xFF757575),
+        offset: Offset(-0.5, -0.5),
+        blurRadius: 0.8,
+      ),
+    ];
+
+    TextStyle suggestionLabelStyle({
+      required Color color,
+      required double size,
+      required FontWeight fontWeight,
+    }) {
+      if (usePixelSuggestionFont) {
+        return GoogleFonts.pixelifySans(
+          color: color,
+          fontSize: size,
+          fontWeight: fontWeight,
+          height: 1.0,
+          shadows: suggestionShadows,
+        );
+      }
+      return TextStyle(
+        color: color,
+        fontSize: size,
+        fontWeight: fontWeight,
+        shadows: suggestionShadows,
+      );
+    }
 
     return SizedBox(
       height: height,
@@ -15609,34 +15654,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           const SizedBox(width: 8),
                           Text(
                             notation,
-                            style: TextStyle(
+                            style: suggestionLabelStyle(
                               color: color,
-                              fontSize: 16,
+                              size: 16,
                               fontWeight: l.multiPv == 1
                                   ? FontWeight.bold
                                   : FontWeight.normal,
-                              shadows: const [
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(0.5, 0.5),
-                                  blurRadius: 0.8,
-                                ),
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(-0.5, 0.5),
-                                  blurRadius: 0.8,
-                                ),
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(0.5, -0.5),
-                                  blurRadius: 0.8,
-                                ),
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(-0.5, -0.5),
-                                  blurRadius: 0.8,
-                                ),
-                              ],
                             ),
                           ),
                           if (isCapture) ...[
@@ -15648,32 +15671,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             eval >= 0
                                 ? '+${eval.toStringAsFixed(2)}'
                                 : eval.toStringAsFixed(2),
-                            style: TextStyle(
+                            style: suggestionLabelStyle(
                               color: color,
-                              fontSize: 14,
+                              size: 14,
                               fontWeight: FontWeight.bold,
-                              shadows: const [
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(0.5, 0.5),
-                                  blurRadius: 0.8,
-                                ),
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(-0.5, 0.5),
-                                  blurRadius: 0.8,
-                                ),
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(0.5, -0.5),
-                                  blurRadius: 0.8,
-                                ),
-                                Shadow(
-                                  color: Color(0xFF757575),
-                                  offset: Offset(-0.5, -0.5),
-                                  blurRadius: 0.8,
-                                ),
-                              ],
                             ),
                           ),
                         ],
