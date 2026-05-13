@@ -3072,15 +3072,18 @@ Widget _buildQuizStudyFamilyChoiceChip(
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
-              label,
-              style: state._academyHudStyle(
-                palette: palette,
-                size: 11.8,
-                color: selected ? selectedForeground : palette.text,
-                weight: FontWeight.w800,
-                letterSpacing: 0.7,
-                height: 1.0,
+            Flexible(
+              child: Text(
+                label,
+                softWrap: true,
+                style: state._academyHudStyle(
+                  palette: palette,
+                  size: 11.8,
+                  color: selected ? selectedForeground : palette.text,
+                  weight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                  height: 1.0,
+                ),
               ),
             ),
             if (studied) ...<Widget>[
