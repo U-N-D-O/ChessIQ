@@ -6193,6 +6193,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _currentDepth = 0;
     });
     final analysisMultiPvCount = _analysisMultiPvCount;
+    final liveAnalysisTimeout = _usesInfiniteAnalysisDepth
+        ? const Duration(days: 1)
+        : _playVsBot && !shouldShowVisualSuggestions
+        ? const Duration(milliseconds: 1800)
+        : _analysisLiveCompletionTimeout(
+            depth: _engineDepth,
+            multiPv: analysisMultiPvCount,
+          );
     engine.scheduleSearch(
       EngineRequestSpec(
         requestId: _nextEngineRequestId(EngineRequestRole.liveAnalysis),
@@ -6202,14 +6210,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         multiPv: analysisMultiPvCount,
         depth: _engineDepth,
         infinite: _usesInfiniteAnalysisDepth,
-        timeout: _usesInfiniteAnalysisDepth
-            ? const Duration(days: 1)
-            : _playVsBot
-            ? const Duration(milliseconds: 1800)
-            : _analysisLiveCompletionTimeout(
-                depth: _engineDepth,
-                multiPv: analysisMultiPvCount,
-              ),
+        timeout: liveAnalysisTimeout,
         firstInfoTimeout: _playVsBot
             ? null
             : const Duration(milliseconds: 2600),
@@ -11446,6 +11447,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return topLeft & targetBox.size;
   }
 
+  ({double height, double topOffset, int maxVisibleMoves})?
+  _portraitFloatingSuggestionsLayout({
+    EdgeInsets padding = const EdgeInsets.symmetric(horizontal: 20),
+  }) {
+    final boardRect = _boardRectInScene();
+    final actionAreaRect = _rectInScene(_actionAreaKey);
+    if (boardRect == null || actionAreaRect == null) {
+      return null;
+    }
+
+    const boardClearance = 12.0;
+    const deckClearance = 12.0;
+    const moveRowHeight = 32.0;
+    final availableHeight =
+        actionAreaRect.top -
+        deckClearance -
+        (boardRect.bottom + boardClearance);
+    if (availableHeight <= padding.vertical) {
+      return null;
+    }
+
+    final maxVisibleMoves =
+        ((availableHeight - padding.vertical) / moveRowHeight).floor();
+    if (maxVisibleMoves < 1) {
+      return null;
+    }
+
+    return (
+      height: availableHeight,
+      topOffset: -(availableHeight + deckClearance),
+      maxVisibleMoves: maxVisibleMoves,
+    );
+  }
+
   bool _isCompactBotFrame(BuildContext context) {
     final media = MediaQuery.of(context);
     return _playVsBot &&
@@ -15987,9 +16022,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : const Color(0xFF0B0F16);
       final showStatusTagInDeck = isLandscape;
       final showEndMatchButton = endedOutcome != null;
-      const portraitSuggestionsOverlayHeight = 168.0;
+      const portraitSuggestionsPadding = EdgeInsets.symmetric(horizontal: 20);
+      final portraitSuggestionsLayout =
+          !isLandscape && _hasVisibleSuggestedMoves
+          ? _portraitFloatingSuggestionsLayout(
+              padding: portraitSuggestionsPadding,
+            )
+          : null;
       final showFloatingPortraitSuggestionsOverlay =
-          !isLandscape && _hasVisibleSuggestedMoves;
+          portraitSuggestionsLayout != null;
 
       final deck = Container(
         decoration: _vsBotArcadePanelDecoration(
@@ -16149,12 +16190,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               Positioned(
                 left: 0,
                 right: 0,
-                top: -portraitSuggestionsOverlayHeight,
+                top: portraitSuggestionsLayout.topOffset,
                 child: _buildSuggestedMovesList(
-                  height: portraitSuggestionsOverlayHeight,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  maxVisibleMoves: 2,
-                  alignment: Alignment.bottomCenter,
+                  height: portraitSuggestionsLayout.height,
+                  padding: portraitSuggestionsPadding,
+                  maxVisibleMoves: portraitSuggestionsLayout.maxVisibleMoves,
+                  alignment: Alignment.topCenter,
                 ),
               ),
           ],
