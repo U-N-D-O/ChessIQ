@@ -92,9 +92,9 @@ class _MenuFloorMovePlan {
 
   final double startSceneTime;
   final double endSceneTime;
-  final int fromRow;
+  final double fromRow;
   final int fromColumn;
-  final int toRow;
+  final double toRow;
   final int toColumn;
   final bool knightMove;
   final String? captureActorId;
@@ -352,6 +352,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   );
   static const Duration _checkAlertDuration = Duration(milliseconds: 1500);
   static const Duration _squareToastDuration = Duration(milliseconds: 1500);
+  static const Duration _extraSuggestionLaunchDelay = Duration(
+    milliseconds: 170,
+  );
+  static const Duration _secondExtraSuggestionLaunchDelay = Duration(
+    milliseconds: 200,
+  );
   static const Duration _creditsModernDwell = Duration(seconds: 15);
   static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
   static const Duration _creditsRetroDwell = Duration(seconds: 15);
@@ -367,6 +373,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   late AnimationController _introController;
   late AnimationController _menuRevealController;
   late AnimationController _launchController;
+  late AnimationController _extraLaunchController;
+  late AnimationController _secondExtraLaunchController;
   late AnimationController _menuMusicFadeController;
   late AnimationController _sectionTransitionController;
   late AnimationController _menuExitAnimationController;
@@ -456,6 +464,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void>? _sacrificeScanEngineStartFuture;
   final GlobalKey _sceneKey = GlobalKey();
   final GlobalKey _boardKey = GlobalKey();
+  final GlobalKey _actionAreaKey = GlobalKey();
   final GlobalKey _suggestionButtonKey = GlobalKey();
   final GlobalKey _storeButtonKey = GlobalKey();
   final GlobalKey _evalBarHorizontalKey = GlobalKey();
@@ -628,6 +637,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _suggestionBurstActive = false;
   Offset? _launchStart;
   List<Offset> _launchTargets = <Offset>[];
+  Offset? _extraLaunchStart;
+  List<Offset> _extraLaunchTargets = <Offset>[];
+  Offset? _secondExtraLaunchStart;
+  List<Offset> _secondExtraLaunchTargets = <Offset>[];
   bool _launchTargetsEvalBar = false;
   GameOutcome? _gameOutcome;
   DrawReason? _gameDrawReason;
@@ -941,6 +954,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       duration: const Duration(milliseconds: 800),
     );
     _launchController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _extraLaunchController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _secondExtraLaunchController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 650),
     );
@@ -1711,6 +1732,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   String _menuFloorSquareKey(int row, int column) => '$row:$column';
 
+  ({double row, int tileRow, int column}) _menuFloorCaptureTargetPosition({
+    required _MenuFloorActorState victim,
+    required double attackerSpawnSceneTime,
+  }) {
+    final attackerAge = max(0.0, _mainMenuSceneTime - attackerSpawnSceneTime);
+    final projectedRow =
+        _currentMenuFloorActorRow(victim) - attackerAge * _menuFloorDriftSpeed;
+    final column = _currentMenuFloorActorColumn(victim).round();
+    final tileRow = max(0, projectedRow.round());
+    return (row: projectedRow, tileRow: tileRow, column: column);
+  }
+
   Set<String> _menuFloorReservedSquares({String? ignoringActorId}) {
     final reserved = <String>{};
     for (final actor in _menuFloorActors) {
@@ -1734,7 +1767,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
       final move = actor.activeMove;
       if (move != null) {
-        reserved.add(_menuFloorSquareKey(move.toRow, move.toColumn));
+        reserved.add(_menuFloorSquareKey(move.toRow.round(), move.toColumn));
       }
     }
     return reserved;
@@ -1796,9 +1829,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   _MenuFloorMovePlan _menuFloorCreateMovePlan({
-    required int fromRow,
+    required double fromRow,
     required int fromColumn,
-    required int toRow,
+    required double toRow,
     required int toColumn,
     required bool knightMove,
     String? captureActorId,
@@ -1894,9 +1927,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         anchorColumn: start.x.toDouble(),
         spawnSceneTime: _mainMenuSceneTime,
         activeMove: _menuFloorCreateMovePlan(
-          fromRow: start.y,
+          fromRow: start.y.toDouble(),
           fromColumn: start.x,
-          toRow: target.y,
+          toRow: target.y.toDouble(),
           toColumn: target.x,
           knightMove: piece.startsWith('n_'),
         ),
@@ -1914,8 +1947,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (targetActor.capturedSceneTime != null) {
       return null;
     }
-    final targetRow = targetActor.anchorRow.round();
-    final targetColumn = targetActor.anchorColumn.round();
+    final captureTargetPosition = _menuFloorCaptureTargetPosition(
+      victim: targetActor,
+      attackerSpawnSceneTime: _mainMenuSceneTime,
+    );
+    final targetRow = captureTargetPosition.tileRow;
+    final targetColumn = captureTargetPosition.column;
+    final captureRowCount = max(_menuFloorLogicalRowCount, targetRow + 1);
     final attackerColor = targetActor.piece.endsWith('_w') ? 'b' : 'w';
     final attackerPieces = <String>[
       'n_$attackerColor',
@@ -1943,7 +1981,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           pieceThemes[_menuHashIndex('$attemptSeed:theme', pieceThemes.length)];
       final startRows = _menuFloorStartRows(
         piece: piece,
-        rowCount: _menuFloorLogicalRowCount,
+        rowCount: captureRowCount,
       );
       final candidateStarts = <Point<int>>[];
       for (final startRow in startRows) {
@@ -1966,7 +2004,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         piece: piece,
         startRow: start.y,
         startColumn: start.x,
-        rowCount: _menuFloorLogicalRowCount,
+        rowCount: captureRowCount,
         seedBase: attemptSeed,
         reservedSquares: reservedSquares,
         captureSquareKey: captureSquareKey,
@@ -1982,9 +2020,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         anchorColumn: start.x.toDouble(),
         spawnSceneTime: _mainMenuSceneTime,
         activeMove: _menuFloorCreateMovePlan(
-          fromRow: start.y,
+          fromRow: start.y.toDouble(),
           fromColumn: start.x,
-          toRow: target.y,
+          toRow: captureTargetPosition.row,
           toColumn: target.x,
           knightMove: piece.startsWith('n_'),
           captureActorId: targetActor.id,
@@ -2005,6 +2043,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return false;
     }
     String? captureSquareKey;
+    ({double row, int tileRow, int column})? captureTargetPosition;
     if (captureActorId != null) {
       final targetActor = _menuFloorActors
           .where((entry) => entry.id == captureActorId)
@@ -2017,9 +2056,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (sameColor) {
         return false;
       }
+      captureTargetPosition = _menuFloorCaptureTargetPosition(
+        victim: targetActor,
+        attackerSpawnSceneTime: actor.spawnSceneTime,
+      );
       captureSquareKey = _menuFloorSquareKey(
-        targetActor.anchorRow.round(),
-        targetActor.anchorColumn.round(),
+        captureTargetPosition.tileRow,
+        captureTargetPosition.column,
       );
     }
     final reservedSquares = _menuFloorReservedSquares(
@@ -2031,13 +2074,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _menuFloorLogicalRowCount + 4,
       _menuFloorExitRowThreshold.ceil() + 2,
     );
+    final selectionRowCount = max(
+      actor.blocksNewSpawnsUntilExit ? exitRowCount : _menuFloorLogicalRowCount,
+      captureTargetPosition == null ? 0 : captureTargetPosition.tileRow + 1,
+    );
     final target = _menuFloorSelectTarget(
       piece: actor.piece,
       startRow: startRow,
       startColumn: startColumn,
-      rowCount: actor.blocksNewSpawnsUntilExit
-          ? exitRowCount
-          : _menuFloorLogicalRowCount,
+      rowCount: selectionRowCount,
       seedBase: seedBase,
       reservedSquares: reservedSquares,
       captureSquareKey: captureSquareKey,
@@ -2047,9 +2092,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return false;
     }
     actor.activeMove = _menuFloorCreateMovePlan(
-      fromRow: startRow,
+      fromRow: actor.anchorRow,
       fromColumn: startColumn,
-      toRow: target.y,
+      toRow: captureTargetPosition?.row ?? target.y.toDouble(),
       toColumn: target.x,
       knightMove: actor.piece.startsWith('n_'),
       captureActorId: captureActorId,
@@ -2068,7 +2113,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final rowDelta = move.toRow - move.fromRow;
       final columnDelta = move.toColumn - move.fromColumn;
       final rowIsLongAxis = rowDelta.abs() > columnDelta.abs();
-      final midRowOffset = rowIsLongAxis ? rowDelta.toDouble() : 0.0;
+      final midRowOffset = rowIsLongAxis ? rowDelta : 0.0;
       final midColumnOffset = rowIsLongAxis ? 0.0 : columnDelta.toDouble();
       const split = 0.68;
       if (easedMoveProgress < split) {
@@ -2083,7 +2128,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         (easedMoveProgress - split) / (1.0 - split),
       );
       return (
-        rowOffset: ui.lerpDouble(midRowOffset, rowDelta.toDouble(), localT)!,
+        rowOffset: ui.lerpDouble(midRowOffset, rowDelta, localT)!,
         columnOffset: ui.lerpDouble(
           midColumnOffset,
           columnDelta.toDouble(),
@@ -2095,7 +2140,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return (
       rowOffset: ui.lerpDouble(
         0.0,
-        (move.toRow - move.fromRow).toDouble(),
+        move.toRow - move.fromRow,
         easedMoveProgress,
       )!,
       columnOffset: ui.lerpDouble(
@@ -2165,7 +2210,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (move == null || _mainMenuSceneTime < move.endSceneTime) {
         continue;
       }
-      actor.anchorRow = move.toRow.toDouble();
+      actor.anchorRow = move.toRow;
       actor.anchorColumn = move.toColumn.toDouble();
       actor.activeMove = null;
       if (move.captureActorId != null) {
@@ -2319,7 +2364,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           final tileBoundaryYs = <double>[tileCapY];
           final tileBoundaryHalfWidths = <double>[tileCapHalfWidth];
 
-          for (var row = 1; row <= visibleRowCount; row++) {
+          for (var row = 1; row <= visibleRowCount + 1; row++) {
             final progress = ui.lerpDouble(
               tileCapProgress,
               1.0,
@@ -2341,8 +2386,44 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             );
           }
 
-          tileBoundaryYs.add(size.height * 1.02);
-          tileBoundaryHalfWidths.add(size.width * 0.60);
+          double exitRowY;
+          double exitRowHalfWidth;
+          double extraExitRowY;
+          double extraExitRowHalfWidth;
+          if (tileBoundaryHalfWidths.length >= 2 &&
+              tileBoundaryYs.length >= 2) {
+            final lastIndex = tileBoundaryHalfWidths.length - 1;
+            final lastHalfWidth = tileBoundaryHalfWidths[lastIndex];
+            final previousHalfWidth = tileBoundaryHalfWidths[lastIndex - 1];
+            final lastY = tileBoundaryYs[lastIndex];
+            final previousY = tileBoundaryYs[lastIndex - 1];
+            final lastSegmentHeight = max(1.0, lastY - previousY);
+            final lastHalfWidthDelta = lastHalfWidth - previousHalfWidth;
+            exitRowY = lastY + lastSegmentHeight;
+            exitRowHalfWidth = max(
+              lastHalfWidth,
+              lastHalfWidth + lastHalfWidthDelta,
+            );
+            extraExitRowY = exitRowY + lastSegmentHeight;
+            extraExitRowHalfWidth = max(
+              exitRowHalfWidth,
+              exitRowHalfWidth + lastHalfWidthDelta,
+            );
+          } else {
+            exitRowY = size.height * 1.02;
+            exitRowHalfWidth = _menuFloorHalfWidthForProgress(
+              size,
+              outerRadius,
+              1.0,
+            );
+            extraExitRowY = exitRowY + size.height * 0.12;
+            extraExitRowHalfWidth = exitRowHalfWidth;
+          }
+          tileBoundaryYs.add(exitRowY);
+          tileBoundaryHalfWidths.add(exitRowHalfWidth);
+          tileBoundaryYs.add(extraExitRowY);
+          tileBoundaryHalfWidths.add(extraExitRowHalfWidth);
+
           final pieceBoundaryYs = <double>[...tileBoundaryYs];
           final pieceBoundaryHalfWidths = <double>[...tileBoundaryHalfWidths];
           if (pieceBoundaryYs.length >= 2) {
@@ -2363,22 +2444,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             return const SizedBox.shrink();
           }
 
-          final maxRenderableRow = pieceBoundaryYs.length - 1.001;
-          _menuFloorExitRowThreshold = max(0.0, maxRenderableRow);
+          final maxRenderableAnchorRow = max(
+            0.0,
+            pieceBoundaryYs.length - 1.501,
+          );
+          _menuFloorExitRowThreshold = maxRenderableAnchorRow;
 
           ({Offset position, double rowHeight, double tileWidth, double depth})?
           projectPoint({required double row, required double column}) {
             if (row < 0 ||
-                row > maxRenderableRow ||
+                row > maxRenderableAnchorRow ||
                 column < 0 ||
                 column >= columnCount) {
               return null;
             }
-            final clampedRow = row.clamp(0.0, maxRenderableRow);
-            final projectedRow = (clampedRow + 0.5).clamp(
-              0.0,
-              pieceBoundaryYs.length - 1.001,
-            );
+            final projectedRow = row + 0.5;
             final rowIndex = projectedRow.floor();
             final rowT = projectedRow - rowIndex;
             final topY = pieceBoundaryYs[rowIndex];
@@ -2396,7 +2476,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               position: Offset(x, y),
               rowHeight: bottomY - topY,
               tileWidth: (halfWidth * 2) / columnCount,
-              depth: clampedRow / max(1.0, maxRenderableRow),
+              depth: row / max(1.0, maxRenderableAnchorRow),
             );
           }
 
@@ -2453,6 +2533,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             final shadowWidth = pieceWidth * 0.42;
             final shadowHeight = max(2.5, pieceHeight * 0.09);
             final shadowTop = groundY - shadowHeight * 0.08;
+            final horizontalAnchorCorrection =
+                pieceWidth * ui.lerpDouble(0.03, 0.05, projection.depth)!;
+            final anchoredX =
+                projection.position.dx - horizontalAnchorCorrection;
             final resolvedOpacity = (0.48 + projection.depth * 0.14) * opacity;
             final pieceWidget = _pieceImage(
               piece,
@@ -2465,7 +2549,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             renderables.add((
               depthY: groundY - 0.01,
               widget: Positioned(
-                left: projection.position.dx - shadowWidth / 2,
+                left: anchoredX - shadowWidth / 2,
                 top: shadowTop - shadowHeight / 2,
                 child: IgnorePointer(
                   child: Container(
@@ -2493,7 +2577,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             renderables.add((
               depthY: groundY,
               widget: Positioned(
-                left: projection.position.dx - pieceWidth / 2,
+                left: anchoredX - pieceWidth / 2,
                 top: pieceTop,
                 child: IgnorePointer(
                   child: Opacity(
@@ -2509,7 +2593,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ));
           }
 
-          final scaleLockRow = max(0.0, pieceBoundaryYs.length - 2.35);
+          final scaleLockRow = max(0.0, maxRenderableAnchorRow - 0.85);
           for (final actor in _menuFloorActors) {
             final opacity = _currentMenuFloorActorOpacity(actor);
             if (opacity <= 0.0) {
@@ -5246,6 +5330,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _gameResultDialogVisible = false;
     _launchStart = null;
     _launchTargets = <Offset>[];
+    _extraLaunchStart = null;
+    _extraLaunchTargets = <Offset>[];
+    _secondExtraLaunchStart = null;
+    _secondExtraLaunchTargets = <Offset>[];
     _launchTargetsEvalBar = false;
     _topLines = [];
     _analysisLines = [];
@@ -7308,6 +7396,54 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return Align(
       alignment: isLandscape ? Alignment.topCenter : Alignment.bottomCenter,
       child: _buildMoveQualityBanner(isLandscape: isLandscape),
+    );
+  }
+
+  Widget _buildPortraitVsBotMoveQualityBannerSceneOverlay() {
+    if (!_playVsBot || _gameOutcome != null || !_hasMoveQualityBanner) {
+      return const SizedBox.shrink();
+    }
+
+    final media = MediaQuery.of(context);
+    if (media.orientation == Orientation.landscape) {
+      return const SizedBox.shrink();
+    }
+
+    final boardRect = _boardRectInScene();
+    if (boardRect == null) {
+      return const SizedBox.shrink();
+    }
+
+    const gapBelowBoard = 12.0;
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: boardRect.bottom + gapBelowBoard,
+      child: Center(child: _buildMoveQualityBanner(isLandscape: false)),
+    );
+  }
+
+  Widget _buildLandscapeVsBotMoveQualityBannerSceneOverlay(Size scene) {
+    if (!_playVsBot || _gameOutcome != null || !_hasMoveQualityBanner) {
+      return const SizedBox.shrink();
+    }
+
+    final media = MediaQuery.of(context);
+    if (media.orientation != Orientation.landscape) {
+      return const SizedBox.shrink();
+    }
+
+    final actionAreaRect = _rectInScene(_actionAreaKey);
+    if (actionAreaRect == null) {
+      return const SizedBox.shrink();
+    }
+
+    const gapAboveActionArea = 14.0;
+    return Positioned(
+      left: actionAreaRect.left,
+      right: max(0.0, scene.width - actionAreaRect.right),
+      bottom: max(0.0, scene.height - actionAreaRect.top + gapAboveActionArea),
+      child: _buildMoveQualityBannerOverlay(isLandscape: true),
     );
   }
 
@@ -11293,6 +11429,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return topLeft & boardBox.size;
   }
 
+  Rect? _rectInScene(GlobalKey key) {
+    final targetContext = key.currentContext;
+    final sceneContext = _sceneKey.currentContext;
+    if (targetContext == null || sceneContext == null) {
+      return null;
+    }
+    final targetBox = _renderBoxFromContext(targetContext);
+    final sceneBox = _renderBoxFromContext(sceneContext);
+    if (targetBox == null || sceneBox == null) {
+      return null;
+    }
+    final topLeft = sceneBox.globalToLocal(
+      targetBox.localToGlobal(Offset.zero),
+    );
+    return topLeft & targetBox.size;
+  }
+
   bool _isCompactBotFrame(BuildContext context) {
     final media = MediaQuery.of(context);
     return _playVsBot &&
@@ -12183,8 +12336,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'f2',
       'h2',
     ];
-    final safeCount = count.clamp(1, preferred.length);
+    final safeCount = count.clamp(1, 8);
     return preferred.take(safeCount).toList();
+  }
+
+  String? _extraLaunchSquareForSuggestionCount(int count) {
+    if (count >= 9) {
+      return 'e2';
+    }
+    return null;
+  }
+
+  String? _secondExtraLaunchSquareForSuggestionCount(int count) {
+    if (count >= 10) {
+      return 'c2';
+    }
+    return null;
   }
 
   Future<void> _fireSuggestionLaunch() async {
@@ -12214,28 +12381,117 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           .map(_squareCenterInScene)
           .whereType<Offset>()
           .toList();
-      if (targets.isEmpty) {
+      final extraSquare = _extraLaunchSquareForSuggestionCount(_multiPvCount);
+      final extraTarget = extraSquare == null
+          ? null
+          : _squareCenterInScene(extraSquare);
+      final extraTargets = extraSquare == null
+          ? <Offset>[]
+          : <Offset>[extraTarget!];
+      final secondExtraSquare = _secondExtraLaunchSquareForSuggestionCount(
+        _multiPvCount,
+      );
+      final secondExtraTarget = secondExtraSquare == null
+          ? null
+          : _squareCenterInScene(secondExtraSquare);
+      final secondExtraTargets = secondExtraSquare == null
+          ? <Offset>[]
+          : <Offset>[secondExtraTarget!];
+      if (targets.isEmpty &&
+          extraTargets.isEmpty &&
+          secondExtraTargets.isEmpty) {
         if (!completer.isCompleted) completer.complete();
         return;
       }
 
-      setState(() {
-        _launchStart = buttonCenter;
-        _launchTargets = targets;
-        _launchTargetsEvalBar = false;
-      });
+      final pending = <Future<void>>[];
 
-      _launchController.forward(from: 0).whenComplete(() {
-        if (!mounted) return;
+      if (targets.isNotEmpty) {
         setState(() {
-          _launchStart = null;
-          _launchTargets = <Offset>[];
+          _launchStart = buttonCenter;
+          _launchTargets = targets;
           _launchTargetsEvalBar = false;
         });
+
+        pending.add(
+          _launchController.forward(from: 0).whenComplete(() {
+            if (!mounted) return;
+            setState(() {
+              _launchStart = null;
+              _launchTargets = <Offset>[];
+              _launchTargetsEvalBar = false;
+            });
+          }),
+        );
+      }
+
+      if (extraTargets.isNotEmpty) {
+        pending.add(_fireExtraSuggestionLaunch(buttonCenter, extraTargets));
+      }
+
+      if (secondExtraTargets.isNotEmpty) {
+        pending.add(
+          _fireSecondExtraSuggestionLaunch(buttonCenter, secondExtraTargets),
+        );
+      }
+
+      Future.wait(pending).whenComplete(() {
         if (!completer.isCompleted) completer.complete();
       });
     });
     await completer.future;
+  }
+
+  Future<void> _fireExtraSuggestionLaunch(
+    Offset start,
+    List<Offset> targets,
+  ) async {
+    await Future<void>.delayed(_extraSuggestionLaunchDelay);
+    if (!mounted || targets.isEmpty) {
+      return;
+    }
+
+    _extraLaunchController.reset();
+    setState(() {
+      _extraLaunchStart = start;
+      _extraLaunchTargets = targets;
+    });
+
+    await _extraLaunchController.forward();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _extraLaunchStart = null;
+      _extraLaunchTargets = <Offset>[];
+    });
+  }
+
+  Future<void> _fireSecondExtraSuggestionLaunch(
+    Offset start,
+    List<Offset> targets,
+  ) async {
+    await Future<void>.delayed(_secondExtraSuggestionLaunchDelay);
+    if (!mounted || targets.isEmpty) {
+      return;
+    }
+
+    _secondExtraLaunchController.reset();
+    setState(() {
+      _secondExtraLaunchStart = start;
+      _secondExtraLaunchTargets = targets;
+    });
+
+    await _secondExtraLaunchController.forward();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _secondExtraLaunchStart = null;
+      _secondExtraLaunchTargets = <Offset>[];
+    });
   }
 
   Widget _buildSuggestionLaunchOverlay() {
@@ -12246,7 +12502,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return AnimatedBuilder(
       animation: _launchController,
       builder: (context, child) {
-        final t = Curves.easeInOutCubic.transform(_launchController.value);
+        final rawT = _launchController.value;
+        final t = Curves.easeInOutCubic.transform(rawT);
         final start = _launchStart!;
 
         if (_launchTargetsEvalBar) {
@@ -12331,7 +12588,123 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
           );
         }
+        final launchDurationMs =
+            _launchController.duration?.inMilliseconds ?? 650;
+        final safeLaunchDurationMs = launchDurationMs <= 0
+            ? 1
+            : launchDurationMs;
 
+        return IgnorePointer(
+          child: Stack(
+            children: [
+              for (int index = 0; index < _launchTargets.length; index++)
+                Builder(
+                  builder: (context) {
+                    final delayFraction = (index * 20) / safeLaunchDurationMs;
+                    if (rawT < delayFraction) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final launchT = Curves.easeInOutCubic.transform(
+                      ((rawT - delayFraction) / (1.0 - delayFraction)).clamp(
+                        0.0,
+                        1.0,
+                      ),
+                    );
+                    final rippleT = ((launchT - 0.82) / 0.18).clamp(0.0, 1.0);
+                    final rippleRadius = 8 + (24 * rippleT);
+                    final rippleAlpha = (1.0 - rippleT) * 0.75;
+                    final end = _launchTargets[index];
+                    final x = ui.lerpDouble(start.dx, end.dx, launchT)!;
+                    final arcHeight = 26 + (8 * (index % 3));
+                    final sideBias =
+                        (index - ((_launchTargets.length - 1) / 2)) * 6.0;
+                    final y =
+                        ui.lerpDouble(start.dy, end.dy, launchT)! -
+                        sin(launchT * pi) * arcHeight;
+                    final glow =
+                        4 + (5 * (1 - (launchT - 0.7).abs().clamp(0.0, 0.7)));
+                    return Stack(
+                      children: [
+                        if (rippleT > 0)
+                          Positioned(
+                            left: end.dx - rippleRadius,
+                            top: end.dy - rippleRadius,
+                            child: Container(
+                              width: rippleRadius * 2,
+                              height: rippleRadius * 2,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF7EDC8A,
+                                  ).withValues(alpha: rippleAlpha),
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          left: x - 4 + sideBias * (1 - launchT),
+                          top: y - 4,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF7EDC8A),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF7EDC8A,
+                                  ).withValues(alpha: 0.85),
+                                  blurRadius: glow,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildExtraSuggestionLaunchOverlay() {
+    return _buildDelayedSuggestionLaunchOverlay(
+      controller: _extraLaunchController,
+      start: _extraLaunchStart,
+      targets: _extraLaunchTargets,
+    );
+  }
+
+  Widget _buildSecondExtraSuggestionLaunchOverlay() {
+    return _buildDelayedSuggestionLaunchOverlay(
+      controller: _secondExtraLaunchController,
+      start: _secondExtraLaunchStart,
+      targets: _secondExtraLaunchTargets,
+    );
+  }
+
+  Widget _buildDelayedSuggestionLaunchOverlay({
+    required AnimationController controller,
+    required Offset? start,
+    required List<Offset> targets,
+  }) {
+    if (start == null || targets.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        final t = Curves.easeInOutCubic.transform(controller.value);
         final rippleT = ((t - 0.82) / 0.18).clamp(0.0, 1.0);
         final rippleRadius = 8 + (24 * rippleT);
         final rippleAlpha = (1.0 - rippleT) * 0.75;
@@ -12339,11 +12712,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return IgnorePointer(
           child: Stack(
             children: [
-              for (int index = 0; index < _launchTargets.length; index++) ...[
+              for (int index = 0; index < targets.length; index++) ...[
                 if (rippleT > 0)
                   Positioned(
-                    left: _launchTargets[index].dx - rippleRadius,
-                    top: _launchTargets[index].dy - rippleRadius,
+                    left: targets[index].dx - rippleRadius,
+                    top: targets[index].dy - rippleRadius,
                     child: Container(
                       width: rippleRadius * 2,
                       height: rippleRadius * 2,
@@ -12360,11 +12733,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
                 Builder(
                   builder: (context) {
-                    final end = _launchTargets[index];
+                    final end = targets[index];
                     final x = ui.lerpDouble(start.dx, end.dx, t)!;
                     final arcHeight = 26 + (8 * (index % 3));
-                    final sideBias =
-                        (index - ((_launchTargets.length - 1) / 2)) * 6.0;
+                    final sideBias = (index - ((targets.length - 1) / 2)) * 6.0;
                     final y =
                         ui.lerpDouble(start.dy, end.dy, t)! -
                         sin(t * pi) * arcHeight;
@@ -12612,6 +12984,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _yellowMenuDotPosition.dx.clamp(-1.0, 1.0),
           _yellowMenuDotPosition.dy.clamp(-1.0, 1.0),
         );
+        const menuCompositionSize = 360 * 1.10;
         final menuCardShell = Container(
           width: 220,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
@@ -12763,45 +13136,62 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   SizedBox(height: showMenuLogo ? 10 : 2),
                   Expanded(
                     child: Center(
-                      child: Container(
-                        constraints: const BoxConstraints(
-                          maxWidth: 430,
-                          maxHeight: 560,
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            _buildMenuCenterShape(
-                              size: 360 * 1.10,
-                              strokeColor: Color.alphaBlend(
-                                arcade.cyan.withValues(
-                                  alpha: isMono ? 0.04 : 0.14,
+                      child: LayoutBuilder(
+                        builder: (context, innerConstraints) {
+                          final availableWidth = min(
+                            innerConstraints.maxWidth,
+                            430.0,
+                          );
+                          final availableHeight = min(
+                            innerConstraints.maxHeight,
+                            560.0,
+                          );
+                          return SizedBox(
+                            width: availableWidth,
+                            height: availableHeight,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: SizedBox(
+                                width: menuCompositionSize,
+                                height: menuCompositionSize,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    _buildMenuCenterShape(
+                                      size: menuCompositionSize,
+                                      strokeColor: Color.alphaBlend(
+                                        arcade.cyan.withValues(
+                                          alpha: isMono ? 0.04 : 0.14,
+                                        ),
+                                        scheme.outline.withValues(alpha: 0.38),
+                                      ),
+                                      strokeWidth: 2,
+                                      rotation: _menuCenterRotationA,
+                                      sides: _menuCenterShapeSidesA,
+                                      impact: _menuCenterImpact,
+                                      accentColor: blueDotColor,
+                                    ),
+                                    _buildMenuCenterShape(
+                                      size: 285 * 1.10,
+                                      strokeColor: Color.alphaBlend(
+                                        arcade.amber.withValues(
+                                          alpha: isMono ? 0.04 : 0.14,
+                                        ),
+                                        scheme.outline.withValues(alpha: 0.30),
+                                      ),
+                                      strokeWidth: 1.5,
+                                      rotation: _menuCenterRotationB,
+                                      sides: _menuCenterShapeSidesB,
+                                      impact: _menuCenterImpact * 0.86,
+                                      accentColor: yellowDotColor,
+                                    ),
+                                    menuCard,
+                                  ],
                                 ),
-                                scheme.outline.withValues(alpha: 0.38),
                               ),
-                              strokeWidth: 2,
-                              rotation: _menuCenterRotationA,
-                              sides: _menuCenterShapeSidesA,
-                              impact: _menuCenterImpact,
-                              accentColor: blueDotColor,
                             ),
-                            _buildMenuCenterShape(
-                              size: 285 * 1.10,
-                              strokeColor: Color.alphaBlend(
-                                arcade.amber.withValues(
-                                  alpha: isMono ? 0.04 : 0.14,
-                                ),
-                                scheme.outline.withValues(alpha: 0.30),
-                              ),
-                              strokeWidth: 1.5,
-                              rotation: _menuCenterRotationB,
-                              sides: _menuCenterShapeSidesB,
-                              impact: _menuCenterImpact * 0.86,
-                              accentColor: yellowDotColor,
-                            ),
-                            menuCard,
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -13230,7 +13620,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                           ),
                                                                         ),
                                                                       ),
-                                                                    if (_hasMoveQualityBanner)
+                                                                    if (_hasMoveQualityBanner &&
+                                                                        !_playVsBot)
                                                                       Positioned(
                                                                         left: 0,
                                                                         right:
@@ -13369,7 +13760,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             width: portraitToolboxWidth,
                             child: _buildEditModeToolbox(isLandscape: false),
                           ),
+                        _buildLandscapeVsBotMoveQualityBannerSceneOverlay(
+                          Size(width, height),
+                        ),
+                        _buildPortraitVsBotMoveQualityBannerSceneOverlay(),
                         _buildSuggestionLaunchOverlay(),
+                        _buildExtraSuggestionLaunchOverlay(),
+                        _buildSecondExtraSuggestionLaunchOverlay(),
                         _buildButtonRippleOverlay(),
                         _buildStoreCoinGainOverlay(),
                         _buildGameResultRevealOverlay(
@@ -15350,6 +15747,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
 
     _refreshAnalysisForCurrentPosition();
+    unawaited(_maybeTriggerBotMove());
   }
 
   Widget _buildVsBotControlButton({
@@ -15470,8 +15868,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
     final endedOutcome = _gameOutcome;
 
     Widget buildEndMatchButton({
@@ -15588,16 +15986,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ? arcade.text
           : const Color(0xFF0B0F16);
       final showStatusTagInDeck = isLandscape;
-      final showPortraitFeedbackOverlay =
-          !isLandscape && (_hasVisibleSuggestedMoves || _hasMoveQualityBanner);
-      final portraitFeedbackHeight = _hasVisibleSuggestedMoves ? 168.0 : 120.0;
-      final portraitSuggestionPadding = _hasMoveQualityBanner
-          ? const EdgeInsets.fromLTRB(20, 34, 20, 8)
-          : const EdgeInsets.fromLTRB(20, 0, 20, 12);
-      final portraitSuggestionAlignment = _hasMoveQualityBanner
-          ? Alignment.topCenter
-          : Alignment.bottomCenter;
       final showEndMatchButton = endedOutcome != null;
+      const portraitSuggestionsOverlayHeight = 168.0;
+      final showFloatingPortraitSuggestionsOverlay =
+          !isLandscape && _hasVisibleSuggestedMoves;
 
       final deck = Container(
         decoration: _vsBotArcadePanelDecoration(
@@ -15620,7 +16012,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   : null,
             );
 
-            return Column(
+            final deckContent = Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (showStatusTagInDeck) ...[
@@ -15736,11 +16128,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
               ],
             );
+
+            return deckContent;
           },
         ),
       );
 
       return Padding(
+        key: _actionAreaKey,
         padding: EdgeInsets.only(
           bottom: compactBottom,
           left: horizontal,
@@ -15750,26 +16145,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           clipBehavior: Clip.none,
           children: [
             deck,
-            if (showPortraitFeedbackOverlay)
+            if (showFloatingPortraitSuggestionsOverlay)
               Positioned(
                 left: 0,
                 right: 0,
-                top: -portraitFeedbackHeight,
-                child: SizedBox(
-                  height: portraitFeedbackHeight,
-                  child: Stack(
-                    children: [
-                      if (_hasVisibleSuggestedMoves)
-                        _buildSuggestedMovesList(
-                          height: portraitFeedbackHeight,
-                          padding: portraitSuggestionPadding,
-                          maxVisibleMoves: 2,
-                          alignment: portraitSuggestionAlignment,
-                        ),
-                      if (_hasMoveQualityBanner)
-                        _buildMoveQualityBannerOverlay(isLandscape: false),
-                    ],
-                  ),
+                top: -portraitSuggestionsOverlayHeight,
+                child: _buildSuggestedMovesList(
+                  height: portraitSuggestionsOverlayHeight,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  maxVisibleMoves: 2,
+                  alignment: Alignment.bottomCenter,
                 ),
               ),
           ],
@@ -20294,16 +20679,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         );
       }
     } else {
-      final outlineWidth = width == null
-          ? null
-          : width + blackOutlineOverflowPx;
-      final outlineHeight = height == null
-          ? null
-          : height + blackOutlineOverflowPx;
-      final outlineCenterShift = Offset(
-        -blackOutlineOverflowPx / 2,
-        -blackOutlineOverflowPx / 2,
-      );
+      final outlineOffsets = blackOutlineOverflowPx <= 0
+          ? AppThemeProvider.darkPieceOutlineOffsets
+          : AppThemeProvider.darkPieceOutlineOffsets
+                .map((offset) {
+                  final distance = offset.distance;
+                  if (distance == 0) {
+                    return offset;
+                  }
+                  final extraRadius = blackOutlineOverflowPx * 0.5;
+                  return Offset(
+                    offset.dx + (offset.dx / distance) * extraRadius,
+                    offset.dy + (offset.dy / distance) * extraRadius,
+                  );
+                })
+                .toList(growable: false);
 
       result = Stack(
         clipBehavior: Clip.none,
@@ -20331,15 +20721,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
                 ),
               ),
-          for (final offset in AppThemeProvider.darkPieceOutlineOffsets)
+          for (final offset in outlineOffsets)
             Transform.translate(
-              offset: offset + outlineCenterShift,
+              offset: offset,
               child: Opacity(
                 opacity: 0.18,
                 child: Image.asset(
                   'assets/pieces/$assetPiece.png',
-                  width: outlineWidth,
-                  height: outlineHeight,
+                  width: width,
+                  height: height,
                   color: const Color(0xFFF7FBFF),
                   colorBlendMode: BlendMode.srcIn,
                 ),
@@ -20529,6 +20919,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _introController.dispose();
     _menuRevealController.dispose();
     _launchController.dispose();
+    _extraLaunchController.dispose();
+    _secondExtraLaunchController.dispose();
     _buttonRippleController.dispose();
     _menuMusicFadeController.dispose();
     _sectionTransitionController.dispose();

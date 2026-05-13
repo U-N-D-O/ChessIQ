@@ -711,50 +711,33 @@ abstract class _VsBotState extends _StoreState {
     final difficultyAccent = _botDifficultyColor(_selectedBotDifficulty);
     final bubbleAccent = Color.lerp(profileAccent, difficultyAccent, 0.45)!;
     final text = _botSpeechVisibleText.isEmpty ? '...' : _botSpeechVisibleText;
+    final bubbleFill = Color.alphaBlend(
+      bubbleAccent.withValues(alpha: arcade.monochrome ? 0.08 : 0.14),
+      arcade.panelAlt,
+    );
     final tailHeight = 20 * scale;
+    final tailWidth = 20 * scale;
+    final tailLeadInset = 11 * scale;
     final tailTipYOffset = tailHeight * 0.58;
     final tailTop = (pointerTargetDy - tailTipYOffset).clamp(
       4.0 * scale,
       34.0 * scale,
     );
-    final tailAngle =
-        ((pointerTargetDy - (18 * scale)) / (24 * scale)).clamp(-0.34, 0.34);
+    final tailAngle = ((pointerTargetDy - (18 * scale)) / (24 * scale)).clamp(
+      -0.34,
+      0.34,
+    );
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth ?? (214 * scale)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Padding(
-            padding: EdgeInsets.only(top: tailTop),
-            child: Transform.translate(
-              offset: Offset(1.2 * scale, 0),
-              child: Transform.rotate(
-                angle: tailAngle,
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: 1 * scale),
-                  child: CustomPaint(
-                    size: Size(18 * scale, tailHeight),
-                    painter: _SpeechTailPainter(
-                      fillColor: Color.alphaBlend(
-                        bubbleAccent.withValues(
-                          alpha: arcade.monochrome ? 0.08 : 0.14,
-                        ),
-                        arcade.panelAlt,
-                      ),
-                      strokeColor: bubbleAccent.withValues(alpha: 0.72),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Flexible(
+            padding: EdgeInsets.only(left: tailLeadInset),
             child: Container(
               padding: EdgeInsets.fromLTRB(
-                11 * scale,
+                12 * scale,
                 8 * scale,
                 11 * scale,
                 10 * scale,
@@ -803,6 +786,27 @@ abstract class _VsBotState extends _StoreState {
               ),
             ),
           ),
+          Positioned(
+            left: 0,
+            top: tailTop,
+            child: Transform.translate(
+              offset: Offset(0.8 * scale, 0),
+              child: Transform.rotate(
+                angle: tailAngle,
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 1 * scale),
+                  child: CustomPaint(
+                    size: Size(tailWidth, tailHeight),
+                    painter: _SpeechTailPainter(
+                      fillColor: bubbleFill,
+                      strokeColor: bubbleAccent.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -841,51 +845,75 @@ class _SpeechTailPainter extends CustomPainter {
   final Color fillColor;
   final Color strokeColor;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final tip = Offset(size.width * 0.08, size.height * 0.58);
-    final top = Offset(size.width * 0.98, size.height * 0.18);
-    final bottom = Offset(size.width * 0.98, size.height * 0.86);
-    final path = Path()
+  Path _fillPath(Size size) {
+    final tip = Offset(size.width * 0.06, size.height * 0.58);
+    final top = Offset(size.width * 0.96, size.height * 0.18);
+    final bottom = Offset(size.width * 0.96, size.height * 0.84);
+
+    return Path()
       ..moveTo(top.dx, top.dy)
-      ..quadraticBezierTo(
-        size.width * 0.66,
-        size.height * 0.20,
+      ..cubicTo(
+        size.width * 0.76,
+        size.height * 0.14,
         size.width * 0.34,
-        size.height * 0.38,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.16,
-        size.height * 0.50,
+        size.height * 0.28,
         tip.dx,
         tip.dy,
       )
-      ..quadraticBezierTo(
-        size.width * 0.18,
-        size.height * 0.68,
+      ..cubicTo(
         size.width * 0.34,
-        size.height * 0.78,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.66,
-        size.height * 0.90,
+        size.height * 0.76,
+        size.width * 0.76,
+        size.height * 0.92,
         bottom.dx,
         bottom.dy,
       )
       ..close();
+  }
+
+  Path _outlinePath(Size size) {
+    final tip = Offset(size.width * 0.06, size.height * 0.58);
+    final top = Offset(size.width * 0.82, size.height * 0.24);
+    final bottom = Offset(size.width * 0.82, size.height * 0.78);
+
+    return Path()
+      ..moveTo(top.dx, top.dy)
+      ..cubicTo(
+        size.width * 0.64,
+        size.height * 0.18,
+        size.width * 0.30,
+        size.height * 0.30,
+        tip.dx,
+        tip.dy,
+      )
+      ..cubicTo(
+        size.width * 0.30,
+        size.height * 0.74,
+        size.width * 0.64,
+        size.height * 0.86,
+        bottom.dx,
+        bottom.dy,
+      );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fillPath = _fillPath(size);
+    final outlinePath = _outlinePath(size);
 
     canvas.drawPath(
-      path,
+      fillPath,
       Paint()
         ..color = fillColor
         ..style = PaintingStyle.fill,
     );
     canvas.drawPath(
-      path,
+      outlinePath,
       Paint()
         ..color = strokeColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = size.width * 0.08,
+        ..strokeWidth = size.width * 0.08
+        ..strokeJoin = StrokeJoin.round,
     );
   }
 
