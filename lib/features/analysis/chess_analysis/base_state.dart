@@ -331,6 +331,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _analysisMultiPvKey = 'analysis_multi_pv_v1';
   static const String _analysisMoveAssessmentEnabledKey =
       'analysis_move_assessment_enabled_v1';
+  static const String _analysisHeadToHeadEvalBarEnabledKey =
+      'analysis_head_to_head_eval_bar_enabled_v1';
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
@@ -634,6 +636,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _introCompleted = true;
   bool _suggestionsEnabled = false;
   bool _moveAssessmentEnabled = false;
+  bool _headToHeadEvalBarEnabled = false;
   bool _vsBotEvalEnabled = false;
   bool _vsBotOptimalLineRevealActive = false;
   int _vsBotCharge = 0;
@@ -4200,6 +4203,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedMoveAssessment = prefs.getBool(
         _analysisMoveAssessmentEnabledKey,
       );
+      final savedHeadToHeadEvalBarEnabled = prefs.getBool(
+        _analysisHeadToHeadEvalBarEnabledKey,
+      );
 
       if (savedPerspective != null &&
           savedPerspective >= 0 &&
@@ -4214,6 +4220,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       if (savedMoveAssessment != null) {
         _moveAssessmentEnabled = savedMoveAssessment;
+      }
+      if (savedHeadToHeadEvalBarEnabled != null) {
+        _headToHeadEvalBarEnabled = savedHeadToHeadEvalBarEnabled;
       }
     } catch (e) {
       debugPrint('Failed to load analysis settings prefs: $e');
@@ -4264,6 +4273,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _clearMoveQualityOverlay();
         _clearMoveQualityBadge();
       }
+    });
+
+    _persistCurrentSettings();
+    if (value) {
+      await _ensureEngineStarted();
+      if (!mounted) {
+        return;
+      }
+    }
+    _analyze();
+  }
+
+  Future<void> _setHeadToHeadEvalBarEnabled(bool value) async {
+    if (_headToHeadEvalBarEnabled == value) {
+      return;
+    }
+
+    setState(() {
+      _headToHeadEvalBarEnabled = value;
     });
 
     _persistCurrentSettings();
@@ -4347,6 +4375,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool get _isAnalysisEditModeActive =>
       _analysisEditMode && _canUseAnalysisEditMode;
 
+  bool get _showsHeadToHeadEvalBar =>
+      !_playVsBot && _isHeadToHeadPerspective && _headToHeadEvalBarEnabled;
+
   bool get _runsAnalysisMoveAssessment => !_playVsBot && _moveAssessmentEnabled;
 
   bool get _isEngineActive => _playVsBot
@@ -4357,8 +4388,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       ? _vsBotOptimalLineRevealActive && _isHumanTurnInBotGame
       : _isEngineActive && _multiPvCount > 0;
 
-  bool get _shouldKeepEvalActive =>
-      _playVsBot ? _vsBotEvalEnabled : _isEngineActive;
+  bool get _shouldKeepEvalActive => _playVsBot
+      ? _vsBotEvalEnabled
+      : _isEngineActive || _showsHeadToHeadEvalBar;
 
   bool get _shouldRunLiveAnalysis =>
       _shouldKeepEvalActive ||
@@ -5132,6 +5164,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedDepth = decoded['engineDepth'];
       final savedMultiPv = decoded['multiPvCount'];
       final savedMoveAssessmentEnabled = decoded['moveAssessmentEnabled'];
+      final savedHeadToHeadEvalBarEnabled = decoded['headToHeadEvalBarEnabled'];
       final savedWhiteTurn = decoded['isWhiteTurn'];
       final savedBoard = decoded['boardState'];
       final savedHistory = decoded['moveHistory'];
@@ -5166,6 +5199,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!prefs.containsKey(_analysisMoveAssessmentEnabledKey) &&
           savedMoveAssessmentEnabled is bool) {
         _moveAssessmentEnabled = savedMoveAssessmentEnabled;
+      }
+      if (!prefs.containsKey(_analysisHeadToHeadEvalBarEnabledKey) &&
+          savedHeadToHeadEvalBarEnabled is bool) {
+        _headToHeadEvalBarEnabled = savedHeadToHeadEvalBarEnabled;
       }
       if (savedWhiteTurn is bool) {
         _isWhiteTurn = savedWhiteTurn;
@@ -5282,6 +5319,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     await prefs.setBool(
       _analysisMoveAssessmentEnabledKey,
       _moveAssessmentEnabled,
+    );
+    await prefs.setBool(
+      _analysisHeadToHeadEvalBarEnabledKey,
+      _headToHeadEvalBarEnabled,
     );
     await _saveCurrentAsDefaultSnapshot(logChange: false);
   }
@@ -7503,6 +7544,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Widget _buildPortraitVsBotMoveQualityBannerSceneOverlay() {
     if (!_playVsBot || _gameOutcome != null || !_hasMoveQualityBanner) {
+      return const SizedBox.shrink();
+    }
+
+    final media = MediaQuery.of(context);
+    if (media.orientation == Orientation.landscape) {
+      return const SizedBox.shrink();
+    }
+
+    final boardRect = _boardRectInScene();
+    if (boardRect == null) {
+      return const SizedBox.shrink();
+    }
+
+    const gapBelowBoard = 12.0;
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: boardRect.bottom + gapBelowBoard,
+      child: Center(child: _buildMoveQualityBanner(isLandscape: false)),
+    );
+  }
+
+  Widget _buildPortraitAnalysisMoveQualityBannerSceneOverlay() {
+    if (_playVsBot || _gameOutcome != null || !_hasMoveQualityBanner) {
       return const SizedBox.shrink();
     }
 
@@ -13908,6 +13973,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         _buildLandscapeVsBotMoveQualityBannerSceneOverlay(
                           Size(width, height),
                         ),
+                        _buildPortraitAnalysisMoveQualityBannerSceneOverlay(),
                         _buildPortraitVsBotMoveQualityBannerSceneOverlay(),
                         _buildSuggestionLaunchOverlay(),
                         _buildExtraSuggestionLaunchOverlay(),
@@ -16408,7 +16474,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _iconBtn(Icons.refresh, _confirmReset),
           _marketplaceBtn(),
           _buildSuggestionTriggerButton(),
-          if (!_playVsBot)
+          if (!_playVsBot && _isHeadToHeadPerspective)
+            _buildHeadToHeadEvalBarToggleButton(
+              scheme: scheme,
+              isLight: isLight,
+            )
+          else if (!_playVsBot)
             SizedBox.square(
               dimension: 40,
               child: Stack(
@@ -18721,6 +18792,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'engineDepth': _engineDepth,
       'multiPvCount': _multiPvCount,
       'moveAssessmentEnabled': _moveAssessmentEnabled,
+      'headToHeadEvalBarEnabled': _headToHeadEvalBarEnabled,
       'isWhiteTurn': _isWhiteTurn,
       'whiteKingMoved': _whiteKingMoved,
       'blackKingMoved': _blackKingMoved,
@@ -20923,6 +20995,53 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Widget _buildHeadToHeadEvalBarToggleButton({
+    required ColorScheme scheme,
+    required bool isLight,
+  }) {
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final activeAccent = useMonochrome
+        ? scheme.onSurface
+        : _evalColorForUi(_displayEvalForPov());
+    final iconColor = _headToHeadEvalBarEnabled
+        ? activeAccent
+        : scheme.onSurface.withValues(alpha: isLight ? 0.78 : 0.58);
+    final backgroundColor = Color.alphaBlend(
+      (_headToHeadEvalBarEnabled ? activeAccent : scheme.primary).withValues(
+        alpha: _headToHeadEvalBarEnabled
+            ? (isLight ? 0.16 : 0.10)
+            : (isLight ? 0.10 : 0.05),
+      ),
+      scheme.surface,
+    );
+    final borderColor = _headToHeadEvalBarEnabled
+        ? activeAccent.withValues(alpha: isLight ? 0.56 : 0.36)
+        : scheme.outline.withValues(alpha: isLight ? 0.38 : 0.24);
+
+    return Tooltip(
+      message: _headToHeadEvalBarEnabled ? 'Hide eval bar' : 'Show eval bar',
+      waitDuration: const Duration(milliseconds: 300),
+      child: SizedBox.square(
+        dimension: 40,
+        child: IconButton(
+          onPressed: () {
+            unawaited(_setHeadToHeadEvalBarEnabled(!_headToHeadEvalBarEnabled));
+          },
+          icon: Icon(Icons.stacked_bar_chart_rounded, color: iconColor),
+          style: IconButton.styleFrom(
+            backgroundColor: backgroundColor,
+            side: BorderSide(color: borderColor),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeadToHeadGlyph(
     BuildContext context, {
     double iconSize = 16,
@@ -21003,6 +21122,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _perspective = p;
           if (p == BoardPerspective.headToHead) {
             _suggestionsEnabled = false;
+            _openingMode = OpeningMode.off;
+            _preferOpeningModeOnNextToggleAfterSacrifice = false;
+            _openingModeFeedbackLabel = null;
+            _openingModeFeedbackColor = null;
+            _selectedGambit = null;
+            _gambitPreviewLines = <EngineLine>[];
+            _gambitSelectedFrom = null;
+            _legalTargets.clear();
+            _gambitAvailableTargets.clear();
             _topLines = <EngineLine>[];
             _analysisLines = <EngineLine>[];
             _analysisLinesFen = null;
@@ -21010,10 +21138,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           }
         });
         if (p == BoardPerspective.headToHead) {
+          _cancelSacrificeScanSearches(reason: 'head-to-head perspective');
           if (_analysisEditMode) {
             _setAnalysisEditMode(false);
           }
           _send('stop');
+          if (_headToHeadEvalBarEnabled) {
+            _analyze();
+          }
         }
         setL(() {});
         _persistCurrentSettings();
