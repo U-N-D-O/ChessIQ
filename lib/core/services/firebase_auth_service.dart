@@ -30,12 +30,14 @@ class FirebaseAuthService {
   static const String _prefRefreshToken = 'fauth_refresh';
   static const String _prefIdToken = 'fauth_id_token';
   static const String _prefExpiryMs = 'fauth_expiry_ms';
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
   String? _uid;
   String? _idToken;
   String? _refreshToken;
   DateTime? _expiry;
   String? _lastError;
+  Future<void>? _initializationFuture;
 
   /// Firebase UID for the anonymous user, or null before initialisation.
   String? get uid => _uid;
@@ -44,8 +46,13 @@ class FirebaseAuthService {
   String? get lastError => _lastError;
 
   /// Loads persisted credentials and refreshes or creates a new account as
-  /// needed. Should be called once in [main] before [runApp].
+  /// needed. Safe to warm up during startup or lazily before the first
+  /// authenticated request.
   Future<void> initialize() async {
+    return _initializationFuture ??= _initializeInternal();
+  }
+
+  Future<void> _initializeInternal() async {
     final prefs = await SharedPreferences.getInstance();
     _uid = prefs.getString(_prefUid);
     _refreshToken = prefs.getString(_prefRefreshToken);
@@ -66,6 +73,7 @@ class FirebaseAuthService {
   /// Returns null if offline or if sign-in failed.
   Future<String?> getIdToken() async {
     _lastError = null;
+    await initialize();
     if (_idToken != null && !_isExpiredOrSoon()) return _idToken;
     if (_refreshToken != null) {
       await _refreshIdToken();
@@ -81,6 +89,7 @@ class FirebaseAuthService {
   /// responsible for rotating local identity state afterward.
   Future<bool> deleteCurrentAnonymousIdentity() async {
     _lastError = null;
+    await initialize();
 
     final idToken = await getIdToken();
     if (idToken == null || idToken.isEmpty) {
@@ -90,11 +99,13 @@ class FirebaseAuthService {
     }
 
     try {
-      final response = await http.post(
-        Uri.parse(_deleteUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'idToken': idToken}),
-      );
+      final response = await http
+          .post(
+            Uri.parse(_deleteUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'idToken': idToken}),
+          )
+          .timeout(_requestTimeout);
       if (response.statusCode == 200) {
         return true;
       }
@@ -108,6 +119,7 @@ class FirebaseAuthService {
 
   /// Discards the current anonymous identity and provisions a fresh one.
   Future<void> rotateAnonymousIdentity() async {
+    await initialize();
     final prefs = await SharedPreferences.getInstance();
     _uid = null;
     _idToken = null;
@@ -132,11 +144,13 @@ class FirebaseAuthService {
 
   Future<void> _signInAnonymously() async {
     try {
-      final response = await http.post(
-        Uri.parse(_signInUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'returnSecureToken': true}),
-      );
+      final response = await http
+          .post(
+            Uri.parse(_signInUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'returnSecureToken': true}),
+          )
+          .timeout(_requestTimeout);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         await _persist(
@@ -156,11 +170,13 @@ class FirebaseAuthService {
 
   Future<void> _refreshIdToken() async {
     try {
-      final response = await http.post(
-        Uri.parse(_refreshUrl),
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'grant_type=refresh_token&refresh_token=$_refreshToken',
-      );
+      final response = await http
+          .post(
+            Uri.parse(_refreshUrl),
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'grant_type=refresh_token&refresh_token=$_refreshToken',
+          )
+          .timeout(_requestTimeout);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         await _persist(

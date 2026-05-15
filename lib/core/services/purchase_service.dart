@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -47,7 +46,7 @@ abstract final class IapProducts {
 /// * Delivers coins via [EconomyProvider] and records non-consumable
 ///   ownership in SharedPreferences under the `iap_owned_` prefix.
 ///
-/// Call [initialize] from `main()` before [runApp], then
+/// Warm [initialize] during startup when convenient, then call
 /// [attachEconomy] as soon as the [EconomyProvider] is created.
 class PurchaseService {
   PurchaseService._();
@@ -60,8 +59,8 @@ class PurchaseService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   final Map<String, Completer<bool>> _pending = {};
   Map<String, ProductDetails> _products = {};
-  bool _initialized = false;
   bool _storeAvailable = false;
+  Future<void>? _initializationFuture;
 
   bool get _isSupportedPlatform =>
       !kIsWeb &&
@@ -78,36 +77,53 @@ class PurchaseService {
   /// Initialises the billing client, subscribes to the purchase stream, and
   /// restores any previous transactions.  Safe to call multiple times.
   Future<void> initialize() async {
-    if (_initialized) return;
-    _initialized = true;
-
     if (!_isSupportedPlatform) {
       // in_app_purchase is not available on desktop/web.
       _storeAvailable = false;
       return;
     }
 
-    _storeAvailable = await InAppPurchase.instance.isAvailable();
+    return _initializationFuture ??= _initializeInternal();
+  }
+
+  Future<void> _initializeInternal() async {
+    try {
+      _storeAvailable = await InAppPurchase.instance
+          .isAvailable()
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      _storeAvailable = false;
+      debugPrint('IAP availability check failed: $e');
+      return;
+    }
+
     if (!_storeAvailable) {
       debugPrint('IAP: billing client unavailable on this device.');
       return;
     }
 
-    _subscription = InAppPurchase.instance.purchaseStream.listen(
+    _subscription ??= InAppPurchase.instance.purchaseStream.listen(
       _handleUpdates,
       onError: (Object e) => debugPrint('IAP stream error: $e'),
     );
 
     await _loadProducts();
-    // Re-deliver any pending / previously purchased transactions.
-    await InAppPurchase.instance.restorePurchases();
+
+    try {
+      // Re-deliver any pending / previously purchased transactions.
+      await InAppPurchase.instance
+          .restorePurchases()
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('IAP restore failed during initialization: $e');
+    }
   }
 
   Future<void> _loadProducts() async {
     try {
-      final response = await InAppPurchase.instance.queryProductDetails(
-        IapProducts.all,
-      );
+      final response = await InAppPurchase.instance
+          .queryProductDetails(IapProducts.all)
+          .timeout(const Duration(seconds: 15));
       if (response.notFoundIDs.isNotEmpty) {
         debugPrint('IAP: products not found: ${response.notFoundIDs}');
       }
@@ -182,6 +198,7 @@ class PurchaseService {
   /// cancelled, errored, or the store is unavailable.
   Future<bool> buy(String productId) async {
     if (!_isSupportedPlatform) return false;
+    await initialize();
     if (!_storeAvailable) return false;
     if (_products.isEmpty) await _loadProducts();
 
@@ -219,13 +236,20 @@ class PurchaseService {
   /// Asks the platform to re-deliver previously purchased non-consumables.
   Future<void> restorePurchases() async {
     if (!_isSupportedPlatform) return;
+    await initialize();
     if (!_storeAvailable) return;
-    await InAppPurchase.instance.restorePurchases();
+    try {
+      await InAppPurchase.instance
+          .restorePurchases()
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('IAP restore request failed: $e');
+    }
   }
 
   void dispose() {
     _subscription?.cancel();
     _subscription = null;
-    _initialized = false;
+    _initializationFuture = null;
   }
 }

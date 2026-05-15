@@ -358,6 +358,7 @@ class ScoreboardService {
   Future<DeleteProfileResult> _deleteProfileDirect({
     required bool deleteAnonymousIdentity,
   }) async {
+    await FirebaseAuthService.instance.initialize();
     final uid = FirebaseAuthService.instance.uid;
     if (uid == null || uid.isEmpty) {
       final authError = FirebaseAuthService.instance.lastError;
