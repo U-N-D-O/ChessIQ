@@ -594,7 +594,9 @@ abstract class _QuizComponents extends _QuizScreen {
     final reverse =
         reverseOverride ??
         (_perspective == BoardPerspective.black ||
-            (_perspective == BoardPerspective.auto && !whiteToMove));
+            ((_perspective == BoardPerspective.auto ||
+                    _perspective == BoardPerspective.headToHead) &&
+                !whiteToMove));
 
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),

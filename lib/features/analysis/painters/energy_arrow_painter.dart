@@ -220,7 +220,7 @@ class EnergyArrowPainter extends CustomPainter {
       final pixelMode = themeMode == ArrowThemeMode.pixel;
       final heavyMode = themeMode == ArrowThemeMode.heavy3d;
       const heavyLineScale = 0.75;
-      final pixelStep = pixelMode ? max(3.0, min(4.5, sq * 0.08)) : 0.0;
+      final pixelStep = pixelMode ? _pixelStepForSquare(sq) : 0.0;
       final pixelSnapOrigin = Offset(boardInset, boardInset);
       final auraColor = glowColor?.withValues(
         alpha: (isFirstArrow ? 0.34 : 0.24) * alphaScale,
@@ -233,13 +233,21 @@ class EnergyArrowPainter extends CustomPainter {
         start.dy + (unitY * themedStartInset),
       );
       final renderStart = pixelMode
-          ? _snapPoint(themedStart, pixelStep, origin: pixelSnapOrigin)
+          ? _pixelRendererInputPoint(
+              themedStart,
+              pixelStep,
+              origin: pixelSnapOrigin,
+            )
           : (heavyMode ? themedStart : start);
       final renderEnd = pixelMode
-          ? _snapPoint(end, pixelStep, origin: pixelSnapOrigin)
+          ? _pixelRendererInputPoint(end, pixelStep, origin: pixelSnapOrigin)
           : end;
       final renderLineEnd = pixelMode
-          ? _snapPoint(lineEnd, pixelStep, origin: pixelSnapOrigin)
+          ? _pixelRendererInputPoint(
+              lineEnd,
+              pixelStep,
+              origin: pixelSnapOrigin,
+            )
           : lineEnd;
       final renderStrokeWidth = pixelMode
           ? max(
@@ -698,6 +706,77 @@ class EnergyArrowPainter extends CustomPainter {
     return Offset(inset + col * sq + sq / 2, inset + row * sq + sq / 2);
   }
 
+  double _pixelStepForSquare(double squareSize) {
+    const minStep = 3.0;
+    const maxStep = 4.5;
+    final idealStep = max(minStep, min(maxStep, squareSize * 0.08));
+    final minCellsPerSquare = max(1, (squareSize / maxStep).ceil());
+    final maxCellsPerSquare = max(
+      minCellsPerSquare,
+      (squareSize / minStep).floor(),
+    );
+    var bestStep = idealStep;
+    var bestDelta = double.infinity;
+
+    // An odd number of pixel cells per square keeps every chess-square center
+    // on the renderer's cell-center lattice.
+    for (
+      var cellsPerSquare = minCellsPerSquare;
+      cellsPerSquare <= maxCellsPerSquare;
+      cellsPerSquare++
+    ) {
+      if (cellsPerSquare.isEven) {
+        continue;
+      }
+      final candidateStep = squareSize / cellsPerSquare;
+      final delta = (candidateStep - idealStep).abs();
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestStep = candidateStep;
+      }
+    }
+
+    return bestStep;
+  }
+
+  Offset _pixelRendererInputPoint(
+    Offset point,
+    double step, {
+    Offset origin = Offset.zero,
+  }) {
+    if (step <= 0) {
+      return point;
+    }
+
+    // PixelArrowRenderer snaps to cell centers by adding +step/2 after its
+    // own rounding. Board-square centers therefore need a half-step pre-bias
+    // here so runtime overlays land on the intended cell-center lattice.
+    return _snapPoint(
+      Offset(point.dx - (step / 2), point.dy - (step / 2)),
+      step,
+      origin: origin,
+    );
+  }
+
+  Offset _snapToPixelCenter(
+    Offset point,
+    double step, {
+    Offset origin = Offset.zero,
+  }) {
+    if (step <= 0) {
+      return point;
+    }
+
+    return Offset(
+      (((point.dx - origin.dx - (step / 2)) / step).roundToDouble() * step) +
+          origin.dx +
+          (step / 2),
+      (((point.dy - origin.dy - (step / 2)) / step).roundToDouble() * step) +
+          origin.dy +
+          (step / 2),
+    );
+  }
+
   Offset _snapPoint(Offset point, double step, {Offset origin = Offset.zero}) {
     if (step <= 0) {
       return point;
@@ -721,7 +800,7 @@ class EnergyArrowPainter extends CustomPainter {
     required double alphaScale,
     required bool emphasized,
   }) {
-    final snappedCenter = _snapPoint(
+    final snappedCenter = _snapToPixelCenter(
       center,
       step,
       origin: Offset(boardInset, boardInset),

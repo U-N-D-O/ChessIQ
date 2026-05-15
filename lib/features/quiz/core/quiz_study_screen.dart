@@ -2570,6 +2570,7 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
       ? const <EngineLine>[]
       : <EngineLine>[EngineLine(ghostMove, 0, 1, 1)];
   final reverse = state._quizStudyBoardIsReversed(selectedLine);
+  final boardHeaderTitle = state._quizResolvedOpeningDisplayName(selectedLine);
 
   return KeyedSubtree(
     key: state._quizStudyBoardKey,
@@ -2590,10 +2591,8 @@ Widget _buildQuizStudyBoardWalkthroughPanel(
           if (!compactLandscape) ...<Widget>[
             state._academyPanelHeader(
               palette: palette,
-              title: 'BOARD',
-              subtitle: !followUpActive
-                  ? 'Replay the selected line move by move.'
-                  : 'Practice engine-backed follow-ups from the current study position.',
+              title: boardHeaderTitle,
+              subtitle: '',
             ),
             const SizedBox(height: 14),
           ],

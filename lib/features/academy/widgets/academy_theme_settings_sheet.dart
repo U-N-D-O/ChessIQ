@@ -79,7 +79,7 @@ Future<void> showAcademyThemeSettingsSheet({
 
   try {
     await openSheet(
-      boardThemeSelectorBuilder: (setSheetState) {
+      boardThemeSelectorBuilder: (setSheetState, markChanged) {
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -90,6 +90,8 @@ Future<void> showAcademyThemeSettingsSheet({
                 return ThemeSelectorTile(
                   selected: selected,
                   onTap: () {
+                    if (selected) return;
+                    markChanged();
                     setSheetState(() {});
                     unawaited(themeProvider.setBoardThemeIndex(index));
                   },
@@ -101,7 +103,7 @@ Future<void> showAcademyThemeSettingsSheet({
               .toList(growable: false),
         );
       },
-      pieceThemeSelectorBuilder: (setSheetState) {
+      pieceThemeSelectorBuilder: (setSheetState, markChanged) {
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -112,6 +114,8 @@ Future<void> showAcademyThemeSettingsSheet({
                 return ThemeSelectorTile(
                   selected: selected,
                   onTap: () {
+                    if (selected) return;
+                    markChanged();
                     setSheetState(() {});
                     unawaited(themeProvider.setPieceThemeIndex(index));
                   },
@@ -121,7 +125,7 @@ Future<void> showAcademyThemeSettingsSheet({
               .toList(growable: false),
         );
       },
-      arrowThemeSelectorBuilder: (setSheetState) {
+      arrowThemeSelectorBuilder: (setSheetState, markChanged) {
         return Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -132,6 +136,8 @@ Future<void> showAcademyThemeSettingsSheet({
                 return ThemeSelectorTile(
                   selected: selected,
                   onTap: () {
+                    if (selected) return;
+                    markChanged();
                     setSheetState(() {});
                     unawaited(themeProvider.setArrowThemeIndex(index));
                   },

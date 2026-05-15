@@ -138,14 +138,24 @@ abstract class _StoreState extends _VsBotCore {
     onTap: onTap,
   );
 
-  Widget _perspectiveOption(String label, BoardPerspective p, Function setL) =>
-      super._perspectiveOption(label, p, setL);
+  Widget _perspectiveOption(
+    String label,
+    BoardPerspective p,
+    StateSetter setL,
+    VoidCallback markChanged,
+  ) => super._perspectiveOption(label, p, setL, markChanged);
 
-  Widget _boardThemeOption(BoardThemeMode mode, Function setL) =>
-      super._boardThemeOption(mode, setL);
+  Widget _boardThemeOption(
+    BoardThemeMode mode,
+    StateSetter setL,
+    VoidCallback markChanged,
+  ) => super._boardThemeOption(mode, setL, markChanged);
 
-  Widget _pieceThemeOption(PieceThemeMode mode, Function setL) =>
-      super._pieceThemeOption(mode, setL);
+  Widget _pieceThemeOption(
+    PieceThemeMode mode,
+    StateSetter setL,
+    VoidCallback markChanged,
+  ) => super._pieceThemeOption(mode, setL, markChanged);
 
   Widget _boardThemeSwatch(BoardThemeMode mode) =>
       super._boardThemeSwatch(mode);

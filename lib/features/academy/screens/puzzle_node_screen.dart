@@ -849,6 +849,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     return showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
@@ -856,7 +857,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       builder: (sheetContext) {
         final sheetScheme = Theme.of(sheetContext).colorScheme;
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,

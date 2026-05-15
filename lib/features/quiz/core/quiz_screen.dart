@@ -615,6 +615,13 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       );
     }
 
+    final studyIntroSeen = decoded['studyIntroSeen'];
+    if (studyIntroSeen is bool) {
+      _quizStudyIntroSeen = studyIntroSeen;
+    } else if (_quizStudyOpeningCounts.isNotEmpty) {
+      _quizStudyIntroSeen = true;
+    }
+
     final bestStreak = decoded['bestStreak'];
     final streak = decoded['streak'];
     final totalAnswered = decoded['totalAnswered'];
@@ -1608,6 +1615,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       'difficulty': _quizDifficulty.index,
       'studyCategory': _quizStudyCategory.index,
       'studyCounts': _quizStudyOpeningCounts,
+      'studyIntroSeen': _quizStudyIntroSeen,
       'dailyScore': _quizDailyScore,
       'dailyAttempts': _quizDailyAttempts,
       'dailyCorrect': _quizDailyCorrectByDay,
@@ -2656,6 +2664,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
 
   void _selectQuizStudyOpening(EcoLine line, {bool focusBoard = false}) {
     final familyName = _quizStudyFamilyName(line.name);
+    final shouldShowIntro = !_quizStudyIntroSeen;
     setState(() {
       _deactivateQuizStudyFollowUps();
       _quizStudySelectedOpeningName = line.name;
@@ -2664,11 +2673,22 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       _quizStudyInfoExpanded = false;
       _quizStudyShownPly = 0;
       _quizStudyOpeningCounts[line.name] = _quizStudyCountFor(line.name) + 1;
+      if (shouldShowIntro) {
+        _quizStudyIntroSeen = true;
+      }
     });
     if (focusBoard) {
       _focusQuizStudyBoard();
     }
     unawaited(_saveQuizStats());
+    if (shouldShowIntro) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(_showQuizStudyIntroDialog());
+      });
+    }
   }
 
   int _quizStudyShownPlyFor(EcoLine line) {
@@ -3046,6 +3066,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       case BoardPerspective.black:
         return false;
       case BoardPerspective.auto:
+      case BoardPerspective.headToHead:
         return !_quizStudyOpeningIsBlackRepertoire(line);
     }
   }
@@ -3169,7 +3190,8 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     }
     final reversed =
         _perspective == BoardPerspective.black ||
-        (_perspective == BoardPerspective.auto &&
+        ((_perspective == BoardPerspective.auto ||
+                _perspective == BoardPerspective.headToHead) &&
             !_quizStudyFollowUpWhiteToMove);
     return reversed ? -whiteEvalCp : whiteEvalCp;
   }
@@ -3984,6 +4006,17 @@ abstract class _QuizScreen extends _AnalysisPageShared {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _showQuizStudyIntroDialog() async {
+    await _showQuizAcademyNoticeDialog(
+      title: 'Opening Study',
+      message: 'Replay the selected line move by move.',
+      tagLabel: 'TIP',
+      actionLabel: 'OK',
+      icon: Icons.play_circle_outline_rounded,
+      accent: _quizStudyCategoryColor(_quizStudyCategory),
     );
   }
 
@@ -7586,7 +7619,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     Widget buildQuizBoardCard({double? maxBoardSize}) {
       final reverse =
           _perspective == BoardPerspective.black ||
-          (_perspective == BoardPerspective.auto && !displayedWhiteToMove);
+          ((_perspective == BoardPerspective.auto ||
+                  _perspective == BoardPerspective.headToHead) &&
+              !displayedWhiteToMove);
       final showingLivePreview =
           !answersLocked &&
           !reviewMode &&

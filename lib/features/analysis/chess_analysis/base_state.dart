@@ -716,6 +716,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _quizStudySelectedOpeningName;
   String? _quizStudyExpandedFamily;
   Map<String, int> _quizStudyOpeningCounts = <String, int>{};
+  bool _quizStudyIntroSeen = false;
   int _quizStudyShownPly = 0;
   bool _quizStudyBoardFlipped = false;
   bool _quizStudyFollowUpMode = false;
@@ -4256,8 +4257,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : max(1, visibleCount);
   }
 
-  bool get _isEngineActive =>
-      _playVsBot ? _vsBotEvalEnabled : _suggestionsEnabled;
+  bool get _isHeadToHeadPerspective =>
+      !_playVsBot && _perspective == BoardPerspective.headToHead;
+
+  bool get _usesTurnAwarePerspective =>
+      _perspective == BoardPerspective.auto ||
+      _perspective == BoardPerspective.headToHead;
+
+  bool get _isEngineActive => _playVsBot
+      ? _vsBotEvalEnabled
+      : !_isHeadToHeadPerspective && _suggestionsEnabled;
 
   bool get _shouldShowVisualSuggestions => _playVsBot
       ? _vsBotOptimalLineRevealActive && _isHumanTurnInBotGame
@@ -5157,6 +5166,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _topLines.add(restored);
         }
         _topLines.sort((a, b) => a.multiPv.compareTo(b.multiPv));
+      }
+
+      if (_isHeadToHeadPerspective) {
+        _suggestionsEnabled = false;
+        _topLines = <EngineLine>[];
+        _analysisLines = <EngineLine>[];
+        _analysisLinesFen = null;
+        _currentDepth = 0;
       }
 
       // Opening preview arrows are transient UI state and should not survive
@@ -7825,7 +7842,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return !_humanPlaysWhite;
     }
     return _perspective == BoardPerspective.black ||
-        (_perspective == BoardPerspective.auto && !_isWhiteTurn);
+        (_usesTurnAwarePerspective && !_isWhiteTurn);
   }
 
   double _displayEvalForPov() {
@@ -7862,7 +7879,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return _playVsBot
         ? !_humanPlaysWhite
         : (_perspective == BoardPerspective.black) ||
-              (_perspective == BoardPerspective.auto && !_isWhiteTurn);
+              (_usesTurnAwarePerspective && !_isWhiteTurn);
   }
 
   String _evalTextForUi(double displayedEval) {
@@ -12349,7 +12366,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final reverse = _playVsBot
         ? !_humanPlaysWhite
         : (_perspective == BoardPerspective.black) ||
-              (_perspective == BoardPerspective.auto && !_isWhiteTurn);
+              (_usesTurnAwarePerspective && !_isWhiteTurn);
     if (reverse) {
       col = 7 - col;
     } else {
@@ -16527,6 +16544,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return _buildVsBotSuggestionTriggerButton();
     }
 
+    if (_isHeadToHeadPerspective) {
+      return _buildHeadToHeadSuggestionLockButton();
+    }
+
     if (_isEngineActive) {
       return GestureDetector(
         key: _suggestionButtonKey,
@@ -18361,39 +18382,45 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       onHapticsEnabledChanged: (enabled) async {
         await _setHapticsEnabled(enabled);
       },
-      boardThemeSelectorBuilder: (setSheetState) {
+      boardThemeSelectorBuilder: (setSheetState, markChanged) {
         return Wrap(
           spacing: 10,
           runSpacing: 10,
           alignment: WrapAlignment.center,
           children: _availableBoardThemes
-              .map((mode) => _boardThemeOption(mode, setSheetState))
+              .map(
+                (mode) => _boardThemeOption(mode, setSheetState, markChanged),
+              )
               .toList(),
         );
       },
-      pieceThemeSelectorBuilder: (setSheetState) {
+      pieceThemeSelectorBuilder: (setSheetState, markChanged) {
         return Wrap(
           spacing: 10,
           runSpacing: 10,
           alignment: WrapAlignment.center,
           children: _availablePieceThemes
-              .map((mode) => _pieceThemeOption(mode, setSheetState))
+              .map(
+                (mode) => _pieceThemeOption(mode, setSheetState, markChanged),
+              )
               .toList(),
         );
       },
-      arrowThemeSelectorBuilder: (setSheetState) {
+      arrowThemeSelectorBuilder: (setSheetState, markChanged) {
         return Wrap(
           spacing: 10,
           runSpacing: 10,
           alignment: WrapAlignment.center,
           children: _availableArrowThemes
-              .map((mode) => _arrowThemeOption(mode, setSheetState))
+              .map(
+                (mode) => _arrowThemeOption(mode, setSheetState, markChanged),
+              )
               .toList(growable: false),
         );
       },
       showBoardPerspectiveSection: showBoardPerspectiveSection,
       boardPerspectiveSectionBuilder: showBoardPerspectiveSection
-          ? (setSheetState) {
+          ? (setSheetState, markChanged) {
               final theme = Theme.of(context);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -18405,23 +18432,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
                       _perspectiveOption(
                         'White',
                         BoardPerspective.white,
                         setSheetState,
+                        markChanged,
                       ),
                       _perspectiveOption(
                         'Black',
                         BoardPerspective.black,
                         setSheetState,
+                        markChanged,
                       ),
                       _perspectiveOption(
                         'Auto',
                         BoardPerspective.auto,
                         setSheetState,
+                        markChanged,
+                      ),
+                      _perspectiveOption(
+                        '1v1',
+                        BoardPerspective.headToHead,
+                        setSheetState,
+                        markChanged,
                       ),
                     ],
                   ),
@@ -19174,6 +19212,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             final canWatchRewardAd = economy.canClaimStoreReward;
             final lockedUntilTomorrow = economy.storeRewardLockedUntilTomorrow;
             final storeCoins = economy.coins;
+            final mediaQuery = MediaQuery.of(ctx);
+            final bottomSafePadding = mediaQuery.viewPadding.bottom;
             final sheetSurface = useMonochrome
                 ? (isDark ? const Color(0xFF050505) : Colors.white)
                 : scheme.surface;
@@ -19181,685 +19221,744 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
               sheetSurface,
             );
+            const storeBottomActionBarReserve = 148.0;
 
             return ColoredBox(
               color: sheetSurface,
               child: SafeArea(
                 top: false,
                 bottom: false,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    12,
-                    20,
-                    MediaQuery.of(ctx).viewInsets.bottom + 20,
+                child: AnimatedPadding(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.only(
+                    bottom: mediaQuery.viewInsets.bottom,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 44,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: scheme.outline.withValues(alpha: 0.32),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Store',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: scheme.onSurface,
-                                  ),
-                                ),
-                                if (initialSection == StoreSection.themes)
-                                  Text(
-                                    'Themes',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: scheme.onSurface.withValues(
-                                        alpha: 0.62,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: pillSurface,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: scheme.outline.withValues(alpha: 0.24),
-                              ),
-                            ),
-                            child: Text(
-                              'Coins: $storeCoins',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? const Color(0xFFFFD166)
-                                    : const Color(0xFF8A6700),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: () async {
-                              await _openSettings();
-                              if (!ctx.mounted) return;
-                              setL(() {});
-                            },
-                            color: scheme.onSurface,
-                            icon: const Icon(Icons.settings_outlined),
-                            tooltip: 'Settings',
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(ctx).maybePop(),
-                            color: scheme.onSurface,
-                            icon: const Icon(Icons.close),
-                            tooltip: 'Close store',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _storeSectionHeader(
-                        'Essentials',
-                        'Coins, unlocks, and analysis upgrades',
-                      ),
-                      _storeItemCard(
-                        icon: Icons.ondemand_video_outlined,
-                        title: 'Watch Ad For Coins',
-                        subtitle: canWatchRewardAd
-                            ? 'Watch and earn +120 coins'
-                            : lockedUntilTomorrow
-                            ? 'Come back tomorrow for +120 coins'
-                            : 'Earn +120 coins (cooldown active)',
-                        priceLabel: 'Free',
-                        enabled: canWatchRewardAd,
-                        preview: canWatchRewardAd
-                            ? null
-                            : _buildStoreRewardCooldownPreview(
-                                rewardAdRemaining,
-                                lockedUntilTomorrow: lockedUntilTomorrow,
-                                useMonochrome: useMonochrome,
-                              ),
-                        actionLabel: canWatchRewardAd ? 'Watch' : 'Cooldown',
-                        actionColor: canWatchRewardAd
-                            ? const Color(0xFF5AAEE8)
-                            : const Color(0xFF6B7280),
-                        onTap: () async {
-                          await _watchRewardAdFromStore();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.monetization_on_outlined,
-                        title: 'Coin Pack S',
-                        subtitle: '+1,500 coins',
-                        priceLabel: '\$4.99',
-                        enabled: true,
-                        actionLabel: 'Buy',
-                        actionColor: const Color(0xFF7EDC8A),
-                        onTap: () async {
-                          await _buyCoinPack(1500, 'Coin Pack S');
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.account_balance_wallet_outlined,
-                        title: 'Coin Pack L',
-                        subtitle: '+5,000 coins',
-                        priceLabel: '\$9.99',
-                        enabled: true,
-                        actionLabel: 'Buy',
-                        actionColor: const Color(0xFF7EDC8A),
-                        onTap: () async {
-                          await _buyCoinPack(5000, 'Coin Pack L');
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.block_outlined,
-                        title: _cleanPlayPassTitle,
-                        subtitle: _adFreeOwned
-                            ? 'Owned ($_cleanPlayPassBenefit)'
-                            : 'Skips ads for $_cleanPlayPassBenefit',
-                        priceLabel: '\$6.99',
-                        enabled: !_adFreeOwned,
-                        actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFF7EDC8A),
-                        onTap: () async {
-                          await _buyAdFree();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.school_outlined,
-                        title: 'Academy Tuition Pass',
-                        subtitle: _academyTuitionPassOwned
-                            ? 'Owned (academy progression without ads)'
-                            : 'Skips academy brain-break and daily challenge reward ads',
-                        priceLabel: '\$6.99',
-                        enabled: !_academyTuitionPassOwned,
-                        actionLabel: _academyTuitionPassOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFF7EDC8A),
-                        onTap: () async {
-                          await _buyAcademyTuitionPass();
-                          setL(() {});
-                        },
-                      ),
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Color.alphaBlend(
-                            scheme.primary.withValues(
-                              alpha: isDark ? 0.08 : 0.03,
-                            ),
-                            scheme.surface,
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: scheme.outline.withValues(alpha: 0.24),
-                          ),
+                      SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          12,
+                          20,
+                          storeBottomActionBarReserve + bottomSafePadding,
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            Center(
+                              child: Container(
+                                width: 44,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: scheme.outline.withValues(alpha: 0.32),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             Row(
                               children: [
-                                Container(
-                                  width: 34,
-                                  height: 34,
-                                  decoration: BoxDecoration(
-                                    color: Color.alphaBlend(
-                                      scheme.primary.withValues(
-                                        alpha: isDark ? 0.10 : 0.05,
-                                      ),
-                                      scheme.surface,
-                                    ),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(
-                                    Icons.card_giftcard_outlined,
-                                    size: 18,
-                                    color: scheme.onSurface.withValues(
-                                      alpha: 0.72,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Promo Code',
+                                        'Store',
                                         style: TextStyle(
+                                          fontSize: 18,
                                           fontWeight: FontWeight.w700,
                                           color: scheme.onSurface,
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Redeem coins or a special store unlock',
-                                        style: TextStyle(
-                                          color: scheme.onSurface.withValues(
-                                            alpha: 0.64,
+                                      if (initialSection == StoreSection.themes)
+                                        Text(
+                                          'Themes',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: scheme.onSurface.withValues(
+                                              alpha: 0.62,
+                                            ),
                                           ),
-                                          fontSize: 12,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: pillSurface,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: scheme.outline.withValues(
+                                        alpha: 0.24,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Coins: $storeCoins',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? const Color(0xFFFFD166)
+                                          : const Color(0xFF8A6700),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  onPressed: () async {
+                                    await _openSettings();
+                                    if (!ctx.mounted) return;
+                                    setL(() {});
+                                  },
+                                  color: scheme.onSurface,
+                                  icon: const Icon(Icons.settings_outlined),
+                                  tooltip: 'Settings',
+                                ),
+                                IconButton(
+                                  onPressed: () => Navigator.of(ctx).maybePop(),
+                                  color: scheme.onSurface,
+                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Close store',
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _storeSectionHeader(
+                              'Essentials',
+                              'Coins, unlocks, and analysis upgrades',
+                            ),
+                            _storeItemCard(
+                              icon: Icons.ondemand_video_outlined,
+                              title: 'Watch Ad For Coins',
+                              subtitle: canWatchRewardAd
+                                  ? 'Watch and earn +120 coins'
+                                  : lockedUntilTomorrow
+                                  ? 'Come back tomorrow for +120 coins'
+                                  : 'Earn +120 coins (cooldown active)',
+                              priceLabel: 'Free',
+                              enabled: canWatchRewardAd,
+                              preview: canWatchRewardAd
+                                  ? null
+                                  : _buildStoreRewardCooldownPreview(
+                                      rewardAdRemaining,
+                                      lockedUntilTomorrow: lockedUntilTomorrow,
+                                      useMonochrome: useMonochrome,
+                                    ),
+                              actionLabel: canWatchRewardAd
+                                  ? 'Watch'
+                                  : 'Cooldown',
+                              actionColor: canWatchRewardAd
+                                  ? const Color(0xFF5AAEE8)
+                                  : const Color(0xFF6B7280),
+                              onTap: () async {
+                                await _watchRewardAdFromStore();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.monetization_on_outlined,
+                              title: 'Coin Pack S',
+                              subtitle: '+1,500 coins',
+                              priceLabel: '\$4.99',
+                              enabled: true,
+                              actionLabel: 'Buy',
+                              actionColor: const Color(0xFF7EDC8A),
+                              onTap: () async {
+                                await _buyCoinPack(1500, 'Coin Pack S');
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.account_balance_wallet_outlined,
+                              title: 'Coin Pack L',
+                              subtitle: '+5,000 coins',
+                              priceLabel: '\$9.99',
+                              enabled: true,
+                              actionLabel: 'Buy',
+                              actionColor: const Color(0xFF7EDC8A),
+                              onTap: () async {
+                                await _buyCoinPack(5000, 'Coin Pack L');
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.block_outlined,
+                              title: _cleanPlayPassTitle,
+                              subtitle: _adFreeOwned
+                                  ? 'Owned ($_cleanPlayPassBenefit)'
+                                  : 'Skips ads for $_cleanPlayPassBenefit',
+                              priceLabel: '\$6.99',
+                              enabled: !_adFreeOwned,
+                              actionLabel: _adFreeOwned ? 'Owned' : 'Buy',
+                              actionColor: const Color(0xFF7EDC8A),
+                              onTap: () async {
+                                await _buyAdFree();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.school_outlined,
+                              title: 'Academy Tuition Pass',
+                              subtitle: _academyTuitionPassOwned
+                                  ? 'Owned (academy progression without ads)'
+                                  : 'Skips academy brain-break and daily challenge reward ads',
+                              priceLabel: '\$6.99',
+                              enabled: !_academyTuitionPassOwned,
+                              actionLabel: _academyTuitionPassOwned
+                                  ? 'Owned'
+                                  : 'Buy',
+                              actionColor: const Color(0xFF7EDC8A),
+                              onTap: () async {
+                                await _buyAcademyTuitionPass();
+                                setL(() {});
+                              },
+                            ),
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Color.alphaBlend(
+                                  scheme.primary.withValues(
+                                    alpha: isDark ? 0.08 : 0.03,
+                                  ),
+                                  scheme.surface,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: scheme.outline.withValues(alpha: 0.24),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 34,
+                                        height: 34,
+                                        decoration: BoxDecoration(
+                                          color: Color.alphaBlend(
+                                            scheme.primary.withValues(
+                                              alpha: isDark ? 0.10 : 0.05,
+                                            ),
+                                            scheme.surface,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.card_giftcard_outlined,
+                                          size: 18,
+                                          color: scheme.onSurface.withValues(
+                                            alpha: 0.72,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Promo Code',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                color: scheme.onSurface,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              'Redeem coins or a special store unlock',
+                                              style: TextStyle(
+                                                color: scheme.onSurface
+                                                    .withValues(alpha: 0.64),
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: promoCodeController,
-                              enabled: !promoRedeemInProgress,
-                              textCapitalization: TextCapitalization.characters,
-                              textInputAction: TextInputAction.done,
-                              maxLength: 32,
-                              onChanged: (_) {
-                                if (promoRedeemMessage != null) {
-                                  setL(() {
-                                    promoRedeemMessage = null;
-                                  });
-                                }
-                              },
-                              onSubmitted: (_) async {
-                                if (promoRedeemInProgress) {
-                                  return;
-                                }
-                                await redeemPromoCode();
-                              },
-                              decoration: InputDecoration(
-                                hintText: 'Enter promo code',
-                                counterText: '',
-                                prefixIcon: const Icon(
-                                  Icons.confirmation_number_outlined,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: promoRedeemInProgress
-                                    ? null
-                                    : () async {
-                                        await redeemPromoCode();
-                                      },
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF5AAEE8),
-                                  foregroundColor: const Color(0xFF07131F),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: promoCodeController,
+                                    enabled: !promoRedeemInProgress,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    textInputAction: TextInputAction.done,
+                                    maxLength: 32,
+                                    onChanged: (_) {
+                                      if (promoRedeemMessage != null) {
+                                        setL(() {
+                                          promoRedeemMessage = null;
+                                        });
+                                      }
+                                    },
+                                    onSubmitted: (_) async {
+                                      if (promoRedeemInProgress) {
+                                        return;
+                                      }
+                                      await redeemPromoCode();
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter promo code',
+                                      counterText: '',
+                                      prefixIcon: const Icon(
+                                        Icons.confirmation_number_outlined,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
                                   ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: promoRedeemInProgress
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.2,
+                                  const SizedBox(height: 10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton(
+                                      onPressed: promoRedeemInProgress
+                                          ? null
+                                          : () async {
+                                              await redeemPromoCode();
+                                            },
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFF5AAEE8,
                                         ),
-                                      )
-                                    : const Text('Redeem'),
+                                        foregroundColor: const Color(
+                                          0xFF07131F,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                      ),
+                                      child: promoRedeemInProgress
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.2,
+                                              ),
+                                            )
+                                          : const Text('Redeem'),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    promoRedeemMessage ?? ' ',
+                                    style: TextStyle(
+                                      color: promoRedeemMessage == null
+                                          ? Colors.transparent
+                                          : promoRedeemMessageIsError
+                                          ? const Color(0xFFD9534F)
+                                          : const Color(0xFF2EAD67),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
+                            const SizedBox(height: 6),
+                            Center(
+                              child: TextButton.icon(
+                                icon: const Icon(Icons.restore),
+                                label: const Text('Restore Purchases'),
+                                onPressed: () async {
+                                  await PurchaseService.instance
+                                      .restorePurchases();
+                                  await _loadStoreState();
+                                  setL(() {});
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            _storeSectionHeader(
+                              'Themes',
+                              'Owned themes live here, and new ones unlock below',
+                            ),
+                            _buildThemeVaultCard(
+                              setL,
+                              onBoardThemeUnlockTap: () =>
+                                  scrollToPack(themePackCardKey),
+                              onPieceThemeUnlockTap: () =>
+                                  scrollToPack(piecePackCardKey),
+                              onArrowThemeUnlockTap: (mode) => scrollToPack(
+                                mode == ArrowThemeMode.pixel
+                                    ? pixelArrowCardKey
+                                    : heavyArrowCardKey,
+                              ),
+                            ),
+                            _storeItemCard(
+                              itemKey: themePackCardKey,
+                              icon: Icons.palette_outlined,
+                              title: 'Board Theme Pack',
+                              subtitle: _themePackOwned
+                                  ? 'Owned · unlocks Ember and Sea boards'
+                                  : 'Unlock Ember and Sea board palettes',
+                              priceLabel: '900 c',
+                              enabled: !_themePackOwned,
+                              actionLabel: _themePackOwned ? 'Owned' : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: _themePackPreview(),
+                              onTap: () async {
+                                await _purchaseThemePack();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.local_florist_outlined,
+                              title: 'Sakura Board',
+                              subtitle: _sakuraBoardOwned
+                                  ? 'Owned'
+                                  : 'Unlock Sakura board palette',
+                              priceLabel: '700 c',
+                              enabled: !_sakuraBoardOwned,
+                              actionLabel: _sakuraBoardOwned ? 'Owned' : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: Padding(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: _boardThemeSwatch(BoardThemeMode.sakura),
+                              ),
+                              onTap: () async {
+                                await _purchaseSakuraBoard();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.beach_access_outlined,
+                              title: 'Tropical Board',
+                              subtitle: _tropicalBoardOwned
+                                  ? 'Owned'
+                                  : 'Unlock Tropical board palette',
+                              priceLabel: '700 c',
+                              enabled: !_tropicalBoardOwned,
+                              actionLabel: _tropicalBoardOwned
+                                  ? 'Owned'
+                                  : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: Padding(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: _boardThemeSwatch(
+                                  BoardThemeMode.tropical,
+                                ),
+                              ),
+                              onTap: () async {
+                                await _purchaseTropicalBoard();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              itemKey: piecePackCardKey,
+                              icon: Icons.extension_outlined,
+                              title: 'Piece Set Pack',
+                              subtitle: _piecePackOwned
+                                  ? 'Owned · unlocks Ember and Frost pieces'
+                                  : 'Unlock Ember and Frost piece styles',
+                              priceLabel: '1400 c',
+                              enabled: !_piecePackOwned,
+                              actionLabel: _piecePackOwned ? 'Owned' : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: _piecePackPreview(),
+                              onTap: () async {
+                                await _purchasePiecePack();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.auto_awesome,
+                              title: 'Spectral Pieces',
+                              subtitle: _spectralOwned
+                                  ? 'Owned'
+                                  : 'Unlock the Spectral piece theme',
+                              priceLabel: '2900 c',
+                              enabled: !_spectralOwned,
+                              actionLabel: _spectralOwned ? 'Owned' : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: _pieceThemePreview(
+                                PieceThemeMode.spectral,
+                                pieceSize: 24.0,
+                              ),
+                              onTap: () async {
+                                await _purchaseSpectral();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.icecream,
+                              title: 'Tutti Frutti Pieces',
+                              subtitle: _tuttiFruttiOwned
+                                  ? 'Owned'
+                                  : 'Unlock Tutti Frutti piece styles',
+                              priceLabel: '1000 c',
+                              enabled: !_tuttiFruttiOwned,
+                              actionLabel: _tuttiFruttiOwned ? 'Owned' : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: _pieceThemePreview(
+                                PieceThemeMode.tuttiFrutti,
+                                pieceSize: 24.0,
+                              ),
+                              onTap: () async {
+                                await _purchaseTuttiFrutti();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.contrast,
+                              title: 'Monochrome Pieces',
+                              subtitle: _monochromePiecesOwned
+                                  ? 'Owned'
+                                  : 'Unlock the Monochrome piece theme',
+                              priceLabel: '850 c',
+                              enabled: !_monochromePiecesOwned,
+                              actionLabel: _monochromePiecesOwned
+                                  ? 'Owned'
+                                  : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: _pieceThemePreview(
+                                PieceThemeMode.monochrome,
+                                pieceSize: 24.0,
+                              ),
+                              onTap: () async {
+                                await _purchaseMonochromePieces();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              itemKey: pixelArrowCardKey,
+                              icon: Icons.grid_4x4_rounded,
+                              title: '8-Bit Arrows',
+                              subtitle: _pixelArrowThemeOwned
+                                  ? 'Owned'
+                                  : 'Unlock chunky pixel arrows across every board mode',
+                              priceLabel: '$_pixelArrowThemePrice c',
+                              enabled: !_pixelArrowThemeOwned,
+                              actionLabel: _pixelArrowThemeOwned
+                                  ? 'Owned'
+                                  : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: const ArrowThemePreviewTile(
+                                arrowThemeIndex: 1,
+                              ),
+                              onTap: () async {
+                                await _purchasePixelArrowTheme();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              itemKey: heavyArrowCardKey,
+                              icon: Icons.view_in_ar_rounded,
+                              title: 'Massive 3D Arrows',
+                              subtitle: _heavyArrowThemeOwned
+                                  ? 'Owned'
+                                  : 'Unlock weighty 3D arrows across every board mode',
+                              priceLabel: '$_heavyArrowThemePrice c',
+                              enabled: !_heavyArrowThemeOwned,
+                              actionLabel: _heavyArrowThemeOwned
+                                  ? 'Owned'
+                                  : 'Buy',
+                              actionColor: const Color(0xFFD8B640),
+                              preview: const ArrowThemePreviewTile(
+                                arrowThemeIndex: 2,
+                              ),
+                              onTap: () async {
+                                await _purchaseHeavyArrowTheme();
+                                setL(() {});
+                              },
+                            ),
                             const SizedBox(height: 10),
+                            _storeSectionHeader(
+                              'Analysis Upgrades',
+                              'Depth, suggestions, and long-run unlocks',
+                            ),
+                            _storeItemCard(
+                              icon: Icons.auto_graph,
+                              title: 'Pro Mode',
+                              subtitle: 'Default mode (max ply depth 20)',
+                              priceLabel: 'Included',
+                              enabled: false,
+                              actionLabel: 'Owned',
+                              actionColor: const Color(0xFF5AAEE8),
+                              onTap: null,
+                            ),
+                            _storeItemCard(
+                              icon: Icons.psychology_alt_outlined,
+                              title: 'Expert Mode',
+                              subtitle: _depthTier >= 2
+                                  ? 'Unlocked (max ply depth 24)'
+                                  : 'Unlock ply depth 21-24',
+                              priceLabel: '2600 c',
+                              enabled: _depthTier == 1,
+                              actionLabel: _depthTier >= 2
+                                  ? 'Owned'
+                                  : (_depthTier == 1 ? 'Unlock' : 'Locked'),
+                              actionColor: const Color(0xFF5AAEE8),
+                              onTap: () async {
+                                await _purchaseDepthTier(2);
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.workspace_premium_outlined,
+                              title: 'Grandmaster Mode',
+                              subtitle: _depthTier >= 3
+                                  ? 'Unlocked (max ply depth 28)'
+                                  : 'Unlock ply depth 25-28',
+                              priceLabel: '4200 c',
+                              enabled: _depthTier == 2,
+                              actionLabel: _depthTier >= 3
+                                  ? 'Owned'
+                                  : (_depthTier == 2 ? 'Unlock' : 'Locked'),
+                              actionColor: const Color(0xFF5AAEE8),
+                              onTap: () async {
+                                await _purchaseDepthTier(3);
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.whatshot_outlined,
+                              title: 'Oracle Mode',
+                              subtitle: _depthTier >= 4
+                                  ? 'Unlocked (max ply depth 30+)'
+                                  : 'Unlock ply depth 29-30+',
+                              priceLabel: '6200 c',
+                              enabled: _depthTier == 3,
+                              actionLabel: _depthTier >= 4
+                                  ? 'Owned'
+                                  : (_depthTier == 3 ? 'Unlock' : 'Locked'),
+                              actionColor: const Color(0xFF5AAEE8),
+                              onTap: () async {
+                                await _purchaseDepthTier(4);
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              icon: Icons.add_circle_outline,
+                              title: '+1 Suggested Move',
+                              subtitle:
+                                  'Current max suggestions: $_maxSuggestionsAllowed / 10',
+                              priceLabel:
+                                  '${500 + (_extraSuggestionPurchases * 120)} c',
+                              enabled: _maxSuggestionsAllowed < 10,
+                              actionLabel: _maxSuggestionsAllowed < 10
+                                  ? 'Buy +1'
+                                  : 'Maxed',
+                              actionColor: const Color(0xFF8FD0FF),
+                              onTap: () async {
+                                await _purchaseExtraSuggestion();
+                                setL(() {});
+                              },
+                            ),
+                            _storeItemCard(
+                              itemKey: const ValueKey<String>(
+                                'analysis_store_sacrifice_mode_card',
+                              ),
+                              icon: Icons.local_fire_department_outlined,
+                              title: 'Sacrifice Mode',
+                              subtitle: _sacrificeModeOwned
+                                  ? 'Owned · unlocks the red sacrifice scan on the analysis opening button'
+                                  : 'Unlock the red sacrifice scan with yellow glare on the analysis opening button',
+                              priceLabel: '$_sacrificeModePrice c',
+                              enabled: !_sacrificeModeOwned,
+                              actionLabel: _sacrificeModeOwned
+                                  ? 'Owned'
+                                  : 'Unlock',
+                              actionColor: const Color(0xFFE65151),
+                              preview: Padding(
+                                padding: const EdgeInsets.only(left: 10),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Color.alphaBlend(
+                                      const Color(
+                                        0xFFE65151,
+                                      ).withValues(alpha: 0.12),
+                                      scheme.surface,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(
+                                        0xFFE65151,
+                                      ).withValues(alpha: 0.34),
+                                    ),
+                                    boxShadow: <BoxShadow>[
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFFFFD166,
+                                        ).withValues(alpha: 0.28),
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 7,
+                                    ),
+                                    child: Text(
+                                      'SACRIFICE',
+                                      style: TextStyle(
+                                        color: Color(0xFFE65151),
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.8,
+                                        shadows: <Shadow>[
+                                          Shadow(
+                                            color: Color(0xFFFFD166),
+                                            blurRadius: 10,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              onTap: () async {
+                                await _purchaseSacrificeMode();
+                                setL(() {});
+                              },
+                            ),
+                            const SizedBox(height: 8),
                             Text(
-                              promoRedeemMessage ?? ' ',
+                              'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowedLabel',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: promoRedeemMessage == null
-                                    ? Colors.transparent
-                                    : promoRedeemMessageIsError
-                                    ? const Color(0xFFD9534F)
-                                    : const Color(0xFF2EAD67),
+                                color: scheme.onSurface.withValues(alpha: 0.64),
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                height: 1.2,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Center(
-                        child: TextButton.icon(
-                          icon: const Icon(Icons.restore),
-                          label: const Text('Restore Purchases'),
-                          onPressed: () async {
-                            await PurchaseService.instance.restorePurchases();
-                            await _loadStoreState();
-                            setL(() {});
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      _storeSectionHeader(
-                        'Themes',
-                        'Owned themes live here, and new ones unlock below',
-                      ),
-                      _buildThemeVaultCard(
-                        setL,
-                        onBoardThemeUnlockTap: () =>
-                            scrollToPack(themePackCardKey),
-                        onPieceThemeUnlockTap: () =>
-                            scrollToPack(piecePackCardKey),
-                        onArrowThemeUnlockTap: (mode) => scrollToPack(
-                          mode == ArrowThemeMode.pixel
-                              ? pixelArrowCardKey
-                              : heavyArrowCardKey,
-                        ),
-                      ),
-                      _storeItemCard(
-                        itemKey: themePackCardKey,
-                        icon: Icons.palette_outlined,
-                        title: 'Board Theme Pack',
-                        subtitle: _themePackOwned
-                            ? 'Owned · unlocks Ember and Sea boards'
-                            : 'Unlock Ember and Sea board palettes',
-                        priceLabel: '900 c',
-                        enabled: !_themePackOwned,
-                        actionLabel: _themePackOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: _themePackPreview(),
-                        onTap: () async {
-                          await _purchaseThemePack();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.local_florist_outlined,
-                        title: 'Sakura Board',
-                        subtitle: _sakuraBoardOwned
-                            ? 'Owned'
-                            : 'Unlock Sakura board palette',
-                        priceLabel: '700 c',
-                        enabled: !_sakuraBoardOwned,
-                        actionLabel: _sakuraBoardOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: Padding(
-                          padding: const EdgeInsets.only(left: 10),
-                          child: _boardThemeSwatch(BoardThemeMode.sakura),
-                        ),
-                        onTap: () async {
-                          await _purchaseSakuraBoard();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.beach_access_outlined,
-                        title: 'Tropical Board',
-                        subtitle: _tropicalBoardOwned
-                            ? 'Owned'
-                            : 'Unlock Tropical board palette',
-                        priceLabel: '700 c',
-                        enabled: !_tropicalBoardOwned,
-                        actionLabel: _tropicalBoardOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: Padding(
-                          padding: const EdgeInsets.only(left: 10),
-                          child: _boardThemeSwatch(BoardThemeMode.tropical),
-                        ),
-                        onTap: () async {
-                          await _purchaseTropicalBoard();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        itemKey: piecePackCardKey,
-                        icon: Icons.extension_outlined,
-                        title: 'Piece Set Pack',
-                        subtitle: _piecePackOwned
-                            ? 'Owned · unlocks Ember and Frost pieces'
-                            : 'Unlock Ember and Frost piece styles',
-                        priceLabel: '1400 c',
-                        enabled: !_piecePackOwned,
-                        actionLabel: _piecePackOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: _piecePackPreview(),
-                        onTap: () async {
-                          await _purchasePiecePack();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.auto_awesome,
-                        title: 'Spectral Pieces',
-                        subtitle: _spectralOwned
-                            ? 'Owned'
-                            : 'Unlock the Spectral piece theme',
-                        priceLabel: '2900 c',
-                        enabled: !_spectralOwned,
-                        actionLabel: _spectralOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: _pieceThemePreview(
-                          PieceThemeMode.spectral,
-                          pieceSize: 24.0,
-                        ),
-                        onTap: () async {
-                          await _purchaseSpectral();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.icecream,
-                        title: 'Tutti Frutti Pieces',
-                        subtitle: _tuttiFruttiOwned
-                            ? 'Owned'
-                            : 'Unlock Tutti Frutti piece styles',
-                        priceLabel: '1000 c',
-                        enabled: !_tuttiFruttiOwned,
-                        actionLabel: _tuttiFruttiOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: _pieceThemePreview(
-                          PieceThemeMode.tuttiFrutti,
-                          pieceSize: 24.0,
-                        ),
-                        onTap: () async {
-                          await _purchaseTuttiFrutti();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.contrast,
-                        title: 'Monochrome Pieces',
-                        subtitle: _monochromePiecesOwned
-                            ? 'Owned'
-                            : 'Unlock the Monochrome piece theme',
-                        priceLabel: '850 c',
-                        enabled: !_monochromePiecesOwned,
-                        actionLabel: _monochromePiecesOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: _pieceThemePreview(
-                          PieceThemeMode.monochrome,
-                          pieceSize: 24.0,
-                        ),
-                        onTap: () async {
-                          await _purchaseMonochromePieces();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        itemKey: pixelArrowCardKey,
-                        icon: Icons.grid_4x4_rounded,
-                        title: '8-Bit Arrows',
-                        subtitle: _pixelArrowThemeOwned
-                            ? 'Owned'
-                            : 'Unlock chunky pixel arrows across every board mode',
-                        priceLabel: '$_pixelArrowThemePrice c',
-                        enabled: !_pixelArrowThemeOwned,
-                        actionLabel: _pixelArrowThemeOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: const ArrowThemePreviewTile(
-                          arrowThemeIndex: 1,
-                        ),
-                        onTap: () async {
-                          await _purchasePixelArrowTheme();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        itemKey: heavyArrowCardKey,
-                        icon: Icons.view_in_ar_rounded,
-                        title: 'Massive 3D Arrows',
-                        subtitle: _heavyArrowThemeOwned
-                            ? 'Owned'
-                            : 'Unlock weighty 3D arrows across every board mode',
-                        priceLabel: '$_heavyArrowThemePrice c',
-                        enabled: !_heavyArrowThemeOwned,
-                        actionLabel: _heavyArrowThemeOwned ? 'Owned' : 'Buy',
-                        actionColor: const Color(0xFFD8B640),
-                        preview: const ArrowThemePreviewTile(
-                          arrowThemeIndex: 2,
-                        ),
-                        onTap: () async {
-                          await _purchaseHeavyArrowTheme();
-                          setL(() {});
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      _storeSectionHeader(
-                        'Analysis Upgrades',
-                        'Depth, suggestions, and long-run unlocks',
-                      ),
-                      _storeItemCard(
-                        icon: Icons.auto_graph,
-                        title: 'Pro Mode',
-                        subtitle: 'Default mode (max ply depth 20)',
-                        priceLabel: 'Included',
-                        enabled: false,
-                        actionLabel: 'Owned',
-                        actionColor: const Color(0xFF5AAEE8),
-                        onTap: null,
-                      ),
-                      _storeItemCard(
-                        icon: Icons.psychology_alt_outlined,
-                        title: 'Expert Mode',
-                        subtitle: _depthTier >= 2
-                            ? 'Unlocked (max ply depth 24)'
-                            : 'Unlock ply depth 21-24',
-                        priceLabel: '2600 c',
-                        enabled: _depthTier == 1,
-                        actionLabel: _depthTier >= 2
-                            ? 'Owned'
-                            : (_depthTier == 1 ? 'Unlock' : 'Locked'),
-                        actionColor: const Color(0xFF5AAEE8),
-                        onTap: () async {
-                          await _purchaseDepthTier(2);
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.workspace_premium_outlined,
-                        title: 'Grandmaster Mode',
-                        subtitle: _depthTier >= 3
-                            ? 'Unlocked (max ply depth 28)'
-                            : 'Unlock ply depth 25-28',
-                        priceLabel: '4200 c',
-                        enabled: _depthTier == 2,
-                        actionLabel: _depthTier >= 3
-                            ? 'Owned'
-                            : (_depthTier == 2 ? 'Unlock' : 'Locked'),
-                        actionColor: const Color(0xFF5AAEE8),
-                        onTap: () async {
-                          await _purchaseDepthTier(3);
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.whatshot_outlined,
-                        title: 'Oracle Mode',
-                        subtitle: _depthTier >= 4
-                            ? 'Unlocked (max ply depth 30+)'
-                            : 'Unlock ply depth 29-30+',
-                        priceLabel: '6200 c',
-                        enabled: _depthTier == 3,
-                        actionLabel: _depthTier >= 4
-                            ? 'Owned'
-                            : (_depthTier == 3 ? 'Unlock' : 'Locked'),
-                        actionColor: const Color(0xFF5AAEE8),
-                        onTap: () async {
-                          await _purchaseDepthTier(4);
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        icon: Icons.add_circle_outline,
-                        title: '+1 Suggested Move',
-                        subtitle:
-                            'Current max suggestions: $_maxSuggestionsAllowed / 10',
-                        priceLabel:
-                            '${500 + (_extraSuggestionPurchases * 120)} c',
-                        enabled: _maxSuggestionsAllowed < 10,
-                        actionLabel: _maxSuggestionsAllowed < 10
-                            ? 'Buy +1'
-                            : 'Maxed',
-                        actionColor: const Color(0xFF8FD0FF),
-                        onTap: () async {
-                          await _purchaseExtraSuggestion();
-                          setL(() {});
-                        },
-                      ),
-                      _storeItemCard(
-                        itemKey: const ValueKey<String>(
-                          'analysis_store_sacrifice_mode_card',
-                        ),
-                        icon: Icons.local_fire_department_outlined,
-                        title: 'Sacrifice Mode',
-                        subtitle: _sacrificeModeOwned
-                            ? 'Owned · unlocks the red sacrifice scan on the analysis opening button'
-                            : 'Unlock the red sacrifice scan with yellow glare on the analysis opening button',
-                        priceLabel: '$_sacrificeModePrice c',
-                        enabled: !_sacrificeModeOwned,
-                        actionLabel: _sacrificeModeOwned ? 'Owned' : 'Unlock',
-                        actionColor: const Color(0xFFE65151),
-                        preview: Padding(
-                          padding: const EdgeInsets.only(left: 10),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Color.alphaBlend(
-                                const Color(0xFFE65151).withValues(alpha: 0.12),
-                                scheme.surface,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: const Color(
-                                  0xFFE65151,
-                                ).withValues(alpha: 0.34),
-                              ),
-                              boxShadow: <BoxShadow>[
-                                BoxShadow(
-                                  color: const Color(
-                                    0xFFFFD166,
-                                  ).withValues(alpha: 0.28),
-                                  blurRadius: 12,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 7,
-                              ),
-                              child: Text(
-                                'SACRIFICE',
-                                style: TextStyle(
-                                  color: Color(0xFFE65151),
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.8,
-                                  shadows: <Shadow>[
-                                    Shadow(
-                                      color: Color(0xFFFFD166),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            0,
+                            16,
+                            16 + bottomSafePadding,
                           ),
-                        ),
-                        onTap: () async {
-                          await _purchaseSacrificeMode();
-                          setL(() {});
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Depth tier: ${_depthTierLabel()}  |  Max depth: $_maxDepthAllowedLabel',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.64),
-                          fontSize: 12,
+                          child: _buildStoreBottomActionBar(
+                            context: ctx,
+                            backgroundSurface: sheetSurface,
+                            onClose: () => Navigator.of(ctx).maybePop(),
+                          ),
                         ),
                       ),
                     ],
@@ -20501,7 +20600,208 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _perspectiveOption(String label, BoardPerspective p, Function setL) {
+  Widget _buildStoreBottomActionBar({
+    required BuildContext context,
+    required Color backgroundSurface,
+    required VoidCallback onClose,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.14 : 0.08),
+      backgroundSurface,
+    );
+
+    final infoBlock = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: isDark ? 0.20 : 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            Icons.storefront_rounded,
+            size: 20,
+            color: scheme.primary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Store options stay live',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Purchases and theme selections apply instantly. Tap Close Store when you are done.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface.withValues(alpha: 0.68),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: scheme.primary.withValues(alpha: isDark ? 0.30 : 0.18),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 460;
+            final button = SizedBox(
+              width: compact ? double.infinity : null,
+              child: FilledButton.icon(
+                onPressed: onClose,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: const Text('Close Store'),
+              ),
+            );
+
+            if (compact) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [infoBlock, const SizedBox(height: 12), button],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: infoBlock),
+                const SizedBox(width: 12),
+                button,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeadToHeadSuggestionLockButton() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final background = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.12 : 0.06),
+      scheme.surface,
+    );
+
+    return Container(
+      key: _suggestionButtonKey,
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: background,
+        border: Border.all(
+          color: scheme.outline.withValues(alpha: isDark ? 0.34 : 0.26),
+          width: 1.6,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: _buildHeadToHeadGlyph(
+          context,
+          iconSize: 14,
+          labelSize: 8.5,
+          compact: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeadToHeadGlyph(
+    BuildContext context, {
+    double iconSize = 16,
+    double labelSize = 9,
+    bool compact = false,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = scheme.primary;
+    final playerColor = scheme.onSurface.withValues(alpha: 0.82);
+    final spacing = compact ? 2.0 : 4.0;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.person_rounded, size: iconSize, color: playerColor),
+        SizedBox(width: spacing),
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 4 : 5,
+            vertical: compact ? 2 : 3,
+          ),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: compact ? 0.12 : 0.14),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: accent.withValues(alpha: 0.26)),
+          ),
+          child: Text(
+            'VS',
+            style: TextStyle(
+              color: accent,
+              fontSize: labelSize,
+              fontWeight: FontWeight.w800,
+              letterSpacing: compact ? 0.3 : 0.5,
+              height: 1,
+            ),
+          ),
+        ),
+        SizedBox(width: spacing),
+        Icon(Icons.person_rounded, size: iconSize, color: playerColor),
+      ],
+    );
+  }
+
+  Widget _perspectiveOption(
+    String label,
+    BoardPerspective p,
+    StateSetter setL,
+    VoidCallback markChanged,
+  ) {
     final sel = _perspective == p;
     final scheme = Theme.of(context).colorScheme;
     Widget kingWidget;
@@ -20509,6 +20809,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       kingWidget = _pieceImage('k_w', width: 20, height: 20);
     } else if (p == BoardPerspective.black) {
       kingWidget = _pieceImage('k_b', width: 20, height: 20);
+    } else if (p == BoardPerspective.headToHead) {
+      kingWidget = _buildHeadToHeadGlyph(context, iconSize: 13, labelSize: 8);
     } else {
       kingWidget = Row(
         mainAxisSize: MainAxisSize.min,
@@ -20525,7 +20827,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
     return GestureDetector(
       onTap: () {
-        setState(() => _perspective = p);
+        if (sel) return;
+        markChanged();
+        setState(() {
+          _perspective = p;
+          if (p == BoardPerspective.headToHead) {
+            _suggestionsEnabled = false;
+            _topLines = <EngineLine>[];
+            _analysisLines = <EngineLine>[];
+            _analysisLinesFen = null;
+            _currentDepth = 0;
+          }
+        });
+        if (p == BoardPerspective.headToHead) {
+          _send('stop');
+        }
         setL(() {});
         _persistCurrentSettings();
       },
@@ -20557,11 +20873,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _boardThemeOption(BoardThemeMode mode, Function setL) {
+  Widget _boardThemeOption(
+    BoardThemeMode mode,
+    StateSetter setL,
+    VoidCallback markChanged,
+  ) {
     final selected = _boardThemeMode == mode;
     return ThemeSelectorTile(
       selected: selected,
       onTap: () {
+        if (selected) return;
+        markChanged();
         setState(() => _boardThemeMode = mode);
         setL(() {});
         _persistCurrentSettings();
@@ -20573,11 +20895,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _pieceThemeOption(PieceThemeMode mode, Function setL) {
+  Widget _pieceThemeOption(
+    PieceThemeMode mode,
+    StateSetter setL,
+    VoidCallback markChanged,
+  ) {
     final selected = _pieceThemeMode == mode;
     return ThemeSelectorTile(
       selected: selected,
       onTap: () {
+        if (selected) return;
+        markChanged();
         setState(() => _pieceThemeMode = mode);
         setL(() {});
         _persistCurrentSettings();
@@ -20589,11 +20917,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _arrowThemeOption(ArrowThemeMode mode, Function setL) {
+  Widget _arrowThemeOption(
+    ArrowThemeMode mode,
+    StateSetter setL,
+    VoidCallback markChanged,
+  ) {
     final selected = _arrowThemeMode == mode;
     return ThemeSelectorTile(
       selected: selected,
       onTap: () {
+        if (selected) return;
+        markChanged();
         setState(() => _arrowThemeMode = mode);
         setL(() {});
         _persistCurrentSettings();

@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'move_quality.dart';
 
-enum BoardPerspective { white, black, auto }
+enum BoardPerspective { white, black, auto, headToHead }
 
 enum BoardThemeMode { dark, light, monochrome, ember, aurora, sakura, tropical }
 
