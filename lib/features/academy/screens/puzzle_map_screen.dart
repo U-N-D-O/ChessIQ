@@ -4914,7 +4914,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
         },
         extraSectionsBuilder: provider.shouldAskForProfile
             ? null
-            : (sheetContext, _) {
+            : (sheetContext, _, markChanged) {
                 final scheme = Theme.of(sheetContext).colorScheme;
                 return <Widget>[
                   Card(

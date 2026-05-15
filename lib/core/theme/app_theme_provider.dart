@@ -43,6 +43,9 @@ class AppThemeUnlockState {
 class AppThemeProvider extends ChangeNotifier {
   static const String _themeModeKey = 'app_theme_mode_v1';
   static const String _themeStyleKey = 'app_theme_style_v1';
+  static const String _boardThemeIndexKey = 'app_board_theme_index_v1';
+  static const String _pieceThemeIndexKey = 'app_piece_theme_index_v1';
+  static const String _arrowThemeIndexKey = 'app_arrow_theme_index_v1';
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
   static const String _legacyCinematicThemeKey = 'cinematic_theme_enabled_v1';
   static const String _sharedStoreStateKey = 'store_state_v1';
@@ -328,6 +331,9 @@ class AppThemeProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final savedThemeMode = prefs.getString(_themeModeKey);
     final savedThemeStyle = prefs.getString(_themeStyleKey);
+    final savedBoardTheme = prefs.getInt(_boardThemeIndexKey);
+    final savedPieceTheme = prefs.getInt(_pieceThemeIndexKey);
+    final savedArrowTheme = prefs.getInt(_arrowThemeIndexKey);
     final rawSnapshot = prefs.getString(_savedDefaultSnapshotKey);
     final legacyCinematic = prefs.getBool(_legacyCinematicThemeKey) ?? false;
 
@@ -343,20 +349,34 @@ class AppThemeProvider extends ChangeNotifier {
         ? AppThemeStyle.monochrome
         : AppThemeStyle.standard;
 
-    if (rawSnapshot != null && rawSnapshot.isNotEmpty) {
+    if (savedBoardTheme != null) {
+      _boardThemeIndex = savedBoardTheme.clamp(0, boardThemeCount - 1);
+    }
+    if (savedPieceTheme != null) {
+      _pieceThemeIndex = savedPieceTheme.clamp(0, pieceThemeCount - 1);
+    }
+    if (savedArrowTheme != null) {
+      _arrowThemeIndex = savedArrowTheme.clamp(0, arrowThemeCount - 1);
+    }
+
+    if (rawSnapshot != null &&
+        rawSnapshot.isNotEmpty &&
+        (savedBoardTheme == null ||
+            savedPieceTheme == null ||
+            savedArrowTheme == null)) {
       try {
         final decoded = jsonDecode(rawSnapshot);
         if (decoded is Map<String, dynamic>) {
           final boardTheme = decoded['boardTheme'];
           final pieceTheme = decoded['pieceTheme'];
           final arrowTheme = decoded['arrowTheme'];
-          if (boardTheme is int) {
+          if (savedBoardTheme == null && boardTheme is int) {
             _boardThemeIndex = boardTheme.clamp(0, boardThemeCount - 1);
           }
-          if (pieceTheme is int) {
+          if (savedPieceTheme == null && pieceTheme is int) {
             _pieceThemeIndex = pieceTheme.clamp(0, pieceThemeCount - 1);
           }
-          if (arrowTheme is int) {
+          if (savedArrowTheme == null && arrowTheme is int) {
             _arrowThemeIndex = arrowTheme.clamp(0, arrowThemeCount - 1);
           }
         }
@@ -394,19 +414,25 @@ class AppThemeProvider extends ChangeNotifier {
 
   Future<void> setBoardThemeIndex(int value) async {
     _boardThemeIndex = value.clamp(0, boardThemeCount - 1);
-    await _persistSnapshotThemeIndices();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_boardThemeIndexKey, _boardThemeIndex);
+    await _persistSnapshotThemeIndices(prefs: prefs);
     notifyListeners();
   }
 
   Future<void> setPieceThemeIndex(int value) async {
     _pieceThemeIndex = value.clamp(0, pieceThemeCount - 1);
-    await _persistSnapshotThemeIndices();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_pieceThemeIndexKey, _pieceThemeIndex);
+    await _persistSnapshotThemeIndices(prefs: prefs);
     notifyListeners();
   }
 
   Future<void> setArrowThemeIndex(int value) async {
     _arrowThemeIndex = value.clamp(0, arrowThemeCount - 1);
-    await _persistSnapshotThemeIndices();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_arrowThemeIndexKey, _arrowThemeIndex);
+    await _persistSnapshotThemeIndices(prefs: prefs);
     notifyListeners();
   }
 
@@ -473,15 +499,18 @@ class AppThemeProvider extends ChangeNotifier {
       _legacyCinematicThemeKey,
       _themeStyle == AppThemeStyle.monochrome,
     );
-    await _persistSnapshotThemeIndices();
+    await prefs.setInt(_boardThemeIndexKey, _boardThemeIndex);
+    await prefs.setInt(_pieceThemeIndexKey, _pieceThemeIndex);
+    await prefs.setInt(_arrowThemeIndexKey, _arrowThemeIndex);
+    await _persistSnapshotThemeIndices(prefs: prefs);
     if (notify) {
       notifyListeners();
     }
   }
 
-  Future<void> _persistSnapshotThemeIndices() async {
-    final prefs = await SharedPreferences.getInstance();
-    final rawSnapshot = prefs.getString(_savedDefaultSnapshotKey);
+  Future<void> _persistSnapshotThemeIndices({SharedPreferences? prefs}) async {
+    final sharedPrefs = prefs ?? await SharedPreferences.getInstance();
+    final rawSnapshot = sharedPrefs.getString(_savedDefaultSnapshotKey);
     if (rawSnapshot == null || rawSnapshot.isEmpty) return;
     try {
       final decoded = jsonDecode(rawSnapshot);
@@ -489,7 +518,7 @@ class AppThemeProvider extends ChangeNotifier {
       decoded['boardTheme'] = _boardThemeIndex;
       decoded['pieceTheme'] = _pieceThemeIndex;
       decoded['arrowTheme'] = _arrowThemeIndex;
-      await prefs.setString(_savedDefaultSnapshotKey, jsonEncode(decoded));
+      await sharedPrefs.setString(_savedDefaultSnapshotKey, jsonEncode(decoded));
     } catch (_) {}
   }
 

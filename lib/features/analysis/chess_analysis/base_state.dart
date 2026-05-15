@@ -326,6 +326,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _muteSoundsKey = 'mute_sounds_v1';
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
   static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
+  static const String _analysisPerspectiveKey = 'analysis_perspective_v1';
+  static const String _analysisEngineDepthKey = 'analysis_engine_depth_v1';
+  static const String _analysisMultiPvKey = 'analysis_multi_pv_v1';
+  static const String _analysisMoveAssessmentEnabledKey =
+      'analysis_move_assessment_enabled_v1';
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
@@ -628,6 +633,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _academyTuitionPassOwned = false;
   bool _introCompleted = true;
   bool _suggestionsEnabled = false;
+  bool _moveAssessmentEnabled = false;
   bool _vsBotEvalEnabled = false;
   bool _vsBotOptimalLineRevealActive = false;
   int _vsBotCharge = 0;
@@ -4134,6 +4140,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _restoreSnapshotAndStart() async {
     await _loadUiPrefs();
     await _loadStoreState();
+    await _loadAnalysisSettingsPrefs();
     await _loadSavedDefaultSnapshot();
     if (_activeSection == AppSection.menu ||
         _activeSection == AppSection.gambitQuiz) {
@@ -4150,12 +4157,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           prefs.getBool(_cinematicThemeEnabledKey) ?? false;
       _cinematicThemeNotifier.value = _isCinematicThemeEnabled;
       if (mounted) {
+        final themeProvider = context.read<AppThemeProvider>();
+        final boardThemeIndex = themeProvider.boardThemeIndex;
+        final pieceThemeIndex = themeProvider.pieceThemeIndex;
+        final arrowThemeIndex = themeProvider.arrowThemeIndex;
+        if (boardThemeIndex >= 0 &&
+            boardThemeIndex < BoardThemeMode.values.length) {
+          _boardThemeMode = BoardThemeMode.values[boardThemeIndex];
+        }
+        if (pieceThemeIndex >= 0 &&
+            pieceThemeIndex < PieceThemeMode.values.length) {
+          _pieceThemeMode = PieceThemeMode.values[pieceThemeIndex];
+        }
+        if (arrowThemeIndex >= 0 &&
+            arrowThemeIndex < ArrowThemeMode.values.length) {
+          _arrowThemeMode = ArrowThemeMode.values[arrowThemeIndex];
+        }
         unawaited(
-          context.read<AppThemeProvider>().syncLegacySettings(
+          themeProvider.syncLegacySettings(
             cinematicEnabled: _isCinematicThemeEnabled,
-            boardThemeIndex: _boardThemeMode.index,
-            pieceThemeIndex: _pieceThemeMode.index,
-            arrowThemeIndex: _arrowThemeMode.index,
             notify: false,
           ),
         );
@@ -4163,6 +4183,35 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _loadQuizPrefs(prefs);
     } catch (e) {
       debugPrint('Failed to load UI prefs: $e');
+    }
+  }
+
+  Future<void> _loadAnalysisSettingsPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPerspective = prefs.getInt(_analysisPerspectiveKey);
+      final savedDepth = prefs.getInt(_analysisEngineDepthKey);
+      final savedMultiPv = prefs.getInt(_analysisMultiPvKey);
+      final savedMoveAssessment = prefs.getBool(
+        _analysisMoveAssessmentEnabledKey,
+      );
+
+      if (savedPerspective != null &&
+          savedPerspective >= 0 &&
+          savedPerspective < BoardPerspective.values.length) {
+        _perspective = BoardPerspective.values[savedPerspective];
+      }
+      if (savedDepth != null) {
+        _engineDepth = savedDepth.clamp(10, _maxDepthAllowed);
+      }
+      if (savedMultiPv != null) {
+        _multiPvCount = savedMultiPv.clamp(0, _maxSuggestionsAllowed);
+      }
+      if (savedMoveAssessment != null) {
+        _moveAssessmentEnabled = savedMoveAssessment;
+      }
+    } catch (e) {
+      debugPrint('Failed to load analysis settings prefs: $e');
     }
   }
 
@@ -4196,6 +4245,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         value ? AppThemeStyle.monochrome : AppThemeStyle.standard,
       );
     }
+  }
+
+  Future<void> _setMoveAssessmentEnabled(bool value) async {
+    if (_moveAssessmentEnabled == value) {
+      return;
+    }
+
+    setState(() {
+      _moveAssessmentEnabled = value;
+      if (!value) {
+        _cancelPendingMoveQualityGrading();
+        _clearMoveQualityOverlay();
+        _clearMoveQualityBadge();
+      }
+    });
+
+    _persistCurrentSettings();
+    if (value) {
+      await _ensureEngineStarted();
+      if (!mounted) {
+        return;
+      }
+    }
+    _analyze();
   }
 
   Future<void> _lightHaptic() async {
@@ -4264,6 +4337,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _perspective == BoardPerspective.auto ||
       _perspective == BoardPerspective.headToHead;
 
+  bool get _runsAnalysisMoveAssessment => !_playVsBot && _moveAssessmentEnabled;
+
   bool get _isEngineActive => _playVsBot
       ? _vsBotEvalEnabled
       : !_isHeadToHeadPerspective && _suggestionsEnabled;
@@ -4274,6 +4349,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool get _shouldKeepEvalActive =>
       _playVsBot ? _vsBotEvalEnabled : _isEngineActive;
+
+  bool get _shouldRunLiveAnalysis =>
+      _shouldKeepEvalActive ||
+      _shouldShowVisualSuggestions ||
+      _runsAnalysisMoveAssessment;
 
   bool get _shouldRunSacrificeScan => _isSacrificeModeActive;
 
@@ -5039,11 +5119,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
 
       final savedPerspective = decoded['perspective'];
-      final savedTheme = decoded['boardTheme'];
-      final savedPieceTheme = decoded['pieceTheme'];
-      final savedArrowTheme = decoded['arrowTheme'];
       final savedDepth = decoded['engineDepth'];
       final savedMultiPv = decoded['multiPvCount'];
+      final savedMoveAssessmentEnabled = decoded['moveAssessmentEnabled'];
       final savedWhiteTurn = decoded['isWhiteTurn'];
       final savedBoard = decoded['boardState'];
       final savedHistory = decoded['moveHistory'];
@@ -5063,31 +5141,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedBlackQueensideRookMoved = decoded['blackQueensideRookMoved'];
       final savedEnPassantTarget = decoded['enPassantTarget'];
 
-      if (savedPerspective is int &&
+      if (!prefs.containsKey(_analysisPerspectiveKey) &&
+          savedPerspective is int &&
           savedPerspective >= 0 &&
           savedPerspective < BoardPerspective.values.length) {
         _perspective = BoardPerspective.values[savedPerspective];
       }
-      if (savedTheme is int &&
-          savedTheme >= 0 &&
-          savedTheme < BoardThemeMode.values.length) {
-        _boardThemeMode = BoardThemeMode.values[savedTheme];
-      }
-      if (savedPieceTheme is int &&
-          savedPieceTheme >= 0 &&
-          savedPieceTheme < PieceThemeMode.values.length) {
-        _pieceThemeMode = PieceThemeMode.values[savedPieceTheme];
-      }
-      if (savedArrowTheme is int &&
-          savedArrowTheme >= 0 &&
-          savedArrowTheme < ArrowThemeMode.values.length) {
-        _arrowThemeMode = ArrowThemeMode.values[savedArrowTheme];
-      }
-      if (savedDepth is int) {
+      if (!prefs.containsKey(_analysisEngineDepthKey) && savedDepth is int) {
         _engineDepth = savedDepth.clamp(10, _maxDepthAllowed);
       }
-      if (savedMultiPv is int) {
+      if (!prefs.containsKey(_analysisMultiPvKey) && savedMultiPv is int) {
         _multiPvCount = savedMultiPv.clamp(0, _maxSuggestionsAllowed);
+      }
+      if (!prefs.containsKey(_analysisMoveAssessmentEnabledKey) &&
+          savedMoveAssessmentEnabled is bool) {
+        _moveAssessmentEnabled = savedMoveAssessmentEnabled;
       }
       if (savedWhiteTurn is bool) {
         _isWhiteTurn = savedWhiteTurn;
@@ -5187,23 +5255,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _gambitAvailableTargets.clear();
       _selectedGambit = null;
       _normalizeUnlockedThemes();
-      if (mounted) {
-        unawaited(
-          context.read<AppThemeProvider>().syncLegacySettings(
-            boardThemeIndex: _boardThemeMode.index,
-            pieceThemeIndex: _pieceThemeMode.index,
-            arrowThemeIndex: _arrowThemeMode.index,
-            notify: false,
-          ),
-        );
-      }
     } catch (e) {
       debugPrint('Failed to load saved default snapshot: $e');
     }
   }
 
   void _persistCurrentSettings() {
-    unawaited(_saveCurrentAsDefaultSnapshot(logChange: false));
+    unawaited(_persistAnalysisSettings());
+  }
+
+  Future<void> _persistAnalysisSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_analysisPerspectiveKey, _perspective.index);
+    await prefs.setInt(_analysisEngineDepthKey, _engineDepth);
+    await prefs.setInt(_analysisMultiPvKey, _multiPvCount);
+    await prefs.setBool(
+      _analysisMoveAssessmentEnabledKey,
+      _moveAssessmentEnabled,
+    );
+    await _saveCurrentAsDefaultSnapshot(logChange: false);
   }
 
   void _applySuggestionCount(int value, {bool persist = false}) {
@@ -5406,7 +5476,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       await nextEngine.startScheduler(
         onTimelineEvent: _handleEngineTimelineEvent,
       );
-      if (_shouldKeepEvalActive || _shouldShowVisualSuggestions) {
+      if (_shouldRunLiveAnalysis) {
         _analyze();
       }
     } catch (e) {
@@ -6185,9 +6255,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final shouldShowVisualSuggestions = _shouldShowVisualSuggestions;
-    if (!_shouldKeepEvalActive &&
-        !shouldShowVisualSuggestions &&
-        !_shouldRunSacrificeScan) {
+    if (!_shouldRunLiveAnalysis && !_shouldRunSacrificeScan) {
       engine.cancelSearches(
         roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
         reason: 'analysis inactive',
@@ -6244,7 +6312,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool moverIsWhite,
     required Map<String, String> nextBoardState,
   }) {
-    final canGrade = !kIsWeb && (_playVsBot || _suggestionsEnabled);
+    final canGrade = !kIsWeb && (_playVsBot || _moveAssessmentEnabled);
     if (!canGrade) {
       return null;
     }
@@ -6346,9 +6414,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       _gradingSearchLines.clear();
       final shouldResumeAnalysis =
-          _analysisRefreshQueuedWhileGrading ||
-          _shouldKeepEvalActive ||
-          _shouldShowVisualSuggestions;
+          _analysisRefreshQueuedWhileGrading || _shouldRunLiveAnalysis;
       _analysisRefreshQueuedWhileGrading = false;
       _send(
         'setoption name MultiPV value ${restoreMultiPv ?? (_shouldShowVisualSuggestions ? _visualSuggestionLineCount : 1)}',
@@ -7150,6 +7216,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _showMoveQualityOverlay(MoveRecord move, int chargeDelta) {
+    if (!_playVsBot && !_moveAssessmentEnabled) {
+      return;
+    }
     final quality = move.quality;
     if (quality == null) {
       return;
@@ -7197,6 +7266,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildMoveQualityBanner({required bool isLandscape}) {
+    if (!_playVsBot && !_moveAssessmentEnabled) {
+      return const SizedBox.shrink();
+    }
     final quality = _moveQualityOverlayQuality;
     final title = _moveQualityOverlayTitle;
     final message = _moveQualityOverlayMessage;
@@ -7509,6 +7581,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!gradingSearchActive &&
         !botSearchActive &&
         !shouldShowVisualSuggestions &&
+        !_runsAnalysisMoveAssessment &&
         !_shouldKeepEvalActive) {
       return;
     }
@@ -13595,6 +13668,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                               child: _buildEditModeDepthCluster(
                                                                                 scale,
                                                                                 scheme,
+                                                                                includeEvalCounter: true,
                                                                               ),
                                                                             ),
                                                                           ),
@@ -13855,10 +13929,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final isLandscape = media.orientation == Orientation.landscape;
     final compactBotHeader =
         _playVsBot && !isLandscape && media.size.width <= 390;
-    final displayedEval = _displayEvalForPov();
-    final displayedEvalColor = useMonochrome
-        ? const Color(0xFFEEEEEE)
-        : _evalColorForUi(displayedEval);
     final selectedBot = _selectedBot;
     final selectedBotAvatarAsset = selectedBot == null
         ? null
@@ -14124,41 +14194,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         maintainSize: true,
         maintainAnimation: true,
         maintainState: true,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: 14 * scale,
-            vertical: 6 * scale,
-          ),
-          decoration: BoxDecoration(
-            color: useMonochrome
-                ? const Color(0xFF161B21)
-                : Color.alphaBlend(
-                    scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
-                    scheme.surface,
-                  ).withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: useMonochrome
-                  ? const Color(0xFF89929D).withValues(alpha: 0.34)
-                  : scheme.outline.withValues(alpha: 0.34),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.10),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Text(
-            _evalTextForUi(displayedEval),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: displayedEvalColor,
-              fontSize: 14 * scale,
-            ),
-          ),
-        ),
+        child: _buildAnalysisEvalCounterChip(scale: scale, scheme: scheme),
       );
     }
 
@@ -14254,20 +14290,93 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildEditModeDepthCluster(double scale, ColorScheme scheme) {
+  Widget _buildAnalysisEvalCounterChip({
+    required double scale,
+    required ColorScheme scheme,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final displayedEval = _displayEvalForPov();
+    final displayedEvalColor = useMonochrome
+        ? const Color(0xFFEEEEEE)
+        : _evalColorForUi(displayedEval);
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: 14 * scale,
+        vertical: 6 * scale,
+      ),
+      decoration: BoxDecoration(
+        color: useMonochrome
+            ? const Color(0xFF161B21)
+            : Color.alphaBlend(
+                scheme.primary.withValues(alpha: isDark ? 0.14 : 0.05),
+                scheme.surface,
+              ).withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: useMonochrome
+              ? const Color(0xFF89929D).withValues(alpha: 0.34)
+              : scheme.outline.withValues(alpha: 0.34),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Text(
+        _evalTextForUi(displayedEval),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: displayedEvalColor,
+          fontSize: 14 * scale,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditModeDepthCluster(
+    double scale,
+    ColorScheme scheme, {
+    bool includeEvalCounter = false,
+  }) {
     final showEditModeButton = !_playVsBot;
     final showDepthCounter = _shouldShowDepthCounter;
-    if (!showEditModeButton && !showDepthCounter) {
+    final showEvalCounter = includeEvalCounter && _shouldShowCenterEvalCounter;
+    if (!showEditModeButton && !showDepthCounter && !showEvalCounter) {
       return const SizedBox.shrink();
     }
 
-    final clusterWidth = showEditModeButton ? 168 * scale : 72 * scale;
+    final clusterWidth = showEvalCounter
+        ? (showEditModeButton ? 250 * scale : 156 * scale)
+        : (showEditModeButton ? 168 * scale : 72 * scale);
     return SizedBox(
       width: clusterWidth,
       height: 30,
       child: Stack(
         alignment: Alignment.center,
         children: [
+          if (showEvalCounter)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 92 * scale),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: _buildAnalysisEvalCounterChip(
+                    scale: scale,
+                    scheme: scheme,
+                  ),
+                ),
+              ),
+            ),
           if (showDepthCounter)
             Align(
               alignment: Alignment.centerRight,
@@ -14589,10 +14698,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final activeMove = _historyIndex >= 0 && _historyIndex < _moveHistory.length
         ? _moveHistory[_historyIndex]
         : null;
-    final activeMoveQuality = _playVsBot
+    final activeMoveQuality = !_playVsBot && !_moveAssessmentEnabled
+        ? null
+        : _playVsBot
         ? _lastMoveQualityBadgeQuality
         : activeMove?.quality;
-    final activeMoveQualitySquare = _playVsBot
+    final activeMoveQualitySquare = !_playVsBot && !_moveAssessmentEnabled
+        ? null
+        : _playVsBot
         ? _lastMoveQualityBadgeSquare
         : activeMove?.uci != null && activeMove!.uci!.length >= 4
         ? activeMove.uci!.substring(2, 4)
@@ -15412,7 +15525,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : useMonochrome
         ? scheme.onSurface.withValues(alpha: 0.70)
         : scheme.onSurface.withValues(alpha: 0.68);
-    final quality = move.quality;
+    final quality = _playVsBot || _moveAssessmentEnabled ? move.quality : null;
     final emphasisQuality =
         quality == MoveQuality.masterstroke || quality == MoveQuality.crucial;
 
@@ -18495,7 +18608,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       onSuggestedMovesChangeEnd: (value) {
         _applySuggestionCount(value, persist: true);
       },
-      extraSectionsBuilder: (sheetContext, setSheetState) {
+      extraSectionsBuilder: (sheetContext, setSheetState, markChanged) {
         final theme = Theme.of(sheetContext);
         final scheme = theme.colorScheme;
         final sectionColor = Color.alphaBlend(
@@ -18503,6 +18616,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           scheme.surface,
         );
         final borderColor = scheme.outline.withValues(alpha: 0.24);
+        final sections = <Widget>[];
+
+        if (isBoardAnalysisPage) {
+          sections.add(
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+              decoration: BoxDecoration(
+                color: sectionColor,
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _moveAssessmentEnabled,
+                title: const Text('Move Assessment'),
+                subtitle: const Text(
+                  'Show best, good, solid, and mistake labels after moves, independent from center suggestions.',
+                ),
+                onChanged: (enabled) {
+                  if (enabled == _moveAssessmentEnabled) {
+                    return;
+                  }
+                  markChanged();
+                  unawaited(_setMoveAssessmentEnabled(enabled));
+                  setSheetState(() {});
+                },
+              ),
+            ),
+          );
+        }
 
         final hasAllThemes =
             _availableBoardThemes.length >= BoardThemeMode.values.length &&
@@ -18512,7 +18655,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             _depthTier >= 3 && _maxSuggestionsAllowed >= 10;
 
         if (hasAllThemes && hasAllStockfishUpgrades) {
-          return const <Widget>[];
+          return sections;
         }
 
         final storeButtonLabel = hasAllThemes
@@ -18525,7 +18668,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ? StoreSection.general
             : StoreSection.themes;
 
-        return <Widget>[
+        sections.add(
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -18544,7 +18687,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               label: Text(storeButtonLabel),
             ),
           ),
-        ];
+        );
+
+        return sections;
       },
     );
   }
@@ -18558,6 +18703,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'arrowTheme': _arrowThemeMode.index,
       'engineDepth': _engineDepth,
       'multiPvCount': _multiPvCount,
+      'moveAssessmentEnabled': _moveAssessmentEnabled,
       'isWhiteTurn': _isWhiteTurn,
       'whiteKingMoved': _whiteKingMoved,
       'blackKingMoved': _blackKingMoved,
@@ -20743,11 +20889,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ],
       ),
       child: Center(
-        child: _buildHeadToHeadGlyph(
-          context,
-          iconSize: 14,
-          labelSize: 8.5,
-          compact: true,
+        child: SizedBox(
+          width: 40,
+          height: 24,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: _buildHeadToHeadGlyph(
+              context,
+              iconSize: 14,
+              labelSize: 8.5,
+              compact: true,
+            ),
+          ),
         ),
       ),
     );

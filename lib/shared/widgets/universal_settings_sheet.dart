@@ -5,7 +5,11 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:flutter/material.dart';
 
 typedef UniversalSettingsExtraBuilder =
-    List<Widget> Function(BuildContext context, StateSetter setSheetState);
+    List<Widget> Function(
+      BuildContext context,
+      StateSetter setSheetState,
+      VoidCallback markChanged,
+    );
 
 typedef UniversalSettingsSelectorBuilder =
     Widget Function(StateSetter setSheetState, VoidCallback markChanged);
@@ -89,7 +93,7 @@ Future<void> showUniversalSettingsSheet({
           final contentBottomPadding =
               (hasChangedSettings ? 140.0 : 20.0) + bottomSafePadding;
           final extraSections =
-              extraSectionsBuilder?.call(context, setSheetState) ??
+              extraSectionsBuilder?.call(context, setSheetState, markChanged) ??
               const <Widget>[];
           final boardThemeSelector = boardThemeSelectorBuilder?.call(
             setSheetState,
