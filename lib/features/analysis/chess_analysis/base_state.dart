@@ -4130,6 +4130,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  TextStyle _mainMenuPixelStyle({
+    required Color color,
+    double size = 10.2,
+    double height = 1.2,
+    double letterSpacing = 0.0,
+  }) {
+    return TextStyle(
+      fontFamily: 'PressStart2P',
+      fontFamilyFallback: const <String>['Courier New'],
+      color: color,
+      fontSize: size,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
+
   Future<void> _restoreSnapshotAndStart() async {
     await _loadUiPrefs();
     await _loadStoreState();
@@ -9983,6 +9999,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       },
     );
   }
+
   bool _isPromotionTarget(String from, String to, String piece) {
     if (piece[0] != 'p') return false;
     final toRank = int.parse(to[1]);
@@ -13003,9 +13020,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  String _menuLogoAsset(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.light
+        ? 'assets/logo2.png'
+        : 'assets/logo.png';
+  }
+
   // --- UI Sections ---
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final menuTopColor = Color.alphaBlend(
+      Color.lerp(
+        scheme.primary,
+        scheme.secondary,
+        0.32,
+      )!.withValues(alpha: isDark ? 0.12 : 0.05),
+      scheme.surface,
+    );
+    final menuBottomColor = Color.alphaBlend(
+      scheme.tertiary.withValues(alpha: isDark ? 0.08 : 0.04),
+      scheme.surface,
+    );
     return Listener(
       onPointerDown: (_) => _resetIdleTimer(),
       onPointerMove: (_) => _resetIdleTimer(),
@@ -13030,12 +13070,62 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         },
         child: _activeSection == AppSection.analysis
             ? _buildAnalysisBoardScaffold(context)
-            : MainMenuScreen(
-                menuReady: _menuReady,
-                menuRevealController: _menuRevealController,
-                sectionTransitionController: _sectionTransitionController,
-                logoAsset: _menuLogoAsset(context),
-                child: _buildMenuExitTransition(),
+            : Scaffold(
+                body: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [menuTopColor, scheme.surface, menuBottomColor],
+                      stops: [0.0, 0.72, 1.0],
+                    ),
+                  ),
+                  child: (!isLandscape)
+                      ? SafeArea(
+                          child: !_menuReady
+                              ? Center(
+                                  child: FadeTransition(
+                                    opacity: CurvedAnimation(
+                                      parent: _menuRevealController,
+                                      curve: Curves.easeOutCubic,
+                                    ),
+                                    child: Image.asset(
+                                      _menuLogoAsset(context),
+                                      width: 220,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                )
+                              : FadeTransition(
+                                  opacity: CurvedAnimation(
+                                    parent: _sectionTransitionController,
+                                    curve: Curves.easeInOutCubic,
+                                  ),
+                                  child: _buildMenuExitTransition(),
+                                ),
+                        )
+                      : (!_menuReady
+                            ? Center(
+                                child: FadeTransition(
+                                  opacity: CurvedAnimation(
+                                    parent: _menuRevealController,
+                                    curve: Curves.easeOutCubic,
+                                  ),
+                                  child: Image.asset(
+                                    _menuLogoAsset(context),
+                                    width: 220,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              )
+                            : FadeTransition(
+                                opacity: CurvedAnimation(
+                                  parent: _sectionTransitionController,
+                                  curve: Curves.easeInOutCubic,
+                                ),
+                                child: _buildMenuExitTransition(),
+                              )),
+                ),
               ),
       ),
     );
@@ -20962,6 +21052,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final scheme = Theme.of(context).colorScheme;
     final accent = scheme.primary;
     final playerColor = scheme.onSurface.withValues(alpha: 0.82);
+    final opponentColor = scheme.onSurface.withValues(alpha: 0.62);
     final spacing = compact ? 2.0 : 4.0;
 
     return Row(
@@ -20991,7 +21082,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
         ),
         SizedBox(width: spacing),
-        Icon(Icons.person_rounded, size: iconSize, color: playerColor),
+        Icon(Icons.person_rounded, size: iconSize, color: opponentColor),
       ],
     );
   }

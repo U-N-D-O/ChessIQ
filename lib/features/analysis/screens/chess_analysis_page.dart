@@ -38,7 +38,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-part '../../main_menu/screen/main_menu_screen.dart';
 part '../../quiz/core/quiz_academy_surface.dart';
 part '../../quiz/core/quiz_components.dart';
 part '../../quiz/core/quiz_screen.dart';
