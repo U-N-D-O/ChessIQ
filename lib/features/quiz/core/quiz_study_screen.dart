@@ -306,20 +306,22 @@ Widget _buildQuizStudyScreen(_QuizScreen state) {
             padding: EdgeInsets.symmetric(horizontal: sideInset),
             child: Column(
               children: <Widget>[
-                const SizedBox(height: 12),
-                _buildQuizStudyTopBar(
-                  state,
-                  palette: palette,
-                  showingDetail: showingDetail,
-                  accent: categoryAccent,
-                  layout: layout,
-                  title: pageTitle,
-                  subtitle: pageSubtitle,
-                  compactLandscapeFamilyLabel: compactLandscapeDetail
-                      ? detailFamilyName
-                      : null,
-                ),
-                SizedBox(height: layout.sectionGap),
+                if (!compactLandscapeDetail) ...<Widget>[
+                  const SizedBox(height: 12),
+                  _buildQuizStudyTopBar(
+                    state,
+                    palette: palette,
+                    showingDetail: showingDetail,
+                    accent: categoryAccent,
+                    layout: layout,
+                    title: pageTitle,
+                    subtitle: pageSubtitle,
+                    compactLandscapeFamilyLabel: compactLandscapeDetail
+                        ? detailFamilyName
+                        : null,
+                  ),
+                  SizedBox(height: layout.sectionGap),
+                ],
                 Expanded(
                   child: compactLandscapeDetail
                       ? _buildQuizStudyDetailScreen(
@@ -450,8 +452,8 @@ Widget _buildQuizStudyTopBar(
                 alignment: Alignment.centerLeft,
                 child: state._academyHudButton(
                   palette: palette,
-                  icon: Icons.keyboard_return_rounded,
-                  label: 'BACK TO BROWSER',
+                  icon: Icons.arrow_back_rounded,
+                  label: 'BACK',
                   accent: accent,
                   onTap: state._closeQuizStudyDetail,
                 ),
@@ -502,10 +504,8 @@ Widget _buildQuizStudyTopBar(
                     alignment: Alignment.centerLeft,
                     child: state._academyHudButton(
                       palette: palette,
-                      icon: showingDetail
-                          ? Icons.keyboard_return_rounded
-                          : Icons.arrow_back_rounded,
-                      label: showingDetail ? 'BACK TO BROWSER' : 'BACK TO QUIZ',
+                      icon: Icons.arrow_back_rounded,
+                      label: showingDetail ? 'BACK' : 'BACK TO QUIZ',
                       accent: showingDetail ? accent : palette.text,
                       onTap: showingDetail
                           ? state._closeQuizStudyDetail
@@ -528,10 +528,8 @@ Widget _buildQuizStudyTopBar(
             children: <Widget>[
               state._academyHudButton(
                 palette: palette,
-                icon: showingDetail
-                    ? Icons.keyboard_return_rounded
-                    : Icons.arrow_back_rounded,
-                label: showingDetail ? 'BACK TO BROWSER' : 'BACK TO QUIZ',
+                icon: Icons.arrow_back_rounded,
+                label: showingDetail ? 'BACK' : 'BACK TO QUIZ',
                 accent: showingDetail ? accent : palette.text,
                 onTap: showingDetail
                     ? state._closeQuizStudyDetail
@@ -549,6 +547,111 @@ Widget _buildQuizStudyTopBar(
               statsButton,
             ],
           ),
+  );
+}
+
+String _quizStudyCompactLandscapeHeaderTitle(
+  _QuizScreen state, {
+  required EcoLine selectedLine,
+  required String familyName,
+  required String variationLabel,
+}) {
+  final resolvedName = state
+      ._quizResolvedOpeningDisplayName(selectedLine)
+      .trim();
+  final resolvedKey = _quizStudyKeyToken(resolvedName);
+  final familyKey = _quizStudyKeyToken(familyName);
+  final variationKey = _quizStudyKeyToken(variationLabel);
+  final resolvedHasFamily =
+      familyKey.isNotEmpty && resolvedKey.contains(familyKey);
+  final resolvedHasVariation =
+      variationKey.isNotEmpty && resolvedKey.contains(variationKey);
+  if (resolvedHasFamily &&
+      (variationLabel == familyName || resolvedHasVariation)) {
+    return resolvedName;
+  }
+
+  final storedName = state._quizStudyDisplayLineLabel(selectedLine.name.trim());
+  final storedKey = _quizStudyKeyToken(storedName);
+  final storedHasFamily = familyKey.isNotEmpty && storedKey.contains(familyKey);
+  final storedHasVariation =
+      variationKey.isNotEmpty && storedKey.contains(variationKey);
+  if (storedHasFamily && (variationLabel == familyName || storedHasVariation)) {
+    return storedName;
+  }
+
+  if (variationLabel == familyName || variationLabel == 'Mainline') {
+    return familyName;
+  }
+  return '$familyName • $variationLabel';
+}
+
+Widget _buildQuizStudyCompactLandscapeRailTopBar(
+  _QuizScreen state, {
+  required EcoLine selectedLine,
+  required _QuizAcademyPalette palette,
+  required Color accent,
+}) {
+  final styleButton = _buildQuizStudyTopIconButton(
+    state,
+    palette: palette,
+    icon: Icons.palette_outlined,
+    accent: palette.cyan,
+    tooltip: 'Style',
+    onTap: state._openAppearanceSettings,
+  );
+  final statsButton = _buildQuizStudyTopIconButton(
+    state,
+    palette: palette,
+    icon: Icons.insights_outlined,
+    accent: palette.amber,
+    tooltip: 'Stats',
+    onTap: state._openQuizStatsSheet,
+  );
+  final flipButton = _buildQuizStudyTopIconButton(
+    state,
+    buttonKey: const ValueKey<String>('quiz_study_board_flip_button'),
+    palette: palette,
+    icon: Icons.swap_horiz_rounded,
+    accent: state._quizStudyBoardFlipped ? accent : palette.cyan,
+    tooltip: state._quizStudyBoardIsReversed(selectedLine)
+        ? 'Show white perspective'
+        : 'Show black perspective',
+    onTap: state._toggleQuizStudyBoardOrientation,
+  );
+
+  return state._academyPixelPanel(
+    panelKey: const ValueKey<String>('quiz_study_compact_landscape_top_bar'),
+    palette: palette,
+    accent: accent,
+    fillColor: palette.panelAlt,
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+    child: Row(
+      children: <Widget>[
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: state._academyHudButton(
+                palette: palette,
+                icon: Icons.arrow_back_rounded,
+                label: 'BACK',
+                accent: accent,
+                onTap: state._closeQuizStudyDetail,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        flipButton,
+        const SizedBox(width: 8),
+        styleButton,
+        const SizedBox(width: 8),
+        statsButton,
+      ],
+    ),
   );
 }
 
@@ -1714,6 +1817,8 @@ Widget _buildQuizStudyDetailHeaderPanel(
   required Color accent,
   required _QuizStudyLayoutSpec layout,
   Widget? compactLandscapeControls,
+  String? compactLandscapeTitle,
+  String? compactLandscapeSubtitle,
 }) {
   final compactLandscape =
       layout.mode == _QuizStudyLayoutMode.phoneLandscape && !layout.isTablet;
@@ -1731,17 +1836,39 @@ Widget _buildQuizStudyDetailHeaderPanel(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
-                child: Text(
-                  variationLabel,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: state._academyDisplayStyle(
-                    palette: palette,
-                    size: 18,
-                    color: palette.text,
-                    weight: FontWeight.w700,
-                    letterSpacing: 0.65,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      compactLandscapeTitle ?? variationLabel,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: state._academyDisplayStyle(
+                        palette: palette,
+                        size: 16.6,
+                        color: palette.text,
+                        weight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if ((compactLandscapeSubtitle ?? '')
+                        .isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 6),
+                      Text(
+                        compactLandscapeSubtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: state._academyHudStyle(
+                          palette: palette,
+                          size: 11.2,
+                          color: palette.textMuted,
+                          weight: FontWeight.w700,
+                          letterSpacing: 0.28,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(width: 10),
@@ -1833,6 +1960,16 @@ Widget _buildQuizStudyDetailScreen(
   final familyLines = state._quizStudyFamilyLines(familyName);
   final studyCount = state._quizStudyCountFor(selectedLine.name);
   final boardMaxWidth = double.infinity;
+  final variationLabel = state._quizStudyVariationLabel(
+    selectedLine,
+    familyName,
+  );
+  final compactLandscapeTitle = _quizStudyCompactLandscapeHeaderTitle(
+    state,
+    selectedLine: selectedLine,
+    familyName: familyName,
+    variationLabel: variationLabel,
+  );
   final replayControls = _buildQuizStudyReplayControls(
     state,
     selectedLine: selectedLine,
@@ -1841,10 +1978,6 @@ Widget _buildQuizStudyDetailScreen(
     accent: accent,
     maxWidth: compactLandscape ? double.infinity : boardMaxWidth,
     showFollowUpStatusTags: layout.isTablet,
-  );
-  final variationLabel = state._quizStudyVariationLabel(
-    selectedLine,
-    familyName,
   );
   final detailHeader = _buildQuizStudyDetailHeaderPanel(
     state,
@@ -1856,6 +1989,10 @@ Widget _buildQuizStudyDetailScreen(
     accent: accent,
     layout: layout,
     compactLandscapeControls: compactLandscape ? replayControls : null,
+    compactLandscapeTitle: compactLandscape ? compactLandscapeTitle : null,
+    compactLandscapeSubtitle: compactLandscape
+        ? '${state._quizStudyCategoryLabel(state._quizStudyCategory)} study line'
+        : null,
   );
   final navigatorPanel = _buildQuizStudyFamilyNavigatorPanel(
     state,
@@ -1886,6 +2023,10 @@ Widget _buildQuizStudyDetailScreen(
       palette: palette,
       accent: accent,
     );
+    const compactLandscapeEvalRailWidth = 34.0;
+    final compactLandscapeShowEvalRail =
+        state._quizStudyFollowUpPositionFor(selectedLine) != null &&
+        state._quizStudyFollowUpEvalVisible;
 
     if (followUpActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1902,56 +2043,87 @@ Widget _buildQuizStudyDetailScreen(
     return LayoutBuilder(
       builder: (context, constraints) {
         final panelGap = max(8.0, layout.sectionGap - 4);
-        const compactBoardChromeHeight = 40.0;
+        const compactBoardHorizontalPadding = 20.0;
+        const compactBoardVerticalPadding = 22.0;
+        final compactRailWidth = min(
+          max(280.0, constraints.maxWidth * 0.34),
+          332.0,
+        );
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Expanded(
-              flex: 6,
               child: LayoutBuilder(
                 builder: (context, leftConstraints) {
+                  final boardWidthBudget =
+                      leftConstraints.maxWidth - compactBoardHorizontalPadding;
+                  final boardHeightBudget =
+                      constraints.maxHeight - compactBoardVerticalPadding;
                   final boardSize = max(
                     0.0,
                     min(
-                      leftConstraints.maxWidth - 24.0,
-                      constraints.maxHeight - compactBoardChromeHeight,
+                      boardWidthBudget,
+                      boardHeightBudget +
+                          (compactLandscapeShowEvalRail
+                              ? compactLandscapeEvalRailWidth
+                              : 0.0),
                     ),
                   );
-                  return _buildQuizStudyBoardWalkthroughPanel(
-                    state,
-                    selectedLine: selectedLine,
-                    preview: preview,
-                    palette: palette,
-                    accent: accent,
-                    boardMaxWidth: boardSize,
-                    compactLandscape: true,
-                    showFollowUpStatusTags: false,
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: _buildQuizStudyBoardWalkthroughPanel(
+                      state,
+                      selectedLine: selectedLine,
+                      preview: preview,
+                      palette: palette,
+                      accent: accent,
+                      boardMaxWidth: boardSize,
+                      compactLandscape: true,
+                      showFollowUpStatusTags: false,
+                    ),
                   );
                 },
               ),
             ),
             SizedBox(width: panelGap),
-            Expanded(
-              flex: 5,
-              child: Scrollbar(
-                child: SingleChildScrollView(
-                  key: state._quizStudyLandscapeDetailScrollKey,
-                  controller: state._quizStudyLandscapeDetailScrollController,
-                  padding: const EdgeInsets.only(right: 2),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      detailHeader,
-                      if (followUpActive) ...<Widget>[
-                        SizedBox(height: panelGap),
-                        followUpPanel,
-                      ],
-                      SizedBox(height: panelGap),
-                      navigatorPanel,
-                    ],
+            SizedBox(
+              width: compactRailWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _buildQuizStudyCompactLandscapeRailTopBar(
+                    state,
+                    selectedLine: selectedLine,
+                    palette: palette,
+                    accent: accent,
                   ),
-                ),
+                  SizedBox(height: panelGap),
+                  Expanded(
+                    child: Scrollbar(
+                      controller:
+                          state._quizStudyLandscapeDetailScrollController,
+                      child: SingleChildScrollView(
+                        key: state._quizStudyLandscapeDetailScrollKey,
+                        controller:
+                            state._quizStudyLandscapeDetailScrollController,
+                        padding: const EdgeInsets.only(right: 2),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            detailHeader,
+                            if (followUpActive) ...<Widget>[
+                              SizedBox(height: panelGap),
+                              followUpPanel,
+                            ],
+                            SizedBox(height: panelGap),
+                            navigatorPanel,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -2834,6 +3006,19 @@ Widget _buildQuizStudyReplayControls(
                         ? () => state._stepQuizStudyForward(selectedLine)
                         : null,
                     accent: palette.cyan,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildQuizStudyReplayButton(
+                    state,
+                    palette: palette,
+                    icon: Icons.skip_next_rounded,
+                    label: 'END',
+                    tooltip:
+                        'Jump to the final line position and continue with follow-ups',
+                    onPressed: preview != null && currentPly < totalPly
+                        ? () => state._jumpQuizStudyToEnd(selectedLine)
+                        : null,
+                    accent: palette.emerald,
                   ),
                 ],
               ),

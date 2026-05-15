@@ -1886,7 +1886,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         ? (compactLandscape ? 'Exam' : 'Bracket ${widget.node.title} Exam')
         : _isDailySequence
         ? (compactLandscape
-              ? _compactDailyTitle()
+              ? '${_compactDailyTitle()} • ${widget.node.title}'
               : '${widget.sequenceTitle ?? 'Daily Challenge'} • ${widget.node.title}')
         : compactLandscape
         ? widget.node.title
@@ -2799,6 +2799,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         : widget.initialReviewMode
         ? 'Review'
         : 'Training';
+    final compactLandscapeDaily = layout.compactLandscape && _isDailySequence;
+    final evalValue = _formatEval(
+      _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
+    );
+    final progressValue = compactLandscapeDaily
+        ? '${_puzzleIndex + 1}/$total • $evalValue'
+        : '${_puzzleIndex + 1}/$total';
 
     return Padding(
       padding: layout.intelOuterPadding,
@@ -2828,7 +2835,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             SizedBox(height: layout.intelSectionGap),
             _InfoLine(
               label: 'Mode',
-              value: modeLabel,
+              value: compactLandscapeDaily
+                  ? '$modeLabel • ${widget.node.title}'
+                  : modeLabel,
               monochrome: monochrome,
               compact: layout.compactLandscape,
             ),
@@ -2845,16 +2854,14 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
             if (!hideLowPriorityMetrics)
               _InfoLine(
                 label: 'Progress',
-                value: '${_puzzleIndex + 1}/$total',
+                value: progressValue,
                 monochrome: monochrome,
                 compact: layout.compactLandscape,
               ),
-            if (!hideLowPriorityMetrics)
+            if (!hideLowPriorityMetrics && !compactLandscapeDaily)
               _InfoLine(
                 label: 'Eval',
-                value: _formatEval(
-                  _evalBarPlayerIsBlack ? -_evalWhitePawns : _evalWhitePawns,
-                ),
+                value: evalValue,
                 monochrome: monochrome,
                 compact: layout.compactLandscape,
               ),

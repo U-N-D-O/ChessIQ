@@ -194,6 +194,7 @@ class _AcademyHubCardModel {
     required this.artLabel,
     required this.imageAsset,
     this.shineAsset,
+    this.extraShineAssets = const <String>[],
     required this.imageAlignment,
     required this.imagePadding,
     required this.accent,
@@ -216,6 +217,7 @@ class _AcademyHubCardModel {
   final String artLabel;
   final String imageAsset;
   final String? shineAsset;
+  final List<String> extraShineAssets;
   final Alignment imageAlignment;
   final EdgeInsets imagePadding;
   final Color accent;
@@ -2428,6 +2430,10 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
       artLabel: usesAccuracy ? 'QUIZ LADDER' : 'STUDY FILES',
       imageAsset: 'assets/academy/openings_study.png',
       shineAsset: 'assets/academy/openings_study_shine.png',
+      extraShineAssets: const <String>[
+        'assets/academy/openings_study_shine2.png',
+        'assets/academy/openings_study_shine3.png',
+      ],
       imageAlignment: Alignment.center,
       imagePadding: const EdgeInsets.all(4),
       accent: accent,
@@ -2626,9 +2632,12 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required bool monochrome,
     required bool isHighlighted,
   }) {
-    final shineAsset = model.shineAsset;
+    final shineAssets = <String>[
+      if (model.shineAsset != null) model.shineAsset!,
+      ...model.extraShineAssets,
+    ];
     final shineState = _academyHubShineStates[model.cardId];
-    if (shineAsset == null || shineState == null) {
+    if (shineAssets.isEmpty || shineState == null) {
       return const SizedBox.shrink();
     }
 
@@ -2641,89 +2650,131 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
           if (!shineActive) {
             return const SizedBox.shrink();
           }
-
-          final sweep = Curves.easeInOutCubic.transform(
-            shineState.controller.value,
-          );
-          final pulse = Curves.easeInOutCubic.transform(
-            (1.0 - ((sweep - 0.5).abs() / 0.5).clamp(0.0, 1.0)).toDouble(),
-          );
-          final bandCenter = -0.24 + sweep * 1.48;
-          final lead = bandCenter.clamp(0.0, 1.0);
-          final innerLead = max(lead, (bandCenter + 0.08).clamp(0.0, 1.0));
-          final center = max(innerLead, (bandCenter + 0.16).clamp(0.0, 1.0));
-          final innerTrail = max(center, (bandCenter + 0.24).clamp(0.0, 1.0));
-          final trail = max(innerTrail, (bandCenter + 0.34).clamp(0.0, 1.0));
-          final baseOpacity = isHighlighted ? (monochrome ? 0.10 : 0.12) : 0.0;
-          final sweepOpacity = isHighlighted
-              ? (monochrome ? 0.58 : 0.66)
-              : (monochrome ? 0.72 : 0.82) * pulse;
-          final highlightColor = monochrome
-              ? const Color(0xFFFFF4C7)
-              : const Color(0xFF9EF6FF);
-
           return Stack(
             fit: StackFit.expand,
-            children: [
-              if (baseOpacity > 0)
-                Opacity(
-                  opacity: baseOpacity,
-                  child: Image.asset(
-                    shineAsset,
-                    fit: BoxFit.contain,
-                    alignment: model.imageAlignment,
-                    filterQuality: FilterQuality.none,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                ),
-              if (sweepOpacity > 0)
-                Opacity(
-                  opacity: sweepOpacity,
-                  child: ShaderMask(
-                    blendMode: BlendMode.srcATop,
-                    shaderCallback: (bounds) {
-                      return LinearGradient(
-                        begin: const Alignment(-1.0, -0.85),
-                        end: const Alignment(1.0, 0.95),
-                        colors: [
-                          Colors.transparent,
-                          Colors.transparent,
-                          highlightColor.withValues(alpha: 0.18),
-                          Colors.white.withValues(alpha: 0.98),
-                          highlightColor.withValues(
-                            alpha: monochrome ? 0.72 : 0.84,
-                          ),
-                          Colors.transparent,
-                          Colors.transparent,
-                        ],
-                        stops: [
-                          0.0,
-                          lead,
-                          innerLead,
-                          center,
-                          innerTrail,
-                          trail,
-                          1.0,
-                        ],
-                      ).createShader(bounds);
-                    },
-                    child: Image.asset(
-                      shineAsset,
-                      fit: BoxFit.contain,
-                      alignment: model.imageAlignment,
-                      filterQuality: FilterQuality.none,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ),
-                ),
-            ],
+            children: List<Widget>.generate(shineAssets.length, (index) {
+              return _buildAcademyHubCardShineLayer(
+                assetPath: shineAssets[index],
+                alignment: model.imageAlignment,
+                monochrome: monochrome,
+                isHighlighted: isHighlighted,
+                progress: shineState.controller.value,
+                layerIndex: index,
+              );
+            }),
           );
         },
       ),
+    );
+  }
+
+  Widget _buildAcademyHubCardShineLayer({
+    required String assetPath,
+    required Alignment alignment,
+    required bool monochrome,
+    required bool isHighlighted,
+    required double progress,
+    required int layerIndex,
+  }) {
+    final sweepSpeed = switch (layerIndex % 3) {
+      0 => 0.88,
+      1 => 1.21,
+      _ => 1.47,
+    };
+    final pulseSpeed = switch (layerIndex % 3) {
+      0 => 0.74,
+      1 => 1.09,
+      _ => 1.33,
+    };
+    final layerOffset = switch (layerIndex % 3) {
+      0 => 0.08,
+      1 => 0.41,
+      _ => 0.69,
+    };
+    final layerPhase = (progress * sweepSpeed + layerOffset) % 1.0;
+    final sweep = Curves.easeInOutCubic.transform(layerPhase);
+    final pulsePhase = (progress * pulseSpeed + layerOffset * 1.37) % 1.0;
+    final pulse = Curves.easeInOutCubic.transform(
+      (1.0 - ((pulsePhase - 0.5).abs() / 0.5).clamp(0.0, 1.0)).toDouble(),
+    );
+    final bandCenter = -0.28 + sweep * (1.44 + layerIndex * 0.1);
+    final lead = bandCenter.clamp(0.0, 1.0);
+    final innerLead = max(lead, (bandCenter + 0.07).clamp(0.0, 1.0));
+    final center = max(innerLead, (bandCenter + 0.15).clamp(0.0, 1.0));
+    final innerTrail = max(center, (bandCenter + 0.24).clamp(0.0, 1.0));
+    final trail = max(innerTrail, (bandCenter + 0.34).clamp(0.0, 1.0));
+    final layerWeight = (1.0 - layerIndex * 0.12).clamp(0.48, 1.0);
+    final baseOpacity = isHighlighted
+        ? (monochrome ? 0.06 : 0.075) * layerWeight * (0.82 + pulse * 0.28)
+        : 0.0;
+    final sweepOpacity =
+        ((isHighlighted
+                    ? (monochrome ? 0.48 : 0.56)
+                    : (monochrome ? 0.62 : 0.74) * pulse) *
+                layerWeight)
+            .clamp(0.0, 1.0);
+    final highlightColor = monochrome
+        ? const Color(0xFFFFF4C7)
+        : switch (layerIndex) {
+            0 => const Color(0xFF9EF6FF),
+            1 => const Color(0xFFFFE978),
+            _ => const Color(0xFFFFA8E8),
+          };
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (baseOpacity > 0)
+          Opacity(
+            opacity: baseOpacity,
+            child: _buildAcademyHubCardShineImage(
+              assetPath: assetPath,
+              alignment: alignment,
+            ),
+          ),
+        if (sweepOpacity > 0)
+          Opacity(
+            opacity: sweepOpacity,
+            child: ShaderMask(
+              blendMode: BlendMode.srcATop,
+              shaderCallback: (bounds) {
+                return LinearGradient(
+                  begin: const Alignment(-1.0, -0.85),
+                  end: const Alignment(1.0, 0.95),
+                  colors: [
+                    Colors.transparent,
+                    Colors.transparent,
+                    highlightColor.withValues(alpha: 0.18),
+                    Colors.white.withValues(alpha: 0.98),
+                    highlightColor.withValues(alpha: monochrome ? 0.72 : 0.84),
+                    Colors.transparent,
+                    Colors.transparent,
+                  ],
+                  stops: [0.0, lead, innerLead, center, innerTrail, trail, 1.0],
+                ).createShader(bounds);
+              },
+              child: _buildAcademyHubCardShineImage(
+                assetPath: assetPath,
+                alignment: alignment,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAcademyHubCardShineImage({
+    required String assetPath,
+    required Alignment alignment,
+  }) {
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      alignment: alignment,
+      filterQuality: FilterQuality.none,
+      errorBuilder: (context, error, stackTrace) {
+        return const SizedBox.shrink();
+      },
     );
   }
 

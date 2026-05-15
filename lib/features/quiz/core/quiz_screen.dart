@@ -2776,6 +2776,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     );
   }
 
+  void _jumpQuizStudyToEnd(EcoLine line) {
+    final totalPly = line.moveTokens.length;
+    if (_quizStudyShownPlyFor(line) >= totalPly) {
+      return;
+    }
+
+    _setQuizStudyShownPly(line, totalPly);
+  }
+
   List<_QuizStudyFamilyGroup> _quizStudyFamilyGroups(
     QuizStudyCategory category,
   ) {
