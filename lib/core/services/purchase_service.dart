@@ -88,9 +88,9 @@ class PurchaseService {
 
   Future<void> _initializeInternal() async {
     try {
-      _storeAvailable = await InAppPurchase.instance
-          .isAvailable()
-          .timeout(const Duration(seconds: 15));
+      _storeAvailable = await InAppPurchase.instance.isAvailable().timeout(
+        const Duration(seconds: 15),
+      );
     } catch (e) {
       _storeAvailable = false;
       debugPrint('IAP availability check failed: $e');
@@ -111,9 +111,9 @@ class PurchaseService {
 
     try {
       // Re-deliver any pending / previously purchased transactions.
-      await InAppPurchase.instance
-          .restorePurchases()
-          .timeout(const Duration(seconds: 15));
+      await InAppPurchase.instance.restorePurchases().timeout(
+        const Duration(seconds: 15),
+      );
     } catch (e) {
       debugPrint('IAP restore failed during initialization: $e');
     }
@@ -239,9 +239,9 @@ class PurchaseService {
     await initialize();
     if (!_storeAvailable) return;
     try {
-      await InAppPurchase.instance
-          .restorePurchases()
-          .timeout(const Duration(seconds: 15));
+      await InAppPurchase.instance.restorePurchases().timeout(
+        const Duration(seconds: 15),
+      );
     } catch (e) {
       debugPrint('IAP restore request failed: $e');
     }
