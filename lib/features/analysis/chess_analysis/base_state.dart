@@ -829,15 +829,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _setAnalysisEditMode(bool enabled) {
+    final nextEnabled = enabled && _canUseAnalysisEditMode;
     setState(() {
-      _analysisEditMode = enabled;
+      _analysisEditMode = nextEnabled;
       _selectedEditToolboxPiece = null;
       _editToolboxEraserSelected = false;
       _holdSelectedFrom = null;
       _gambitSelectedFrom = null;
       _legalTargets.clear();
       _gambitAvailableTargets.clear();
-      _editModeHintText = enabled ? 'Edit mode on' : 'Edit mode off';
+      _editModeHintText = nextEnabled
+          ? 'Edit mode on'
+          : enabled && !_canUseAnalysisEditMode
+          ? 'Edit mode unavailable in 1v1'
+          : 'Edit mode off';
     });
     _scheduleEditModeHintHide();
   }
@@ -856,13 +861,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _scheduleEditToolboxMetricsRefresh() {
-    if (_pendingEditToolboxMetricsRefresh || !_analysisEditMode) {
+    if (_pendingEditToolboxMetricsRefresh || !_isAnalysisEditModeActive) {
       return;
     }
     _pendingEditToolboxMetricsRefresh = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pendingEditToolboxMetricsRefresh = false;
-      if (!mounted || !_analysisEditMode) {
+      if (!mounted || !_isAnalysisEditModeActive) {
         return;
       }
       setState(() {});
@@ -4336,6 +4341,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool get _usesTurnAwarePerspective =>
       _perspective == BoardPerspective.auto ||
       _perspective == BoardPerspective.headToHead;
+
+  bool get _canUseAnalysisEditMode => !_playVsBot && !_isHeadToHeadPerspective;
+
+  bool get _isAnalysisEditModeActive =>
+      _analysisEditMode && _canUseAnalysisEditMode;
 
   bool get _runsAnalysisMoveAssessment => !_playVsBot && _moveAssessmentEnabled;
 
@@ -7898,7 +7908,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool _canHumanInteractWithBoardPiece(String? piece) {
     if (piece == null) return false;
-    if (_analysisEditMode && !_isOpeningSelectionMode) {
+    if (_isAnalysisEditModeActive && !_isOpeningSelectionMode) {
       return true;
     }
     if (!_isCurrentTurnPiece(piece)) {
@@ -9383,12 +9393,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     String to, {
     String? forcedPromotion,
   }) async {
-    final canEditResolvedPosition = _analysisEditMode && !_playVsBot;
+    final canEditResolvedPosition = _isAnalysisEditModeActive;
     if (_gameOutcome != null && !canEditResolvedPosition) return;
     final piece = boardState[from];
     if (piece == null) return;
     if (!_canHumanInteractWithBoardPiece(piece)) return;
-    if (!_analysisEditMode && !_legalMovesFrom(from).contains(to)) return;
+    if (!_isAnalysisEditModeActive && !_legalMovesFrom(from).contains(to)) {
+      return;
+    }
 
     var promotion = forcedPromotion;
     if (_isPromotionTarget(from, to, piece)) {
@@ -9399,7 +9411,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     }
 
-    if (_analysisEditMode) {
+    if (_isAnalysisEditModeActive) {
       final uciPromotion = promotion == null
           ? null
           : (promotion == 't' ? 'r' : promotion.toLowerCase());
@@ -10135,7 +10147,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _handleHoldTap(String square) {
     if (_playVsBot && !_isHumanTurnInBotGame) return;
-    if (_analysisEditMode && !_isOpeningSelectionMode) {
+    if (_isAnalysisEditModeActive && !_isOpeningSelectionMode) {
       if (_editToolboxEraserSelected) {
         _eraseEditModePiece(square);
         return;
@@ -10325,7 +10337,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _placeEditModePiece(String piece, String square) {
-    if (!_analysisEditMode || _isOpeningSelectionMode) {
+    if (!_isAnalysisEditModeActive || _isOpeningSelectionMode) {
       return;
     }
     if (piece == 'k_w' || piece == 'k_b') {
@@ -10345,7 +10357,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _eraseEditModePiece(String square) {
-    if (!_analysisEditMode || _isOpeningSelectionMode) {
+    if (!_isAnalysisEditModeActive || _isOpeningSelectionMode) {
       return;
     }
 
@@ -10400,7 +10412,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Size boardSize,
     bool reverse,
   ) {
-    if (!_analysisEditMode ||
+    if (!_isAnalysisEditModeActive ||
         _isOpeningSelectionMode ||
         !_editToolboxEraserSelected) {
       return;
@@ -10418,7 +10430,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _toggleEditToolboxEraser() {
-    if (!_analysisEditMode || _isOpeningSelectionMode) {
+    if (!_isAnalysisEditModeActive || _isOpeningSelectionMode) {
       return;
     }
     setState(() {
@@ -10435,7 +10447,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _toggleEditToolboxTurn() {
-    if (!_analysisEditMode || _isOpeningSelectionMode) {
+    if (!_isAnalysisEditModeActive || _isOpeningSelectionMode) {
       return;
     }
 
@@ -10493,7 +10505,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _toggleEditToolboxSelection(String piece) {
-    if (!_analysisEditMode || _isOpeningSelectionMode) {
+    if (!_isAnalysisEditModeActive || _isOpeningSelectionMode) {
       return;
     }
     setState(() {
@@ -10510,7 +10522,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<void> _confirmCleanEditBoard() async {
-    if (!_analysisEditMode) return;
+    if (!_isAnalysisEditModeActive) return;
 
     final shouldClean = await showDialog<bool>(
       context: context,
@@ -11054,7 +11066,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   // --- Move Handling ---
   void _onMove(String from, String to, {String? promotion}) {
-    final canEditResolvedPosition = _analysisEditMode && !_playVsBot;
+    final canEditResolvedPosition = _isAnalysisEditModeActive;
     if (_gameOutcome != null && !canEditResolvedPosition) return;
     if (_playVsBot && !_isHumanTurnInBotGame && !_botThinking) {
       return;
@@ -13517,7 +13529,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
                   final double scale = (width / 430.0).clamp(0.8, 1.4);
                   const double portraitToolboxGap = 12.0;
-                  final portraitBoardRect = !isLandscape && _analysisEditMode
+                  final portraitBoardRect =
+                      !isLandscape && _isAnalysisEditModeActive
                       ? _boardRectInScene()
                       : null;
                   final portraitToolboxWidth = portraitBoardRect == null
@@ -13737,7 +13750,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                         ],
                                                                       ),
                                                                     ),
-                                                                    if (_analysisEditMode)
+                                                                    if (_isAnalysisEditModeActive)
                                                                       Align(
                                                                         alignment:
                                                                             Alignment.center,
@@ -13849,7 +13862,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                     ).withValues(alpha: 0.92),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: _analysisEditMode
+                                      color: _isAnalysisEditModeActive
                                           ? const Color(
                                               0xFFFFD166,
                                             ).withValues(alpha: 0.42)
@@ -13868,7 +13881,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   child: Text(
                                     _editModeHintText!,
                                     style: TextStyle(
-                                      color: _analysisEditMode
+                                      color: _isAnalysisEditModeActive
                                           ? const Color(0xFFFFD166)
                                           : Colors.white70,
                                       fontSize: 15,
@@ -13881,7 +13894,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ),
                           ),
                         if (!isLandscape &&
-                            _analysisEditMode &&
+                            _isAnalysisEditModeActive &&
                             portraitBoardRect != null &&
                             portraitToolboxWidth != null)
                           Positioned(
@@ -14346,7 +14359,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     ColorScheme scheme, {
     bool includeEvalCounter = false,
   }) {
-    final showEditModeButton = !_playVsBot;
+    final showEditModeButton = _canUseAnalysisEditMode;
     final showDepthCounter = _shouldShowDepthCounter;
     final showEvalCounter = includeEvalCounter && _shouldShowCenterEvalCounter;
     if (!showEditModeButton && !showDepthCounter && !showEvalCounter) {
@@ -14396,13 +14409,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 height: 30,
                 child: IconButton(
                   onPressed: () {
-                    _setAnalysisEditMode(!_analysisEditMode);
+                    _setAnalysisEditMode(!_isAnalysisEditModeActive);
                   },
                   icon: SizedBox(
                     width: 18,
                     height: 18,
                     child: Image.asset(
-                      _analysisEditMode
+                      _isAnalysisEditModeActive
                           ? 'assets/pieces/edit board.png'
                           : 'assets/pieces/edit no board.png',
                       width: 18,
@@ -14411,7 +14424,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       filterQuality: FilterQuality.medium,
                     ),
                   ),
-                  tooltip: _analysisEditMode
+                  tooltip: _isAnalysisEditModeActive
                       ? 'Edit mode on (any move allowed)'
                       : 'Edit mode off (legal moves only)',
                   splashRadius: 18,
@@ -14793,7 +14806,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   final showOpeningSelectionDots =
                       _isOpeningSelectionMode && isGambitAvailableTarget;
                   final showLockedLegalDots =
-                      !_analysisEditMode && !_isOpeningSelectionMode;
+                      !_isAnalysisEditModeActive && !_isOpeningSelectionMode;
                   final showTargetDot =
                       isLegalTarget &&
                       (showOpeningSelectionDots || showLockedLegalDots);
@@ -14819,7 +14832,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         unawaited(_attemptMove(fromSquare, sq));
                         return;
                       }
-                      if (_analysisEditMode && !_isOpeningSelectionMode) {
+                      if (_isAnalysisEditModeActive &&
+                          !_isOpeningSelectionMode) {
                         _placeEditModePiece(d.data.piece, sq);
                       }
                     },
@@ -14848,7 +14862,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 _legalTargets
                                   ..clear()
                                   ..addAll(
-                                    _analysisEditMode
+                                    _isAnalysisEditModeActive
                                         ? <String>{}
                                         : _legalMovesFrom(sq),
                                   );
@@ -15049,7 +15063,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             _legalTargets
                                               ..clear()
                                               ..addAll(
-                                                _analysisEditMode
+                                                _isAnalysisEditModeActive
                                                     ? <String>{}
                                                     : _legalMovesFrom(sq),
                                               );
@@ -15211,6 +15225,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildEditModeToolbox({required bool isLandscape}) {
+    if (!_isAnalysisEditModeActive) {
+      return const SizedBox.shrink();
+    }
     final theme = Theme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -20993,6 +21010,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           }
         });
         if (p == BoardPerspective.headToHead) {
+          if (_analysisEditMode) {
+            _setAnalysisEditMode(false);
+          }
           _send('stop');
         }
         setL(() {});
