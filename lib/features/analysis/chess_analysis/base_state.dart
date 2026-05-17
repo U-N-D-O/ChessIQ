@@ -11525,7 +11525,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    final shown = await adService.maybeShowInterstitialAvoidingBackToBack();
+    final shown = await adService.maybeShowInterstitialAvoidingBackToBack(
+      placement: InterstitialPlacement.versusBotMatchStart,
+    );
     if (!shown) {
       _addLog(
         'Vs Bot match-start interstitial unavailable; continuing without ad',
@@ -19143,7 +19145,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    final rewardEarned = await AdService.instance.showRewardedAd();
+    final rewardEarned = await AdService.instance.showRewardedAd(
+      placement: RewardedPlacement.storeReward,
+    );
     if (!mounted) return;
     if (!rewardEarned) {
       await _showThemedErrorDialog(

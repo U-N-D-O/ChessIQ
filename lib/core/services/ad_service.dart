@@ -3,6 +3,33 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+enum InterstitialPlacement {
+  boardReset,
+  versusBotMatchStart,
+  academyBreak,
+  academyReturn,
+  quizMilestone,
+}
+
+extension InterstitialPlacementDetails on InterstitialPlacement {
+  String get label => switch (this) {
+    InterstitialPlacement.boardReset => 'Board reset',
+    InterstitialPlacement.versusBotMatchStart => 'Vs Bot match start',
+    InterstitialPlacement.academyBreak => 'Academy break',
+    InterstitialPlacement.academyReturn => 'Academy return',
+    InterstitialPlacement.quizMilestone => 'Quiz milestone',
+  };
+}
+
+enum RewardedPlacement { storeReward, academyBonus }
+
+extension RewardedPlacementDetails on RewardedPlacement {
+  String get label => switch (this) {
+    RewardedPlacement.storeReward => 'Store reward',
+    RewardedPlacement.academyBonus => 'Academy bonus',
+  };
+}
+
 class AdService {
   AdService._();
 
@@ -12,28 +39,73 @@ class AdService {
       'ca-app-pub-3940256099942544/4411468910';
   static const String _testRewardedAdUnitId =
       'ca-app-pub-3940256099942544/1712485313';
-  static const String _iosInterstitialAdUnitId = String.fromEnvironment(
+  static const String _iosDefaultInterstitialAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID',
     defaultValue: 'ca-app-pub-8366041710010578/4392988454',
   );
-  static const String _iosRewardedAdUnitId = String.fromEnvironment(
+  static const String _iosBoardResetInterstitialAdUnitId =
+      String.fromEnvironment('ADMOB_IOS_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID');
+  static const String _iosVsBotInterstitialAdUnitId = String.fromEnvironment(
+    'ADMOB_IOS_INTERSTITIAL_VS_BOT_AD_UNIT_ID',
+  );
+  static const String _iosAcademyBreakInterstitialAdUnitId =
+      String.fromEnvironment('ADMOB_IOS_INTERSTITIAL_ACADEMY_BREAK_AD_UNIT_ID');
+  static const String _iosAcademyReturnInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_IOS_INTERSTITIAL_ACADEMY_RETURN_AD_UNIT_ID',
+      );
+  static const String _iosQuizMilestoneInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_IOS_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+      );
+  static const String _iosDefaultRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_REWARDED_AD_UNIT_ID',
     defaultValue: 'ca-app-pub-8366041710010578/4229336921',
   );
-  static const String _androidInterstitialAdUnitId = String.fromEnvironment(
-    'ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID',
+  static const String _iosStoreRewardedAdUnitId = String.fromEnvironment(
+    'ADMOB_IOS_REWARDED_STORE_AD_UNIT_ID',
   );
-  static const String _androidRewardedAdUnitId = String.fromEnvironment(
+  static const String _iosAcademyRewardedAdUnitId = String.fromEnvironment(
+    'ADMOB_IOS_REWARDED_ACADEMY_AD_UNIT_ID',
+  );
+  static const String _androidDefaultInterstitialAdUnitId =
+      String.fromEnvironment('ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID');
+  static const String _androidBoardResetInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_ANDROID_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID',
+      );
+  static const String _androidVsBotInterstitialAdUnitId =
+      String.fromEnvironment('ADMOB_ANDROID_INTERSTITIAL_VS_BOT_AD_UNIT_ID');
+  static const String _androidAcademyBreakInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_ANDROID_INTERSTITIAL_ACADEMY_BREAK_AD_UNIT_ID',
+      );
+  static const String _androidAcademyReturnInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_ANDROID_INTERSTITIAL_ACADEMY_RETURN_AD_UNIT_ID',
+      );
+  static const String _androidQuizMilestoneInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_ANDROID_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+      );
+  static const String _androidDefaultRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_ANDROID_REWARDED_AD_UNIT_ID',
+  );
+  static const String _androidStoreRewardedAdUnitId = String.fromEnvironment(
+    'ADMOB_ANDROID_REWARDED_STORE_AD_UNIT_ID',
+  );
+  static const String _androidAcademyRewardedAdUnitId = String.fromEnvironment(
+    'ADMOB_ANDROID_REWARDED_ACADEMY_AD_UNIT_ID',
   );
   static const Duration _boardResetCooldown = Duration(seconds: 90);
   static const Duration _interstitialRepeatGrace = Duration(seconds: 10);
 
   Future<void>? _initializationFuture;
-  InterstitialAd? _interstitialAd;
-  RewardedAd? _rewardedAd;
-  bool _loadingInterstitial = false;
-  bool _loadingRewarded = false;
+  final Map<String, InterstitialAd> _interstitialAds =
+      <String, InterstitialAd>{};
+  final Set<String> _loadingInterstitialAdUnitIds = <String>{};
+  final Map<String, RewardedAd> _rewardedAds = <String, RewardedAd>{};
+  final Set<String> _loadingRewardedAdUnitIds = <String>{};
   bool _showingInterstitial = false;
   bool _showingRewarded = false;
   DateTime? _lastBoardResetInterstitialAt;
@@ -43,20 +115,6 @@ class AdService {
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
-
-  String? get _interstitialAdUnitId => _resolveAdUnitId(
-    formatLabel: 'interstitial',
-    testAdUnitId: _testInterstitialAdUnitId,
-    iosAdUnitId: _iosInterstitialAdUnitId,
-    androidAdUnitId: _androidInterstitialAdUnitId,
-  );
-
-  String? get _rewardedAdUnitId => _resolveAdUnitId(
-    formatLabel: 'rewarded',
-    testAdUnitId: _testRewardedAdUnitId,
-    iosAdUnitId: _iosRewardedAdUnitId,
-    androidAdUnitId: _androidRewardedAdUnitId,
-  );
 
   Duration get boardResetCooldownRemaining {
     final lastShownAt = _lastBoardResetInterstitialAt;
@@ -99,29 +157,40 @@ class AdService {
       return false;
     }
 
-    final shown = await showInterstitialAd();
+    final shown = await showInterstitialAd(
+      placement: InterstitialPlacement.boardReset,
+    );
     if (shown) {
       _lastBoardResetInterstitialAt = DateTime.now();
     }
     return shown;
   }
 
-  Future<bool> maybeShowInterstitialAvoidingBackToBack() async {
+  Future<bool> maybeShowInterstitialAvoidingBackToBack({
+    required InterstitialPlacement placement,
+  }) async {
     if (interstitialRepeatGraceRemaining > Duration.zero) {
       return false;
     }
-    return showInterstitialAd();
+    return showInterstitialAd(placement: placement);
   }
 
-  Future<bool> showInterstitialAd() async {
+  Future<bool> showInterstitialAd({
+    required InterstitialPlacement placement,
+  }) async {
     await initialize();
     if (!isSupportedPlatform || _showingInterstitial) {
       return false;
     }
 
-    final ad = _interstitialAd;
+    final adUnitId = _interstitialAdUnitIdFor(placement);
+    if (adUnitId == null) {
+      return false;
+    }
+
+    final ad = _interstitialAds.remove(adUnitId);
     if (ad == null) {
-      _preloadInterstitial();
+      _preloadInterstitial(adUnitId);
       return false;
     }
 
@@ -129,7 +198,6 @@ class AdService {
     var wasPresented = false;
 
     _showingInterstitial = true;
-    _interstitialAd = null;
     ad.fullScreenContentCallback = FullScreenContentCallback<InterstitialAd>(
       onAdShowedFullScreenContent: (_) {
         wasPresented = true;
@@ -142,16 +210,16 @@ class AdService {
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _showingInterstitial = false;
-        _preloadInterstitial();
+        _preloadInterstitial(adUnitId);
         if (!completer.isCompleted) {
           completer.complete(wasPresented);
         }
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
-        debugPrint('Interstitial failed to show: $error');
+        debugPrint('${placement.label} interstitial failed to show: $error');
         ad.dispose();
         _showingInterstitial = false;
-        _preloadInterstitial();
+        _preloadInterstitial(adUnitId);
         if (!completer.isCompleted) {
           completer.complete(false);
         }
@@ -161,10 +229,10 @@ class AdService {
     try {
       ad.show();
     } catch (error) {
-      debugPrint('Interstitial show threw: $error');
+      debugPrint('${placement.label} interstitial show threw: $error');
       ad.dispose();
       _showingInterstitial = false;
-      _preloadInterstitial();
+      _preloadInterstitial(adUnitId);
       if (!completer.isCompleted) {
         completer.complete(false);
       }
@@ -173,15 +241,20 @@ class AdService {
     return completer.future;
   }
 
-  Future<bool> showRewardedAd() async {
+  Future<bool> showRewardedAd({required RewardedPlacement placement}) async {
     await initialize();
     if (!isSupportedPlatform || _showingRewarded) {
       return false;
     }
 
-    final ad = _rewardedAd;
+    final adUnitId = _rewardedAdUnitIdFor(placement);
+    if (adUnitId == null) {
+      return false;
+    }
+
+    final ad = _rewardedAds.remove(adUnitId);
     if (ad == null) {
-      _preloadRewarded();
+      _preloadRewarded(adUnitId);
       return false;
     }
 
@@ -189,21 +262,20 @@ class AdService {
     var rewardEarned = false;
 
     _showingRewarded = true;
-    _rewardedAd = null;
     ad.fullScreenContentCallback = FullScreenContentCallback<RewardedAd>(
       onAdDismissedFullScreenContent: (ad) {
         ad.dispose();
         _showingRewarded = false;
-        _preloadRewarded();
+        _preloadRewarded(adUnitId);
         if (!completer.isCompleted) {
           completer.complete(rewardEarned);
         }
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
-        debugPrint('Rewarded ad failed to show: $error');
+        debugPrint('${placement.label} rewarded ad failed to show: $error');
         ad.dispose();
         _showingRewarded = false;
-        _preloadRewarded();
+        _preloadRewarded(adUnitId);
         if (!completer.isCompleted) {
           completer.complete(false);
         }
@@ -217,10 +289,10 @@ class AdService {
         },
       );
     } catch (error) {
-      debugPrint('Rewarded ad show threw: $error');
+      debugPrint('${placement.label} rewarded ad show threw: $error');
       ad.dispose();
       _showingRewarded = false;
-      _preloadRewarded();
+      _preloadRewarded(adUnitId);
       if (!completer.isCompleted) {
         completer.complete(false);
       }
@@ -236,8 +308,114 @@ class AdService {
       debugPrint('AdMob initialization failed: $error');
     }
 
-    _preloadInterstitial();
-    _preloadRewarded();
+    final interstitialAdUnitIds = <String>{
+      for (final placement in InterstitialPlacement.values)
+        if (_interstitialAdUnitIdFor(placement) case final String adUnitId)
+          adUnitId,
+    };
+    for (final adUnitId in interstitialAdUnitIds) {
+      _preloadInterstitial(adUnitId);
+    }
+
+    final rewardedAdUnitIds = <String>{
+      for (final placement in RewardedPlacement.values)
+        if (_rewardedAdUnitIdFor(placement) case final String adUnitId)
+          adUnitId,
+    };
+    for (final adUnitId in rewardedAdUnitIds) {
+      _preloadRewarded(adUnitId);
+    }
+  }
+
+  String? _interstitialAdUnitIdFor(InterstitialPlacement placement) {
+    final iosAdUnitId = switch (placement) {
+      InterstitialPlacement.boardReset => _firstConfigured(
+        _iosBoardResetInterstitialAdUnitId,
+        _iosDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.versusBotMatchStart => _firstConfigured(
+        _iosVsBotInterstitialAdUnitId,
+        _iosDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.academyBreak => _firstConfigured(
+        _iosAcademyBreakInterstitialAdUnitId,
+        _iosDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.academyReturn => _firstConfigured(
+        _iosAcademyReturnInterstitialAdUnitId,
+        _iosDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.quizMilestone => _firstConfigured(
+        _iosQuizMilestoneInterstitialAdUnitId,
+        _iosDefaultInterstitialAdUnitId,
+      ),
+    };
+    final androidAdUnitId = switch (placement) {
+      InterstitialPlacement.boardReset => _firstConfigured(
+        _androidBoardResetInterstitialAdUnitId,
+        _androidDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.versusBotMatchStart => _firstConfigured(
+        _androidVsBotInterstitialAdUnitId,
+        _androidDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.academyBreak => _firstConfigured(
+        _androidAcademyBreakInterstitialAdUnitId,
+        _androidDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.academyReturn => _firstConfigured(
+        _androidAcademyReturnInterstitialAdUnitId,
+        _androidDefaultInterstitialAdUnitId,
+      ),
+      InterstitialPlacement.quizMilestone => _firstConfigured(
+        _androidQuizMilestoneInterstitialAdUnitId,
+        _androidDefaultInterstitialAdUnitId,
+      ),
+    };
+
+    return _resolveAdUnitId(
+      formatLabel: '${placement.label} interstitial',
+      testAdUnitId: _testInterstitialAdUnitId,
+      iosAdUnitId: iosAdUnitId,
+      androidAdUnitId: androidAdUnitId,
+    );
+  }
+
+  String? _rewardedAdUnitIdFor(RewardedPlacement placement) {
+    final iosAdUnitId = switch (placement) {
+      RewardedPlacement.storeReward => _firstConfigured(
+        _iosStoreRewardedAdUnitId,
+        _iosDefaultRewardedAdUnitId,
+      ),
+      RewardedPlacement.academyBonus => _firstConfigured(
+        _iosAcademyRewardedAdUnitId,
+        _iosDefaultRewardedAdUnitId,
+      ),
+    };
+    final androidAdUnitId = switch (placement) {
+      RewardedPlacement.storeReward => _firstConfigured(
+        _androidStoreRewardedAdUnitId,
+        _androidDefaultRewardedAdUnitId,
+      ),
+      RewardedPlacement.academyBonus => _firstConfigured(
+        _androidAcademyRewardedAdUnitId,
+        _androidDefaultRewardedAdUnitId,
+      ),
+    };
+
+    return _resolveAdUnitId(
+      formatLabel: '${placement.label} rewarded',
+      testAdUnitId: _testRewardedAdUnitId,
+      iosAdUnitId: iosAdUnitId,
+      androidAdUnitId: androidAdUnitId,
+    );
+  }
+
+  String _firstConfigured(String primary, String fallback) {
+    if (primary.isNotEmpty) {
+      return primary;
+    }
+    return fallback;
   }
 
   String? _resolveAdUnitId({
@@ -271,59 +449,55 @@ class AdService {
     return testAdUnitId;
   }
 
-  void _preloadInterstitial() {
+  void _preloadInterstitial(String adUnitId) {
     if (!isSupportedPlatform ||
-        _loadingInterstitial ||
-        _interstitialAd != null) {
+        _loadingInterstitialAdUnitIds.contains(adUnitId) ||
+        _interstitialAds.containsKey(adUnitId)) {
       return;
     }
 
-    final adUnitId = _interstitialAdUnitId;
-    if (adUnitId == null) {
-      return;
-    }
-
-    _loadingInterstitial = true;
+    _loadingInterstitialAdUnitIds.add(adUnitId);
     InterstitialAd.load(
       adUnitId: adUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
-          _loadingInterstitial = false;
+          _loadingInterstitialAdUnitIds.remove(adUnitId);
           ad.setImmersiveMode(true);
-          _interstitialAd = ad;
+          final previousAd = _interstitialAds.remove(adUnitId);
+          previousAd?.dispose();
+          _interstitialAds[adUnitId] = ad;
         },
         onAdFailedToLoad: (error) {
-          _loadingInterstitial = false;
-          debugPrint('Interstitial failed to load: $error');
+          _loadingInterstitialAdUnitIds.remove(adUnitId);
+          debugPrint('Interstitial failed to load for $adUnitId: $error');
         },
       ),
     );
   }
 
-  void _preloadRewarded() {
-    if (!isSupportedPlatform || _loadingRewarded || _rewardedAd != null) {
+  void _preloadRewarded(String adUnitId) {
+    if (!isSupportedPlatform ||
+        _loadingRewardedAdUnitIds.contains(adUnitId) ||
+        _rewardedAds.containsKey(adUnitId)) {
       return;
     }
 
-    final adUnitId = _rewardedAdUnitId;
-    if (adUnitId == null) {
-      return;
-    }
-
-    _loadingRewarded = true;
+    _loadingRewardedAdUnitIds.add(adUnitId);
     RewardedAd.load(
       adUnitId: adUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
-          _loadingRewarded = false;
+          _loadingRewardedAdUnitIds.remove(adUnitId);
           ad.setImmersiveMode(true);
-          _rewardedAd = ad;
+          final previousAd = _rewardedAds.remove(adUnitId);
+          previousAd?.dispose();
+          _rewardedAds[adUnitId] = ad;
         },
         onAdFailedToLoad: (error) {
-          _loadingRewarded = false;
-          debugPrint('Rewarded ad failed to load: $error');
+          _loadingRewardedAdUnitIds.remove(adUnitId);
+          debugPrint('Rewarded ad failed to load for $adUnitId: $error');
         },
       ),
     );

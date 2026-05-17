@@ -1073,7 +1073,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     final academyAdFree = await _isAcademyTuitionPassOwned();
     final shown = academyAdFree
         ? true
-        : await AdService.instance.showInterstitialAd();
+        : await AdService.instance.showInterstitialAd(
+            placement: InterstitialPlacement.academyBreak,
+          );
     if (!shown || !mounted) return;
 
     final economy = context.read<EconomyProvider>();

@@ -13,9 +13,20 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use(keystoreProperties::load)
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use(localProperties::load)
+}
+
 fun resolveSigningValue(envName: String, propertyName: String): String? {
     return providers.environmentVariable(envName).orNull
         ?: keystoreProperties.getProperty(propertyName)
+}
+
+fun resolveLocalValue(envName: String, propertyName: String): String? {
+    return providers.environmentVariable(envName).orNull
+        ?: localProperties.getProperty(propertyName)
 }
 
 val releaseStoreFile = resolveSigningValue("ANDROID_KEYSTORE_PATH", "storeFile")
@@ -23,12 +34,22 @@ val releaseStoreFile = resolveSigningValue("ANDROID_KEYSTORE_PATH", "storeFile")
 val releaseStorePassword = resolveSigningValue("ANDROID_KEYSTORE_PASSWORD", "storePassword")
 val releaseKeyAlias = resolveSigningValue("ANDROID_KEY_ALIAS", "keyAlias")
 val releaseKeyPassword = resolveSigningValue("ANDROID_KEY_PASSWORD", "keyPassword")
+val defaultDebugAdmobAppId = "ca-app-pub-3940256099942544~3347511713"
+val admobAndroidAppId = resolveLocalValue("ADMOB_ANDROID_APP_ID", "admobAndroidAppId")
+val isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("release", ignoreCase = true) ||
+        taskName.contains("bundle", ignoreCase = true)
+}
 val hasReleaseSigning = listOf(
     releaseStoreFile,
     releaseStorePassword,
     releaseKeyAlias,
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
+
+check(!isReleaseBuildRequested || !admobAndroidAppId.isNullOrBlank()) {
+    "Missing Android AdMob app ID. Set ADMOB_ANDROID_APP_ID or admobAndroidAppId in android/local.properties before Android release builds."
+}
 
 android {
     namespace = "com.qila.chessiq"
@@ -52,6 +73,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["admobApplicationId"] =
+            admobAndroidAppId ?: defaultDebugAdmobAppId
     }
 
     signingConfigs {

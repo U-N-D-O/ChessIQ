@@ -5087,7 +5087,9 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   Future<void> _showQuizMilestoneInterstitial() async {
-    final shown = await AdService.instance.showInterstitialAd();
+    final shown = await AdService.instance.showInterstitialAd(
+      placement: InterstitialPlacement.quizMilestone,
+    );
     if (!shown) {
       _addLog('Quiz interstitial unavailable at 10-guess milestone.');
     }

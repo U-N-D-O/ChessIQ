@@ -624,7 +624,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     final economy = context.read<EconomyProvider>();
     if (elapsed >= const Duration(minutes: 20)) {
-      final rewarded = await AdService.instance.showRewardedAd();
+      final rewarded = await AdService.instance.showRewardedAd(
+        placement: RewardedPlacement.academyBonus,
+      );
       if (rewarded && mounted) {
         await economy.addCoins(50);
         await _showStatusDialog(title: 'Reward Earned', message: '+50 coins.');
@@ -632,7 +634,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
 
-    await AdService.instance.showInterstitialAd();
+    await AdService.instance.showInterstitialAd(
+      placement: InterstitialPlacement.academyReturn,
+    );
   }
 
   Future<void> _showRewardAdUnavailableDialog() async {
@@ -1305,7 +1309,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
 
-    final shown = await AdService.instance.showInterstitialAd();
+    final shown = await AdService.instance.showInterstitialAd(
+      placement: InterstitialPlacement.academyBreak,
+    );
     if (shown && mounted) {
       final economy = context.read<EconomyProvider>();
       await economy.awardAcademyInterstitialCoins();
@@ -1502,7 +1508,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final academyAdFree = await _isAcademyTuitionPassOwned();
     final rewardEarned = academyAdFree
         ? true
-        : await AdService.instance.showRewardedAd();
+        : await AdService.instance.showRewardedAd(
+            placement: RewardedPlacement.academyBonus,
+          );
     if (!mounted) {
       return;
     }
@@ -1691,7 +1699,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         widget.initialReviewMode && widget.sequenceTitle == 'Review Mistakes';
     if (callback != null) {
       if (isReviewMistakeExit) {
-        await AdService.instance.showInterstitialAd();
+        await AdService.instance.showInterstitialAd(
+          placement: InterstitialPlacement.academyReturn,
+        );
       }
       if (!mounted) return;
       try {
@@ -1705,7 +1715,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return;
     }
     if (isReviewMistakeExit) {
-      await AdService.instance.showInterstitialAd();
+      await AdService.instance.showInterstitialAd(
+        placement: InterstitialPlacement.academyReturn,
+      );
     }
     if (!mounted) return;
     if (!await navigator.maybePop()) {

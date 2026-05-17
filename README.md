@@ -87,6 +87,7 @@ If you plan to make a substantial change, start by reviewing the architecture an
 ## Documentation And Operations
 
 - Architecture overview: `ARCHITECTURE.md`
+- AdMob setup: `ADMOB_SETUP.md`
 - Android release setup: `ANDROID_ONE_CLICK_RELEASE_SETUP.md`
 - Google Play release flow: `GOOGLE_PLAY_RELEASE.md`
 - iOS release setup: `IOS_ONE_CLICK_RELEASE_SETUP.md`

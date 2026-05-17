@@ -1,5 +1,7 @@
 {
-    "projects": {
-        "default": "chessiq-89b45"
-    }
+  "projects": {
+    "default": "chessiq-89b45"
+  },
+  "targets": {},
+  "etags": {}
 }
