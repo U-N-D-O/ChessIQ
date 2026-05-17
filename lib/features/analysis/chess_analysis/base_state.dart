@@ -367,7 +367,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _secondExtraSuggestionLaunchDelay = Duration(
     milliseconds: 200,
   );
-  static const Duration _creditsModernDwell = Duration(seconds: 15);
+  static const Duration _creditsModernDwell = Duration(seconds: 45);
   static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
   static const Duration _creditsRetroDwell = Duration(seconds: 15);
   static const bool _creditsDisableLoopForTests = bool.fromEnvironment(
@@ -11518,7 +11518,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _handleAnalysisInterstitialShown() async {
     if (!mounted) return;
     final economy = context.read<EconomyProvider>();
-    await economy.addCoins(10);
+    final claimed = await economy.claimAnalysisInterstitialCoins();
+    if (!claimed) return;
     await _saveStoreState();
     if (!mounted || _activeSection != AppSection.analysis) return;
 
@@ -11526,7 +11527,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (center == null) return;
     setState(() {
       _storeCoinGainCenter = center;
-      _storeCoinGainAmount = 10;
+      _storeCoinGainAmount = EconomyProvider.academyInterstitialRewardCoins;
     });
     await _storeCoinGainController.forward(from: 0);
     if (!mounted) return;
@@ -17447,32 +17448,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   children: <Widget>[
                                     const Spacer(),
                                     IconButton(
-                                      key: const ValueKey<String>(
-                                        'credits_add_coins_button',
-                                      ),
-                                      onPressed: () async {
-                                        await dialogContext
-                                            .read<EconomyProvider>()
-                                            .addCoins(50000);
-                                      },
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: visuals.primaryAccent
-                                            .withValues(
-                                              alpha: visuals.isRetro
-                                                  ? 0.34
-                                                  : 0.24,
-                                            ),
-                                        foregroundColor: visuals.palette.text,
-                                        side: BorderSide(
-                                          color: visuals.primaryAccent
-                                              .withValues(alpha: 0.42),
-                                        ),
-                                      ),
-                                      icon: const Icon(Icons.add_card_rounded),
-                                      tooltip: 'Add 50,000 coins',
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
                                       onPressed: () =>
                                           Navigator.of(dialogContext).pop(),
                                       style: IconButton.styleFrom(
@@ -19404,7 +19379,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     var unlockChanged = false;
 
     if (result.coinAmount > 0) {
-      await context.read<EconomyProvider>().addCoins(result.coinAmount);
+      await context.read<EconomyProvider>().refresh();
       fragments.add('+${result.coinAmount} coins');
     }
 

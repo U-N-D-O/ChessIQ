@@ -691,7 +691,18 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     final completedDaily = Set<String>.from(progress.completedDailyPuzzleIds);
     var coins = _economyProvider?.coins ?? progress.coins;
     if (daily && completedDaily.add(puzzle.puzzleId)) {
-      coins += _dailyPuzzleReward;
+      final economy = _economyProvider;
+      if (economy != null) {
+        final claimed = await economy.claimDailyPuzzleCoins(
+          claimKey: 'academy-daily-puzzle:${puzzle.puzzleId}',
+          notify: false,
+        );
+        if (claimed) {
+          coins = economy.coins;
+        }
+      } else {
+        coins += _dailyPuzzleReward;
+      }
     }
 
     var streak = progress.streak + 1;
@@ -796,9 +807,23 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     final completed = Set<String>.from(progress.completedDailyPuzzleIds)
       ..add(puzzleId);
 
+    var coins = _economyProvider?.coins ?? progress.coins;
+    final economy = _economyProvider;
+    if (economy != null) {
+      final claimed = await economy.claimDailyPuzzleCoins(
+        claimKey: 'academy-daily-puzzle:$puzzleId',
+        notify: false,
+      );
+      if (claimed) {
+        coins = economy.coins;
+      }
+    } else {
+      coins += _dailyPuzzleReward;
+    }
+
     final updated = progress.copyWith(
       completedDailyPuzzleIds: completed,
-      coins: (_economyProvider?.coins ?? progress.coins) + _dailyPuzzleReward,
+      coins: coins,
     );
 
     await _saveUpdatedProgress(updated, syncCoins: true);
@@ -806,60 +831,83 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   }
 
   Future<void> watchRewardedAd() async {
-    final updated = progress.copyWith(
-      coins: (_economyProvider?.coins ?? progress.coins) + _coinsPerAdWatch,
-    );
+    final economy = _economyProvider;
+    var coins = progress.coins;
+    if (economy != null) {
+      final claimed = await economy.claimAcademyRewardedAdCoins(notify: false);
+      if (claimed) {
+        coins = economy.coins;
+      }
+    } else {
+      coins = (_economyProvider?.coins ?? progress.coins) + _coinsPerAdWatch;
+    }
+    final updated = progress.copyWith(coins: coins);
     await _saveUpdatedProgress(updated, syncCoins: true);
     notifyListeners();
   }
 
+  Future<int?> _spendAuthoritativeCoins(int cost) async {
+    final economy = _economyProvider;
+    if (economy == null) {
+      if (!kReleaseMode && progress.coins >= cost) {
+        return progress.coins - cost;
+      }
+      return null;
+    }
+    final spent = await economy.spendCoins(cost, notify: false);
+    if (!spent) {
+      return null;
+    }
+    return economy.coins;
+  }
+
   Future<bool> buyHintPack({int amount = 3, int cost = 25}) async {
-    final currentCoins = _economyProvider?.coins ?? progress.coins;
-    if (currentCoins < cost) return false;
+    final remainingCoins = await _spendAuthoritativeCoins(cost);
+    if (remainingCoins == null) return false;
     final updated = progress.copyWith(
-      coins: currentCoins - cost,
+      coins: remainingCoins,
       freeHints: progress.freeHints + amount,
     );
-    await _saveUpdatedProgress(updated, syncCoins: true);
+    await _saveUpdatedProgress(updated, syncCoins: false);
     notifyListeners();
     return true;
   }
 
   Future<bool> buySkipPack({int amount = 2, int cost = 35}) async {
-    final currentCoins = _economyProvider?.coins ?? progress.coins;
-    if (currentCoins < cost) return false;
+    final remainingCoins = await _spendAuthoritativeCoins(cost);
+    if (remainingCoins == null) return false;
     final updated = progress.copyWith(
-      coins: currentCoins - cost,
+      coins: remainingCoins,
       freeSkips: progress.freeSkips + amount,
     );
-    await _saveUpdatedProgress(updated, syncCoins: true);
+    await _saveUpdatedProgress(updated, syncCoins: false);
     notifyListeners();
     return true;
   }
 
   Future<bool> buyProfileReset({int cost = 500}) async {
-    final currentCoins = _economyProvider?.coins ?? progress.coins;
-    if (currentCoins < cost) return false;
-    final updated = progress.copyWith(coins: currentCoins - cost);
-    await _saveUpdatedProgress(updated, syncCoins: true);
+    final remainingCoins = await _spendAuthoritativeCoins(cost);
+    if (remainingCoins == null) return false;
+    final updated = progress.copyWith(coins: remainingCoins);
+    await _saveUpdatedProgress(updated, syncCoins: false);
     notifyListeners();
     return true;
   }
 
   Future<bool> buyNicknameReset({int cost = 500}) async {
-    final currentCoins = _economyProvider?.coins ?? progress.coins;
-    if (currentCoins < cost) return false;
-    final updated = progress.copyWith(coins: currentCoins - cost, handle: '');
-    await _saveUpdatedProgress(updated, syncCoins: true);
+    final remainingCoins = await _spendAuthoritativeCoins(cost);
+    if (remainingCoins == null) return false;
+    final updated = progress.copyWith(coins: remainingCoins, handle: '');
+    await _saveUpdatedProgress(updated, syncCoins: false);
     notifyListeners();
     return true;
   }
 
   Future<bool> buyCountryReset({int cost = 500}) async {
-    final currentCoins = _economyProvider?.coins ?? progress.coins;
-    if (currentCoins < cost) return false;
-    final updated = progress.copyWith(coins: currentCoins - cost, country: '');
-    await _saveUpdatedProgress(updated, syncCoins: true);
+    final remainingCoins = await _spendAuthoritativeCoins(cost);
+    if (remainingCoins == null) return false;
+    final updated = progress.copyWith(coins: remainingCoins, country: '');
+    await _saveUpdatedProgress(updated, syncCoins: false);
     notifyListeners();
     return true;
   }
@@ -967,8 +1015,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       return false;
     }
 
-    final currentCoins = _economyProvider?.coins ?? progress.coins;
-    if (currentCoins < cost) {
+    final remainingCoins = await _spendAuthoritativeCoins(cost);
+    if (remainingCoins == null) {
       return false;
     }
 
@@ -979,12 +1027,12 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       ..[entryNodeKey] = entryNode.copyWith(unlocked: true);
 
     final updated = progress.copyWith(
-      coins: currentCoins - cost,
+      coins: remainingCoins,
       purchasedSemesterTuitions: updatedPurchasedTuitions,
       nodes: updatedNodes,
     );
 
-    await _saveUpdatedProgress(updated, syncCoins: true);
+    await _saveUpdatedProgress(updated, syncCoins: false);
     if (_basePuzzleCountsByNode.isNotEmpty) {
       await _ensureNodePuzzlesLoaded(<String>{entryNodeKey});
     }
@@ -1443,6 +1491,20 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   Future<void> syncCoinsFromStoreState({bool notify = true}) async {
     if (_progress == null) return;
 
+    if (_economyProvider != null) {
+      await _economyProvider!.refresh(notify: false);
+      final normalizedCoins = _economyProvider!.coins;
+      if (normalizedCoins == progress.coins) {
+        return;
+      }
+      _progress = progress.copyWith(coins: normalizedCoins);
+      await _saveProgress(mirrorStoreCoins: false);
+      if (notify) {
+        notifyListeners();
+      }
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final signed = LocalIntegrityService.decodeJson(
       prefs.getString(_sharedStoreStateKey),
@@ -1469,7 +1531,10 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       }
 
       if (_economyProvider != null) {
-        await _economyProvider!.setCoins(normalizedCoins, notify: false);
+        await _economyProvider!.replaceCoinsFromTrustedSource(
+          normalizedCoins,
+          notify: false,
+        );
       }
       _progress = progress.copyWith(coins: normalizedCoins);
       await _saveProgress(mirrorStoreCoins: false);
@@ -1500,7 +1565,10 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     bool syncCoins = false,
   }) async {
     if (syncCoins && _economyProvider != null) {
-      await _economyProvider!.setCoins(updated.coins, notify: false);
+      await _economyProvider!.replaceCoinsFromTrustedSource(
+        updated.coins,
+        notify: false,
+      );
       _progress = updated.copyWith(coins: _economyProvider!.coins);
       await _saveProgress(mirrorStoreCoins: false);
       return;

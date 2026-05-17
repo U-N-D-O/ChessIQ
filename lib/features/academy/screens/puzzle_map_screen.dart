@@ -1079,9 +1079,9 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     if (!shown || !mounted) return;
 
     final economy = context.read<EconomyProvider>();
-    await economy.awardAcademyInterstitialCoins();
+    final rewarded = await economy.awardAcademyInterstitialCoins();
     await provider.syncCoinsFromStoreState(notify: true);
-    if (!mounted) return;
+    if (!mounted || !rewarded) return;
     await _showStatusDialog(
       title: 'Academy Break Complete',
       message: '+10 coins.',

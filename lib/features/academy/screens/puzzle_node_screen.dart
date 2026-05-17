@@ -628,7 +628,12 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         placement: RewardedPlacement.academyBonus,
       );
       if (rewarded && mounted) {
-        await economy.addCoins(50);
+        final claimed = await economy.claimAcademyExamBonusCoins(
+          claimKey: 'academy-exam:${widget.node.title}:${elapsed.inMilliseconds}',
+        );
+        if (!claimed) {
+          return;
+        }
         await _showStatusDialog(title: 'Reward Earned', message: '+50 coins.');
       }
       return;
@@ -1298,9 +1303,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     if (academyAdFree) {
       if (!mounted) return;
       final economy = context.read<EconomyProvider>();
-      await economy.awardAcademyInterstitialCoins();
+      final rewarded = await economy.awardAcademyInterstitialCoins();
       await provider.syncCoinsFromStoreState(notify: true);
-      if (!mounted) return;
+      if (!mounted || !rewarded) return;
       await _showStatusDialog(
         title: 'Academy Break Complete',
         message: '+10 coins.',
@@ -1314,9 +1319,9 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     );
     if (shown && mounted) {
       final economy = context.read<EconomyProvider>();
-      await economy.awardAcademyInterstitialCoins();
+      final rewarded = await economy.awardAcademyInterstitialCoins();
       await provider.syncCoinsFromStoreState(notify: true);
-      if (!mounted) return;
+      if (!mounted || !rewarded) return;
       await _showStatusDialog(
         title: 'Academy Break Complete',
         message: '+10 coins.',
@@ -1520,7 +1525,13 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     }
 
     const rewardAmount = 200;
-    await economy.addCoins(rewardAmount);
+    final claimed = await economy.claimDailyChallengeCoins(
+      claimKey:
+          'academy-daily:${DateTime.now().toUtc().toIso8601String().substring(0, 10)}',
+    );
+    if (!claimed) {
+      return;
+    }
     await provider.markTodayDailyChallengeRewardClaimed();
     await provider.syncCoinsFromStoreState(notify: true);
 

@@ -167,9 +167,27 @@ class PurchaseService {
 
     switch (purchase.productID) {
       case IapProducts.coinPackS:
-        await _economy?.addCoins(IapProducts.coinPackSAmount);
+        final smallPackFingerprint = purchaseDeliveryFingerprint(purchase);
+        final smallPackDelivered = smallPackFingerprint != null &&
+            await (_economy?.deliverPurchasedCoinPack(
+                  purchase.productID,
+                  fingerprint: smallPackFingerprint,
+                ) ??
+                Future<bool>.value(false));
+        if (!smallPackDelivered) {
+          throw StateError('Server-side coin pack delivery failed.');
+        }
       case IapProducts.coinPackL:
-        await _economy?.addCoins(IapProducts.coinPackLAmount);
+        final largePackFingerprint = purchaseDeliveryFingerprint(purchase);
+        final largePackDelivered = largePackFingerprint != null &&
+            await (_economy?.deliverPurchasedCoinPack(
+                  purchase.productID,
+                  fingerprint: largePackFingerprint,
+                ) ??
+                Future<bool>.value(false));
+        if (!largePackDelivered) {
+          throw StateError('Server-side coin pack delivery failed.');
+        }
       case IapProducts.resetBoardPass:
         await _setOwned(IapProducts.resetBoardPass);
       case IapProducts.academyPass:

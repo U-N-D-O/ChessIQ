@@ -43,6 +43,65 @@ const PROMO_UNLOCK_KEYS = [
     "adFreeOwned",
     "academyTuitionPassOwned",
 ] as const;
+const ECONOMY_DEFAULT_COINS = 120;
+const ECONOMY_MAX_COINS = 1000000;
+const ECONOMY_MIGRATION_MAX_COINS = 1000000;
+const ECONOMY_STORE_REWARD_COINS = 120;
+const ECONOMY_STORE_REWARD_COOLDOWNS_MS = [
+    5 * 60 * 1000,
+    15 * 60 * 1000,
+    30 * 60 * 1000,
+] as const;
+const ECONOMY_MAX_TRACKED_CLAIM_KEYS = 60;
+const ECONOMY_MAX_TRACKED_FINGERPRINTS = 200;
+type EconomyRewardSpec = {
+    amount: number;
+    minIntervalMs?: number;
+    dailyMax?: number;
+    requiresClaimKey?: boolean;
+    requiresFingerprint?: boolean;
+};
+
+const ECONOMY_REWARD_SPECS: Record<string, EconomyRewardSpec> = {
+    analysisInterstitial: {
+        amount: 10,
+        minIntervalMs: 3 * 60 * 1000,
+        dailyMax: 10,
+    },
+    academyInterstitial: {
+        amount: 10,
+        minIntervalMs: 3 * 60 * 1000,
+        dailyMax: 10,
+    },
+    academyExamBonus: {
+        amount: 50,
+        minIntervalMs: 15 * 60 * 1000,
+        dailyMax: 6,
+        requiresClaimKey: true,
+    },
+    academyDailyPuzzle: {
+        amount: 40,
+        requiresClaimKey: true,
+    },
+    academyRewardedAd: {
+        amount: 10,
+        minIntervalMs: 3 * 60 * 1000,
+        dailyMax: 10,
+    },
+    academyDailyChallenge: {
+        amount: 200,
+        dailyMax: 1,
+        requiresClaimKey: true,
+    },
+    purchaseCoinPackS: {
+        amount: 1500,
+        requiresFingerprint: true,
+    },
+    purchaseCoinPackL: {
+        amount: 5000,
+        requiresFingerprint: true,
+    },
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -188,6 +247,36 @@ type PromoClaimIdentity = {
 type PromoClaimRecord = {
     claimedAt: string;
 } & PromoClaimIdentity;
+
+type EconomyRewardKey = keyof typeof ECONOMY_REWARD_SPECS;
+
+type EconomyRewardTracker = {
+    lastClaimAtMs?: number;
+    countToday?: number;
+    lastDayKey?: string;
+    claimKeys?: Record<string, string>;
+};
+
+type EconomyState = {
+    coins: number;
+    createdAt: string;
+    updatedAt: string;
+    storeRewardLastClaimAtMs: number | null;
+    storeRewardCountToday: number;
+    storeRewardDayKey: string;
+    rewardTrackers?: Record<string, EconomyRewardTracker>;
+    deliveredFingerprints?: string[];
+    migratedFromClient?: boolean;
+};
+
+type EconomyClientPayload = {
+    coins: number;
+    storeReward: {
+        lastClaimAtMs: number | null;
+        watchCountToday: number;
+        dayKey: string;
+    };
+};
 
 type StoredPromoCode = {
     code: string;
@@ -536,6 +625,309 @@ function findPromoCodeEntry(params: {
     }
 
     return null;
+}
+
+function clampEconomyCoins(value: number): number {
+    return Math.min(ECONOMY_MAX_COINS, Math.max(0, Math.trunc(value)));
+}
+
+function utcDayKeyFromMs(value: number): string {
+    const date = new Date(value);
+    const yyyy = date.getUTCFullYear().toString().padStart(4, "0");
+    const mm = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+    const dd = date.getUTCDate().toString().padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+function millisecondsUntilNextUtcMidnight(nowMs: number): number {
+    const now = new Date(nowMs);
+    const nextMidnight = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+        0,
+        0,
+        0,
+        0,
+    );
+    return Math.max(0, nextMidnight - nowMs);
+}
+
+function readBoundedInteger(
+    value: unknown,
+    fallback: number,
+    min: number,
+    max: number,
+): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        return fallback;
+    }
+
+    const normalized = Math.trunc(value);
+    if (normalized < min || normalized > max) {
+        return fallback;
+    }
+    return normalized;
+}
+
+function pruneStringRecord(
+    source: Record<string, string>,
+    maxEntries: number,
+): Record<string, string> {
+    const entries = Object.entries(source)
+        .filter(([key, value]) => key.trim().length > 0 && value.trim().length > 0)
+        .sort((a, b) => a[1].localeCompare(b[1]));
+    if (entries.length <= maxEntries) {
+        return Object.fromEntries(entries);
+    }
+    return Object.fromEntries(entries.slice(entries.length - maxEntries));
+}
+
+function buildDefaultEconomyState(params?: {
+    migrationCoins?: number | null;
+    nowIso?: string;
+}): EconomyState {
+    const nowIso = params?.nowIso ?? new Date().toISOString();
+    const migrationCoins = params?.migrationCoins ?? null;
+    return {
+        coins: clampEconomyCoins(migrationCoins ?? ECONOMY_DEFAULT_COINS),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        storeRewardLastClaimAtMs: null,
+        storeRewardCountToday: 0,
+        storeRewardDayKey: "",
+        rewardTrackers: {},
+        deliveredFingerprints: [],
+        migratedFromClient: migrationCoins != null,
+    };
+}
+
+function isEconomyRewardKey(value: string): value is EconomyRewardKey {
+    return Object.prototype.hasOwnProperty.call(ECONOMY_REWARD_SPECS, value);
+}
+
+function normalizeEconomyRewardTracker(value: unknown): EconomyRewardTracker {
+    if (!value || typeof value !== "object") {
+        return {
+            countToday: 0,
+            lastDayKey: "",
+        };
+    }
+
+    const record = value as Record<string, unknown>;
+    const claimKeysRaw = record.claimKeys;
+    let claimKeys: Record<string, string> | undefined;
+    if (claimKeysRaw && typeof claimKeysRaw === "object") {
+        const next: Record<string, string> = {};
+        for (const [claimKey, storedAt] of Object.entries(claimKeysRaw)) {
+            if (typeof storedAt !== "string") {
+                continue;
+            }
+            const trimmedKey = claimKey.trim().substring(0, 120);
+            const trimmedValue = storedAt.trim().substring(0, 80);
+            if (trimmedKey.length === 0 || trimmedValue.length === 0) {
+                continue;
+            }
+            next[trimmedKey] = trimmedValue;
+        }
+        if (Object.keys(next).length > 0) {
+            claimKeys = pruneStringRecord(next, ECONOMY_MAX_TRACKED_CLAIM_KEYS);
+        }
+    }
+
+    const lastClaimAtMs = readBoundedInteger(
+        record.lastClaimAtMs,
+        -1,
+        0,
+        Number.MAX_SAFE_INTEGER,
+    );
+    return {
+        ...(lastClaimAtMs >= 0 ? { lastClaimAtMs } : {}),
+        countToday: readBoundedInteger(record.countToday, 0, 0, 1000),
+        lastDayKey: typeof record.lastDayKey === "string"
+            ? record.lastDayKey.trim().substring(0, 32)
+            : "",
+        ...(claimKeys != null ? { claimKeys } : {}),
+    };
+}
+
+function normalizeEconomyState(
+    value: unknown,
+    migrationCoins?: number | null,
+): EconomyState {
+    const fallback = buildDefaultEconomyState({ migrationCoins });
+    if (!value || typeof value !== "object") {
+        return fallback;
+    }
+
+    const record = value as Record<string, unknown>;
+    const rewardTrackers: Record<string, EconomyRewardTracker> = {};
+    const rewardTrackersRaw = record.rewardTrackers;
+    if (rewardTrackersRaw && typeof rewardTrackersRaw === "object") {
+        for (const [key, trackerValue] of Object.entries(rewardTrackersRaw)) {
+            if (!isEconomyRewardKey(key)) {
+                continue;
+            }
+            rewardTrackers[key] = normalizeEconomyRewardTracker(trackerValue);
+        }
+    }
+
+    const deliveredFingerprintsRaw = Array.isArray(record.deliveredFingerprints)
+        ? record.deliveredFingerprints
+        : [];
+    const deliveredFingerprints = Array.from(
+        new Set(
+            deliveredFingerprintsRaw
+                .filter((entry): entry is string => typeof entry === "string")
+                .map((entry) => entry.trim())
+                .filter((entry) => entry.length > 0)
+                .slice(-ECONOMY_MAX_TRACKED_FINGERPRINTS),
+        ),
+    );
+
+    return {
+        coins: clampEconomyCoins(
+            readBoundedInteger(
+                record.coins,
+                fallback.coins,
+                0,
+                ECONOMY_MAX_COINS,
+            ),
+        ),
+        createdAt: typeof record.createdAt === "string" && record.createdAt.trim().length > 0
+            ? record.createdAt.trim().substring(0, 80)
+            : fallback.createdAt,
+        updatedAt: typeof record.updatedAt === "string" && record.updatedAt.trim().length > 0
+            ? record.updatedAt.trim().substring(0, 80)
+            : fallback.updatedAt,
+        storeRewardLastClaimAtMs: (() => {
+            const normalized = readBoundedInteger(
+                record.storeRewardLastClaimAtMs,
+                -1,
+                0,
+                Number.MAX_SAFE_INTEGER,
+            );
+            return normalized >= 0 ? normalized : null;
+        })(),
+        storeRewardCountToday: readBoundedInteger(
+            record.storeRewardCountToday,
+            0,
+            0,
+            ECONOMY_STORE_REWARD_COOLDOWNS_MS.length,
+        ),
+        storeRewardDayKey: typeof record.storeRewardDayKey === "string"
+            ? record.storeRewardDayKey.trim().substring(0, 32)
+            : "",
+        rewardTrackers,
+        deliveredFingerprints,
+        migratedFromClient: record.migratedFromClient === true,
+    };
+}
+
+function buildEconomyClientPayload(state: EconomyState): EconomyClientPayload {
+    return {
+        coins: state.coins,
+        storeReward: {
+            lastClaimAtMs: state.storeRewardLastClaimAtMs,
+            watchCountToday: state.storeRewardCountToday,
+            dayKey: state.storeRewardDayKey,
+        },
+    };
+}
+
+function readOptionalMigrationCoins(value: unknown): number | null {
+    if (value == null) {
+        return null;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Migration coins must be an integer.",
+        );
+    }
+    if (value < 0 || value > ECONOMY_MIGRATION_MAX_COINS) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Migration coins are out of range.",
+        );
+    }
+    return value;
+}
+
+function readRequiredEconomyAmount(value: unknown): number {
+    if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Economy amount must be an integer.",
+        );
+    }
+    if (value <= 0 || value > ECONOMY_MAX_COINS) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Economy amount is out of range.",
+        );
+    }
+    return value;
+}
+
+function readEconomyRewardKey(value: unknown): EconomyRewardKey {
+    if (typeof value !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Reward key must be a string.",
+        );
+    }
+
+    const rewardKey = value.trim();
+    if (!isEconomyRewardKey(rewardKey)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Reward key is not allowlisted.",
+        );
+    }
+    return rewardKey;
+}
+
+function readOptionalEconomyString(
+    value: unknown,
+    fieldName: string,
+    maxLength: number,
+): string | null {
+    if (value == null) {
+        return null;
+    }
+    if (typeof value !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `${fieldName} must be a string.`,
+        );
+    }
+    const trimmed = value.trim();
+    if (trimmed.length == 0) {
+        return null;
+    }
+    return trimmed.substring(0, maxLength);
+}
+
+async function loadOrCreateEconomyState(
+    uid: string,
+    migrationCoins?: number | null,
+): Promise<EconomyState> {
+    const ref = db.ref(`economy_profiles/${uid}`);
+    const existingSnap = await ref.once("value");
+    if (existingSnap.exists()) {
+        return normalizeEconomyState(existingSnap.val());
+    }
+
+    const initialState = buildDefaultEconomyState({ migrationCoins });
+    const transactionResult = await ref.transaction((currentValue) => {
+        if (currentValue != null) {
+            return currentValue;
+        }
+        return initialState;
+    });
+
+    return normalizeEconomyState(transactionResult.snapshot.val(), migrationCoins);
 }
 
 function parseAcademyNodeKey(nodeKey: string): { startElo: number; endElo: number } | null {
@@ -1268,11 +1660,286 @@ async function redeemPromoCodeImpl(
         });
     }
 
+    let economy: EconomyClientPayload | null = null;
+    if (storedPromo.reward.coinAmount > 0) {
+        const economyRef = db.ref(`economy_profiles/${uid}`);
+        const economyResult = await economyRef.transaction((currentValue) => {
+            const currentState = normalizeEconomyState(currentValue);
+            return {
+                ...currentState,
+                coins: clampEconomyCoins(currentState.coins + storedPromo.reward.coinAmount),
+                updatedAt: claimedAt,
+            };
+        });
+        economy = buildEconomyClientPayload(
+            normalizeEconomyState(economyResult.snapshot.val()),
+        );
+    }
+
     return {
         success: true,
         code: storedPromo.code,
         reward: claimRecord.reward,
         claimedAt,
+        economy,
+    };
+}
+
+async function getEconomyStateImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Must be signed in.",
+        );
+    }
+
+    const migrationCoins = readOptionalMigrationCoins(data?.migrationCoins);
+    const state = await loadOrCreateEconomyState(context.auth.uid, migrationCoins);
+    return {
+        success: true,
+        state: buildEconomyClientPayload(state),
+    };
+}
+
+async function claimStoreRewardAdImpl(
+    context: functions.https.CallableContext,
+) {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Must be signed in.",
+        );
+    }
+
+    const uid = context.auth.uid;
+    const ref = db.ref(`economy_profiles/${uid}`);
+    let blockedReason = "cooldown";
+    let remainingMs = 0;
+    let responseState: EconomyState | null = null;
+
+    const transactionResult = await ref.transaction((currentValue) => {
+        const state = normalizeEconomyState(currentValue);
+        const nowMs = Date.now();
+        const todayKey = utcDayKeyFromMs(nowMs);
+
+        let countToday = state.storeRewardCountToday;
+        if (state.storeRewardDayKey !== todayKey) {
+            countToday = 0;
+        }
+
+        if (countToday >= ECONOMY_STORE_REWARD_COOLDOWNS_MS.length) {
+            blockedReason = "daily-lock";
+            remainingMs = millisecondsUntilNextUtcMidnight(nowMs);
+            responseState = {
+                ...state,
+                storeRewardCountToday: countToday,
+                storeRewardDayKey: todayKey,
+            };
+            return;
+        }
+
+        const lastClaimAtMs = state.storeRewardLastClaimAtMs;
+        if (lastClaimAtMs != null) {
+            const cooldownMs = ECONOMY_STORE_REWARD_COOLDOWNS_MS[
+                Math.min(countToday, ECONOMY_STORE_REWARD_COOLDOWNS_MS.length - 1)
+            ];
+            const nextEligibleAtMs = lastClaimAtMs + cooldownMs;
+            if (nextEligibleAtMs > nowMs) {
+                blockedReason = "cooldown";
+                remainingMs = nextEligibleAtMs - nowMs;
+                responseState = {
+                    ...state,
+                    storeRewardCountToday: countToday,
+                    storeRewardDayKey: todayKey,
+                };
+                return;
+            }
+        }
+
+        const nextState: EconomyState = {
+            ...state,
+            coins: clampEconomyCoins(state.coins + ECONOMY_STORE_REWARD_COINS),
+            storeRewardLastClaimAtMs: nowMs,
+            storeRewardCountToday: countToday + 1,
+            storeRewardDayKey: todayKey,
+            updatedAt: new Date(nowMs).toISOString(),
+        };
+        responseState = nextState;
+        return nextState;
+    });
+
+    const state = responseState ?? normalizeEconomyState(transactionResult.snapshot.val());
+    return {
+        success: transactionResult.committed,
+        reason: transactionResult.committed ? null : blockedReason,
+        remainingMs,
+        state: buildEconomyClientPayload(state),
+    };
+}
+
+async function spendEconomyCoinsImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Must be signed in.",
+        );
+    }
+
+    const amount = readRequiredEconomyAmount(data?.amount);
+    const ref = db.ref(`economy_profiles/${context.auth.uid}`);
+    let responseState: EconomyState | null = null;
+
+    const transactionResult = await ref.transaction((currentValue) => {
+        const state = normalizeEconomyState(currentValue);
+        if (state.coins < amount) {
+            responseState = state;
+            return;
+        }
+
+        const nextState: EconomyState = {
+            ...state,
+            coins: clampEconomyCoins(state.coins - amount),
+            updatedAt: new Date().toISOString(),
+        };
+        responseState = nextState;
+        return nextState;
+    });
+
+    const state = responseState ?? normalizeEconomyState(transactionResult.snapshot.val());
+    return {
+        success: transactionResult.committed,
+        reason: transactionResult.committed ? null : "insufficient-funds",
+        state: buildEconomyClientPayload(state),
+    };
+}
+
+async function grantEconomyRewardImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Must be signed in.",
+        );
+    }
+
+    const rewardKey = readEconomyRewardKey(data?.rewardKey);
+    const rewardSpec = ECONOMY_REWARD_SPECS[rewardKey];
+    const claimKey = readOptionalEconomyString(data?.claimKey, "claimKey", 120);
+    const fingerprint = readOptionalEconomyString(
+        data?.fingerprint,
+        "fingerprint",
+        1024,
+    );
+
+    if (rewardSpec.requiresClaimKey && claimKey == null) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Reward ${rewardKey} requires a claim key.`,
+        );
+    }
+    if (rewardSpec.requiresFingerprint && fingerprint == null) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Reward ${rewardKey} requires a delivery fingerprint.`,
+        );
+    }
+
+    const ref = db.ref(`economy_profiles/${context.auth.uid}`);
+    let blockedReason = "rate-limited";
+    let remainingMs = 0;
+    let responseState: EconomyState | null = null;
+
+    const transactionResult = await ref.transaction((currentValue) => {
+        const state = normalizeEconomyState(currentValue);
+        const nowMs = Date.now();
+        const todayKey = utcDayKeyFromMs(nowMs);
+        const nextRewardTrackers = {
+            ...(state.rewardTrackers ?? {}),
+        };
+        const tracker = normalizeEconomyRewardTracker(nextRewardTrackers[rewardKey]);
+
+        if (tracker.lastDayKey !== todayKey) {
+            tracker.countToday = 0;
+            tracker.lastDayKey = todayKey;
+        }
+
+        if (rewardSpec.dailyMax != null &&
+            (tracker.countToday ?? 0) >= rewardSpec.dailyMax) {
+            blockedReason = "daily-limit";
+            responseState = state;
+            return;
+        }
+
+        if (rewardSpec.minIntervalMs != null && tracker.lastClaimAtMs != null) {
+            const nextEligibleAtMs = tracker.lastClaimAtMs + rewardSpec.minIntervalMs;
+            if (nextEligibleAtMs > nowMs) {
+                blockedReason = "rate-limited";
+                remainingMs = nextEligibleAtMs - nowMs;
+                responseState = state;
+                return;
+            }
+        }
+
+        if (claimKey != null) {
+            const trackedClaims = {
+                ...(tracker.claimKeys ?? {}),
+            };
+            if (Object.prototype.hasOwnProperty.call(trackedClaims, claimKey)) {
+                blockedReason = "duplicate-claim";
+                responseState = state;
+                return;
+            }
+            trackedClaims[claimKey] = new Date(nowMs).toISOString();
+            tracker.claimKeys = pruneStringRecord(
+                trackedClaims,
+                ECONOMY_MAX_TRACKED_CLAIM_KEYS,
+            );
+        }
+
+        if (fingerprint != null) {
+            const fingerprints = Array.from(
+                new Set([...(state.deliveredFingerprints ?? []), fingerprint]),
+            );
+            if (fingerprints.length === (state.deliveredFingerprints ?? []).length) {
+                blockedReason = "duplicate-delivery";
+                responseState = state;
+                return;
+            }
+            state.deliveredFingerprints = fingerprints.slice(
+                -ECONOMY_MAX_TRACKED_FINGERPRINTS,
+            );
+        }
+
+        tracker.lastClaimAtMs = nowMs;
+        tracker.lastDayKey = todayKey;
+        tracker.countToday = (tracker.countToday ?? 0) + 1;
+        nextRewardTrackers[rewardKey] = tracker;
+
+        const nextState: EconomyState = {
+            ...state,
+            coins: clampEconomyCoins(state.coins + rewardSpec.amount),
+            rewardTrackers: nextRewardTrackers,
+            deliveredFingerprints: state.deliveredFingerprints ?? [],
+            updatedAt: new Date(nowMs).toISOString(),
+        };
+        responseState = nextState;
+        return nextState;
+    });
+
+    const state = responseState ?? normalizeEconomyState(transactionResult.snapshot.val());
+    return {
+        success: transactionResult.committed,
+        reason: transactionResult.committed ? null : blockedReason,
+        remainingMs,
+        state: buildEconomyClientPayload(state),
     };
 }
 
@@ -1337,6 +2004,22 @@ export const checkHandleAvailabilityV2 = functions.https.onCall(
 
 export const redeemPromoCode = functions.https.onCall(
     async (data, context) => redeemPromoCodeImpl(data, context),
+);
+
+export const getEconomyState = functions.https.onCall(
+    async (data, context) => getEconomyStateImpl(data, context),
+);
+
+export const claimStoreRewardAd = functions.https.onCall(
+    async (_data, context) => claimStoreRewardAdImpl(context),
+);
+
+export const spendEconomyCoins = functions.https.onCall(
+    async (data, context) => spendEconomyCoinsImpl(data, context),
+);
+
+export const grantEconomyReward = functions.https.onCall(
+    async (data, context) => grantEconomyRewardImpl(data, context),
 );
 
 // ---------------------------------------------------------------------------

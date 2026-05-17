@@ -126,31 +126,6 @@ void main() {
     },
   );
 
-  testWidgets('credits dialog coin button grants 50000 coins', (tester) async {
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final economy = await _pumpCreditsDialog(
-      tester,
-      size: const Size(390, 844),
-    );
-
-    expect(economy.coins, 120);
-
-    final grantButton = find.byKey(
-      const ValueKey<String>('credits_add_coins_button'),
-    );
-    expect(grantButton, findsOneWidget);
-
-    await tester.tap(grantButton);
-    await tester.pump();
-
-    expect(economy.coins, 50120);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
-
   testWidgets(
     'credits dialog keeps scroll position through the glitch style swap',
     (tester) async {
