@@ -14,8 +14,9 @@ abstract class _VsBotState extends _StoreState {
   Key? get _botAvatarWidgetKey => _botAvatarKey;
 
   @override
-  String get _introSoundAssetPath =>
-      _playVsBot ? 'sounds/vs.mp3' : super._introSoundAssetPath;
+  String get _introSoundAssetPath => _playVsBot || _isHeadToHeadPerspective
+      ? 'sounds/vs.mp3'
+      : super._introSoundAssetPath;
 
   @override
   double get _botAvatarIntroArrivalProgress => 0.69;
@@ -86,6 +87,9 @@ abstract class _VsBotState extends _StoreState {
   Widget _buildSceneIntroOverlay(Size scene, double scale) {
     if (_playVsBot) {
       return _buildVsBotIntroOverlay(scene, scale);
+    }
+    if (_isHeadToHeadPerspective) {
+      return _buildHeadToHeadIntroOverlay(scene, scale);
     }
     return super._buildSceneIntroOverlay(scene, scale);
   }
@@ -560,6 +564,493 @@ abstract class _VsBotState extends _StoreState {
                         ),
                       ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeadToHeadIntroOverlay(Size scene, double scale) {
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final leftAccent = arcade.monochrome
+        ? Color.alphaBlend(arcade.text.withValues(alpha: 0.16), arcade.panelAlt)
+        : Color.lerp(arcade.cyan, Colors.white, 0.22)!;
+    final rightAccent = arcade.monochrome
+        ? Color.alphaBlend(arcade.line.withValues(alpha: 0.22), arcade.panelAlt)
+        : Color.lerp(arcade.crimson, arcade.pink, 0.24)!;
+    final stageAccent = Color.lerp(leftAccent, rightAccent, 0.50)!;
+    final glyphAccent = Color.lerp(stageAccent, arcade.crimson, 0.20)!;
+    final glyphSecondary = arcade.monochrome
+        ? Color.lerp(arcade.textMuted, Colors.white, 0.28)!
+        : Color.lerp(arcade.pink, arcade.cyan, 0.34)!;
+    final compactScene = scene.width <= 390 || scene.height <= 430;
+
+    return AnimatedBuilder(
+      animation: _introController,
+      builder: (context, child) {
+        final t = _introController.value.clamp(0.0, 1.0);
+        final fade = 1.0 - ((t - 0.80) / 0.15).clamp(0.0, 1.0);
+        final baseCenter = Offset(
+          scene.width * 0.5,
+          scene.height * (compactScene ? 0.39 : 0.42),
+        );
+        final impactT = Curves.easeOut.transform(
+          ((t - 0.28) / 0.12).clamp(0.0, 1.0),
+        );
+        final impactShake =
+            sin(impactT * pi * 9.0) * (1.0 - impactT) * (12 * scale);
+        final center = baseCenter.translate(impactShake, 0);
+        final glyphSize = (compactScene ? 64.0 : 76.0) * scale;
+        final hazeOpacity = ((t - 0.06) / 0.18).clamp(0.0, 1.0) * fade;
+        final impactFlash = sin(impactT * pi).clamp(0.0, 1.0);
+        final shockwaveT = ((t - 0.27) / 0.34).clamp(0.0, 1.0);
+        final exitLiftT = Curves.easeIn.transform(
+          ((t - 0.80) / 0.15).clamp(0.0, 1.0),
+        );
+        final glyphEntryT = Curves.easeOutBack.transform(
+          (t / 0.26).clamp(0.0, 1.0),
+        );
+        final glyphSettleT = Curves.easeInOut.transform(
+          ((t - 0.20) / 0.14).clamp(0.0, 1.0),
+        );
+        final vOffset = Offset.lerp(
+          Offset(-glyphSize * 1.9, -glyphSize * 1.4),
+          Offset(-34 * scale, -2 * scale),
+          glyphEntryT,
+        )!;
+        final sOffset = Offset.lerp(
+          Offset(scene.width + glyphSize * 0.9, scene.height + glyphSize * 0.7),
+          Offset(34 * scale, 2 * scale),
+          glyphEntryT,
+        )!;
+        final vRotation = ui.lerpDouble(-1.30, -0.08, glyphSettleT)!;
+        final sRotation = ui.lerpDouble(1.30, 0.08, glyphSettleT)!;
+        final cinematicPulse = sin(impactT * pi) * 0.12;
+        final coreScale =
+            0.88 +
+            (0.12 * glyphSettleT) +
+            (0.11 * (1.0 - impactT)) +
+            cinematicPulse;
+        final glyphGlow =
+            ui.lerpDouble(16 * scale, 38 * scale, impactFlash) ?? 16 * scale;
+        final glyphTrailOpacity =
+            ((1.0 - glyphSettleT) * 0.32 + impactFlash * 0.18) * fade;
+        final glyphYOffset = -16 * scale * exitLiftT;
+        final introPlateWidth = min(
+          226 * scale,
+          scene.width * (compactScene ? 0.72 : 0.76),
+        );
+        final infoPlateWidth = min(
+          286 * scale,
+          scene.width * (compactScene ? 0.84 : 0.88),
+        );
+        final badgeEntryT = Curves.easeOutBack.transform(
+          ((t - 0.14) / 0.22).clamp(0.0, 1.0),
+        );
+        final badgeSettleT = Curves.easeInOut.transform(
+          ((t - 0.26) / 0.16).clamp(0.0, 1.0),
+        );
+        final badgeSize = (compactScene ? 42.0 : 48.0) * scale;
+        final badgeCenterY =
+            center.dy + (compactScene ? 8.0 : 10.0) * scale + glyphYOffset;
+        final leftBadgeStart = Offset(
+          -badgeSize,
+          badgeCenterY + (compactScene ? 28 : 34) * scale,
+        );
+        final rightBadgeStart = Offset(
+          scene.width + badgeSize,
+          badgeCenterY - (compactScene ? 28 : 34) * scale,
+        );
+        final leftBadgeTarget =
+            center + Offset(-(glyphSize * 1.18), badgeCenterY - center.dy);
+        final rightBadgeTarget =
+            center + Offset(glyphSize * 1.18, badgeCenterY - center.dy);
+        final badgeArcLift =
+            sin(pi * badgeEntryT) * (compactScene ? 20.0 : 26.0) * scale;
+        final leftBadgeCenter = Offset.lerp(
+          leftBadgeStart,
+          leftBadgeTarget,
+          badgeEntryT,
+        )!.translate(0, -badgeArcLift);
+        final rightBadgeCenter = Offset.lerp(
+          rightBadgeStart,
+          rightBadgeTarget,
+          badgeEntryT,
+        )!.translate(0, -badgeArcLift);
+        final leftBadgeRotation = ui.lerpDouble(-0.46, -0.06, badgeSettleT)!;
+        final rightBadgeRotation = ui.lerpDouble(0.46, 0.06, badgeSettleT)!;
+        final badgeOpacity = ((t - 0.12) / 0.10).clamp(0.0, 1.0) * fade;
+        final badgeScale = 0.82 + (0.12 * badgeSettleT) + (impactFlash * 0.08);
+
+        Widget buildGlyph(String glyph, Offset offset, double rotation) {
+          final glyphLeft = center.dx + offset.dx - (glyphSize * 0.28);
+          final glyphTop =
+              center.dy + offset.dy - (glyphSize * 0.62) + glyphYOffset;
+
+          Widget glowText(double fontScale, Color color, double blur) {
+            return Text(
+              glyph,
+              style: GoogleFonts.orbitron(
+                fontSize: glyphSize * fontScale,
+                fontWeight: FontWeight.w900,
+                height: 0.84,
+                color: color,
+                shadows: [
+                  Shadow(
+                    color: color.withValues(alpha: 0.95),
+                    blurRadius: blur,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Positioned(
+            left: glyphLeft,
+            top: glyphTop,
+            child: Opacity(
+              opacity: fade,
+              child: Transform.rotate(
+                angle: rotation,
+                child: Transform.scale(
+                  scale: coreScale,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Opacity(
+                        opacity: 0.44 * fade,
+                        child: Transform.scale(
+                          scale: 1.28 + (impactFlash * 0.16),
+                          child: glowText(1.0, glyphAccent, glyphGlow * 1.1),
+                        ),
+                      ),
+                      if (glyphTrailOpacity > 0.01)
+                        Opacity(
+                          opacity: glyphTrailOpacity,
+                          child: Transform.translate(
+                            offset: Offset(
+                              glyph == 'V' ? -14 * scale : 14 * scale,
+                              10 * scale,
+                            ),
+                            child: glowText(
+                              0.98,
+                              glyphSecondary,
+                              glyphGlow * 0.85,
+                            ),
+                          ),
+                        ),
+                      glowText(
+                        1.0,
+                        Color.lerp(
+                          glyphSecondary,
+                          Colors.white,
+                          0.36,
+                        )!.withValues(alpha: 0.82),
+                        glyphGlow * 0.34,
+                      ),
+                      Text(
+                        glyph,
+                        style: GoogleFonts.orbitron(
+                          fontSize: glyphSize,
+                          fontWeight: FontWeight.w900,
+                          height: 0.84,
+                          color: glyphAccent,
+                          shadows: [
+                            Shadow(
+                              color: glyphAccent.withValues(alpha: 0.95),
+                              blurRadius: glyphGlow * 0.42,
+                            ),
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.42),
+                              blurRadius: 10 * scale,
+                              offset: Offset(0, 5 * scale),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        Widget buildWingBadge({
+          required Offset badgeCenter,
+          required Color accent,
+          required double rotation,
+        }) {
+          final badgeTextColor = _vsBotReadableAccentColor(accent, arcade);
+
+          return Positioned(
+            left: badgeCenter.dx - (badgeSize / 2),
+            top: badgeCenter.dy - (badgeSize / 2),
+            child: Opacity(
+              opacity: badgeOpacity,
+              child: Transform.rotate(
+                angle: rotation,
+                child: Transform.scale(
+                  scale: badgeScale,
+                  child: Container(
+                    width: badgeSize,
+                    height: badgeSize,
+                    decoration: _vsBotArcadePanelDecoration(
+                      palette: arcade,
+                      accent: accent,
+                      radius: 16 * scale,
+                      borderWidth: max(1.2, 1.8 * scale),
+                      inset: true,
+                      elevated: false,
+                      fillColor: Color.alphaBlend(
+                        accent.withValues(
+                          alpha: arcade.monochrome ? 0.08 : 0.12,
+                        ),
+                        arcade.panelAlt,
+                      ),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Opacity(
+                          opacity: 0.34 + (impactFlash * 0.16),
+                          child: Container(
+                            width: badgeSize * 0.62,
+                            height: badgeSize * 0.62,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  accent.withValues(
+                                    alpha: arcade.monochrome ? 0.14 : 0.28,
+                                  ),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Transform.translate(
+                          offset: Offset(0, -badgeSize * 0.03),
+                          child: Text(
+                            '1',
+                            style: GoogleFonts.orbitron(
+                              fontSize: badgeSize * 0.46,
+                              fontWeight: FontWeight.w900,
+                              color: badgeTextColor,
+                              height: 0.92,
+                              shadows: [
+                                Shadow(
+                                  color: accent.withValues(alpha: 0.52),
+                                  blurRadius: 10 * scale,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return IgnorePointer(
+          child: Opacity(
+            opacity: fade,
+            child: SizedBox(
+              width: scene.width,
+              height: scene.height,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: center.dx - (introPlateWidth / 2),
+                    top:
+                        center.dy -
+                        ((compactScene ? 102 : 118) * scale) +
+                        glyphYOffset,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: (0.44 + (impactFlash * 0.18)) * fade,
+                        child: Container(
+                          width: introPlateWidth,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: (compactScene ? 12 : 14) * scale,
+                            vertical: (compactScene ? 8 : 9) * scale,
+                          ),
+                          decoration: _vsBotArcadePanelDecoration(
+                            palette: arcade,
+                            accent: stageAccent,
+                            radius: 18 * scale,
+                            borderWidth: max(1.4, 2.0 * scale),
+                            inset: true,
+                            elevated: false,
+                            fillColor: arcade.marquee,
+                          ),
+                          child: Text(
+                            'HEAD TO HEAD',
+                            textAlign: TextAlign.center,
+                            style: puzzleAcademyIdentityStyle(
+                              palette: arcade.base,
+                              size: 7.6 * scale,
+                              color: stageAccent,
+                              withGlow: true,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: center.dx - (scene.width * 0.40),
+                    top: center.dy - (scene.width * 0.40) + glyphYOffset,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: hazeOpacity,
+                        child: Transform.scale(
+                          scaleY: 0.70,
+                          child: Container(
+                            width: scene.width * 0.80,
+                            height: scene.width * 0.80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  glyphAccent.withValues(alpha: 0.32),
+                                  glyphSecondary.withValues(alpha: 0.14),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.52, 1.0],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: center.dx - (72 * scale * shockwaveT) - (20 * scale),
+                    top:
+                        center.dy -
+                        (72 * scale * shockwaveT) -
+                        (20 * scale) +
+                        glyphYOffset,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: (1.0 - shockwaveT) * 0.55 * fade,
+                        child: Container(
+                          width: 40 * scale + (144 * scale * shockwaveT),
+                          height: 40 * scale + (144 * scale * shockwaveT),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: stageAccent.withValues(alpha: 0.55),
+                              width: max(
+                                1.4,
+                                3.6 * scale * (1.0 - shockwaveT * 0.45),
+                              ),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: glyphAccent.withValues(alpha: 0.24),
+                                blurRadius: 24 * scale,
+                                spreadRadius: 4 * scale,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: center.dx - (80 * scale),
+                    top: center.dy - (46 * scale) + glyphYOffset,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: impactFlash * 0.30 * fade,
+                        child: Transform.scale(
+                          scaleY: 0.58,
+                          child: Container(
+                            width: 160 * scale,
+                            height: 160 * scale,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  Color.lerp(
+                                    glyphSecondary,
+                                    Colors.white,
+                                    0.40,
+                                  )!.withValues(alpha: 0.58),
+                                  glyphAccent.withValues(alpha: 0.20),
+                                  Colors.transparent,
+                                ],
+                                stops: const [0.0, 0.32, 1.0],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: center.dx - (infoPlateWidth / 2),
+                    top:
+                        center.dy +
+                        ((compactScene ? 40 : 46) * scale) +
+                        glyphYOffset,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: (0.38 + (impactFlash * 0.18)) * fade,
+                        child: Container(
+                          width: infoPlateWidth,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: (compactScene ? 12 : 16) * scale,
+                            vertical: 8 * scale,
+                          ),
+                          decoration: _vsBotArcadePanelDecoration(
+                            palette: arcade,
+                            accent: stageAccent,
+                            radius: 16 * scale,
+                            borderWidth: max(1.2, 1.8 * scale),
+                            inset: true,
+                            elevated: false,
+                            fillColor: arcade.panelAlt,
+                          ),
+                          child: Text(
+                            'ANALYSIS // 1V1',
+                            textAlign: TextAlign.center,
+                            style: puzzleAcademyIdentityStyle(
+                              palette: arcade.base,
+                              size: 6.8 * scale,
+                              color: stageAccent,
+                              withGlow: true,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  buildGlyph('V', vOffset, vRotation),
+                  buildGlyph('S', sOffset, sRotation),
+                  buildWingBadge(
+                    badgeCenter: leftBadgeCenter,
+                    accent: leftAccent,
+                    rotation: leftBadgeRotation,
+                  ),
+                  buildWingBadge(
+                    badgeCenter: rightBadgeCenter,
+                    accent: rightAccent,
+                    rotation: rightBadgeRotation,
                   ),
                 ],
               ),

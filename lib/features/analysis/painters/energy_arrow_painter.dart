@@ -787,6 +787,10 @@ class EnergyArrowPainter extends CustomPainter {
     );
   }
 
+  Offset _snapToWholePixel(Offset point) {
+    return Offset(point.dx.roundToDouble(), point.dy.roundToDouble());
+  }
+
   Color _lightenColor(Color color, double amount) {
     return Color.lerp(color, Colors.white, amount.clamp(0.0, 1.0))!;
   }
@@ -874,25 +878,92 @@ class EnergyArrowPainter extends CustomPainter {
     );
     canvas.restore();
 
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: max(7.0, step * 0.75),
-          fontWeight: FontWeight.w900,
-          fontFamily: 'PressStart2P',
+    final labelFillColor =
+        (emphasized ? const Color(0xFFFFF8D8) : const Color(0xFFF7FBFF))
+            .withValues(alpha: alphaScale);
+    final labelShadowColor = const Color(0xFF03070D).withValues(
+      alpha: emphasized ? max(0.96, alphaScale) : max(0.88, alphaScale),
+    );
+    final labelFontSize = max(
+      emphasized && label.length == 1 ? 8.4 : 7.4,
+      step * (emphasized ? 0.92 : 0.82),
+    );
+
+    TextPainter buildLabelPainter(Color fillColor) {
+      return TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(
+            color: fillColor,
+            fontSize: labelFontSize,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'PressStart2P',
+          ),
         ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+
+    final textPainter = buildLabelPainter(labelFillColor);
+    final shadowPainter = buildLabelPainter(labelShadowColor);
+    final labelPlateRect = Rect.fromCenter(
+      center: snappedCenter,
+      width: max(
+        step * 1.9,
+        textPainter.width + step * (emphasized ? 1.55 : 1.20),
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    textPainter.paint(
-      canvas,
+      height: max(step * 1.45, textPainter.height + step * 0.60),
+    );
+    final labelPlateRRect = RRect.fromRectAndRadius(
+      labelPlateRect,
+      Radius.circular(step * 0.14),
+    );
+    final labelPlateColor =
+        (emphasized ? const Color(0xFF0E151D) : _darkenColor(color, 0.68))
+            .withValues(alpha: max(0.86, alphaScale));
+
+    canvas.drawRRect(
+      labelPlateRRect,
+      Paint()
+        ..color = labelPlateColor
+        ..style = PaintingStyle.fill
+        ..isAntiAlias = false,
+    );
+    canvas.drawRRect(
+      labelPlateRRect,
+      Paint()
+        ..color = _lightenColor(
+          labelPlateColor,
+          emphasized ? 0.26 : 0.16,
+        ).withValues(alpha: max(0.72, alphaScale))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..isAntiAlias = false,
+    );
+
+    final labelOrigin = _snapToWholePixel(
       Offset(
         snappedCenter.dx - (textPainter.width / 2),
         snappedCenter.dy - (textPainter.height / 2),
       ),
     );
+    final labelOutlineOffset = max(1.0, (step * 0.22).roundToDouble());
+    final labelOutlineOffsets = <Offset>[
+      Offset(-labelOutlineOffset, 0),
+      Offset(labelOutlineOffset, 0),
+      Offset(0, -labelOutlineOffset),
+      Offset(0, labelOutlineOffset),
+    ];
+    for (final delta in labelOutlineOffsets) {
+      shadowPainter.paint(canvas, labelOrigin + delta);
+    }
+    if (emphasized) {
+      shadowPainter.paint(
+        canvas,
+        labelOrigin + Offset(labelOutlineOffset, labelOutlineOffset),
+      );
+    }
+    textPainter.paint(canvas, labelOrigin);
   }
 
   @override

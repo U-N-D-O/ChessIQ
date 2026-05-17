@@ -8,10 +8,24 @@ class AdService {
 
   static final AdService instance = AdService._();
 
-  static const String interstitialAdUnitId =
+  static const String _testInterstitialAdUnitId =
       'ca-app-pub-3940256099942544/4411468910';
-  static const String rewardedAdUnitId =
+  static const String _testRewardedAdUnitId =
       'ca-app-pub-3940256099942544/1712485313';
+  static const String _iosInterstitialAdUnitId = String.fromEnvironment(
+    'ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-8366041710010578/4392988454',
+  );
+  static const String _iosRewardedAdUnitId = String.fromEnvironment(
+    'ADMOB_IOS_REWARDED_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-8366041710010578/4229336921',
+  );
+  static const String _androidInterstitialAdUnitId = String.fromEnvironment(
+    'ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID',
+  );
+  static const String _androidRewardedAdUnitId = String.fromEnvironment(
+    'ADMOB_ANDROID_REWARDED_AD_UNIT_ID',
+  );
   static const Duration _boardResetCooldown = Duration(seconds: 90);
   static const Duration _interstitialRepeatGrace = Duration(seconds: 10);
 
@@ -29,6 +43,20 @@ class AdService {
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
+
+  String? get _interstitialAdUnitId => _resolveAdUnitId(
+    formatLabel: 'interstitial',
+    testAdUnitId: _testInterstitialAdUnitId,
+    iosAdUnitId: _iosInterstitialAdUnitId,
+    androidAdUnitId: _androidInterstitialAdUnitId,
+  );
+
+  String? get _rewardedAdUnitId => _resolveAdUnitId(
+    formatLabel: 'rewarded',
+    testAdUnitId: _testRewardedAdUnitId,
+    iosAdUnitId: _iosRewardedAdUnitId,
+    androidAdUnitId: _androidRewardedAdUnitId,
+  );
 
   Duration get boardResetCooldownRemaining {
     final lastShownAt = _lastBoardResetInterstitialAt;
@@ -212,6 +240,37 @@ class AdService {
     _preloadRewarded();
   }
 
+  String? _resolveAdUnitId({
+    required String formatLabel,
+    required String testAdUnitId,
+    required String iosAdUnitId,
+    required String androidAdUnitId,
+  }) {
+    if (!isSupportedPlatform) {
+      return null;
+    }
+
+    final configuredAdUnitId = switch (defaultTargetPlatform) {
+      TargetPlatform.iOS => iosAdUnitId,
+      TargetPlatform.android => androidAdUnitId,
+      _ => '',
+    };
+
+    if (configuredAdUnitId.isNotEmpty) {
+      return configuredAdUnitId;
+    }
+
+    if (kReleaseMode) {
+      debugPrint(
+        'Missing $formatLabel AdMob unit ID for $defaultTargetPlatform '
+        'release build. Set the matching ADMOB_* dart-define.',
+      );
+      return null;
+    }
+
+    return testAdUnitId;
+  }
+
   void _preloadInterstitial() {
     if (!isSupportedPlatform ||
         _loadingInterstitial ||
@@ -219,9 +278,14 @@ class AdService {
       return;
     }
 
+    final adUnitId = _interstitialAdUnitId;
+    if (adUnitId == null) {
+      return;
+    }
+
     _loadingInterstitial = true;
     InterstitialAd.load(
-      adUnitId: interstitialAdUnitId,
+      adUnitId: adUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
@@ -242,9 +306,14 @@ class AdService {
       return;
     }
 
+    final adUnitId = _rewardedAdUnitId;
+    if (adUnitId == null) {
+      return;
+    }
+
     _loadingRewarded = true;
     RewardedAd.load(
-      adUnitId: rewardedAdUnitId,
+      adUnitId: adUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {

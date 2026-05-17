@@ -327,6 +327,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _hapticsEnabledKey = 'haptics_enabled_v1';
   static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
   static const String _analysisPerspectiveKey = 'analysis_perspective_v1';
+  static const String _analysisLockedHeadToHeadPerspectiveKey =
+      'analysis_locked_head_to_head_perspective_v1';
   static const String _analysisEngineDepthKey = 'analysis_engine_depth_v1';
   static const String _analysisMultiPvKey = 'analysis_multi_pv_v1';
   static const String _analysisMoveAssessmentEnabledKey =
@@ -637,6 +639,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _introCompleted = true;
   bool _suggestionsEnabled = false;
   bool _moveAssessmentEnabled = false;
+  bool _lockedHeadToHeadPerspective = false;
   bool _headToHeadEvalBarEnabled = false;
   bool _vsBotEvalEnabled = false;
   bool _vsBotOptimalLineRevealActive = false;
@@ -4204,6 +4207,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedMoveAssessment = prefs.getBool(
         _analysisMoveAssessmentEnabledKey,
       );
+      final savedLockedHeadToHeadPerspective = prefs.getBool(
+        _analysisLockedHeadToHeadPerspectiveKey,
+      );
       final savedHeadToHeadEvalBarEnabled = prefs.getBool(
         _analysisHeadToHeadEvalBarEnabledKey,
       );
@@ -4221,6 +4227,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       if (savedMoveAssessment != null) {
         _moveAssessmentEnabled = savedMoveAssessment;
+      }
+      if (savedLockedHeadToHeadPerspective != null) {
+        _lockedHeadToHeadPerspective = savedLockedHeadToHeadPerspective;
       }
       if (savedHeadToHeadEvalBarEnabled != null) {
         _headToHeadEvalBarEnabled = savedHeadToHeadEvalBarEnabled;
@@ -4305,6 +4314,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _analyze();
   }
 
+  Future<void> _setLockedHeadToHeadPerspective(bool value) async {
+    if (_lockedHeadToHeadPerspective == value) {
+      return;
+    }
+
+    setState(() {
+      _lockedHeadToHeadPerspective = value;
+    });
+
+    _persistCurrentSettings();
+    _analyze();
+  }
+
   Future<void> _lightHaptic() async {
     if (!_hapticsEnabled) return;
     await HapticFeedback.lightImpact();
@@ -4367,9 +4389,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool get _isHeadToHeadPerspective =>
       !_playVsBot && _perspective == BoardPerspective.headToHead;
 
+  bool get _isLockedHeadToHeadPerspective =>
+      _isHeadToHeadPerspective && _lockedHeadToHeadPerspective;
+
   bool get _usesTurnAwarePerspective =>
       _perspective == BoardPerspective.auto ||
-      _perspective == BoardPerspective.headToHead;
+      (_perspective == BoardPerspective.headToHead &&
+          !_lockedHeadToHeadPerspective);
 
   bool get _canUseAnalysisEditMode => !_playVsBot && !_isHeadToHeadPerspective;
 
@@ -5165,6 +5191,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedDepth = decoded['engineDepth'];
       final savedMultiPv = decoded['multiPvCount'];
       final savedMoveAssessmentEnabled = decoded['moveAssessmentEnabled'];
+      final savedLockedHeadToHeadPerspective =
+          decoded['lockedHeadToHeadPerspective'];
       final savedHeadToHeadEvalBarEnabled = decoded['headToHeadEvalBarEnabled'];
       final savedWhiteTurn = decoded['isWhiteTurn'];
       final savedBoard = decoded['boardState'];
@@ -5200,6 +5228,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!prefs.containsKey(_analysisMoveAssessmentEnabledKey) &&
           savedMoveAssessmentEnabled is bool) {
         _moveAssessmentEnabled = savedMoveAssessmentEnabled;
+      }
+      if (!prefs.containsKey(_analysisLockedHeadToHeadPerspectiveKey) &&
+          savedLockedHeadToHeadPerspective is bool) {
+        _lockedHeadToHeadPerspective = savedLockedHeadToHeadPerspective;
       }
       if (!prefs.containsKey(_analysisHeadToHeadEvalBarEnabledKey) &&
           savedHeadToHeadEvalBarEnabled is bool) {
@@ -5320,6 +5352,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     await prefs.setBool(
       _analysisMoveAssessmentEnabledKey,
       _moveAssessmentEnabled,
+    );
+    await prefs.setBool(
+      _analysisLockedHeadToHeadPerspectiveKey,
+      _lockedHeadToHeadPerspective,
     );
     await prefs.setBool(
       _analysisHeadToHeadEvalBarEnabledKey,
@@ -15152,6 +15188,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         opacity: 0.2,
                                         child: _pieceImage(
                                           p,
+                                          orientForHeadToHeadPerspective: true,
                                           motionSeed: '$sq-dragging',
                                         ),
                                       ),
@@ -15668,7 +15705,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
         ],
       ),
-      child: _pieceImage(p, motionSeed: motionSeed),
+      child: _pieceImage(
+        p,
+        orientForHeadToHeadPerspective: true,
+        motionSeed: motionSeed,
+      ),
     );
   }
 
@@ -15691,7 +15732,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     String? motionSeed,
   }) {
     if (selectedGlowColor == null) {
-      return _pieceImage(piece, motionSeed: motionSeed);
+      return _pieceImage(
+        piece,
+        orientForHeadToHeadPerspective: true,
+        motionSeed: motionSeed,
+      );
     }
 
     final glowColor = selectedGlowColor == 'yellow'
@@ -15713,7 +15758,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
         ],
       ),
-      child: _pieceImage(piece, motionSeed: motionSeed),
+      child: _pieceImage(
+        piece,
+        orientForHeadToHeadPerspective: true,
+        motionSeed: motionSeed,
+      ),
     );
   }
 
@@ -18665,6 +18714,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ],
                   ),
+                  if (_isHeadToHeadPerspective) ...[
+                    const SizedBox(height: 12),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _lockedHeadToHeadPerspective,
+                      onChanged: (value) {
+                        markChanged();
+                        unawaited(_setLockedHeadToHeadPerspective(value));
+                        setSheetState(() {});
+                      },
+                      title: const Text('Lock 1v1 orientation'),
+                      subtitle: const Text(
+                        'Keep white at the bottom and rotate black pieces toward the top player.',
+                      ),
+                    ),
+                  ],
                 ],
               );
             }
@@ -18787,6 +18852,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final prefs = await SharedPreferences.getInstance();
     final payload = {
       'perspective': _perspective.index,
+      'lockedHeadToHeadPerspective': _lockedHeadToHeadPerspective,
       'boardTheme': _boardThemeMode.index,
       'pieceTheme': _pieceThemeMode.index,
       'arrowTheme': _arrowThemeMode.index,
@@ -19813,15 +19879,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ),
                             const SizedBox(height: 6),
                             Center(
-                              child: TextButton.icon(
-                                icon: const Icon(Icons.restore),
-                                label: const Text('Restore Purchases'),
-                                onPressed: () async {
-                                  await PurchaseService.instance
-                                      .restorePurchases();
-                                  await _loadStoreState();
-                                  setL(() {});
-                                },
+                              child: Column(
+                                children: [
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.restore),
+                                    label: const Text('Restore Purchases'),
+                                    onPressed: () async {
+                                      await PurchaseService.instance
+                                          .restorePurchases();
+                                      await _loadStoreState();
+                                      setL(() {});
+                                    },
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Use this after reinstalling or moving to a new device. Only permanent passes restore; coin packs do not.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.62,
+                                      ),
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -21308,6 +21391,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     PieceThemeMode? theme,
     bool applyBlackOutline = true,
     double blackOutlineOverflowPx = 0,
+    bool orientForHeadToHeadPerspective = false,
     String? motionSeed,
   }) {
     final activeTheme = theme ?? _pieceThemeMode;
@@ -21333,6 +21417,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final isBlackPiece = piece.endsWith('_b');
     final isSpectral = activeTheme == PieceThemeMode.spectral;
     Widget result;
+
+    Widget maybeOrientForHeadToHeadPerspective(Widget child) {
+      if (!orientForHeadToHeadPerspective || !_isHeadToHeadPerspective) {
+        return child;
+      }
+
+      if (!_isLockedHeadToHeadPerspective || !isBlackPiece) {
+        return child;
+      }
+
+      return Transform.rotate(angle: pi, child: child);
+    }
 
     if (!isBlackPiece || !applyBlackOutline) {
       if (!isSpectral) {
@@ -21430,79 +21526,84 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     if (!isSpectral) {
-      return result;
+      return maybeOrientForHeadToHeadPerspective(result);
     }
 
-    return AnimatedBuilder(
-      animation: _pulseController,
-      builder: (context, child) {
-        final phase = _pieceThemePhase(piece, motionSeed);
-        final phase2 = _pieceThemePhase2(piece, motionSeed);
-        final phase3 = _pieceThemePhase3(piece, motionSeed);
-        final frequency =
-            0.48 + (_pieceThemeHash(piece, motionSeed) % 13) * 0.017;
-        final elapsedSeconds =
-            _spectralMotionClock.elapsedMicroseconds /
-            Duration.microsecondsPerSecond;
-        final t = elapsedSeconds * frequency + phase;
-        final shimmer =
-            (sin(t * 1.17) * 0.42) +
-            (sin(t * 0.73 + phase2) * 0.34) +
-            (cos(t * 1.43 + phase3) * 0.24);
-        final pulse = (0.46 + shimmer * 0.08).clamp(0.36, 0.56);
-        final flutterOffset = Offset(
-          cos(t * 1.31 + phase2) * (0.14 + pulse * 0.18),
-          sin(t * 1.47 + phase3) * (0.12 + pulse * 0.20),
-        );
-        final glowColor = _pieceTintColor(
-          piece,
-          activeTheme,
-        ).withValues(alpha: (0.20 + pulse * 0.18).clamp(0.22, 0.36));
-        final trailOffsets =
-            <Offset>[
-                  const Offset(-0.85, -0.62),
-                  const Offset(0.78, -0.18),
-                  const Offset(-0.42, 0.88),
-                ]
-                .map(
-                  (offset) =>
-                      offset * (0.74 + pulse * 0.34) +
-                      flutterOffset * (0.34 + pulse * 0.12),
-                )
-                .toList(growable: false);
+    return maybeOrientForHeadToHeadPerspective(
+      AnimatedBuilder(
+        animation: _pulseController,
+        builder: (context, child) {
+          final phase = _pieceThemePhase(piece, motionSeed);
+          final phase2 = _pieceThemePhase2(piece, motionSeed);
+          final phase3 = _pieceThemePhase3(piece, motionSeed);
+          final frequency =
+              0.48 + (_pieceThemeHash(piece, motionSeed) % 13) * 0.017;
+          final elapsedSeconds =
+              _spectralMotionClock.elapsedMicroseconds /
+              Duration.microsecondsPerSecond;
+          final t = elapsedSeconds * frequency + phase;
+          final shimmer =
+              (sin(t * 1.17) * 0.42) +
+              (sin(t * 0.73 + phase2) * 0.34) +
+              (cos(t * 1.43 + phase3) * 0.24);
+          final pulse = (0.46 + shimmer * 0.08).clamp(0.36, 0.56);
+          final flutterOffset = Offset(
+            cos(t * 1.31 + phase2) * (0.14 + pulse * 0.18),
+            sin(t * 1.47 + phase3) * (0.12 + pulse * 0.20),
+          );
+          final glowColor = _pieceTintColor(
+            piece,
+            activeTheme,
+          ).withValues(alpha: (0.20 + pulse * 0.18).clamp(0.22, 0.36));
+          final trailOffsets =
+              <Offset>[
+                    const Offset(-0.85, -0.62),
+                    const Offset(0.78, -0.18),
+                    const Offset(-0.42, 0.88),
+                  ]
+                  .map(
+                    (offset) =>
+                        offset * (0.74 + pulse * 0.34) +
+                        flutterOffset * (0.34 + pulse * 0.12),
+                  )
+                  .toList(growable: false);
 
-        return Container(
-          decoration: BoxDecoration(
-            boxShadow: [
-              BoxShadow(
-                color: glowColor,
-                blurRadius: 11 + pulse * 8,
-                spreadRadius: 1.2 + pulse * 1.8,
-              ),
-            ],
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              for (final offset in trailOffsets)
-                Transform.translate(
-                  offset: offset,
-                  child: Opacity(
-                    opacity: (0.095 - pulse * 0.018).clamp(0.055, 0.10),
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        glowColor.withValues(alpha: 0.20),
-                        BlendMode.srcIn,
+          return Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: glowColor,
+                  blurRadius: 11 + pulse * 8,
+                  spreadRadius: 1.2 + pulse * 1.8,
+                ),
+              ],
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                for (final offset in trailOffsets)
+                  Transform.translate(
+                    offset: offset,
+                    child: Opacity(
+                      opacity: (0.095 - pulse * 0.018).clamp(0.055, 0.10),
+                      child: ColorFiltered(
+                        colorFilter: ColorFilter.mode(
+                          glowColor.withValues(alpha: 0.20),
+                          BlendMode.srcIn,
+                        ),
+                        child: baseImage,
                       ),
-                      child: baseImage,
                     ),
                   ),
+                Transform.translate(
+                  offset: flutterOffset * 0.38,
+                  child: result,
                 ),
-              Transform.translate(offset: flutterOffset * 0.38, child: result),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

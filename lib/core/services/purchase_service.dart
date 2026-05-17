@@ -54,6 +54,8 @@ class PurchaseService {
   static final PurchaseService instance = PurchaseService._();
 
   static const String _ownedPrefix = 'iap_owned_';
+  static const String _deliveredHistoryKey = 'iap_delivered_history_v1';
+  static const int _maxDeliveredFingerprints = 200;
 
   EconomyProvider? _economy;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
@@ -75,7 +77,7 @@ class PurchaseService {
   void attachEconomy(EconomyProvider economy) => _economy = economy;
 
   /// Initialises the billing client, subscribes to the purchase stream, and
-  /// restores any previous transactions.  Safe to call multiple times.
+  /// loads product metadata. Safe to call multiple times.
   Future<void> initialize() async {
     if (!_isSupportedPlatform) {
       // in_app_purchase is not available on desktop/web.
@@ -108,15 +110,6 @@ class PurchaseService {
     );
 
     await _loadProducts();
-
-    try {
-      // Re-deliver any pending / previously purchased transactions.
-      await InAppPurchase.instance.restorePurchases().timeout(
-        const Duration(seconds: 15),
-      );
-    } catch (e) {
-      debugPrint('IAP restore failed during initialization: $e');
-    }
   }
 
   Future<void> _loadProducts() async {
@@ -141,7 +134,7 @@ class PurchaseService {
       switch (purchase.status) {
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
-          await _deliver(purchase);
+          await _deliverIfNeeded(purchase);
           if (purchase.pendingCompletePurchase) {
             await InAppPurchase.instance.completePurchase(purchase);
           }
@@ -167,7 +160,11 @@ class PurchaseService {
     }
   }
 
-  Future<void> _deliver(PurchaseDetails purchase) async {
+  Future<void> _deliverIfNeeded(PurchaseDetails purchase) async {
+    if (!await _claimDelivery(purchase)) {
+      return;
+    }
+
     switch (purchase.productID) {
       case IapProducts.coinPackS:
         await _economy?.addCoins(IapProducts.coinPackSAmount);
@@ -178,6 +175,50 @@ class PurchaseService {
       case IapProducts.academyPass:
         await _setOwned(IapProducts.academyPass);
     }
+  }
+
+  Future<bool> _claimDelivery(PurchaseDetails purchase) async {
+    if (!IapProducts.all.contains(purchase.productID)) {
+      debugPrint('IAP: ignoring unknown product ${purchase.productID}');
+      return false;
+    }
+
+    if (purchase.status == PurchaseStatus.restored &&
+        IapProducts.consumables.contains(purchase.productID)) {
+      debugPrint(
+        'IAP: ignoring restored consumable ${purchase.productID}; '
+        'restore is only for permanent entitlements.',
+      );
+      return false;
+    }
+
+    final fingerprint = purchaseDeliveryFingerprint(purchase);
+    if (fingerprint == null) {
+      debugPrint(
+        'IAP: missing delivery fingerprint for ${purchase.productID}; '
+        'skipping delivery to avoid duplicate grants.',
+      );
+      return false;
+    }
+
+    return _recordDeliveryFingerprint(fingerprint);
+  }
+
+  Future<bool> _recordDeliveryFingerprint(String fingerprint) async {
+    final prefs = await SharedPreferences.getInstance();
+    final history = List<String>.from(
+      prefs.getStringList(_deliveredHistoryKey) ?? const <String>[],
+    );
+    if (history.contains(fingerprint)) {
+      return false;
+    }
+
+    history.add(fingerprint);
+    if (history.length > _maxDeliveredFingerprints) {
+      history.removeRange(0, history.length - _maxDeliveredFingerprints);
+    }
+    await prefs.setStringList(_deliveredHistoryKey, history);
+    return true;
   }
 
   Future<void> _setOwned(String productId) async {
@@ -252,4 +293,36 @@ class PurchaseService {
     _subscription = null;
     _initializationFuture = null;
   }
+
+  @visibleForTesting
+  Future<bool> claimDeliveryForTesting(PurchaseDetails purchase) {
+    return _claimDelivery(purchase);
+  }
+}
+
+@visibleForTesting
+String? purchaseDeliveryFingerprint(PurchaseDetails purchase) {
+  if (IapProducts.nonConsumables.contains(purchase.productID)) {
+    return 'entitlement:${purchase.productID}';
+  }
+
+  final purchaseId = purchase.purchaseID?.trim();
+  if (purchaseId != null && purchaseId.isNotEmpty) {
+    return 'purchase:${purchase.productID}:$purchaseId';
+  }
+
+  final serverVerificationToken = purchase
+      .verificationData
+      .serverVerificationData
+      .trim();
+  if (serverVerificationToken.isNotEmpty) {
+    return 'purchase:${purchase.productID}:$serverVerificationToken';
+  }
+
+  final transactionDate = purchase.transactionDate?.trim();
+  if (transactionDate != null && transactionDate.isNotEmpty) {
+    return 'purchase:${purchase.productID}:$transactionDate';
+  }
+
+  return null;
 }

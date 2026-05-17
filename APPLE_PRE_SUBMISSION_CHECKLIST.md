@@ -6,9 +6,14 @@ Firebase functions, privacy, and final smoke tests.
 
 ## Current Repo Findings
 
-- [ ] Replace the Google test AdMob unit IDs in `lib/core/services/ad_service.dart` before submission.
-  Current interstitial: `ca-app-pub-3940256099942544/4411468910`
-  Current rewarded: `ca-app-pub-3940256099942544/1712485313`
+- [ ] Set the live AdMob release unit IDs before submission.
+  Debug and non-release builds still use Google's test units.
+  The repo now defaults iOS release builds to these live unit IDs:
+  `ca-app-pub-8366041710010578/4392988454` (interstitial)
+  `ca-app-pub-8366041710010578/4229336921` (rewarded)
+  Android release builds still expect these dart-defines:
+  `ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID`
+  `ADMOB_ANDROID_REWARDED_AD_UNIT_ID`
 - [ ] Stop hardcoding App Store prices in `lib/features/analysis/chess_analysis/base_state.dart`.
   The Store currently shows fixed strings like `$4.99`, `$9.99`, and `$6.99`
   instead of StoreKit's localized `ProductDetails.price`.
@@ -21,10 +26,12 @@ Firebase functions, privacy, and final smoke tests.
 
 ## Must Change Before Submission
 
-- [ ] Replace the test interstitial and rewarded ad unit IDs in
-  `lib/core/services/ad_service.dart` with your live iOS AdMob unit IDs.
+- [ ] Pass your live AdMob ad unit IDs into the release build with the
+  required `ADMOB_*` dart-defines where the repo does not already provide the
+  platform default.
 - [ ] Keep `ios/Runner/Info.plist` `GADApplicationIdentifier` aligned with the
   same AdMob app as the live unit IDs.
+  Current iOS app ID: `ca-app-pub-8366041710010578~7238643645`
 - [ ] Remove hardcoded IAP prices from
   `lib/features/analysis/chess_analysis/base_state.dart` and render the live,
   localized StoreKit prices returned by `PurchaseService`.
@@ -72,7 +79,9 @@ Firebase functions, privacy, and final smoke tests.
 
 ## Ads
 
-- [ ] Replace the test ad unit IDs before generating the submission build.
+- [ ] Confirm the release build includes the live `ADMOB_*` dart-defines before
+  generating the submission artifact for any platform that does not already
+  have a checked-in live default.
 - [ ] Confirm interstitial ads show correctly on iOS in the live flows you use:
   analysis reset, bot rematch/new match, Academy placements, and any other
   release-facing trigger.
