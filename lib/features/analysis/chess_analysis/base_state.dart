@@ -3683,6 +3683,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
+    Future<void> openTermsOfService() async {
+      final launched = await launchUrl(chessIqTermsOfServiceUri);
+      if (launched || !mounted) return;
+      await Clipboard.setData(
+        const ClipboardData(text: chessIqTermsOfServiceUrl),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the Terms of Service. The URL has been copied instead.',
+          ),
+        ),
+      );
+    }
+
     return Container(
       key: const ValueKey<String>('credits_ownership_copy'),
       width: double.infinity,
@@ -3787,6 +3803,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   unawaited(openPrivacyNotice());
                 },
               ),
+              _buildLegalNoticeLink(
+                key: const ValueKey<String>('credits_legal_link_terms'),
+                label: 'Terms of Service',
+                icon: Icons.description_outlined,
+                accent: visuals.secondaryAccent,
+                visuals: visuals,
+                onTap: () {
+                  unawaited(openTermsOfService());
+                },
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -3819,7 +3845,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
           const SizedBox(height: 10),
           Text(
-            'The feedback button opens the hosted ChessIQ feedback page. The hosted privacy notice opens in your browser, while the other buttons open the bundled legal records.',
+            'The feedback button opens the hosted ChessIQ feedback page. The hosted privacy notice and Terms of Service open in your browser, while the other buttons open the bundled legal records.',
             style: _creditsLabelStyle(
               visuals,
               size: 10.9,
