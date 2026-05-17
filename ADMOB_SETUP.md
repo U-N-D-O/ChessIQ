@@ -53,11 +53,16 @@ Android.
 ## Current iOS Configuration
 
 - AdMob app ID: `ca-app-pub-8366041710010578~7238643645`
-- Default iOS interstitial unit in repo: `ca-app-pub-8366041710010578/4392988454`
-- Default iOS rewarded unit in repo: `ca-app-pub-8366041710010578/4229336921`
+- Board Reset interstitial: `ca-app-pub-8366041710010578/4392988454`
+- Vs Bot Match Start interstitial: `ca-app-pub-8366041710010578/5329949968`
+- Academy Break interstitial: `ca-app-pub-8366041710010578/2781019694`
+- Academy Return interstitial: `ca-app-pub-8366041710010578/9294457153`
+- Quiz Milestone interstitial: `ca-app-pub-8366041710010578/3746617002`
+- Store Reward rewarded: `ca-app-pub-8366041710010578/4229336921`
+- Academy Bonus rewarded: `ca-app-pub-8366041710010578/6532562448`
 
-If no placement-specific iOS unit ID is supplied yet, the app falls back to the
- checked-in default live iOS unit for that format.
+These iOS placement-specific IDs are now checked into the repo as the default
+live values, and the `ADMOB_IOS_*` dart-defines remain available as overrides.
 
 ## Placement Routing In Code
 

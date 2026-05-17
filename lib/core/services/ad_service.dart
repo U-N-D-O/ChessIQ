@@ -44,19 +44,28 @@ class AdService {
     defaultValue: 'ca-app-pub-8366041710010578/4392988454',
   );
   static const String _iosBoardResetInterstitialAdUnitId =
-      String.fromEnvironment('ADMOB_IOS_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID');
+      String.fromEnvironment(
+        'ADMOB_IOS_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID',
+        defaultValue: 'ca-app-pub-8366041710010578/4392988454',
+      );
   static const String _iosVsBotInterstitialAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_INTERSTITIAL_VS_BOT_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-8366041710010578/5329949968',
   );
   static const String _iosAcademyBreakInterstitialAdUnitId =
-      String.fromEnvironment('ADMOB_IOS_INTERSTITIAL_ACADEMY_BREAK_AD_UNIT_ID');
+      String.fromEnvironment(
+        'ADMOB_IOS_INTERSTITIAL_ACADEMY_BREAK_AD_UNIT_ID',
+        defaultValue: 'ca-app-pub-8366041710010578/2781019694',
+      );
   static const String _iosAcademyReturnInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_INTERSTITIAL_ACADEMY_RETURN_AD_UNIT_ID',
+        defaultValue: 'ca-app-pub-8366041710010578/9294457153',
       );
   static const String _iosQuizMilestoneInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+        defaultValue: 'ca-app-pub-8366041710010578/3746617002',
       );
   static const String _iosDefaultRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_REWARDED_AD_UNIT_ID',
@@ -64,9 +73,11 @@ class AdService {
   );
   static const String _iosStoreRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_REWARDED_STORE_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-8366041710010578/4229336921',
   );
   static const String _iosAcademyRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_REWARDED_ACADEMY_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-8366041710010578/6532562448',
   );
   static const String _androidDefaultInterstitialAdUnitId =
       String.fromEnvironment('ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID');
