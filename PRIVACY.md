@@ -2,13 +2,13 @@
 
 Published notice: https://modus.qila.gl/ChessIQ/privacy-notice/
 
-This notice explains what information ChessIQ may show publicly for the Academy leaderboard, what data may be sent to QILA Modus backend services for leaderboard and promo code redemption features, and how third-party advertising partners may process advertising-related data if you consent in the app's advertising popup.
+This notice explains what information ChessIQ may show publicly for the Academy leaderboard, what data may be sent to QILA Modus backend services for leaderboard and promo code redemption features, and how Google AdMob may process advertising-related data when ChessIQ shows interstitial and rewarded ads.
 
-Separated by design. ChessIQ keeps leaderboard profile data intentionally minimal. Optional ad personalization is handled separately through third-party advertising SDKs and only after consent where required.
+Separated by design. ChessIQ keeps leaderboard profile data intentionally minimal. Advertising-related processing is handled separately through Google AdMob and relevant platform privacy settings.
 
 ## Applies To
 
-- Academy leaderboard profile setup, promo code redemption, and optional advertising consent
+- Academy leaderboard profile setup, promo code redemption, and ads shown in ChessIQ
 
 ## Operator
 
@@ -16,11 +16,11 @@ Separated by design. ChessIQ keeps leaderboard profile data intentionally minima
 
 ## Last Updated
 
-- May 12, 2026
+- May 17, 2026
 
 ## Information Used Or Processed
 
-Leaderboard data and promo redemption tracking support core features. Advertising-related data may also be processed by ad partners if you consent to personalized ads.
+Leaderboard data and promo redemption tracking support core features. Advertising-related data may also be processed by Google AdMob when ads are requested or shown.
 
 - Nickname
 - Country or region
@@ -29,9 +29,9 @@ Leaderboard data and promo redemption tracking support core features. Advertisin
 - Update timestamp
 - Anonymous Firebase user ID
 - Redeemed promo code and promo claim timestamp
-- Academy nickname, title, and country or region in private promo claim records when that Academy profile is already attached to the same anonymous Firebase user ID
-- Advertising identifier via ad partner, if consented
-- Ad/device interaction data via ad partner, if consented
+- Academy nickname, title, and the country or region selected during Academy setup in private promo claim records when that Academy profile is already attached to the same anonymous Firebase user ID
+- Advertising identifier via Google AdMob, when available under platform settings
+- Ad/device interaction data via Google AdMob when ads are requested or shown
 
 ## Information We Do Not Ask You To Enter
 
@@ -40,6 +40,8 @@ ChessIQ does not ask you to type direct personal identifiers for leaderboard set
 - Email address
 - Real name
 - Precise location
+
+ChessIQ does not request location permission and does not collect or use device GPS or other device-location data. The only country or region value ChessIQ uses for Academy features or promo claim records is the one selected during Academy setup.
 
 ## Public Leaderboard Display
 
@@ -70,10 +72,12 @@ When the app redeems a promo code, ChessIQ may send or store the following data 
 - Redeemed promo code
 - Claim timestamp
 - Anonymous Firebase user ID
-- Academy nickname, title, and country or region already attached to that anonymous Firebase user ID, if available
+- Academy nickname, title, and the country or region already selected during Academy setup and attached to that anonymous Firebase user ID, if available
 - Promo reward details needed to fulfill the redemption
 
 These promo redemption records are used to prevent duplicate claims and to help QILA Modus review who redeemed a code. They are not shown publicly in the leaderboard.
+
+Where this notice refers to country or region in promo claim records, it means only the country or region the user selected during Academy setup. It is not inferred from IP address, device location, or similar location signals.
 
 ## Information We Do Not Request For The Leaderboard
 
@@ -83,7 +87,7 @@ For Academy leaderboard participation, ChessIQ does not ask you to enter:
 - Real name
 - Precise location
 
-Optional advertising consent is handled separately through platform or SDK consent flows, not through the leaderboard profile form.
+ChessIQ does not currently present a separate in-app advertising consent form. Leaderboard setup is separate from any platform or ad-partner permission handling.
 
 ## Network And Service Metadata
 
@@ -91,21 +95,27 @@ Backend services and infrastructure providers may process standard network metad
 
 ChessIQ does not show this network metadata on the public leaderboard, and it is not requested from you as part of the Academy profile form.
 
+This network metadata handling does not mean ChessIQ accesses device GPS or other device-location services.
+
 ## Advertising And Consent
 
-ChessIQ may display ads to support the app. Personalized advertising or ad tracking is only used if you agree in the advertising consent popup shown when the app first asks for that choice, or in any later consent flow made available to you.
+ChessIQ may display interstitial and rewarded ads to support the app.
 
-If you do not agree, ChessIQ may still show non-personalized or contextual ads, subject to the capabilities of the active ad service and platform rules.
+ChessIQ does not currently present a dedicated in-app advertising consent or withdrawal screen.
 
-The exact consent experience may depend on your platform, app version, and active ad partner setup.
+Depending on your platform, region, and Google AdMob behavior, ads may be served using contextual, non-personalized, or other platform-limited signals.
+
+ChessIQ does not currently request App Tracking Transparency permission on iOS.
+
+The exact advertising experience may depend on your platform, app version, and active ad partner setup.
 
 ## Third-Party Ad Networks
 
-At the time of this notice, ChessIQ uses Google AdMob to serve ads.
+At the time of this notice, ChessIQ uses only Google AdMob to serve ads.
 
-If QILA Modus later adds mediation, auction, or additional ad network partners, this notice will be updated to identify the active partners before or when those integrations go live.
+QILA Modus has not yet activated mediation or additional ad network partners in the shipped app. If that changes, this notice will be updated to identify the active partners before or when those integrations go live.
 
-When personalized advertising is enabled, advertising partners may process data such as:
+When identifier-based or personalized advertising signals are available, Google AdMob and its providers may process data such as:
 
 - Advertising identifier such as IDFA on iOS or the Android advertising ID or similar platform identifier
 - IP address and approximate location
@@ -114,19 +124,21 @@ When personalized advertising is enabled, advertising partners may process data 
 
 These signals are generally collected directly by the advertising partner SDK. QILA Modus does not use the ChessIQ leaderboard database to store your advertising identifier or build its own advertising profile from this data.
 
+ChessIQ itself does not request or use device GPS or similar device-location services for ads.
+
 ## Changing Or Withdrawing Ad Consent
 
-You may be able to revisit or withdraw advertising consent through privacy controls provided in ChessIQ, if and when those controls are available in the app.
+ChessIQ does not currently offer a dedicated in-app screen to revisit ad-consent settings.
 
-Some advertising permissions are controlled by your device platform rather than by ChessIQ directly. For example, on iOS, if you previously denied tracking permission, you may need to change that choice in the iPhone or iPad Settings app instead of inside ChessIQ.
+Ad-related permissions or identifiers may instead be controlled by your device platform or Google-provided controls, where available.
 
-Where direct in-app withdrawal is not available, device or platform privacy settings may be the correct place to change your advertising-related choices.
+On iOS, ChessIQ does not currently present an App Tracking Transparency prompt in this version.
 
-Changing or withdrawing consent affects ad personalization and related tracking. It does not by itself remove an Academy leaderboard entry.
+Changing or limiting platform-level ad identifiers affects ad personalization and related tracking. It does not by itself remove an Academy leaderboard entry.
 
 ## Your Choice
 
-Joining the Academy leaderboard is optional. Personalized advertising is also optional. If you do not want to publish a nickname and country or region on the leaderboard, do not complete leaderboard profile setup. If you do not want ad personalization, do not grant advertising consent.
+Joining the Academy leaderboard is optional. Ads may still be shown whether or not you join the leaderboard. If you do not want to publish a nickname and country or region on the leaderboard, do not complete leaderboard profile setup. If you want to limit ad-related identifiers where your platform supports that, use the relevant device privacy settings.
 
 If you later want to remove that Academy leaderboard identity, you can delete the Academy profile from Puzzle Academy settings. This removes the live leaderboard profile and clears the local saved Academy profile and exam history used for leaderboard participation.
 
