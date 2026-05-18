@@ -168,7 +168,8 @@ class PurchaseService {
     switch (purchase.productID) {
       case IapProducts.coinPackS:
         final smallPackFingerprint = purchaseDeliveryFingerprint(purchase);
-        final smallPackDelivered = smallPackFingerprint != null &&
+        final smallPackDelivered =
+            smallPackFingerprint != null &&
             await (_economy?.deliverPurchasedCoinPack(
                   purchase.productID,
                   fingerprint: smallPackFingerprint,
@@ -179,7 +180,8 @@ class PurchaseService {
         }
       case IapProducts.coinPackL:
         final largePackFingerprint = purchaseDeliveryFingerprint(purchase);
-        final largePackDelivered = largePackFingerprint != null &&
+        final largePackDelivered =
+            largePackFingerprint != null &&
             await (_economy?.deliverPurchasedCoinPack(
                   purchase.productID,
                   fingerprint: largePackFingerprint,

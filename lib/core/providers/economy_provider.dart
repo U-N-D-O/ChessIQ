@@ -46,9 +46,10 @@ class EconomyProvider extends ChangeNotifier {
   }
 
   Duration get _currentCooldownDuration {
-    return progressiveCooldowns[
-      _watchCountToday.clamp(0, progressiveCooldowns.length - 1)
-    ];
+    return progressiveCooldowns[_watchCountToday.clamp(
+      0,
+      progressiveCooldowns.length - 1,
+    )];
   }
 
   Duration get remainingStoreRewardCooldown {
@@ -61,11 +62,7 @@ class EconomyProvider extends ChangeNotifier {
 
     if (_watchCountToday >= 3) {
       final utcNow = now.toUtc();
-      final midnight = DateTime.utc(
-        utcNow.year,
-        utcNow.month,
-        utcNow.day + 1,
-      );
+      final midnight = DateTime.utc(utcNow.year, utcNow.month, utcNow.day + 1);
       final remaining = midnight.difference(utcNow);
       if (remaining.isNegative) {
         return Duration.zero;
@@ -89,7 +86,10 @@ class EconomyProvider extends ChangeNotifier {
   Future<void> refresh({bool notify = true}) async {
     final prefs = await SharedPreferences.getInstance();
     final payload = _readStorePayload(prefs);
-    final localCoins = max(0, (payload['coins'] as num?)?.toInt() ?? defaultCoins);
+    final localCoins = max(
+      0,
+      (payload['coins'] as num?)?.toInt() ?? defaultCoins,
+    );
     final lastWatchMs = prefs.getInt(storeRewardAdLastWatchKey);
     final localLastWatch = lastWatchMs == null
         ? null
@@ -101,7 +101,8 @@ class EconomyProvider extends ChangeNotifier {
 
     final trustedNow = _trustedNow();
     final todayStr = _dayStamp(trustedNow);
-    final savedLastWatchDay = prefs.getString(storeRewardAdLastWatchDayKey) ?? '';
+    final savedLastWatchDay =
+        prefs.getString(storeRewardAdLastWatchDayKey) ?? '';
     var localWatchCountToday =
         prefs.getInt(storeRewardAdWatchCountTodayKey) ?? 0;
     var localLastWatchDay = savedLastWatchDay;
@@ -197,17 +198,11 @@ class EconomyProvider extends ChangeNotifier {
   }
 
   Future<bool> claimAnalysisInterstitialCoins({bool notify = true}) async {
-    return _claimReward(
-      EconomyRewardKey.analysisInterstitial,
-      notify: notify,
-    );
+    return _claimReward(EconomyRewardKey.analysisInterstitial, notify: notify);
   }
 
   Future<bool> awardAcademyInterstitialCoins({bool notify = true}) async {
-    return _claimReward(
-      EconomyRewardKey.academyInterstitial,
-      notify: notify,
-    );
+    return _claimReward(EconomyRewardKey.academyInterstitial, notify: notify);
   }
 
   Future<bool> claimAcademyExamBonusCoins({
@@ -233,10 +228,7 @@ class EconomyProvider extends ChangeNotifier {
   }
 
   Future<bool> claimAcademyRewardedAdCoins({bool notify = true}) async {
-    return _claimReward(
-      EconomyRewardKey.academyRewardedAd,
-      notify: notify,
-    );
+    return _claimReward(EconomyRewardKey.academyRewardedAd, notify: notify);
   }
 
   Future<bool> claimDailyChallengeCoins({

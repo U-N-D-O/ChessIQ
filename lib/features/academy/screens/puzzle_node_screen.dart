@@ -629,7 +629,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       );
       if (rewarded && mounted) {
         final claimed = await economy.claimAcademyExamBonusCoins(
-          claimKey: 'academy-exam:${widget.node.title}:${elapsed.inMilliseconds}',
+          claimKey:
+              'academy-exam:${widget.node.title}:${elapsed.inMilliseconds}',
         );
         if (!claimed) {
           return;

@@ -96,9 +96,7 @@ class EconomyRemoteService {
   }
 
   Future<EconomyMutationResult> spendCoins(int amount) async {
-    final result = await _callFunction(_spendCoinsFunction, {
-      'amount': amount,
-    });
+    final result = await _callFunction(_spendCoinsFunction, {'amount': amount});
     return _parseMutationResult(result);
   }
 
@@ -133,7 +131,8 @@ class EconomyRemoteService {
       lastStoreRewardAdAt: lastClaimAtMs == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(lastClaimAtMs),
-      watchCountToday: (storeRewardMap['watchCountToday'] as num?)?.toInt() ?? 0,
+      watchCountToday:
+          (storeRewardMap['watchCountToday'] as num?)?.toInt() ?? 0,
       lastWatchDay: storeRewardMap['dayKey']?.toString().trim() ?? '',
     );
   }
