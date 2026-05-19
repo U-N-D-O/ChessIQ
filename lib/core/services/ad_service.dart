@@ -439,6 +439,10 @@ class AdService {
       return null;
     }
 
+    if (!kReleaseMode) {
+      return testAdUnitId;
+    }
+
     final configuredAdUnitId = switch (defaultTargetPlatform) {
       TargetPlatform.iOS => iosAdUnitId,
       TargetPlatform.android => androidAdUnitId,
@@ -449,15 +453,11 @@ class AdService {
       return configuredAdUnitId;
     }
 
-    if (kReleaseMode) {
-      debugPrint(
-        'Missing $formatLabel AdMob unit ID for $defaultTargetPlatform '
-        'release build. Set the matching ADMOB_* dart-define.',
-      );
-      return null;
-    }
-
-    return testAdUnitId;
+    debugPrint(
+      'Missing $formatLabel AdMob unit ID for $defaultTargetPlatform '
+      'release build. Set the matching ADMOB_* dart-define.',
+    );
+    return null;
   }
 
   void _preloadInterstitial(String adUnitId) {
