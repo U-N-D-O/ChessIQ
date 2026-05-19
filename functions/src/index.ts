@@ -3160,6 +3160,64 @@ async function actOnFriendMatchImpl(
     };
 }
 
+async function refreshFriendMatchStateImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const matchId = readFriendMatchId(data?.matchId);
+    const matchRef = db.ref(`friend_matches/${matchId}`);
+    let responseMatch: FriendMatchRecord | null = null;
+
+    const transactionResult = await matchRef.transaction((currentValue) => {
+        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        if (existingMatch == null) {
+            return;
+        }
+
+        const isParticipant = existingMatch.hostUid === uid ||
+            existingMatch.guestUid === uid ||
+            existingMatch.whiteUid === uid ||
+            existingMatch.blackUid === uid;
+        if (!isParticipant) {
+            throw new functions.https.HttpsError(
+                "permission-denied",
+                "Only match participants can refresh that match.",
+            );
+        }
+
+        const synchronizedMatch = synchronizeFriendMatchForNow(
+            existingMatch,
+            Date.now(),
+        );
+        responseMatch = synchronizedMatch;
+        return friendMatchChanged(existingMatch, synchronizedMatch)
+            ? synchronizedMatch
+            : undefined;
+    });
+
+    const match = responseMatch ?? normalizeFriendMatchRecord(
+        transactionResult.snapshot.val(),
+        matchId,
+    );
+    if (match == null) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "That match no longer exists.",
+        );
+    }
+
+    if (transactionResult.committed) {
+        await persistFriendMatchIndexes(match);
+    }
+
+    return {
+        success: true,
+        invite: buildFriendInviteRecord(match),
+        snapshot: buildFriendMatchClientPayload(match),
+    };
+}
+
 // ---------------------------------------------------------------------------
 // submitAcademyScore
 //
@@ -3245,6 +3303,10 @@ export const createFriendMatchInvite = functions.https.onCall(
 
 export const joinFriendMatchInvite = functions.https.onCall(
     async (data, context) => joinFriendMatchInviteImpl(data, context),
+);
+
+export const refreshFriendMatchState = functions.https.onCall(
+    async (data, context) => refreshFriendMatchStateImpl(data, context),
 );
 
 export const submitFriendMatchMove = functions.https.onCall(

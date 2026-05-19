@@ -288,6 +288,7 @@ class RemoteFriendMatchSnapshot {
     required this.timeControl,
     required this.whiteTimeRemainingMs,
     required this.blackTimeRemainingMs,
+    required this.lastTickStartedAt,
     required this.createdAt,
     required this.updatedAt,
     required this.moves,
@@ -335,6 +336,9 @@ class RemoteFriendMatchSnapshot {
       blackTimeRemainingMs: _intFromDynamic(
         clockMap['blackMsRemaining'] ?? map['blackMsRemaining'],
       ),
+      lastTickStartedAt: _nullableDateTimeFromDynamic(
+        clockMap['lastTickStartedAtMs'] ?? map['lastTickStartedAtMs'],
+      ),
       activeClockSeat: remoteFriendSeatFromWire(
         clockMap['activeSeat']?.toString() ??
             map['activeClockSeat']?.toString(),
@@ -369,6 +373,7 @@ class RemoteFriendMatchSnapshot {
   final RemoteFriendTimeControl timeControl;
   final int whiteTimeRemainingMs;
   final int blackTimeRemainingMs;
+  final DateTime? lastTickStartedAt;
   final RemoteFriendSeat? activeClockSeat;
   final String? drawOfferByUid;
   final DateTime createdAt;
@@ -397,6 +402,7 @@ class RemoteFriendMatchSnapshot {
       'clocks': <String, dynamic>{
         'whiteMsRemaining': whiteTimeRemainingMs,
         'blackMsRemaining': blackTimeRemainingMs,
+        'lastTickStartedAtMs': lastTickStartedAt?.millisecondsSinceEpoch,
         'activeSeat': activeClockSeat?.wireName,
       },
       'drawOfferByUid': drawOfferByUid,

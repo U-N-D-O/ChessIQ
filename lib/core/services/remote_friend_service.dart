@@ -79,6 +79,7 @@ class RemoteFriendService {
       'https://us-central1-chessiq-89b45.cloudfunctions.net';
   static const String _createInviteFunction = 'createFriendMatchInvite';
   static const String _joinInviteFunction = 'joinFriendMatchInvite';
+  static const String _refreshMatchFunction = 'refreshFriendMatchState';
   static const String _submitMoveFunction = 'submitFriendMatchMove';
   static const String _actOnMatchFunction = 'actOnFriendMatch';
 
@@ -112,6 +113,13 @@ class RemoteFriendService {
     final map = json.cast<String, dynamic>();
     map.putIfAbsent('matchId', () => matchId.trim());
     return RemoteFriendMatchSnapshot.fromMap(map);
+  }
+
+  Future<RemoteFriendMutationResult> refreshMatch(String matchId) async {
+    final result = await _callFunction(_refreshMatchFunction, <String, dynamic>{
+      'matchId': matchId.trim(),
+    });
+    return RemoteFriendMutationResult.fromResultMap(result);
   }
 
   Future<List<RemoteFriendMatchMembership>> fetchMyMatchMemberships() async {

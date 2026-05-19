@@ -1260,18 +1260,28 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               ? scheme.surface
               : scheme.onPrimary;
           final isTimedLocalFriendFinish = _isTimedLocalFriendFinish && !isDraw;
+          final isTimedRemoteFriendFinish =
+              _isTimedRemoteFriendFinish && !isDraw;
           final title = isDraw
               ? 'Draw'
+              : _isRemoteFriendMatchMode
+              ? (isTimedRemoteFriendFinish ? 'Time' : 'Match End')
               : isTimedLocalFriendFinish
               ? 'Time'
               : 'Checkmate';
           final message = isDraw
-              ? _drawOutcomeDialogMessage(_gameDrawReason)
+              ? (_isRemoteFriendMatchMode
+                    ? _remoteFriendOutcomeDialogMessage(outcome)
+                    : _drawOutcomeDialogMessage(_gameDrawReason))
+              : _isRemoteFriendMatchMode
+              ? _remoteFriendOutcomeDialogMessage(outcome)
               : isTimedLocalFriendFinish
               ? _localFriendTimeoutDialogMessage(outcome)
               : 'Checkmate has been reached. Continue to inspect, or reset to start over.';
           final icon = isDraw
               ? Icons.balance_rounded
+              : isTimedRemoteFriendFinish
+              ? Icons.flag_rounded
               : isTimedLocalFriendFinish
               ? Icons.flag_rounded
               : Icons.crisis_alert_rounded;
