@@ -67,3 +67,6 @@ puzzle_map_manual_stderr.txt
 .an_base_state.txt
 .tmp_puzzle_map_test_output.txt
 pglite-debug.log
+
+# Local storefront helper notes
+store/README.md

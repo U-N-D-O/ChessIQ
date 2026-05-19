@@ -123,6 +123,7 @@ abstract class _StoreState extends _VsBotCore {
     required bool enabled,
     required String actionLabel,
     Color? actionColor,
+    String? badgeLabel,
     Widget? preview,
     VoidCallback? onTap,
   }) => super._storeItemCard(
@@ -134,6 +135,7 @@ abstract class _StoreState extends _VsBotCore {
     enabled: enabled,
     actionLabel: actionLabel,
     actionColor: actionColor,
+    badgeLabel: badgeLabel,
     preview: preview,
     onTap: onTap,
   );

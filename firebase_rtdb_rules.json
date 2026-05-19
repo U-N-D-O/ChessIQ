@@ -46,6 +46,10 @@
                 ".write": false
             }
         },
+        "storefront_public": {
+            ".read": true,
+            ".write": false
+        },
         "friend_matches": {
             "$matchId": {
                 ".read": "auth != null && root.child('friend_match_memberships/' + auth.uid + '/' + $matchId).exists()",

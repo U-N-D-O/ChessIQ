@@ -79,6 +79,7 @@ flutter:
     - assets/arrows/
     - assets/sounds/
     - assets/bots/
+    - store/
     - assets/puzzles/
     - assets/ChessIQ.png
     - assets/QILAmodus.png

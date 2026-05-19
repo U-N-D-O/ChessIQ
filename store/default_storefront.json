@@ -1,0 +1,90 @@
+{
+    "campaign": {
+        "enabled": false,
+        "title": "Seasonal Store Campaign",
+        "subtitle": "Enable this in Firebase to feature live offers without shipping a new app update.",
+        "availability": {
+            "kind": "annualRange",
+            "startMonth": 12,
+            "startDay": 1,
+            "endMonth": 12,
+            "endDay": 31
+        }
+    },
+    "offers": {
+        "watch_ad_reward": {
+            "enabled": true
+        },
+        "coin_pack_s": {
+            "enabled": true,
+            "badge": "Starter"
+        },
+        "coin_pack_l": {
+            "enabled": true,
+            "badge": "Best Value"
+        },
+        "clean_play_pass": {
+            "enabled": true
+        },
+        "academy_tuition_pass": {
+            "enabled": true
+        },
+        "theme_pack": {
+            "enabled": true,
+            "coinPrice": 900
+        },
+        "sakura_board": {
+            "enabled": true,
+            "coinPrice": 700
+        },
+        "tropical_board": {
+            "enabled": true,
+            "coinPrice": 700
+        },
+        "piece_pack": {
+            "enabled": true,
+            "coinPrice": 1400
+        },
+        "spectral_pieces": {
+            "enabled": true,
+            "coinPrice": 2900
+        },
+        "tutti_frutti_pieces": {
+            "enabled": true,
+            "coinPrice": 1000
+        },
+        "monochrome_pieces": {
+            "enabled": true,
+            "coinPrice": 850
+        },
+        "pixel_arrows": {
+            "enabled": true,
+            "coinPrice": 850
+        },
+        "heavy_arrows": {
+            "enabled": true,
+            "coinPrice": 1200
+        },
+        "expert_mode": {
+            "enabled": true,
+            "coinPrice": 2600
+        },
+        "grandmaster_mode": {
+            "enabled": true,
+            "coinPrice": 4200
+        },
+        "oracle_mode": {
+            "enabled": true,
+            "coinPrice": 6200
+        },
+        "extra_suggestion": {
+            "enabled": true,
+            "baseCoinPrice": 500,
+            "coinPriceStep": 120
+        },
+        "sacrifice_mode": {
+            "enabled": true,
+            "coinPrice": 2850
+        }
+    }
+}
