@@ -1108,7 +1108,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
 
   @override
   Future<void> _maybeTriggerBotMove() async {
-    if (!_playVsBot || _selectedBot == null) return;
+    if (!_isBotMatchMode || _selectedBot == null) return;
     if (_activeSection != AppSection.analysis) return;
     if (_isHumanTurnInBotGame || _botThinking) return;
     if (_gameOutcome != null) return;
@@ -1119,7 +1119,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       unawaited(
         Future<void>.delayed(introDelay, () async {
           if (!mounted ||
-              !_playVsBot ||
+              !_isBotMatchMode ||
               _selectedBot == null ||
               _activeSection != AppSection.analysis ||
               _isHumanTurnInBotGame ||
@@ -1159,7 +1159,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       final to = chosen.substring(2, 4);
       await Future<void>.delayed(_botPersonaMoveDelay(bot));
       if (!mounted ||
-          !_playVsBot ||
+          !_isBotMatchMode ||
           _selectedBot == null ||
           _isHumanTurnInBotGame) {
         return;
@@ -1220,7 +1220,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       return dialog;
     }
 
-    if (!_playVsBot) {
+    if (!_isBotMatchMode) {
       final result = await showDialog<String>(
         context: context,
         barrierDismissible: false,
@@ -1259,8 +1259,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           final continueForeground = useMonochrome
               ? scheme.surface
               : scheme.onPrimary;
-          final isTimedLocalFriendFinish =
-              _playLocalFriendMatch && _localFriendEndedOnTime && !isDraw;
+          final isTimedLocalFriendFinish = _isTimedLocalFriendFinish && !isDraw;
           final title = isDraw
               ? 'Draw'
               : isTimedLocalFriendFinish
@@ -2267,16 +2266,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   @override
   void _openBotSetupFromMenu() {
     setState(() {
-      _playVsBot = false;
-      _playLocalFriendMatch = false;
-      _selectedBot = null;
-      _botThinking = false;
-      _vsBotSessionWins = 0;
-      _vsBotSessionLosses = 0;
-      _vsBotSessionDraws = 0;
-      _gameOutcome = null;
-      _botSideChoice = BotSideChoice.random;
-      _activeSection = AppSection.botSetup;
+      _applyAnalysisModeSectionState(
+        AppSection.botSetup,
+        resetBotSideChoice: true,
+      );
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_botSetupPageController.hasClients) {
@@ -2741,7 +2734,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       unawaited(_stopMenuMusic(fadeOut: true));
       if (!mounted) return;
 
-      if (_activeSection == AppSection.analysis && !_playVsBot) {
+      if (_activeSection == AppSection.analysis && _isAnalysisMatchMode) {
         _persistAnalysisSnapshotIfNeeded();
       }
 
@@ -2754,14 +2747,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           _selectedBot?.id != bot.id || _selectedBotDifficulty != difficulty;
 
       setState(() {
-        _activeSection = AppSection.analysis;
-        _playVsBot = true;
-        _playLocalFriendMatch = false;
+        _prepareAnalysisMatchEntry(MatchMode.bot);
         _selectedBot = bot;
         _selectedBotDifficulty = difficulty;
-        _vsBotEvalEnabled = true;
-        _vsBotOptimalLineRevealActive = false;
-        _vsBotCharge = 0;
         if (switchedChallenge) {
           _vsBotSessionWins = 0;
           _vsBotSessionLosses = 0;
@@ -2769,8 +2757,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         }
         _clearVsBotProgressState();
         _humanPlaysWhite = humanPlaysWhite;
-        _botThinking = false;
-        _analysisEditMode = false;
       });
 
       _resetBoard(initialLaunch: false, withIntro: true);
@@ -4058,7 +4044,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
 
   @override
   void _recordVsBotSessionResult(GameOutcome outcome) {
-    if (!_playVsBot || _selectedBot == null) {
+    if (!_isBotMatchMode || _selectedBot == null) {
       return;
     }
     _clearVsBotProgressState();
@@ -4108,7 +4094,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   @override
   Future<void> _onBotAvatarTapped() async {
     final bot = _selectedBot;
-    if (bot == null || !_playVsBot || !mounted) {
+    if (bot == null || !_isBotMatchMode || !mounted) {
       return;
     }
     await HapticFeedback.selectionClick();

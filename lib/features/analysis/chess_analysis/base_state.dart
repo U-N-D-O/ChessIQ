@@ -349,7 +349,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'analysis_move_assessment_enabled_v1';
   static const String _analysisHeadToHeadEvalBarEnabledKey =
       'analysis_head_to_head_eval_bar_enabled_v1';
-    static const String _analysisLocalFriendTimeControlKey =
+  static const String _analysisLocalFriendTimeControlKey =
       'analysis_local_friend_time_control_v1';
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
@@ -573,7 +573,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   EcoLine? _selectedGambit;
   List<EngineLine> _gambitPreviewLines = [];
   final Random _rng = Random();
-  bool _playVsBot = false;
+  MatchMode _matchMode = MatchMode.analysis;
   bool _humanPlaysWhite = true;
   bool _botThinking = false;
   final List<_GhostArrow> _botGhostArrows = <_GhostArrow>[];
@@ -688,7 +688,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _headToHeadEvalBarEnabled = false;
   bool _vsBotEvalEnabled = false;
   bool _vsBotOptimalLineRevealActive = false;
-  bool _playLocalFriendMatch = false;
   int _vsBotCharge = 0;
   int _vsBotMatchStartCount = 0;
   int _vsBotChargeEpoch = 0;
@@ -1014,7 +1013,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             setState(() {
               _introCompleted = true;
             });
-            if (_playVsBot &&
+            if (_isBotMatchMode &&
                 !_isHumanTurnInBotGame &&
                 !_botThinking &&
                 _gameOutcome == null) {
@@ -4421,17 +4420,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _localFriendTimeControls.length - 1,
       )];
 
-  String _formatLocalFriendTimeControl(
-    _LocalFriendTimeControlPreset preset,
-  ) {
+  String _formatLocalFriendTimeControl(_LocalFriendTimeControlPreset preset) {
     if (preset.initialTime == null) {
       return preset.label;
     }
     final minutes = preset.initialTime!.inMinutes;
     final incrementSeconds = preset.increment.inSeconds;
-    return incrementSeconds > 0
-        ? '$minutes+$incrementSeconds'
-        : '$minutes+0';
+    return incrementSeconds > 0 ? '$minutes+$incrementSeconds' : '$minutes+0';
   }
 
   Future<void> _setLocalFriendTimeControlIndex(int index) async {
@@ -4442,7 +4437,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     setState(() {
       _localFriendTimeControlIndex = clamped;
-      if (_playLocalFriendMatch) {
+      if (_isLocalFriendMatchMode) {
         _stopLocalFriendClock(clearDisplay: true);
         _initializeLocalFriendClocks();
         _startLocalFriendClockForCurrentTurn();
@@ -4454,7 +4449,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool get _hasTimedLocalFriendClock =>
-      _playLocalFriendMatch && _selectedLocalFriendTimeControl.initialTime != null;
+      _isLocalFriendMatchMode &&
+      _selectedLocalFriendTimeControl.initialTime != null;
 
   Duration _localFriendDisplayedClock({required bool white}) {
     final stored = white
@@ -4465,7 +4461,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return stored;
     }
 
-    final elapsed = DateTime.now().difference(_localFriendActiveClockStartedAt!);
+    final elapsed = DateTime.now().difference(
+      _localFriendActiveClockStartedAt!,
+    );
     final remaining = _localFriendActiveClockBaseline - elapsed;
     return remaining.isNegative ? Duration.zero : remaining;
   }
@@ -4526,7 +4524,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _completeLocalFriendTurn({required bool moverIsWhite}) {
-    if (!_playLocalFriendMatch) {
+    if (!_isLocalFriendMatchMode) {
       return;
     }
 
@@ -4570,7 +4568,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _tickLocalFriendClock(Timer timer) {
-    if (!_playLocalFriendMatch ||
+    if (!_isLocalFriendMatchMode ||
         !_hasTimedLocalFriendClock ||
         _gameOutcome != null ||
         _localFriendActiveClockIsWhite == null) {
@@ -4649,31 +4647,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return;
       }
 
-      if (_activeSection == AppSection.analysis &&
-          !_playVsBot &&
-          !_playLocalFriendMatch) {
+      if (_activeSection == AppSection.analysis && _isAnalysisMatchMode) {
         _persistAnalysisSnapshotIfNeeded();
       }
 
       setState(() {
-        _activeSection = AppSection.analysis;
-        _playVsBot = false;
-        _playLocalFriendMatch = true;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
-        _analysisEditMode = false;
+        _prepareAnalysisMatchEntry(MatchMode.localFriend);
+        _resetVsBotSessionState();
         _perspective = BoardPerspective.headToHead;
-        _suggestionsEnabled = false;
-        _openingMode = OpeningMode.off;
-        _selectedGambit = null;
-        _gambitPreviewLines = <EngineLine>[];
-        _gambitSelectedFrom = null;
-        _holdSelectedFrom = null;
-        _legalTargets.clear();
-        _gambitAvailableTargets.clear();
       });
 
       _resetBoard(initialLaunch: false, withIntro: false);
@@ -4719,7 +4700,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool get _showsOracleDepthPlus =>
       _depthTier >= 4 && _engineDepth >= _oracleInfiniteDepth;
 
-  bool get _usesInfiniteAnalysisDepth => !_playVsBot && _showsOracleDepthPlus;
+  bool get _usesInfiniteAnalysisDepth =>
+      _isAnalysisMatchMode && _showsOracleDepthPlus;
 
   String _engineDepthSettingLabel(int depth) {
     if (_depthTier >= 4 && depth >= _oracleInfiniteDepth) {
@@ -4737,7 +4719,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int get _effectiveMultiPvCount => max(1, _multiPvCount);
 
   int get _visualSuggestionLineCount =>
-      _playVsBot ? max(1, _multiPvCount) : _effectiveMultiPvCount;
+      _isBotMatchMode ? max(1, _multiPvCount) : _effectiveMultiPvCount;
+
+  bool get _isAnalysisMatchMode => _matchMode == MatchMode.analysis;
+
+  bool get _isBotMatchMode => _matchMode == MatchMode.bot;
+
+  bool get _isLocalFriendMatchMode => _matchMode == MatchMode.localFriend;
+
+  bool get _isMatchModeActive => !_isAnalysisMatchMode;
+
+  bool get _isTimedLocalFriendFinish =>
+      _isLocalFriendMatchMode && _localFriendEndedOnTime;
+
+  String get _activeEngineOwner =>
+      _isBotMatchMode ? _vsBotEngineOwner : _analysisEngineOwner;
 
   int get _analysisMultiPvCount {
     // Live suggestions should track the user-facing slider exactly.
@@ -4751,7 +4747,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool get _isHeadToHeadPerspective =>
-      !_playVsBot && _perspective == BoardPerspective.headToHead;
+      !_isBotMatchMode && _perspective == BoardPerspective.headToHead;
 
   bool get _isLockedHeadToHeadPerspective =>
       _isHeadToHeadPerspective && _lockedHeadToHeadPerspective;
@@ -4761,29 +4757,31 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       (_perspective == BoardPerspective.headToHead &&
           !_lockedHeadToHeadPerspective);
 
-  bool get _canUseAnalysisEditMode => !_playVsBot && !_isHeadToHeadPerspective;
+  bool get _canUseAnalysisEditMode =>
+      _isAnalysisMatchMode && !_isHeadToHeadPerspective;
 
   bool get _isAnalysisEditModeActive =>
       _analysisEditMode && _canUseAnalysisEditMode;
 
   bool get _showsHeadToHeadEvalBar =>
-      !_playVsBot &&
-      !_playLocalFriendMatch &&
+      _isAnalysisMatchMode &&
       _isHeadToHeadPerspective &&
       _headToHeadEvalBarEnabled;
 
-    bool get _runsAnalysisMoveAssessment =>
-      !_playVsBot && !_playLocalFriendMatch && _moveAssessmentEnabled;
+  bool get _runsAnalysisMoveAssessment =>
+      _isAnalysisMatchMode && _moveAssessmentEnabled;
 
-  bool get _isEngineActive => _playVsBot
+  bool get _isEngineActive => _isBotMatchMode
       ? _vsBotEvalEnabled
-      : !_playLocalFriendMatch && !_isHeadToHeadPerspective && _suggestionsEnabled;
+      : _isAnalysisMatchMode &&
+            !_isHeadToHeadPerspective &&
+            _suggestionsEnabled;
 
-  bool get _shouldShowVisualSuggestions => _playVsBot
+  bool get _shouldShowVisualSuggestions => _isBotMatchMode
       ? _vsBotOptimalLineRevealActive && _isHumanTurnInBotGame
       : _isEngineActive && _multiPvCount > 0;
 
-  bool get _shouldKeepEvalActive => _playVsBot
+  bool get _shouldKeepEvalActive => _isBotMatchMode
       ? _vsBotEvalEnabled
       : _isEngineActive || _showsHeadToHeadEvalBar;
 
@@ -4794,13 +4792,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool get _shouldRunSacrificeScan => _isSacrificeModeActive;
 
-  bool get _shouldShowCenterEvalCounter => _shouldKeepEvalActive && !_playVsBot;
+  bool get _shouldShowCenterEvalCounter =>
+      _shouldKeepEvalActive && !_isBotMatchMode;
 
   bool get _shouldShowDepthCounter => _shouldShowCenterEvalCounter;
 
   void _disableEngineInsights() {
     setState(() {
-      if (_playVsBot) {
+      if (_isBotMatchMode) {
         _vsBotOptimalLineRevealActive = false;
       } else {
         _suggestionsEnabled = false;
@@ -4878,13 +4877,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       square: checkedKing.square,
       againstViewer: againstViewer,
       title: againstViewer
-          ? (_playVsBot ? 'YOUR KING IN CHECK' : 'KING IN CHECK')
+          ? (_isBotMatchMode ? 'YOUR KING IN CHECK' : 'KING IN CHECK')
           : 'CHECK',
       subtitle: againstViewer
-          ? (_playVsBot
+          ? (_isBotMatchMode
                 ? 'Defend immediately before the bot converts.'
                 : 'The side you are viewing is under direct attack.')
-          : (_playVsBot
+          : (_isBotMatchMode
                 ? 'The enemy king is under pressure.'
                 : 'Pressure lands on the opposing king.'),
       accent: againstViewer ? const Color(0xFFE45C5C) : const Color(0xFFFFB347),
@@ -4916,9 +4915,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   _GameResultReveal _createGameResultReveal(GameOutcome outcome) {
     final isDraw = outcome == GameOutcome.draw;
-    final isWin = !isDraw && _playVsBot && _isWinningOutcomeForPov;
-    final isTimedLocalFriendFinish =
-      _playLocalFriendMatch && _localFriendEndedOnTime && !isDraw;
+    final isWin = !isDraw && _isBotMatchMode && _isWinningOutcomeForPov;
+    final isTimedLocalFriendFinish = _isTimedLocalFriendFinish && !isDraw;
     final accent = isDraw
         ? const Color(0xFFD8B640)
         : isWin
@@ -4926,24 +4924,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : const Color(0xFFE45C5C);
     final title = isDraw
         ? 'DRAW'
-        : _playVsBot
+        : _isBotMatchMode
         ? (isWin ? 'VICTORY' : 'DEFEAT')
-      : isTimedLocalFriendFinish
-      ? _localFriendTimeoutTitle(outcome)
+        : isTimedLocalFriendFinish
+        ? _localFriendTimeoutTitle(outcome)
         : 'CHECKMATE';
     final subtitle = isDraw
         ? _drawOutcomeRevealSubtitle(_gameDrawReason)
-        : _playVsBot
+        : _isBotMatchMode
         ? (isWin
               ? 'Checkmate lands. Take in the final position.'
               : 'Checkmate lands. Watch the last strike finish.')
-      : isTimedLocalFriendFinish
-      ? _localFriendTimeoutSubtitle(outcome)
+        : isTimedLocalFriendFinish
+        ? _localFriendTimeoutSubtitle(outcome)
         : 'The final move is locked on the board.';
     final icon = isDraw
         ? Icons.balance_rounded
-      : isTimedLocalFriendFinish
-      ? Icons.flag_rounded
+        : isTimedLocalFriendFinish
+        ? Icons.flag_rounded
         : isWin
         ? Icons.emoji_events_rounded
         : Icons.crisis_alert_rounded;
@@ -5293,7 +5291,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final isHumanVsBotMove =
-        _playVsBot && pending.moverIsWhite == _humanPlaysWhite;
+        _isBotMatchMode && pending.moverIsWhite == _humanPlaysWhite;
     final badgeSquare = pending.uci.length >= 4
         ? pending.uci.substring(2, 4)
         : null;
@@ -5326,7 +5324,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _moveHistory[pending.moveIndex] = overlayMove;
       }
 
-      if (!_playVsBot || isHumanVsBotMove) {
+      if (!_isBotMatchMode || isHumanVsBotMove) {
         _lastMoveQualityBadgeQuality = MoveQuality.book;
         _lastMoveQualityBadgeSquare = badgeSquare;
         _showMoveQualityOverlay(overlayMove, 0);
@@ -5752,7 +5750,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _persistAnalysisSnapshotIfNeeded() {
-    if (_playVsBot || _playLocalFriendMatch || _activeSection != AppSection.analysis) {
+    if (_isMatchModeActive || _activeSection != AppSection.analysis) {
       return;
     }
     _persistCurrentSettings();
@@ -5876,7 +5874,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _selectedGambit = null;
     _gambitPreviewLines = [];
     _suggestionsEnabled = false;
-    _vsBotEvalEnabled = _playVsBot;
+    _vsBotEvalEnabled = _isBotMatchMode;
     _vsBotOptimalLineRevealActive = false;
     _vsBotCharge = 0;
     _suggestionLaunchInProgress = false;
@@ -5927,7 +5925,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _addLog('Engine unavailable on web; running without Stockfish process.');
       return;
     }
-    final desiredOwner = _playVsBot ? _vsBotEngineOwner : _analysisEngineOwner;
+    final desiredOwner = _activeEngineOwner;
 
     if (_engine != null && _engineOwner != desiredOwner) {
       await _releaseEngineSession();
@@ -6049,9 +6047,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     ).inMilliseconds;
     final scaledBudgetMs = (liveBudgetMs * 0.45).round();
     final minimumBudgetMs = backgroundConfirmation
-        ? (_playVsBot ? 3200 : 5000)
-        : (_playVsBot ? 2800 : 4200);
-    final maximumBudgetMs = _playVsBot ? 12000 : 18000;
+        ? (_isBotMatchMode ? 3200 : 5000)
+        : (_isBotMatchMode ? 2800 : 4200);
+    final maximumBudgetMs = _isBotMatchMode ? 12000 : 18000;
     return Duration(
       milliseconds: min(maximumBudgetMs, max(minimumBudgetMs, scaledBudgetMs)),
     );
@@ -6060,7 +6058,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Duration? _moveQualityFirstInfoTimeout({
     required bool backgroundConfirmation,
   }) {
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       return backgroundConfirmation
           ? const Duration(milliseconds: 1800)
           : const Duration(milliseconds: 1600);
@@ -6210,7 +6208,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       case EngineRequestRole.liveAnalysis:
         return true;
       case EngineRequestRole.botSearch:
-        return _playVsBot && !_isHumanTurnInBotGame;
+        return _isBotMatchMode && !_isHumanTurnInBotGame;
       case EngineRequestRole.moveGrading:
       case EngineRequestRole.backgroundConfirmation:
       case EngineRequestRole.sacrificeScan:
@@ -6256,7 +6254,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final shouldShowVisualSuggestions =
-        _shouldShowVisualSuggestions && (!_playVsBot || _isHumanTurnInBotGame);
+        _shouldShowVisualSuggestions &&
+        (!_isBotMatchMode || _isHumanTurnInBotGame);
     final analysisMultiPvCount = _analysisMultiPvCount;
     setState(() {
       _currentDepth = max(_currentDepth, update.line.depth);
@@ -6298,7 +6297,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _handleBotSearchUpdate(EngineSearchUpdate update) {
     _recordPrimaryEngineUpdate(update);
     _maybeResolvePendingMoveQualityFromUpdate(update);
-    if (!mounted || !_playVsBot || !update.request.matchesFen(_genFen())) {
+    if (!mounted || !_isBotMatchMode || !update.request.matchesFen(_genFen())) {
       return;
     }
     if (!_isLegalUciMove(update.line.move)) {
@@ -6519,7 +6518,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final isHumanVsBotMove =
-        _playVsBot && pending.moverIsWhite == _humanPlaysWhite;
+        _isBotMatchMode && pending.moverIsWhite == _humanPlaysWhite;
     final assessment = publication.assessment;
     final quality = assessment.quality;
     final badgeSquare = pending.uci.length >= 4
@@ -6582,7 +6581,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           overlayMove = updatedMove;
         }
       }
-      if ((!_playVsBot || isHumanVsBotMove) &&
+      if ((!_isBotMatchMode || isHumanVsBotMove) &&
           shouldShowAssessment &&
           canShowBackgroundCorrection) {
         _lastMoveQualityBadgeQuality = quality;
@@ -6592,12 +6591,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
 
     final shouldQueueConfirmation =
-        _playVsBot && isHumanVsBotMove ||
+        _isBotMatchMode && isHumanVsBotMove ||
         _shouldQueueBackgroundConfirmation(assessment);
     if (publication.sourceRole != EngineRequestRole.backgroundConfirmation &&
         !_openingFeedbackOnlyApplies(pending.moveIndex) &&
         shouldQueueConfirmation) {
-      if (_playVsBot && isHumanVsBotMove) {
+      if (_isBotMatchMode && isHumanVsBotMove) {
         _queueBackgroundMoveQualityConfirmation(
           pending,
           fen: pending.preMoveFen,
@@ -6607,7 +6606,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _queueBackgroundMoveQualityConfirmation(pending);
     }
 
-    if (_playVsBot &&
+    if (_isBotMatchMode &&
         !_isHumanTurnInBotGame &&
         !_botThinking &&
         _gameOutcome == null) {
@@ -6625,14 +6624,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (record.uci != pending.uci || record.isWhite != pending.moverIsWhite) {
       return false;
     }
-    if (!_playVsBot || pending.moverIsWhite != _humanPlaysWhite) {
+    if (!_isBotMatchMode || pending.moverIsWhite != _humanPlaysWhite) {
       return true;
     }
     return pending.moveIndex == _latestHumanVsBotMoveIndex();
   }
 
   int _latestHumanVsBotMoveIndex() {
-    if (!_playVsBot || _moveHistory.isEmpty) {
+    if (!_isBotMatchMode || _moveHistory.isEmpty) {
       return -1;
     }
     final maxIndex = min(_historyIndex, _moveHistory.length - 1);
@@ -6694,7 +6693,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool get _isHumanTurnInBotGame {
-    if (!_playVsBot || _selectedBot == null) return true;
+    if (!_isBotMatchMode || _selectedBot == null) return true;
     return _isWhiteTurn == _humanPlaysWhite;
   }
 
@@ -6749,7 +6748,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final analysisMultiPvCount = _analysisMultiPvCount;
     final liveAnalysisTimeout = _usesInfiniteAnalysisDepth
         ? const Duration(days: 1)
-        : _playVsBot && !shouldShowVisualSuggestions
+        : _isBotMatchMode && !shouldShowVisualSuggestions
         ? const Duration(milliseconds: 1800)
         : _analysisLiveCompletionTimeout(
             depth: _engineDepth,
@@ -6765,7 +6764,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         depth: _engineDepth,
         infinite: _usesInfiniteAnalysisDepth,
         timeout: liveAnalysisTimeout,
-        firstInfoTimeout: _playVsBot
+        firstInfoTimeout: _isBotMatchMode
             ? null
             : const Duration(milliseconds: 2600),
         preCommands: _analysisEngineRequestCommands,
@@ -6779,11 +6778,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool moverIsWhite,
     required Map<String, String> nextBoardState,
   }) {
-    final canGrade = !kIsWeb && (_playVsBot || _moveAssessmentEnabled);
+    final canGrade =
+        !kIsWeb && (_isBotMatchMode || _runsAnalysisMoveAssessment);
     if (!canGrade) {
       return null;
     }
-    if (_playVsBot && moverIsWhite != _humanPlaysWhite) {
+    if (_isBotMatchMode && moverIsWhite != _humanPlaysWhite) {
       return null;
     }
 
@@ -6977,7 +6977,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool get _canEvaluateSacrificeAvailability =>
-      !_playVsBot && _sacrificeModeOwned;
+      _isAnalysisMatchMode && _sacrificeModeOwned;
 
   bool get _hasAvailableSacrificePreview =>
       _canEvaluateSacrificeAvailability &&
@@ -7683,7 +7683,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _showMoveQualityOverlay(MoveRecord move, int chargeDelta) {
-    if (!_playVsBot && !_moveAssessmentEnabled) {
+    if (!_isBotMatchMode && !_runsAnalysisMoveAssessment) {
       return;
     }
     final quality = move.quality;
@@ -7701,7 +7701,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? 'CRUCIAL!'
         : quality.label.toUpperCase();
     _moveQualityOverlayMessage = move.qualityExplanation ?? quality.explanation;
-    _moveQualityOverlayChargeDelta = _playVsBot ? chargeDelta : null;
+    _moveQualityOverlayChargeDelta = _isBotMatchMode ? chargeDelta : null;
     _moveQualityOverlayScoringSuppressedReason = move.scoringSuppressedReason;
     _moveQualityOverlayTimer = Timer(overlayDuration, () {
       if (!mounted) {
@@ -7719,7 +7719,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<void> _activateVsBotOptimalLineReveal() async {
-    if (!_playVsBot || !_isHumanTurnInBotGame || _vsBotCharge < 100) {
+    if (!_isBotMatchMode || !_isHumanTurnInBotGame || _vsBotCharge < 100) {
       return;
     }
     setState(() {
@@ -7733,7 +7733,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildMoveQualityBanner({required bool isLandscape}) {
-    if (!_playVsBot && !_moveAssessmentEnabled) {
+    if (!_isBotMatchMode && !_runsAnalysisMoveAssessment) {
       return const SizedBox.shrink();
     }
     final quality = _moveQualityOverlayQuality;
@@ -7750,7 +7750,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       isLandscape ? 8 : 10,
     );
 
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       final useMonochrome =
           context.watch<AppThemeProvider>().isMonochrome ||
           _isCinematicThemeEnabled;
@@ -7774,28 +7774,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       };
 
       return IgnorePointer(
-
-    if (_playLocalFriendMatch && endedOutcome == null) {
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: compactBottom,
-          left: horizontal,
-          right: horizontal,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _iconBtn(Icons.arrow_back_rounded, _goToMenu),
-            _iconBtn(Icons.refresh, _confirmReset),
-            _marketplaceBtn(),
-            _iconBtn(
-              Icons.tune_rounded,
-              () => unawaited(_openSettings(fromAnalysisMode: false)),
-            ),
-          ],
-        ),
-      );
-    }
         child: Padding(
           padding: contentPadding,
           child: ConstrainedBox(
@@ -7981,7 +7959,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildPortraitVsBotMoveQualityBannerSceneOverlay() {
-    if (!_playVsBot || _gameOutcome != null || !_hasMoveQualityBanner) {
+    if (!_isBotMatchMode || _gameOutcome != null || !_hasMoveQualityBanner) {
       return const SizedBox.shrink();
     }
 
@@ -8005,7 +7983,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildPortraitAnalysisMoveQualityBannerSceneOverlay() {
-    if (_playVsBot || _gameOutcome != null || !_hasMoveQualityBanner) {
+    if (!_isAnalysisMatchMode ||
+        _gameOutcome != null ||
+        !_hasMoveQualityBanner) {
       return const SizedBox.shrink();
     }
 
@@ -8029,7 +8009,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildLandscapeVsBotMoveQualityBannerSceneOverlay(Size scene) {
-    if (!_playVsBot || _gameOutcome != null || !_hasMoveQualityBanner) {
+    if (!_isBotMatchMode || _gameOutcome != null || !_hasMoveQualityBanner) {
       return const SizedBox.shrink();
     }
 
@@ -8089,7 +8069,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final activeSearch = _botSearchCompleter;
     final botSearchActive = activeSearch != null && !activeSearch.isCompleted;
     final shouldShowVisualSuggestions =
-        _shouldShowVisualSuggestions && (!_playVsBot || _isHumanTurnInBotGame);
+        _shouldShowVisualSuggestions &&
+        (!_isBotMatchMode || _isHumanTurnInBotGame);
     final analysisMultiPvCount = _analysisMultiPvCount;
     if (!gradingSearchActive &&
         !botSearchActive &&
@@ -8172,7 +8153,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
 
       if (botSearchActive) {
-        if (!_playVsBot || !_botThinking) {
+        if (!_isBotMatchMode || !_botThinking) {
           _botSearchCompleter = null;
         }
         if (multiPv <= _botSearchMultiPv) {
@@ -8417,14 +8398,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!_isCurrentTurnPiece(piece)) {
       return false;
     }
-    if (_playVsBot && !_isHumanTurnInBotGame) {
+    if (_isBotMatchMode && !_isHumanTurnInBotGame) {
       return false;
     }
     return true;
   }
 
   bool get _isBlackPovActive {
-    if (_playVsBot && _selectedBot != null) {
+    if (_isBotMatchMode && _selectedBot != null) {
       return !_humanPlaysWhite;
     }
     return _perspective == BoardPerspective.black ||
@@ -8462,7 +8443,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool get _boardReversed {
-    return _playVsBot
+    return _isBotMatchMode
         ? !_humanPlaysWhite
         : (_perspective == BoardPerspective.black) ||
               (_usesTurnAwarePerspective && !_isWhiteTurn);
@@ -8747,10 +8728,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (outcome == GameOutcome.draw) {
       return _drawOutcomePersistentTitle(_gameDrawReason);
     }
-    if (_playLocalFriendMatch && _localFriendEndedOnTime) {
+    if (_isTimedLocalFriendFinish) {
       return _localFriendTimeoutTitle(outcome);
     }
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       return _isWinningOutcomeForPov ? 'VICTORY' : 'DEFEAT';
     }
     return 'CHECKMATE';
@@ -8760,10 +8741,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (outcome == GameOutcome.draw) {
       return _drawOutcomeRevealSubtitle(_gameDrawReason);
     }
-    if (_playLocalFriendMatch && _localFriendEndedOnTime) {
+    if (_isTimedLocalFriendFinish) {
       return _localFriendTimeoutSubtitle(outcome);
     }
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       return _isWinningOutcomeForPov
           ? 'Checkmate lands. The result is locked in.'
           : 'Checkmate lands. The position is finished.';
@@ -8785,7 +8766,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool checkedSideIsWhite,
     bool? moverIsWhite,
   }) {
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       return checkedSideIsWhite == _humanPlaysWhite;
     }
     if (moverIsWhite != null) {
@@ -8932,7 +8913,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool get _isGambitsOnlyOpeningMode => _openingMode == OpeningMode.violetGlow;
 
   bool get _isSacrificeModeActive =>
-      !_playVsBot &&
+      _isAnalysisMatchMode &&
       _sacrificeModeOwned &&
       _openingMode == OpeningMode.sacrificeGlow;
 
@@ -9600,7 +9581,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _handleBoardTap(String square) {
-    if (_playVsBot && !_isHumanTurnInBotGame) return;
+    if (_isBotMatchMode && !_isHumanTurnInBotGame) return;
     if (!_isOpeningSelectionMode) return;
 
     final piece = boardState[square];
@@ -9733,7 +9714,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _handleGambitDragDrop(String from, String to) {
-    if (_playVsBot && !_isHumanTurnInBotGame) return;
+    if (_isBotMatchMode && !_isHumanTurnInBotGame) return;
     if (!_isOpeningSelectionMode || from == to) return;
 
     final sourcePiece = boardState[from];
@@ -10223,33 +10204,53 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _enPassantTarget = move.enPassantTarget;
   }
 
+  void _resetVsBotSessionState() {
+    _selectedBot = null;
+    _botThinking = false;
+    _vsBotSessionWins = 0;
+    _vsBotSessionLosses = 0;
+    _vsBotSessionDraws = 0;
+  }
+
+  void _applyAnalysisModeSectionState(
+    AppSection section, {
+    bool clearOutcome = true,
+    bool clearBotGhostArrows = false,
+    bool resetQuizLaunch = true,
+    bool resetBotSideChoice = false,
+  }) {
+    _matchMode = MatchMode.analysis;
+    _resetVsBotSessionState();
+    if (clearOutcome) {
+      _clearGameOutcomeState();
+    }
+    if (clearBotGhostArrows) {
+      _clearBotGhostArrows();
+    }
+    if (resetQuizLaunch) {
+      _quizLaunchedFromAcademy = false;
+    }
+    if (resetBotSideChoice) {
+      _botSideChoice = BotSideChoice.random;
+    }
+    _activeSection = section;
+  }
+
+  void _prepareAnalysisMatchEntry(MatchMode matchMode) {
+    _activeSection = AppSection.analysis;
+    _matchMode = matchMode;
+    _analysisEditMode = false;
+  }
+
   void _openPuzzleAcademyFromMenu() {
     setState(() {
-      _playVsBot = false;
-      _playLocalFriendMatch = false;
-      _selectedBot = null;
-      _botThinking = false;
-      _vsBotSessionWins = 0;
-      _vsBotSessionLosses = 0;
-      _vsBotSessionDraws = 0;
-      _clearGameOutcomeState();
-      _quizLaunchedFromAcademy = false;
-      _activeSection = AppSection.puzzleAcademy;
+      _applyAnalysisModeSectionState(AppSection.puzzleAcademy);
     });
   }
 
   void _openVsModeFromMenu() {
     setState(() {
-      _playVsBot = false;
-      _playLocalFriendMatch = false;
-      _selectedBot = null;
-      _botThinking = false;
-      _vsBotSessionWins = 0;
-      _vsBotSessionLosses = 0;
-      _vsBotSessionDraws = 0;
-      _clearGameOutcomeState();
-      _quizLaunchedFromAcademy = false;
-      _activeSection = AppSection.vsMode;
+      _applyAnalysisModeSectionState(AppSection.vsMode);
     });
   }
 
@@ -10260,24 +10261,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     try {
       // Coordinate menu exit animation with music fade.
       _menuExitAnimationController.reset();
-
-      // Run menu exit animation and stop music in parallel.
       final transition = _menuExitAnimationController.forward();
       unawaited(_stopMenuMusic(fadeOut: true));
-
-      // After menu exits, switch to analysis.
       await transition;
       if (!mounted) return;
+
       setState(() {
-        _activeSection = AppSection.analysis;
-        _playVsBot = false;
-        _playLocalFriendMatch = false;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
+        _applyAnalysisModeSectionState(
+          AppSection.analysis,
+          clearOutcome: false,
+          resetQuizLaunch: false,
+        );
       });
+
       await _restoreAnalysisWorkspace();
       unawaited(_ensureEngineStarted());
       _analyze();
@@ -10292,18 +10288,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_activeSection == AppSection.gambitQuiz) {
       final returnToAcademy = _quizLaunchedFromAcademy;
       setState(() {
-        _playVsBot = false;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
-        _clearGameOutcomeState();
+        _applyAnalysisModeSectionState(
+          returnToAcademy ? AppSection.puzzleAcademy : AppSection.menu,
+        );
         _resetQuizToSetupState();
-        _quizLaunchedFromAcademy = false;
-        _activeSection = returnToAcademy
-            ? AppSection.puzzleAcademy
-            : AppSection.menu;
       });
       if (!returnToAcademy) {
         unawaited(_playMenuMusic());
@@ -10313,55 +10301,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     if (_activeSection == AppSection.botSetup) {
       setState(() {
-        _playVsBot = false;
-        _playLocalFriendMatch = false;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
-        _clearGameOutcomeState();
-        _clearBotGhostArrows();
-        _quizLaunchedFromAcademy = false;
-        _activeSection = AppSection.vsMode;
+        _applyAnalysisModeSectionState(
+          AppSection.vsMode,
+          clearBotGhostArrows: true,
+        );
       });
       return;
     }
 
     if (_activeSection == AppSection.vsMode) {
       setState(() {
-        _playVsBot = false;
-        _playLocalFriendMatch = false;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
-        _clearGameOutcomeState();
-        _quizLaunchedFromAcademy = false;
-        _activeSection = AppSection.menu;
+        _applyAnalysisModeSectionState(AppSection.menu);
       });
       return;
     }
 
     if (_activeSection == AppSection.puzzleAcademy) {
       setState(() {
-        _playVsBot = false;
-        _playLocalFriendMatch = false;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
-        _clearGameOutcomeState();
-        _quizLaunchedFromAcademy = false;
-        _activeSection = AppSection.menu;
+        _applyAnalysisModeSectionState(AppSection.menu);
       });
       return;
     }
 
-    final wasBotGame = _playVsBot;
-    final wasLocalFriendGame = _playLocalFriendMatch;
+    final wasBotGame = _isBotMatchMode;
+    final wasLocalFriendGame = _isLocalFriendMatchMode;
     if (wasBotGame) {
       _send('stop');
     } else if (!wasLocalFriendGame) {
@@ -10386,16 +10349,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _botSearchLines.clear();
           _clearBotGhostArrows();
         }
-        _playVsBot = false;
-        _playLocalFriendMatch = false;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
-        _clearGameOutcomeState();
-        _quizLaunchedFromAcademy = false;
-        _activeSection = AppSection.menu;
+        _applyAnalysisModeSectionState(AppSection.menu);
       });
       unawaited(_playMenuMusic());
     });
@@ -10412,19 +10366,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
       if (!mounted) return;
       setState(() {
-        _activeSection = AppSection.menu;
-        _playVsBot = false;
-        _playLocalFriendMatch = false;
-        _selectedBot = null;
-        _botThinking = false;
-        _vsBotSessionWins = 0;
-        _vsBotSessionLosses = 0;
-        _vsBotSessionDraws = 0;
+        _applyAnalysisModeSectionState(AppSection.menu, clearOutcome: false);
         _menuReady = true;
         _introCompleted = true;
         _buttonUnlocked = true;
         _menuMusicPlaying = false;
-        _quizLaunchedFromAcademy = false;
       });
 
       _menuExitAnimationController.reset();
@@ -10465,8 +10411,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 opacity: opacity,
                 child: _activeSection == AppSection.menu
                     ? _buildStartMenu()
-                  : _activeSection == AppSection.vsMode
-                  ? _buildVsModeScreen()
+                    : _activeSection == AppSection.vsMode
+                    ? _buildVsModeScreen()
                     : _activeSection == AppSection.botSetup
                     ? _buildBotSetupScreen()
                     : _activeSection == AppSection.puzzleAcademy
@@ -10699,7 +10645,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _handleHoldTap(String square) {
-    if (_playVsBot && !_isHumanTurnInBotGame) return;
+    if (_isBotMatchMode && !_isHumanTurnInBotGame) return;
     if (_isAnalysisEditModeActive && !_isOpeningSelectionMode) {
       if (_editToolboxEraserSelected) {
         _eraseEditModePiece(square);
@@ -11621,7 +11567,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _onMove(String from, String to, {String? promotion}) {
     final canEditResolvedPosition = _isAnalysisEditModeActive;
     if (_gameOutcome != null && !canEditResolvedPosition) return;
-    if (_playVsBot && !_isHumanTurnInBotGame && !_botThinking) {
+    if (_isBotMatchMode && !_isHumanTurnInBotGame && !_botThinking) {
       return;
     }
     if (from == to) return;
@@ -11673,7 +11619,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ((_sacrificePreviewFen == _genFen() &&
                 _sacrificePreviewLines.any((line) => line.move == uciMove)) ||
             (pendingMoveQuality?.isSacrifice ?? false));
-    final isHumanVsBotMove = _playVsBot && moverIsWhite == _humanPlaysWhite;
+    final isHumanVsBotMove =
+        _isBotMatchMode && moverIsWhite == _humanPlaysWhite;
 
     if (canEditResolvedPosition && _gameOutcome != null) {
       _cancelGameResultReveal();
@@ -11752,7 +11699,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _gambitSelectedFrom = null;
       _legalTargets.clear();
       _gambitAvailableTargets.clear();
-      if (_playVsBot && isHumanVsBotMove) {
+      if (_isBotMatchMode && isHumanVsBotMove) {
         _clearMoveQualityBadge();
         _vsBotOptimalLineRevealActive = false;
         _topLines = [];
@@ -11760,7 +11707,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _analysisLinesFen = null;
         _currentDepth = 0;
         _currentEvalSnapshot = null;
-      } else if (!_playVsBot) {
+      } else if (!_isBotMatchMode) {
         _topLines = [];
         _analysisLines = [];
         _analysisLinesFen = null;
@@ -11776,7 +11723,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       _updateCurrentOpening();
       _refreshGambitPreview();
-      if (!_playVsBot) {
+      if (_isAnalysisMatchMode) {
         _restoreCachedEvalForFen(_genFen());
       }
       if (autoDisableSacrificeMode) {
@@ -11804,7 +11751,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
-    if (_playVsBot && _isKingAttacked(boardState, _isWhiteTurn)) {
+    if (_isBotMatchMode && _isKingAttacked(boardState, _isWhiteTurn)) {
       unawaited(_checkHaptic());
     }
 
@@ -11848,11 +11795,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     _persistAnalysisSnapshotIfNeeded();
-    if (_playLocalFriendMatch) {
+    if (_isLocalFriendMatchMode) {
       _startLocalFriendClockForCurrentTurn();
     } else {
       _refreshAnalysisForCurrentPosition();
-      if (_playVsBot) {
+      if (_isBotMatchMode) {
         unawaited(_maybeTriggerBotMove());
       }
     }
@@ -12150,16 +12097,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   bool _isCompactBotFrame(BuildContext context) {
     final media = MediaQuery.of(context);
-    return _playVsBot &&
+    return _isBotMatchMode &&
         (media.size.width <= 390 ||
             (media.orientation == Orientation.landscape &&
                 media.size.height <= 430));
   }
 
-  double _boardFrameBorderWidth() => _playVsBot ? 2.8 : 2.0;
+  double _boardFrameBorderWidth() => _isBotMatchMode ? 2.8 : 2.0;
 
   double _boardInnerPaddingForContext(BuildContext context) {
-    if (!_playVsBot) {
+    if (!_isBotMatchMode) {
       return 0.0;
     }
     return _isCompactBotFrame(context) ? 6.0 : 8.0;
@@ -12277,7 +12224,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         height: boardRect.height + 16,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(
-                            _playVsBot ? 28 : 20,
+                            _isBotMatchMode ? 28 : 20,
                           ),
                           border: Border.all(
                             color: reveal.accent.withValues(
@@ -12965,7 +12912,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool get _hasBotAvatarIntroArrived {
-    if (!_playVsBot || _introCompleted) {
+    if (!_isBotMatchMode || _introCompleted) {
       return true;
     }
     return _introController.value >= _botAvatarIntroArrivalProgress;
@@ -13011,7 +12958,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     var col = square.codeUnitAt(0) - 97;
     var row = int.parse(square[1]) - 1;
-    final reverse = _playVsBot
+    final reverse = _isBotMatchMode
         ? !_humanPlaysWhite
         : (_perspective == BoardPerspective.black) ||
               (_usesTurnAwarePerspective && !_isWhiteTurn);
@@ -14147,7 +14094,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
                   const Spacer(),
                   IconButton(
-                    key: const ValueKey<String>('analysis_vs_mode_credits_trigger'),
+                    key: const ValueKey<String>(
+                      'analysis_vs_mode_credits_trigger',
+                    ),
                     onPressed: _showCreditsDialog,
                     tooltip: 'Credits and legal',
                     style: IconButton.styleFrom(
@@ -14336,7 +14285,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             scheme.surface,
                                           ),
                                           side: BorderSide(
-                                            color: _localFriendTimeControlIndex ==
+                                            color:
+                                                _localFriendTimeControlIndex ==
                                                     index
                                                 ? arcade.amber.withValues(
                                                     alpha: 0.72,
@@ -14364,7 +14314,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   ),
                                   const SizedBox(height: 14),
                                   Text(
-                                    selectedLocalFriendTimeControl.initialTime ==
+                                    selectedLocalFriendTimeControl
+                                                .initialTime ==
                                             null
                                         ? 'Shared board without a clock.'
                                         : 'Both sides start with ${_formatLocalFriendTimeControl(selectedLocalFriendTimeControl)} and the white clock runs first.',
@@ -14403,9 +14354,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       icon: const Icon(
                                         Icons.play_arrow_rounded,
                                       ),
-                                      label: const Text(
-                                        'Start Shared Board',
-                                      ),
+                                      label: const Text('Start Shared Board'),
                                     ),
                                   ),
                                 ],
@@ -14623,14 +14572,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                           72.0,
                                                                         );
                                                                 final hasLandscapeTitle =
-                                                                  !_playVsBot &&
-                                                                  !_playLocalFriendMatch &&
+                                                                    _isAnalysisMatchMode &&
                                                                     (_selectedGambit !=
                                                                             null ||
                                                                         _currentOpening
                                                                             .isNotEmpty);
                                                                 final landscapeBannerTop =
-                                                                    _playVsBot
+                                                                    _isBotMatchMode
                                                                     ? 10.0
                                                                     : hasLandscapeTitle
                                                                     ? 54.0
@@ -14657,8 +14605,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                               ),
                                                                             ),
                                                                           ),
-                                                                            if (!_playVsBot &&
-                                                                              !_playLocalFriendMatch &&
+                                                                          if (_isAnalysisMatchMode &&
                                                                               _selectedGambit !=
                                                                                   null)
                                                                             Align(
@@ -14685,8 +14632,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                                 ),
                                                                               ),
                                                                             )
-                                                                            else if (!_playVsBot &&
-                                                                              !_playLocalFriendMatch &&
+                                                                          else if (_isAnalysisMatchMode &&
                                                                               _currentOpening.isNotEmpty)
                                                                             Align(
                                                                               alignment: Alignment.center,
@@ -14699,8 +14645,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                                 ),
                                                                               ),
                                                                             ),
-                                                                          if (!_playVsBot &&
-                                                                              !_playLocalFriendMatch)
+                                                                          if (_isAnalysisMatchMode)
                                                                             _buildSuggestedMovesList(
                                                                               height: suggestionsHeight,
                                                                               padding: const EdgeInsets.symmetric(
@@ -14708,8 +14653,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                                 vertical: 8,
                                                                               ),
                                                                             ),
-                                                                          if (!_playVsBot &&
-                                                                              !_playLocalFriendMatch)
+                                                                          if (_isAnalysisMatchMode)
                                                                             _buildHistoryBar(
                                                                               height: historyHeight,
                                                                               margin: const EdgeInsets.symmetric(
@@ -14742,7 +14686,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                         ),
                                                                       ),
                                                                     if (_hasMoveQualityBanner &&
-                                                                        !_playVsBot)
+                                                                        !_isBotMatchMode)
                                                                       Positioned(
                                                                         left: 0,
                                                                         right:
@@ -14782,7 +14726,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             8,
                                             8,
                                             8,
-                                            _playVsBot ? 2 : 8,
+                                            _isBotMatchMode ? 2 : 8,
                                           ),
                                           child: LayoutBuilder(
                                             builder: (context, inner) {
@@ -14805,9 +14749,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                           ),
                                         ),
                                       ),
-                                      if (!_playVsBot && !_playLocalFriendMatch)
+                                      if (_isAnalysisMatchMode)
                                         _buildOpeningLabel(scale),
-                                      if (!_playVsBot && !_playLocalFriendMatch)
+                                      if (_isAnalysisMatchMode)
                                         _buildSuggestedMovesList(
                                           height: 130,
                                           padding: const EdgeInsets.symmetric(
@@ -14815,7 +14759,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             horizontal: 20,
                                           ),
                                         ),
-                                      if (!_playVsBot && !_playLocalFriendMatch)
+                                      if (_isAnalysisMatchMode)
                                         _buildHistoryBar(),
                                       _buildActionArea(),
                                     ],
@@ -14919,7 +14863,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
     final compactBotHeader =
-        _playVsBot && !isLandscape && media.size.width <= 390;
+        _isBotMatchMode && !isLandscape && media.size.width <= 390;
     final selectedBot = _selectedBot;
     final selectedBotAvatarAsset = selectedBot == null
         ? null
@@ -14954,17 +14898,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? 'PLAYER TURN'
         : 'BOT TURN';
     final localFriendStatusAccent = _gameOutcome != null
-      ? (_gameOutcome == GameOutcome.draw
-          ? botArcade.amber
-          : const Color(0xFFE45C5C))
-      : _isWhiteTurn
-      ? botArcade.cyan
-      : botArcade.amber;
+        ? (_gameOutcome == GameOutcome.draw
+              ? botArcade.amber
+              : const Color(0xFFE45C5C))
+        : _isWhiteTurn
+        ? botArcade.cyan
+        : botArcade.amber;
     final localFriendStatusLabel = _gameOutcome != null
-      ? 'MATCH END'
-      : _isWhiteTurn
-      ? 'WHITE TURN'
-      : 'BLACK TURN';
+        ? 'MATCH END'
+        : _isWhiteTurn
+        ? 'WHITE TURN'
+        : 'BLACK TURN';
     final portraitFilledTagForeground = botArcade.monochrome
         ? botArcade.text
         : const Color(0xFF0B0F16);
@@ -14973,7 +14917,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     Widget buildPortraitBotStatusTag({required bool compact}) {
-      if (!_playVsBot || selectedBot == null) {
+      if (!_isBotMatchMode || selectedBot == null) {
         return const SizedBox.shrink();
       }
 
@@ -15107,7 +15051,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
             ],
           ),
-          if (_playVsBot && selectedBot != null) ...[
+          if (_isBotMatchMode && selectedBot != null) ...[
             SizedBox(width: 8 * scale),
             buildPortraitBotIdentityCluster(
               avatarSize: 34 * scale,
@@ -15147,21 +15091,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
                   SizedBox(
                     width: 120 * scale,
-                    child: !_playVsBot
+                    child: _isBotMatchMode
                         ? Text(
-                            _playLocalFriendMatch
-                                ? 'VS FRIEND'
-                                : 'Engine: Stockfish 18',
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.54),
-                              fontSize: 10 * scale,
-                              letterSpacing: 0.4,
-                            ),
-                          )
-                        : Text(
                             selectedBot?.name ?? '',
                             textAlign: TextAlign.center,
                             maxLines: 2,
@@ -15172,13 +15103,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               color: botAccent,
                               withGlow: true,
                             ),
+                          )
+                        : Text(
+                            _isLocalFriendMatchMode
+                                ? 'VS FRIEND'
+                                : 'Engine: Stockfish 18',
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.54),
+                              fontSize: 10 * scale,
+                              letterSpacing: 0.4,
+                            ),
                           ),
                   ),
                 ],
               ),
             ),
           ),
-          if (_playVsBot && selectedBot != null)
+          if (_isBotMatchMode && selectedBot != null)
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerRight,
@@ -15209,10 +15153,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final centerEvalCounter = buildCenterEvalCounter();
     final depthCluster = _buildEditModeDepthCluster(scale, scheme);
     final rightAccessoryAlignment =
-      (_playVsBot && selectedBot != null) || _playLocalFriendMatch
+        (_isBotMatchMode && selectedBot != null) || _isLocalFriendMatchMode
         ? Alignment.centerRight
         : Alignment.center;
-    final rightAccessory = _playVsBot && selectedBot != null
+    final rightAccessory = _isBotMatchMode && selectedBot != null
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -15221,7 +15165,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               if (_shouldShowDepthCounter) depthCluster,
             ],
           )
-        : _playLocalFriendMatch
+        : _isLocalFriendMatchMode
         ? Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -15715,7 +15659,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final compactBotFrame = _isCompactBotFrame(context);
     final boardBorderWidth = _boardFrameBorderWidth();
     final boardInnerPadding = _boardInnerPaddingForContext(context);
-    final boardAccent = _playVsBot
+    final boardAccent = _isBotMatchMode
         ? (_selectedBot == null
               ? arcade.cyan
               : Color.lerp(
@@ -15724,18 +15668,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   0.45,
                 )!)
         : Colors.white10;
-    final innerBoardRadius = _playVsBot ? (compactBotFrame ? 8.0 : 10.0) : 4.0;
+    final innerBoardRadius = _isBotMatchMode
+        ? (compactBotFrame ? 8.0 : 10.0)
+        : 4.0;
     final activeMove = _historyIndex >= 0 && _historyIndex < _moveHistory.length
         ? _moveHistory[_historyIndex]
         : null;
-    final activeMoveQuality = !_playVsBot && !_moveAssessmentEnabled
+    final activeMoveQuality = !_isBotMatchMode && !_runsAnalysisMoveAssessment
         ? null
-        : _playVsBot
+        : _isBotMatchMode
         ? _lastMoveQualityBadgeQuality
         : activeMove?.quality;
-    final activeMoveQualitySquare = !_playVsBot && !_moveAssessmentEnabled
+    final activeMoveQualitySquare =
+        !_isBotMatchMode && !_runsAnalysisMoveAssessment
         ? null
-        : _playVsBot
+        : _isBotMatchMode
         ? _lastMoveQualityBadgeSquare
         : activeMove?.uci != null && activeMove!.uci!.length >= 4
         ? activeMove.uci!.substring(2, 4)
@@ -15754,7 +15701,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final checkedKingSquares = _currentCheckedKingSquares();
 
     return Container(
-      decoration: _playVsBot
+      decoration: _isBotMatchMode
           ? _vsBotArcadePanelDecoration(
               palette: arcade,
               accent: boardAccent,
@@ -15769,7 +15716,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
               borderRadius: BorderRadius.circular(4),
             ),
-      padding: _playVsBot ? EdgeInsets.all(boardInnerPadding) : EdgeInsets.zero,
+      padding: _isBotMatchMode
+          ? EdgeInsets.all(boardInnerPadding)
+          : EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(innerBoardRadius),
         child: LayoutBuilder(
@@ -15899,7 +15848,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       ),
                                       decoration: BoxDecoration(
                                         color: Colors.black.withValues(
-                                          alpha: _playVsBot ? 0.72 : 0.56,
+                                          alpha: _isBotMatchMode ? 0.72 : 0.56,
                                         ),
                                         borderRadius: BorderRadius.circular(7),
                                         border: Border.all(
@@ -15976,12 +15925,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                     child: IgnorePointer(
                                       child: Padding(
                                         padding: EdgeInsets.all(
-                                          _playVsBot ? 4.0 : 3.5,
+                                          _isBotMatchMode ? 4.0 : 3.5,
                                         ),
                                         child: DecoratedBox(
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(
-                                              _playVsBot ? 9 : 7,
+                                              _isBotMatchMode ? 9 : 7,
                                             ),
                                             gradient: RadialGradient(
                                               colors: [
@@ -15999,7 +15948,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                               color: const Color(
                                                 0xFFEA4E4E,
                                               ).withValues(alpha: 0.96),
-                                              width: _playVsBot ? 2.2 : 2.0,
+                                              width: _isBotMatchMode
+                                                  ? 2.2
+                                                  : 2.0,
                                             ),
                                             boxShadow: [
                                               BoxShadow(
@@ -16156,7 +16107,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           opacity: _boardIntroOpacity(),
           child: _buildAnimatedArrows(reverse),
         ),
-        if (_playLocalFriendMatch) _buildLocalFriendClockOverlay(),
+        if (_isLocalFriendMatchMode) _buildLocalFriendClockOverlay(),
       ],
     );
   }
@@ -16192,10 +16143,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _isCinematicThemeEnabled;
     final isActive =
         _gameOutcome == null && _localFriendActiveClockIsWhite == white;
-    final isWinner = _gameOutcome != null &&
+    final isWinner =
+        _gameOutcome != null &&
         ((white && _gameOutcome == GameOutcome.whiteWin) ||
             (!white && _gameOutcome == GameOutcome.blackWin));
-    final isLoser = _gameOutcome != null &&
+    final isLoser =
+        _gameOutcome != null &&
         ((white && _gameOutcome == GameOutcome.blackWin) ||
             (!white && _gameOutcome == GameOutcome.whiteWin));
     final accent = isWinner
@@ -16679,7 +16632,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : useMonochrome
         ? scheme.onSurface.withValues(alpha: 0.70)
         : scheme.onSurface.withValues(alpha: 0.68);
-    final quality = _playVsBot || _moveAssessmentEnabled ? move.quality : null;
+    final quality = _isBotMatchMode || _runsAnalysisMoveAssessment
+        ? move.quality
+        : null;
     final emphasisQuality =
         quality == MoveQuality.masterstroke || quality == MoveQuality.crucial;
 
@@ -17024,7 +16979,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _undoBotTurn() {
-    if (!_playVsBot || _moveHistory.isEmpty) return;
+    if (!_isBotMatchMode || _moveHistory.isEmpty) return;
 
     _send('stop');
     _cancelGameResultReveal();
@@ -17290,7 +17245,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       final useMonochrome =
           context.watch<AppThemeProvider>().isMonochrome ||
           _isCinematicThemeEnabled;
@@ -17506,6 +17461,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
+    if (_isLocalFriendMatchMode && endedOutcome == null) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: compactBottom,
+          left: horizontal,
+          right: horizontal,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _iconBtn(Icons.arrow_back_rounded, _goToMenu),
+            _iconBtn(Icons.refresh, _confirmReset),
+            _marketplaceBtn(),
+            _iconBtn(
+              Icons.tune_rounded,
+              () => unawaited(_openSettings(fromAnalysisMode: false)),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (endedOutcome != null) {
       final accent = endedOutcome == GameOutcome.draw
           ? const Color(0xFFD8B640)
@@ -17557,12 +17534,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _iconBtn(Icons.refresh, _confirmReset),
           _marketplaceBtn(),
           _buildSuggestionTriggerButton(),
-          if (!_playVsBot && _isHeadToHeadPerspective)
+          if (_isAnalysisMatchMode && _isHeadToHeadPerspective)
             _buildHeadToHeadEvalBarToggleButton(
               scheme: scheme,
               isLight: isLight,
             )
-          else if (!_playVsBot)
+          else if (_isAnalysisMatchMode)
             SizedBox.square(
               dimension: 40,
               child: Stack(
@@ -17764,7 +17741,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             _buildBotUndoButton(),
           _iconBtn(
             Icons.settings_outlined,
-            () => _openSettings(fromAnalysisMode: !_playVsBot),
+            () => _openSettings(fromAnalysisMode: _isAnalysisMatchMode),
           ),
         ],
       ),
@@ -17824,7 +17801,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Widget _buildSuggestionTriggerButton() {
     final palette = _suggestionButtonPalette();
 
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       return _buildVsBotSuggestionTriggerButton();
     }
 
@@ -17836,7 +17813,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return GestureDetector(
         key: _suggestionButtonKey,
         onTap: _disableEngineInsights,
-        onLongPress: _playVsBot
+        onLongPress: _isBotMatchMode
             ? null
             : () {
                 setState(() {
@@ -19388,7 +19365,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final useMonochrome =
             context.watch<AppThemeProvider>().isMonochrome ||
             _isCinematicThemeEnabled;
-        final isVsBot = _playVsBot;
+        final isVsBot = _isBotMatchMode;
         final dialogSurface = useMonochrome
             ? scheme.surface
             : Color.alphaBlend(
@@ -19603,7 +19580,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _openAppearanceSettings() {
     _openSettings(
-      fromAnalysisMode: _activeSection == AppSection.analysis && !_playVsBot,
+      fromAnalysisMode:
+          _activeSection == AppSection.analysis && _isAnalysisMatchMode,
     );
   }
 
@@ -19613,8 +19591,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }) async {
     final themeProvider = context.read<AppThemeProvider>();
     final isBoardAnalysisPage =
-        _activeSection == AppSection.analysis && !_playVsBot;
-    final isVsBotPage = _playVsBot;
+        _activeSection == AppSection.analysis && _isAnalysisMatchMode;
+    final isVsBotPage = _isBotMatchMode;
     final showBoardPerspectiveSection =
         !isAcademyMode && fromAnalysisMode && isBoardAnalysisPage;
     final showEngineControlsSection =
@@ -20123,7 +20101,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final adService = AdService.instance;
     final shouldAttemptAd =
         !_adFreeOwned && adService.boardResetCooldownRemaining == Duration.zero;
-    final wasLocalFriendMatch = _playLocalFriendMatch;
+    final wasLocalFriendMatch = _isLocalFriendMatchMode;
+    final wasBotMatch = _isBotMatchMode;
     if (shouldAttemptAd) {
       final shown = await adService.maybeShowBoardResetInterstitial();
       if (!shown) {
@@ -20132,7 +20111,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         await _handleAnalysisInterstitialShown();
       }
     }
-    if (_playVsBot) {
+    if (wasBotMatch) {
       await _handleVsBotMatchStarted();
     }
     if (!mounted) return;

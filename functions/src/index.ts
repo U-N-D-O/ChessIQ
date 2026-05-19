@@ -1,3 +1,5 @@
+import { Chess } from "chess.js";
+import { randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
 
@@ -54,6 +56,12 @@ const ECONOMY_STORE_REWARD_COOLDOWNS_MS = [
 ] as const;
 const ECONOMY_MAX_TRACKED_CLAIM_KEYS = 60;
 const ECONOMY_MAX_TRACKED_FINGERPRINTS = 200;
+const FRIEND_MATCH_INVITE_CODE_LENGTH = 6;
+const FRIEND_MATCH_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+const FRIEND_MATCH_ACTIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const FRIEND_MATCH_MAX_INITIAL_SECONDS = 4 * 60 * 60;
+const FRIEND_MATCH_MAX_INCREMENT_SECONDS = 60;
+const FRIEND_MATCH_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 type EconomyRewardSpec = {
     amount: number;
     minIntervalMs?: number;
@@ -1943,6 +1951,1215 @@ async function grantEconomyRewardImpl(
     };
 }
 
+type FriendMatchStatus =
+    | "pending"
+    | "active"
+    | "completed"
+    | "expired"
+    | "cancelled";
+
+type FriendSeat = "white" | "black";
+
+type FriendSeatPreference = "random" | FriendSeat;
+
+type FriendOutcomeCode = "whiteWin" | "blackWin" | "draw" | "aborted";
+
+type FriendTimeControl = {
+    initialSeconds: number;
+    incrementSeconds: number;
+};
+
+type FriendMatchClocks = {
+    whiteMsRemaining: number;
+    blackMsRemaining: number;
+    activeSeat: FriendSeat | null;
+    lastTickStartedAtMs: number | null;
+};
+
+type FriendMoveRecord = {
+    ply: number;
+    uci: string;
+    san: string;
+    fen: string;
+    playedByUid: string;
+    playedAtMs: number;
+};
+
+type FriendMatchOutcome = {
+    code: FriendOutcomeCode;
+    reason: string;
+    winnerUid: string | null;
+    concludedAtMs: number;
+};
+
+type FriendMatchRecord = {
+    matchId: string;
+    inviteCode: string;
+    status: FriendMatchStatus;
+    hostUid: string;
+    guestUid: string | null;
+    whiteUid: string | null;
+    blackUid: string | null;
+    fen: string;
+    pgn: string;
+    nextPly: number;
+    whiteToMove: boolean;
+    timeControl: FriendTimeControl;
+    clocks: FriendMatchClocks;
+    createdAtMs: number;
+    updatedAtMs: number;
+    startedAtMs: number | null;
+    expiresAtMs: number;
+    drawOfferByUid: string | null;
+    outcome: FriendMatchOutcome | null;
+    moves: Record<string, FriendMoveRecord>;
+};
+
+type FriendInviteRecord = {
+    matchId: string;
+    inviteCode: string;
+    hostUid: string;
+    status: FriendMatchStatus;
+    createdAtMs: number;
+    expiresAtMs: number;
+};
+
+type FriendMembershipRecord = {
+    inviteCode: string;
+    status: FriendMatchStatus;
+    updatedAtMs: number;
+};
+
+type FriendMoveInput = {
+    from: string;
+    to: string;
+    promotion?: string;
+};
+
+type FriendMatchAction =
+    | "resign"
+    | "offerDraw"
+    | "acceptDraw"
+    | "declineDraw"
+    | "cancelPending";
+
+function requireAuthUid(context: functions.https.CallableContext): string {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Must be signed in.",
+        );
+    }
+    return context.auth.uid;
+}
+
+function readFriendMatchId(rawMatchId: unknown): string {
+    if (typeof rawMatchId !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "matchId must be a string.",
+        );
+    }
+    const matchId = rawMatchId.trim();
+    if (matchId.length < 8 || matchId.length > 128) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "matchId is invalid.",
+        );
+    }
+    return matchId;
+}
+
+function readFriendInviteCode(rawInviteCode: unknown): string {
+    if (typeof rawInviteCode !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "inviteCode must be a string.",
+        );
+    }
+    const inviteCode = rawInviteCode.trim().toUpperCase();
+    const inviteCodeRe = new RegExp(
+        `^[${FRIEND_MATCH_CODE_ALPHABET}]{${FRIEND_MATCH_INVITE_CODE_LENGTH}}$`,
+    );
+    if (!inviteCodeRe.test(inviteCode)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "inviteCode is invalid.",
+        );
+    }
+    return inviteCode;
+}
+
+function readFriendSeatPreference(rawPreference: unknown): FriendSeatPreference {
+    switch ((rawPreference ?? "random").toString().trim().toLowerCase()) {
+        case "white":
+            return "white";
+        case "black":
+            return "black";
+        case "random":
+        default:
+            return "random";
+    }
+}
+
+function readFriendMatchAction(rawAction: unknown): FriendMatchAction {
+    switch ((rawAction ?? "").toString().trim()) {
+        case "resign":
+        case "offerDraw":
+        case "acceptDraw":
+        case "declineDraw":
+        case "cancelPending":
+            return rawAction as FriendMatchAction;
+        default:
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Unsupported friend match action.",
+            );
+    }
+}
+
+function readFriendNonNegativeInt(
+    rawValue: unknown,
+    fieldName: string,
+    maxValue: number,
+): number {
+    if (rawValue == null) {
+        return 0;
+    }
+    const parsed = typeof rawValue === "number"
+        ? rawValue
+        : typeof rawValue === "string"
+            ? Number(rawValue.trim())
+            : Number.NaN;
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > maxValue) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            `${fieldName} must be between 0 and ${maxValue}.`,
+        );
+    }
+    return Math.floor(parsed);
+}
+
+function readFriendExpectedPly(rawValue: unknown): number | null {
+    if (rawValue == null) {
+        return null;
+    }
+    return readFriendNonNegativeInt(rawValue, "expectedPly", 4096);
+}
+
+function readFriendTimeControl(rawValue: unknown): FriendTimeControl {
+    const payload = rawValue && typeof rawValue === "object"
+        ? rawValue as Record<string, unknown>
+        : {};
+    const initialSeconds = readFriendNonNegativeInt(
+        payload.initialSeconds,
+        "timeControl.initialSeconds",
+        FRIEND_MATCH_MAX_INITIAL_SECONDS,
+    );
+    const incrementSeconds = initialSeconds <= 0
+        ? 0
+        : readFriendNonNegativeInt(
+            payload.incrementSeconds,
+            "timeControl.incrementSeconds",
+            FRIEND_MATCH_MAX_INCREMENT_SECONDS,
+        );
+    return {
+        initialSeconds,
+        incrementSeconds,
+    };
+}
+
+function readFriendMoveInput(rawMove: unknown): FriendMoveInput {
+    if (typeof rawMove !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "moveUci must be a string.",
+        );
+    }
+    const moveUci = rawMove.trim().toLowerCase();
+    if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(moveUci)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "moveUci must be a legal UCI coordinate string.",
+        );
+    }
+    return {
+        from: moveUci.slice(0, 2),
+        to: moveUci.slice(2, 4),
+        promotion: moveUci.length > 4 ? moveUci.slice(4, 5) : undefined,
+    };
+}
+
+function normalizeFriendMatchStatus(rawStatus: unknown): FriendMatchStatus {
+    switch ((rawStatus ?? "pending").toString().trim()) {
+        case "active":
+        case "completed":
+        case "expired":
+        case "cancelled":
+            return rawStatus as FriendMatchStatus;
+        case "pending":
+        default:
+            return "pending";
+    }
+}
+
+function normalizeFriendSeat(rawSeat: unknown): FriendSeat | null {
+    switch ((rawSeat ?? "").toString().trim()) {
+        case "white":
+            return "white";
+        case "black":
+            return "black";
+        default:
+            return null;
+    }
+}
+
+function normalizeFriendOutcomeCode(rawCode: unknown): FriendOutcomeCode | null {
+    switch ((rawCode ?? "").toString().trim()) {
+        case "whiteWin":
+            return "whiteWin";
+        case "blackWin":
+            return "blackWin";
+        case "draw":
+            return "draw";
+        case "aborted":
+            return "aborted";
+        default:
+            return null;
+    }
+}
+
+function normalizeFriendMatchOutcome(rawValue: unknown): FriendMatchOutcome | null {
+    if (!rawValue || typeof rawValue !== "object") {
+        return null;
+    }
+    const payload = rawValue as Record<string, unknown>;
+    const code = normalizeFriendOutcomeCode(payload.code);
+    if (code == null) {
+        return null;
+    }
+    return {
+        code,
+        reason: (payload.reason ?? "").toString().trim(),
+        winnerUid: payload.winnerUid == null
+            ? null
+            : payload.winnerUid.toString().trim() || null,
+        concludedAtMs: readFriendNonNegativeInt(
+            payload.concludedAtMs,
+            "outcome.concludedAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ),
+    };
+}
+
+function normalizeFriendMoveRecord(rawValue: unknown): FriendMoveRecord | null {
+    if (!rawValue || typeof rawValue !== "object") {
+        return null;
+    }
+    const payload = rawValue as Record<string, unknown>;
+    const uci = (payload.uci ?? "").toString().trim();
+    const san = (payload.san ?? "").toString().trim();
+    const fen = (payload.fen ?? "").toString().trim();
+    const playedByUid = (payload.playedByUid ?? "").toString().trim();
+    if (!uci || !san || !fen || !playedByUid) {
+        return null;
+    }
+    return {
+        ply: readFriendNonNegativeInt(payload.ply, "move.ply", 4096),
+        uci,
+        san,
+        fen,
+        playedByUid,
+        playedAtMs: readFriendNonNegativeInt(
+            payload.playedAtMs,
+            "move.playedAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ),
+    };
+}
+
+function normalizeFriendMatchClocks(
+    rawValue: unknown,
+    timeControl: FriendTimeControl,
+): FriendMatchClocks {
+    const initialMs = timeControl.initialSeconds * 1000;
+    if (!rawValue || typeof rawValue !== "object") {
+        return {
+            whiteMsRemaining: initialMs,
+            blackMsRemaining: initialMs,
+            activeSeat: null,
+            lastTickStartedAtMs: null,
+        };
+    }
+    const payload = rawValue as Record<string, unknown>;
+    return {
+        whiteMsRemaining: readFriendNonNegativeInt(
+            payload.whiteMsRemaining,
+            "clocks.whiteMsRemaining",
+            Number.MAX_SAFE_INTEGER,
+        ),
+        blackMsRemaining: readFriendNonNegativeInt(
+            payload.blackMsRemaining,
+            "clocks.blackMsRemaining",
+            Number.MAX_SAFE_INTEGER,
+        ),
+        activeSeat: normalizeFriendSeat(payload.activeSeat),
+        lastTickStartedAtMs: payload.lastTickStartedAtMs == null
+            ? null
+            : readFriendNonNegativeInt(
+                payload.lastTickStartedAtMs,
+                "clocks.lastTickStartedAtMs",
+                Number.MAX_SAFE_INTEGER,
+            ),
+    };
+}
+
+function normalizeFriendMatchRecord(
+    rawValue: unknown,
+    matchId: string,
+): FriendMatchRecord | null {
+    if (!rawValue || typeof rawValue !== "object") {
+        return null;
+    }
+    const payload = rawValue as Record<string, unknown>;
+    const timeControl = readFriendTimeControl(payload.timeControl);
+    const createdAtMs = readFriendNonNegativeInt(
+        payload.createdAtMs,
+        "createdAtMs",
+        Number.MAX_SAFE_INTEGER,
+    );
+    const moves: Record<string, FriendMoveRecord> = {};
+    if (payload.moves && typeof payload.moves === "object") {
+        for (const [key, rawMove] of Object.entries(
+            payload.moves as Record<string, unknown>,
+        )) {
+            const move = normalizeFriendMoveRecord(rawMove);
+            if (move != null) {
+                moves[key] = move;
+            }
+        }
+    }
+    const initialFen = new Chess().fen();
+    return {
+        matchId: (payload.matchId ?? matchId).toString().trim() || matchId,
+        inviteCode: (payload.inviteCode ?? "").toString().trim(),
+        status: normalizeFriendMatchStatus(payload.status),
+        hostUid: (payload.hostUid ?? "").toString().trim(),
+        guestUid: payload.guestUid == null
+            ? null
+            : payload.guestUid.toString().trim() || null,
+        whiteUid: payload.whiteUid == null
+            ? null
+            : payload.whiteUid.toString().trim() || null,
+        blackUid: payload.blackUid == null
+            ? null
+            : payload.blackUid.toString().trim() || null,
+        fen: (payload.fen ?? initialFen).toString().trim() || initialFen,
+        pgn: (payload.pgn ?? "").toString(),
+        nextPly: readFriendNonNegativeInt(payload.nextPly, "nextPly", 4096),
+        whiteToMove: payload.whiteToMove === false ? false : true,
+        timeControl,
+        clocks: normalizeFriendMatchClocks(payload.clocks, timeControl),
+        createdAtMs,
+        updatedAtMs: readFriendNonNegativeInt(
+            payload.updatedAtMs,
+            "updatedAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ),
+        startedAtMs: payload.startedAtMs == null
+            ? null
+            : readFriendNonNegativeInt(
+                payload.startedAtMs,
+                "startedAtMs",
+                Number.MAX_SAFE_INTEGER,
+            ),
+        expiresAtMs: readFriendNonNegativeInt(
+            payload.expiresAtMs,
+            "expiresAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ) || (createdAtMs + FRIEND_MATCH_PENDING_TTL_MS),
+        drawOfferByUid: payload.drawOfferByUid == null
+            ? null
+            : payload.drawOfferByUid.toString().trim() || null,
+        outcome: normalizeFriendMatchOutcome(payload.outcome),
+        moves,
+    };
+}
+
+function normalizeFriendInviteRecord(
+    rawValue: unknown,
+    inviteCode: string,
+): FriendInviteRecord | null {
+    if (!rawValue || typeof rawValue !== "object") {
+        return null;
+    }
+    const payload = rawValue as Record<string, unknown>;
+    return {
+        matchId: (payload.matchId ?? "").toString().trim(),
+        inviteCode: (payload.inviteCode ?? inviteCode).toString().trim() || inviteCode,
+        hostUid: (payload.hostUid ?? "").toString().trim(),
+        status: normalizeFriendMatchStatus(payload.status),
+        createdAtMs: readFriendNonNegativeInt(
+            payload.createdAtMs,
+            "invite.createdAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ),
+        expiresAtMs: readFriendNonNegativeInt(
+            payload.expiresAtMs,
+            "invite.expiresAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ),
+    };
+}
+
+function otherFriendSeat(seat: FriendSeat): FriendSeat {
+    return seat === "white" ? "black" : "white";
+}
+
+function randomFriendSeat(): FriendSeat {
+    return randomInt(2) === 0 ? "white" : "black";
+}
+
+function buildFriendInviteRecord(match: FriendMatchRecord): FriendInviteRecord {
+    return {
+        matchId: match.matchId,
+        inviteCode: match.inviteCode,
+        hostUid: match.hostUid,
+        status: match.status,
+        createdAtMs: match.createdAtMs,
+        expiresAtMs: match.expiresAtMs,
+    };
+}
+
+function buildFriendMembershipRecord(match: FriendMatchRecord): FriendMembershipRecord {
+    return {
+        inviteCode: match.inviteCode,
+        status: match.status,
+        updatedAtMs: match.updatedAtMs,
+    };
+}
+
+function serializeFriendMoveKey(ply: number): string {
+    return ply.toString().padStart(4, "0");
+}
+
+function createFriendMatchRecord(params: {
+    matchId: string;
+    inviteCode: string;
+    hostUid: string;
+    hostSeat: FriendSeat;
+    timeControl: FriendTimeControl;
+    nowMs: number;
+}): FriendMatchRecord {
+    const chess = new Chess();
+    const initialMs = params.timeControl.initialSeconds * 1000;
+    return {
+        matchId: params.matchId,
+        inviteCode: params.inviteCode,
+        status: "pending",
+        hostUid: params.hostUid,
+        guestUid: null,
+        whiteUid: params.hostSeat === "white" ? params.hostUid : null,
+        blackUid: params.hostSeat === "black" ? params.hostUid : null,
+        fen: chess.fen(),
+        pgn: "",
+        nextPly: 0,
+        whiteToMove: true,
+        timeControl: params.timeControl,
+        clocks: {
+            whiteMsRemaining: initialMs,
+            blackMsRemaining: initialMs,
+            activeSeat: null,
+            lastTickStartedAtMs: null,
+        },
+        createdAtMs: params.nowMs,
+        updatedAtMs: params.nowMs,
+        startedAtMs: null,
+        expiresAtMs: params.nowMs + FRIEND_MATCH_PENDING_TTL_MS,
+        drawOfferByUid: null,
+        outcome: null,
+        moves: {},
+    };
+}
+
+function buildFriendMatchClientPayload(match: FriendMatchRecord): Record<string, unknown> {
+    const moves = Object.values(match.moves)
+        .sort((left, right) => left.ply - right.ply)
+        .map((move) => ({ ...move }));
+    return {
+        ...match,
+        moves,
+    };
+}
+
+function friendMatchParticipantSeat(
+    match: FriendMatchRecord,
+    uid: string,
+): FriendSeat | null {
+    if (match.whiteUid === uid) {
+        return "white";
+    }
+    if (match.blackUid === uid) {
+        return "black";
+    }
+    return null;
+}
+
+function friendMatchOpponentUid(
+    match: FriendMatchRecord,
+    uid: string,
+): string | null {
+    if (match.whiteUid === uid) {
+        return match.blackUid;
+    }
+    if (match.blackUid === uid) {
+        return match.whiteUid;
+    }
+    return null;
+}
+
+function concludeFriendMatch(
+    match: FriendMatchRecord,
+    params: {
+        status?: FriendMatchStatus;
+        code: FriendOutcomeCode;
+        reason: string;
+        winnerUid: string | null;
+        nowMs: number;
+    },
+): FriendMatchRecord {
+    return {
+        ...match,
+        status: params.status ?? "completed",
+        updatedAtMs: params.nowMs,
+        expiresAtMs: params.nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+        drawOfferByUid: null,
+        clocks: {
+            ...match.clocks,
+            activeSeat: null,
+            lastTickStartedAtMs: null,
+        },
+        outcome: {
+            code: params.code,
+            reason: params.reason,
+            winnerUid: params.winnerUid,
+            concludedAtMs: params.nowMs,
+        },
+    };
+}
+
+function synchronizeFriendMatchForNow(
+    match: FriendMatchRecord,
+    nowMs: number,
+): FriendMatchRecord {
+    if (match.status === "pending" && match.expiresAtMs <= nowMs) {
+        return concludeFriendMatch(match, {
+            status: "expired",
+            code: "aborted",
+            reason: "inviteExpired",
+            winnerUid: null,
+            nowMs,
+        });
+    }
+
+    if (match.status === "active" && match.expiresAtMs <= nowMs) {
+        return concludeFriendMatch(match, {
+            status: "expired",
+            code: "aborted",
+            reason: "staleMatchExpired",
+            winnerUid: null,
+            nowMs,
+        });
+    }
+
+    if (match.status !== "active" || match.timeControl.initialSeconds <= 0) {
+        return match;
+    }
+
+    const activeSeat = match.clocks.activeSeat;
+    const lastTickStartedAtMs = match.clocks.lastTickStartedAtMs;
+    if (activeSeat == null || lastTickStartedAtMs == null) {
+        return match;
+    }
+
+    const elapsedMs = Math.max(0, nowMs - lastTickStartedAtMs);
+    if (elapsedMs <= 0) {
+        return match;
+    }
+
+    const whiteMsRemaining = activeSeat === "white"
+        ? Math.max(0, match.clocks.whiteMsRemaining - elapsedMs)
+        : match.clocks.whiteMsRemaining;
+    const blackMsRemaining = activeSeat === "black"
+        ? Math.max(0, match.clocks.blackMsRemaining - elapsedMs)
+        : match.clocks.blackMsRemaining;
+
+    const synchronizedMatch: FriendMatchRecord = {
+        ...match,
+        updatedAtMs: nowMs,
+        clocks: {
+            ...match.clocks,
+            whiteMsRemaining,
+            blackMsRemaining,
+            lastTickStartedAtMs: nowMs,
+        },
+    };
+
+    if (activeSeat === "white" && whiteMsRemaining <= 0) {
+        return concludeFriendMatch(synchronizedMatch, {
+            code: "blackWin",
+            reason: "timeout",
+            winnerUid: synchronizedMatch.blackUid,
+            nowMs,
+        });
+    }
+    if (activeSeat === "black" && blackMsRemaining <= 0) {
+        return concludeFriendMatch(synchronizedMatch, {
+            code: "whiteWin",
+            reason: "timeout",
+            winnerUid: synchronizedMatch.whiteUid,
+            nowMs,
+        });
+    }
+    return synchronizedMatch;
+}
+
+function friendDrawReasonFromChess(chess: Chess): string {
+    if (chess.isStalemate()) {
+        return "stalemate";
+    }
+    if (chess.isThreefoldRepetition()) {
+        return "threefoldRepetition";
+    }
+    if (chess.isInsufficientMaterial()) {
+        return "insufficientMaterial";
+    }
+    return "draw";
+}
+
+function friendMatchChanged(
+    currentMatch: FriendMatchRecord,
+    nextMatch: FriendMatchRecord,
+): boolean {
+    return JSON.stringify(currentMatch) !== JSON.stringify(nextMatch);
+}
+
+async function generateUniqueFriendInviteCode(): Promise<string> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+        let inviteCode = "";
+        for (let index = 0; index < FRIEND_MATCH_INVITE_CODE_LENGTH; index += 1) {
+            inviteCode += FRIEND_MATCH_CODE_ALPHABET[
+                randomInt(FRIEND_MATCH_CODE_ALPHABET.length)
+            ];
+        }
+        const inviteSnap = await db
+            .ref(`friend_match_invites/by_code/${inviteCode}`)
+            .once("value");
+        if (!inviteSnap.exists()) {
+            return inviteCode;
+        }
+    }
+
+    throw new functions.https.HttpsError(
+        "unavailable",
+        "Could not allocate a unique invite code. Please try again.",
+    );
+}
+
+async function persistFriendMatchIndexes(match: FriendMatchRecord): Promise<void> {
+    const updates: Record<string, unknown> = {
+        [`friend_match_invites/by_code/${match.inviteCode}`]: buildFriendInviteRecord(match),
+        [`friend_match_memberships/${match.hostUid}/${match.matchId}`]: buildFriendMembershipRecord(match),
+    };
+    if (match.guestUid != null) {
+        updates[
+            `friend_match_memberships/${match.guestUid}/${match.matchId}`
+        ] = buildFriendMembershipRecord(match);
+    }
+    await db.ref().update(updates);
+}
+
+async function createFriendMatchInviteImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const timeControl = readFriendTimeControl(data?.timeControl);
+    const seatPreference = readFriendSeatPreference(data?.seatPreference);
+    const hostSeat = seatPreference === "random"
+        ? randomFriendSeat()
+        : seatPreference;
+    const matchRef = db.ref("friend_matches").push();
+    const matchId = matchRef.key;
+    if (!matchId) {
+        throw new functions.https.HttpsError(
+            "unavailable",
+            "Could not allocate a match id.",
+        );
+    }
+
+    const inviteCode = await generateUniqueFriendInviteCode();
+    const nowMs = Date.now();
+    const match = createFriendMatchRecord({
+        matchId,
+        inviteCode,
+        hostUid: uid,
+        hostSeat,
+        timeControl,
+        nowMs,
+    });
+
+    await db.ref().update({
+        [`friend_matches/${matchId}`]: match,
+        [`friend_match_invites/by_code/${inviteCode}`]: buildFriendInviteRecord(match),
+        [`friend_match_memberships/${uid}/${matchId}`]: buildFriendMembershipRecord(match),
+    });
+
+    return {
+        success: true,
+        invite: buildFriendInviteRecord(match),
+        snapshot: buildFriendMatchClientPayload(match),
+    };
+}
+
+async function joinFriendMatchInviteImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const inviteCode = readFriendInviteCode(data?.inviteCode);
+    const inviteSnap = await db
+        .ref(`friend_match_invites/by_code/${inviteCode}`)
+        .once("value");
+    const inviteRecord = normalizeFriendInviteRecord(inviteSnap.val(), inviteCode);
+    if (inviteRecord == null || !inviteRecord.matchId) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "That invite code was not found.",
+        );
+    }
+
+    const matchRef = db.ref(`friend_matches/${inviteRecord.matchId}`);
+    let blockedReason = "match-unavailable";
+    let responseMatch: FriendMatchRecord | null = null;
+
+    const transactionResult = await matchRef.transaction((currentValue) => {
+        const existingMatch = normalizeFriendMatchRecord(
+            currentValue,
+            inviteRecord.matchId,
+        );
+        if (existingMatch == null) {
+            blockedReason = "match-unavailable";
+            return;
+        }
+
+        const nowMs = Date.now();
+        const synchronizedMatch = synchronizeFriendMatchForNow(
+            existingMatch,
+            nowMs,
+        );
+
+        if (synchronizedMatch.hostUid === uid || synchronizedMatch.guestUid === uid) {
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        if (synchronizedMatch.status !== "pending") {
+            blockedReason = synchronizedMatch.status === "active"
+                ? "match-full"
+                : synchronizedMatch.status;
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        if (synchronizedMatch.guestUid != null && synchronizedMatch.guestUid !== uid) {
+            blockedReason = "match-full";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        const guestSeat = synchronizedMatch.whiteUid == null ? "white" : "black";
+        const nextMatch: FriendMatchRecord = {
+            ...synchronizedMatch,
+            status: "active",
+            guestUid: uid,
+            whiteUid: guestSeat === "white" ? uid : synchronizedMatch.whiteUid,
+            blackUid: guestSeat === "black" ? uid : synchronizedMatch.blackUid,
+            updatedAtMs: nowMs,
+            startedAtMs: synchronizedMatch.startedAtMs ?? nowMs,
+            expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+            clocks: {
+                ...synchronizedMatch.clocks,
+                activeSeat: synchronizedMatch.timeControl.initialSeconds > 0
+                    ? "white"
+                    : null,
+                lastTickStartedAtMs: synchronizedMatch.timeControl.initialSeconds > 0
+                    ? nowMs
+                    : null,
+            },
+        };
+        responseMatch = nextMatch;
+        blockedReason = "";
+        return nextMatch;
+    });
+
+    const match = responseMatch ?? normalizeFriendMatchRecord(
+        transactionResult.snapshot.val(),
+        inviteRecord.matchId,
+    );
+    if (match == null) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "That invite code no longer points to an active match.",
+        );
+    }
+
+    if (transactionResult.committed) {
+        await persistFriendMatchIndexes(match);
+    }
+
+    return {
+        success: transactionResult.committed ||
+            match.hostUid === uid ||
+            match.guestUid === uid,
+        reason: transactionResult.committed ? null : blockedReason,
+        invite: buildFriendInviteRecord(match),
+        snapshot: buildFriendMatchClientPayload(match),
+    };
+}
+
+async function submitFriendMatchMoveImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const matchId = readFriendMatchId(data?.matchId);
+    const expectedPly = readFriendExpectedPly(data?.expectedPly);
+    const moveInput = readFriendMoveInput(data?.moveUci);
+    const moveUci = `${moveInput.from}${moveInput.to}${moveInput.promotion ?? ""}`;
+
+    const matchRef = db.ref(`friend_matches/${matchId}`);
+    let blockedReason = "match-unavailable";
+    let acceptedMove = false;
+    let responseMatch: FriendMatchRecord | null = null;
+
+    const transactionResult = await matchRef.transaction((currentValue) => {
+        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        if (existingMatch == null) {
+            blockedReason = "match-unavailable";
+            return;
+        }
+
+        const nowMs = Date.now();
+        const synchronizedMatch = synchronizeFriendMatchForNow(
+            existingMatch,
+            nowMs,
+        );
+        const playerSeat = friendMatchParticipantSeat(synchronizedMatch, uid);
+        if (playerSeat == null) {
+            blockedReason = "not-participant";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        if (synchronizedMatch.status !== "active") {
+            blockedReason = synchronizedMatch.status;
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        if (expectedPly != null && expectedPly !== synchronizedMatch.nextPly) {
+            blockedReason = "stale-client";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        const expectedSeat = synchronizedMatch.whiteToMove ? "white" : "black";
+        if (expectedSeat !== playerSeat) {
+            blockedReason = "not-your-turn";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        let chess: Chess;
+        try {
+            chess = new Chess(synchronizedMatch.fen);
+        } catch (error) {
+            blockedReason = "invalid-position";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        const moveResult = chess.move({
+            from: moveInput.from,
+            to: moveInput.to,
+            promotion: moveInput.promotion,
+        });
+        if (moveResult == null) {
+            blockedReason = "illegal-move";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        let whiteMsRemaining = synchronizedMatch.clocks.whiteMsRemaining;
+        let blackMsRemaining = synchronizedMatch.clocks.blackMsRemaining;
+        let activeSeat: FriendSeat | null = null;
+        let lastTickStartedAtMs: number | null = null;
+        if (synchronizedMatch.timeControl.initialSeconds > 0) {
+            const incrementMs = synchronizedMatch.timeControl.incrementSeconds * 1000;
+            if (playerSeat === "white") {
+                whiteMsRemaining += incrementMs;
+            } else {
+                blackMsRemaining += incrementMs;
+            }
+            activeSeat = chess.turn() === "w" ? "white" : "black";
+            lastTickStartedAtMs = nowMs;
+        }
+
+        const movePly = synchronizedMatch.nextPly + 1;
+        const nextMatchBase: FriendMatchRecord = {
+            ...synchronizedMatch,
+            fen: chess.fen(),
+            pgn: chess.pgn(),
+            nextPly: movePly,
+            whiteToMove: chess.turn() === "w",
+            updatedAtMs: nowMs,
+            expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+            drawOfferByUid: null,
+            clocks: {
+                whiteMsRemaining,
+                blackMsRemaining,
+                activeSeat,
+                lastTickStartedAtMs,
+            },
+            moves: {
+                ...synchronizedMatch.moves,
+                [serializeFriendMoveKey(movePly)]: {
+                    ply: movePly,
+                    uci: moveUci,
+                    san: moveResult.san,
+                    fen: chess.fen(),
+                    playedByUid: uid,
+                    playedAtMs: nowMs,
+                },
+            },
+        };
+
+        let nextMatch = nextMatchBase;
+        if (chess.isCheckmate()) {
+            nextMatch = concludeFriendMatch(nextMatchBase, {
+                code: playerSeat === "white" ? "whiteWin" : "blackWin",
+                reason: "checkmate",
+                winnerUid: uid,
+                nowMs,
+            });
+        } else if (chess.isDraw()) {
+            nextMatch = concludeFriendMatch(nextMatchBase, {
+                code: "draw",
+                reason: friendDrawReasonFromChess(chess),
+                winnerUid: null,
+                nowMs,
+            });
+        }
+
+        acceptedMove = true;
+        responseMatch = nextMatch;
+        blockedReason = "";
+        return nextMatch;
+    });
+
+    const match = responseMatch ?? normalizeFriendMatchRecord(
+        transactionResult.snapshot.val(),
+        matchId,
+    );
+    if (match == null) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "That match no longer exists.",
+        );
+    }
+
+    if (transactionResult.committed) {
+        await persistFriendMatchIndexes(match);
+    }
+
+    return {
+        success: acceptedMove,
+        acceptedMove,
+        reason: acceptedMove ? null : blockedReason,
+        invite: buildFriendInviteRecord(match),
+        snapshot: buildFriendMatchClientPayload(match),
+    };
+}
+
+async function actOnFriendMatchImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const matchId = readFriendMatchId(data?.matchId);
+    const action = readFriendMatchAction(data?.action);
+    const matchRef = db.ref(`friend_matches/${matchId}`);
+    let blockedReason = "match-unavailable";
+    let actionApplied = false;
+    let responseMatch: FriendMatchRecord | null = null;
+
+    const transactionResult = await matchRef.transaction((currentValue) => {
+        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        if (existingMatch == null) {
+            blockedReason = "match-unavailable";
+            return;
+        }
+
+        const nowMs = Date.now();
+        const synchronizedMatch = synchronizeFriendMatchForNow(
+            existingMatch,
+            nowMs,
+        );
+        const playerSeat = friendMatchParticipantSeat(synchronizedMatch, uid);
+        let nextMatch = synchronizedMatch;
+
+        switch (action) {
+            case "cancelPending": {
+                if (synchronizedMatch.status !== "pending" || synchronizedMatch.hostUid !== uid) {
+                    blockedReason = "cannot-cancel";
+                    break;
+                }
+                nextMatch = concludeFriendMatch(synchronizedMatch, {
+                    status: "cancelled",
+                    code: "aborted",
+                    reason: "cancelled",
+                    winnerUid: null,
+                    nowMs,
+                });
+                actionApplied = true;
+                break;
+            }
+            case "resign": {
+                if (playerSeat == null || synchronizedMatch.status !== "active") {
+                    blockedReason = "cannot-resign";
+                    break;
+                }
+                nextMatch = concludeFriendMatch(synchronizedMatch, {
+                    code: playerSeat === "white" ? "blackWin" : "whiteWin",
+                    reason: "resignation",
+                    winnerUid: friendMatchOpponentUid(synchronizedMatch, uid),
+                    nowMs,
+                });
+                actionApplied = true;
+                break;
+            }
+            case "offerDraw": {
+                if (playerSeat == null || synchronizedMatch.status !== "active") {
+                    blockedReason = "cannot-offer-draw";
+                    break;
+                }
+                if (synchronizedMatch.drawOfferByUid === uid) {
+                    actionApplied = true;
+                    break;
+                }
+                if (synchronizedMatch.drawOfferByUid != null) {
+                    blockedReason = "draw-offer-pending";
+                    break;
+                }
+                nextMatch = {
+                    ...synchronizedMatch,
+                    drawOfferByUid: uid,
+                    updatedAtMs: nowMs,
+                    expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+                };
+                actionApplied = true;
+                break;
+            }
+            case "acceptDraw": {
+                if (playerSeat == null || synchronizedMatch.status !== "active") {
+                    blockedReason = "cannot-accept-draw";
+                    break;
+                }
+                if (synchronizedMatch.drawOfferByUid == null || synchronizedMatch.drawOfferByUid === uid) {
+                    blockedReason = "no-draw-offer";
+                    break;
+                }
+                nextMatch = concludeFriendMatch(synchronizedMatch, {
+                    code: "draw",
+                    reason: "agreedDraw",
+                    winnerUid: null,
+                    nowMs,
+                });
+                actionApplied = true;
+                break;
+            }
+            case "declineDraw": {
+                if (playerSeat == null || synchronizedMatch.status !== "active") {
+                    blockedReason = "cannot-decline-draw";
+                    break;
+                }
+                if (synchronizedMatch.drawOfferByUid == null || synchronizedMatch.drawOfferByUid === uid) {
+                    blockedReason = "no-draw-offer";
+                    break;
+                }
+                nextMatch = {
+                    ...synchronizedMatch,
+                    drawOfferByUid: null,
+                    updatedAtMs: nowMs,
+                    expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+                };
+                actionApplied = true;
+                break;
+            }
+        }
+
+        responseMatch = nextMatch;
+        if (!actionApplied) {
+            return friendMatchChanged(existingMatch, nextMatch)
+                ? nextMatch
+                : undefined;
+        }
+        blockedReason = "";
+        return nextMatch;
+    });
+
+    const match = responseMatch ?? normalizeFriendMatchRecord(
+        transactionResult.snapshot.val(),
+        matchId,
+    );
+    if (match == null) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "That match no longer exists.",
+        );
+    }
+
+    if (transactionResult.committed) {
+        await persistFriendMatchIndexes(match);
+    }
+
+    return {
+        success: actionApplied,
+        reason: actionApplied ? null : blockedReason,
+        invite: buildFriendInviteRecord(match),
+        snapshot: buildFriendMatchClientPayload(match),
+    };
+}
+
 // ---------------------------------------------------------------------------
 // submitAcademyScore
 //
@@ -2020,6 +3237,22 @@ export const spendEconomyCoins = functions.https.onCall(
 
 export const grantEconomyReward = functions.https.onCall(
     async (data, context) => grantEconomyRewardImpl(data, context),
+);
+
+export const createFriendMatchInvite = functions.https.onCall(
+    async (data, context) => createFriendMatchInviteImpl(data, context),
+);
+
+export const joinFriendMatchInvite = functions.https.onCall(
+    async (data, context) => joinFriendMatchInviteImpl(data, context),
+);
+
+export const submitFriendMatchMove = functions.https.onCall(
+    async (data, context) => submitFriendMatchMoveImpl(data, context),
+);
+
+export const actOnFriendMatch = functions.https.onCall(
+    async (data, context) => actOnFriendMatchImpl(data, context),
 );
 
 // ---------------------------------------------------------------------------

@@ -3882,7 +3882,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   @override
   void _openGambitQuizFromAcademy() {
     setState(() {
-      _playVsBot = false;
+      _matchMode = MatchMode.analysis;
       _selectedBot = null;
       _botThinking = false;
       _quizLaunchedFromAcademy = true;

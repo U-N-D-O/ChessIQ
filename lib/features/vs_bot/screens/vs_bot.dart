@@ -14,7 +14,7 @@ abstract class _VsBotState extends _StoreState {
   Key? get _botAvatarWidgetKey => _botAvatarKey;
 
   @override
-  String get _introSoundAssetPath => _playVsBot || _isHeadToHeadPerspective
+  String get _introSoundAssetPath => _isBotMatchMode || _isHeadToHeadPerspective
       ? 'sounds/vs.mp3'
       : super._introSoundAssetPath;
 
@@ -23,7 +23,7 @@ abstract class _VsBotState extends _StoreState {
 
   @override
   double get _botAvatarIntroOpacity {
-    if (!_playVsBot || _introCompleted) {
+    if (!_isBotMatchMode || _introCompleted) {
       return 1.0;
     }
     return 0.0;
@@ -85,7 +85,7 @@ abstract class _VsBotState extends _StoreState {
 
   @override
   Widget _buildSceneIntroOverlay(Size scene, double scale) {
-    if (_playVsBot) {
+    if (_isBotMatchMode) {
       return _buildVsBotIntroOverlay(scene, scale);
     }
     if (_isHeadToHeadPerspective) {
@@ -897,7 +897,7 @@ abstract class _VsBotState extends _StoreState {
                             fillColor: arcade.marquee,
                           ),
                           child: Text(
-                            _playLocalFriendMatch
+                            _isLocalFriendMatchMode
                                 ? 'VS FRIEND'
                                 : 'HEAD TO HEAD',
                             textAlign: TextAlign.center,
@@ -1029,7 +1029,7 @@ abstract class _VsBotState extends _StoreState {
                             fillColor: arcade.panelAlt,
                           ),
                           child: Text(
-                            _playLocalFriendMatch
+                            _isLocalFriendMatchMode
                                 ? 'VS // FRIEND'
                                 : 'ANALYSIS // HEAD-TO-HEAD',
                             textAlign: TextAlign.center,
@@ -1310,7 +1310,7 @@ abstract class _VsBotState extends _StoreState {
   @override
   Future<void> _onBotAvatarTapped() async {
     final bot = _selectedBot;
-    if (bot == null || !_playVsBot || !mounted) {
+    if (bot == null || !_isBotMatchMode || !mounted) {
       return;
     }
     await HapticFeedback.selectionClick();

@@ -45,6 +45,31 @@
                 ".read": "auth != null && auth.uid == $uid",
                 ".write": false
             }
+        },
+        "friend_matches": {
+            "$matchId": {
+                ".read": "auth != null && root.child('friend_match_memberships/' + auth.uid + '/' + $matchId).exists()",
+                ".write": false
+            }
+        },
+        "friend_match_invites": {
+            ".read": false,
+            ".write": false,
+            "by_code": {
+                "$inviteCode": {
+                    ".read": false,
+                    ".write": false
+                }
+            }
+        },
+        "friend_match_memberships": {
+            "$uid": {
+                ".read": "auth != null && auth.uid == $uid",
+                ".write": false,
+                "$matchId": {
+                    ".write": false
+                }
+            }
         }
     }
 }
