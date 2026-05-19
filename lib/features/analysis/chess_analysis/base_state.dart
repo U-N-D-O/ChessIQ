@@ -30,6 +30,20 @@ class _DetectedGameOutcome {
   final DrawReason? drawReason;
 }
 
+class _LocalFriendTimeControlPreset {
+  const _LocalFriendTimeControlPreset({
+    required this.id,
+    required this.label,
+    required this.initialTime,
+    this.increment = Duration.zero,
+  });
+
+  final String id;
+  final String label;
+  final Duration? initialTime;
+  final Duration increment;
+}
+
 class _SquareToast {
   const _SquareToast({
     required this.square,
@@ -335,6 +349,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'analysis_move_assessment_enabled_v1';
   static const String _analysisHeadToHeadEvalBarEnabledKey =
       'analysis_head_to_head_eval_bar_enabled_v1';
+    static const String _analysisLocalFriendTimeControlKey =
+      'analysis_local_friend_time_control_v1';
   static const String _analysisEngineOwner = 'analysis.board';
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
@@ -350,6 +366,35 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _gameResultRevealDuration = Duration(
     milliseconds: 1150,
   );
+  static const List<_LocalFriendTimeControlPreset> _localFriendTimeControls =
+      <_LocalFriendTimeControlPreset>[
+        _LocalFriendTimeControlPreset(
+          id: 'untimed',
+          label: 'Untimed',
+          initialTime: null,
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '3_0',
+          label: '3+0',
+          initialTime: Duration(minutes: 3),
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '5_0',
+          label: '5+0',
+          initialTime: Duration(minutes: 5),
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '10_0',
+          label: '10+0',
+          initialTime: Duration(minutes: 10),
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '10_5',
+          label: '10+5',
+          initialTime: Duration(minutes: 10),
+          increment: Duration(seconds: 5),
+        ),
+      ];
   static const Duration _gameResultRevealSkipDelay = Duration(
     milliseconds: 250,
   );
@@ -643,6 +688,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _headToHeadEvalBarEnabled = false;
   bool _vsBotEvalEnabled = false;
   bool _vsBotOptimalLineRevealActive = false;
+  bool _playLocalFriendMatch = false;
   int _vsBotCharge = 0;
   int _vsBotMatchStartCount = 0;
   int _vsBotChargeEpoch = 0;
@@ -657,9 +703,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _launchTargetsEvalBar = false;
   GameOutcome? _gameOutcome;
   DrawReason? _gameDrawReason;
+  bool _localFriendEndedOnTime = false;
   bool _gameResultDialogVisible = false;
   _GameResultReveal? _gameResultReveal;
   int _gameResultRevealSequence = 0;
+  Timer? _localFriendClockTimer;
+  int _localFriendTimeControlIndex = 2;
+  Duration _localFriendWhiteClockRemaining = Duration.zero;
+  Duration _localFriendBlackClockRemaining = Duration.zero;
+  Duration _localFriendActiveClockBaseline = Duration.zero;
+  DateTime? _localFriendActiveClockStartedAt;
+  bool? _localFriendActiveClockIsWhite;
   Timer? _checkAlertTimer;
   _CheckAlert? _checkAlert;
   Timer? _squareToastTimer;
@@ -848,7 +902,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _editModeHintText = nextEnabled
           ? 'Edit mode on'
           : enabled && !_canUseAnalysisEditMode
-          ? 'Edit mode unavailable in 1v1'
+          ? 'Edit mode unavailable in head-to-head'
           : 'Edit mode off';
     });
     _scheduleEditModeHintHide();
@@ -4239,6 +4293,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedHeadToHeadEvalBarEnabled = prefs.getBool(
         _analysisHeadToHeadEvalBarEnabledKey,
       );
+      final savedLocalFriendTimeControl = prefs.getInt(
+        _analysisLocalFriendTimeControlKey,
+      );
 
       if (savedPerspective != null &&
           savedPerspective >= 0 &&
@@ -4259,6 +4316,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       if (savedHeadToHeadEvalBarEnabled != null) {
         _headToHeadEvalBarEnabled = savedHeadToHeadEvalBarEnabled;
+      }
+      if (savedLocalFriendTimeControl != null &&
+          savedLocalFriendTimeControl >= 0 &&
+          savedLocalFriendTimeControl < _localFriendTimeControls.length) {
+        _localFriendTimeControlIndex = savedLocalFriendTimeControl;
       }
     } catch (e) {
       debugPrint('Failed to load analysis settings prefs: $e');
@@ -4353,6 +4415,282 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _analyze();
   }
 
+  _LocalFriendTimeControlPreset get _selectedLocalFriendTimeControl =>
+      _localFriendTimeControls[_localFriendTimeControlIndex.clamp(
+        0,
+        _localFriendTimeControls.length - 1,
+      )];
+
+  String _formatLocalFriendTimeControl(
+    _LocalFriendTimeControlPreset preset,
+  ) {
+    if (preset.initialTime == null) {
+      return preset.label;
+    }
+    final minutes = preset.initialTime!.inMinutes;
+    final incrementSeconds = preset.increment.inSeconds;
+    return incrementSeconds > 0
+        ? '$minutes+$incrementSeconds'
+        : '$minutes+0';
+  }
+
+  Future<void> _setLocalFriendTimeControlIndex(int index) async {
+    final clamped = index.clamp(0, _localFriendTimeControls.length - 1);
+    if (_localFriendTimeControlIndex == clamped) {
+      return;
+    }
+
+    setState(() {
+      _localFriendTimeControlIndex = clamped;
+      if (_playLocalFriendMatch) {
+        _stopLocalFriendClock(clearDisplay: true);
+        _initializeLocalFriendClocks();
+        _startLocalFriendClockForCurrentTurn();
+      }
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_analysisLocalFriendTimeControlKey, clamped);
+  }
+
+  bool get _hasTimedLocalFriendClock =>
+      _playLocalFriendMatch && _selectedLocalFriendTimeControl.initialTime != null;
+
+  Duration _localFriendDisplayedClock({required bool white}) {
+    final stored = white
+        ? _localFriendWhiteClockRemaining
+        : _localFriendBlackClockRemaining;
+    if (_localFriendActiveClockIsWhite != white ||
+        _localFriendActiveClockStartedAt == null) {
+      return stored;
+    }
+
+    final elapsed = DateTime.now().difference(_localFriendActiveClockStartedAt!);
+    final remaining = _localFriendActiveClockBaseline - elapsed;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  String _formatLocalFriendClock(Duration remaining) {
+    final totalMilliseconds = remaining.inMilliseconds.clamp(0, 59999999);
+    final totalSeconds = totalMilliseconds ~/ 1000;
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (totalSeconds >= 60) {
+      return '$minutes:${seconds.toString().padLeft(2, '0')}';
+    }
+
+    final tenths = (totalMilliseconds % 1000) ~/ 100;
+    return '0:${seconds.toString().padLeft(2, '0')}.$tenths';
+  }
+
+  void _initializeLocalFriendClocks() {
+    final initialTime = _selectedLocalFriendTimeControl.initialTime;
+    _localFriendActiveClockBaseline = Duration.zero;
+    _localFriendActiveClockStartedAt = null;
+    _localFriendActiveClockIsWhite = null;
+    if (initialTime == null) {
+      _localFriendWhiteClockRemaining = Duration.zero;
+      _localFriendBlackClockRemaining = Duration.zero;
+      return;
+    }
+
+    _localFriendWhiteClockRemaining = initialTime;
+    _localFriendBlackClockRemaining = initialTime;
+  }
+
+  void _stopLocalFriendClock({bool clearDisplay = false}) {
+    _localFriendClockTimer?.cancel();
+    _localFriendClockTimer = null;
+
+    if (!clearDisplay &&
+        _localFriendActiveClockIsWhite != null &&
+        _localFriendActiveClockStartedAt != null) {
+      final remaining = _localFriendDisplayedClock(
+        white: _localFriendActiveClockIsWhite!,
+      );
+      if (_localFriendActiveClockIsWhite!) {
+        _localFriendWhiteClockRemaining = remaining;
+      } else {
+        _localFriendBlackClockRemaining = remaining;
+      }
+    }
+
+    _localFriendActiveClockBaseline = Duration.zero;
+    _localFriendActiveClockStartedAt = null;
+    _localFriendActiveClockIsWhite = null;
+
+    if (clearDisplay) {
+      _localFriendWhiteClockRemaining = Duration.zero;
+      _localFriendBlackClockRemaining = Duration.zero;
+    }
+  }
+
+  void _completeLocalFriendTurn({required bool moverIsWhite}) {
+    if (!_playLocalFriendMatch) {
+      return;
+    }
+
+    _stopLocalFriendClock();
+    if (!_hasTimedLocalFriendClock) {
+      return;
+    }
+
+    final increment = _selectedLocalFriendTimeControl.increment;
+    if (increment <= Duration.zero) {
+      return;
+    }
+
+    if (moverIsWhite) {
+      _localFriendWhiteClockRemaining += increment;
+    } else {
+      _localFriendBlackClockRemaining += increment;
+    }
+  }
+
+  void _startLocalFriendClockForCurrentTurn() {
+    if (!_hasTimedLocalFriendClock ||
+        _gameOutcome != null ||
+        _activeSection != AppSection.analysis) {
+      return;
+    }
+
+    _localFriendClockTimer?.cancel();
+    _localFriendActiveClockIsWhite = _isWhiteTurn;
+    _localFriendActiveClockBaseline = _isWhiteTurn
+        ? _localFriendWhiteClockRemaining
+        : _localFriendBlackClockRemaining;
+    _localFriendActiveClockStartedAt = DateTime.now();
+    _localFriendClockTimer = Timer.periodic(
+      const Duration(milliseconds: 200),
+      _tickLocalFriendClock,
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _tickLocalFriendClock(Timer timer) {
+    if (!_playLocalFriendMatch ||
+        !_hasTimedLocalFriendClock ||
+        _gameOutcome != null ||
+        _localFriendActiveClockIsWhite == null) {
+      timer.cancel();
+      if (identical(_localFriendClockTimer, timer)) {
+        _localFriendClockTimer = null;
+      }
+      return;
+    }
+
+    final whiteToFlag = _localFriendActiveClockIsWhite!;
+    final remaining = _localFriendDisplayedClock(white: whiteToFlag);
+    if (remaining <= Duration.zero) {
+      timer.cancel();
+      if (identical(_localFriendClockTimer, timer)) {
+        _localFriendClockTimer = null;
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (whiteToFlag) {
+          _localFriendWhiteClockRemaining = Duration.zero;
+        } else {
+          _localFriendBlackClockRemaining = Duration.zero;
+        }
+      });
+      _endLocalFriendOnTime(whiteFlagged: whiteToFlag);
+      return;
+    }
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _endLocalFriendOnTime({required bool whiteFlagged}) {
+    final outcome = whiteFlagged ? GameOutcome.blackWin : GameOutcome.whiteWin;
+    _send('stop');
+    _stopLocalFriendClock();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _localFriendEndedOnTime = true;
+      _gameOutcome = outcome;
+      _gameDrawReason = null;
+      _botThinking = false;
+      _clearCheckAlertState();
+    });
+    unawaited(_startGameResultReveal(outcome));
+  }
+
+  String _localFriendTimeoutTitle(GameOutcome outcome) {
+    return outcome == GameOutcome.whiteWin
+        ? 'WHITE WINS ON TIME'
+        : 'BLACK WINS ON TIME';
+  }
+
+  String _localFriendTimeoutSubtitle(GameOutcome outcome) {
+    return outcome == GameOutcome.whiteWin
+        ? 'Black ran out of time before the next move could be made.'
+        : 'White ran out of time before the next move could be made.';
+  }
+
+  String _localFriendTimeoutDialogMessage(GameOutcome outcome) {
+    return outcome == GameOutcome.whiteWin
+        ? 'Black flagged before completing the move. Continue to inspect, or reset the board to start another shared game.'
+        : 'White flagged before completing the move. Continue to inspect, or reset the board to start another shared game.';
+  }
+
+  Future<void> _startLocalFriendMatch() async {
+    try {
+      unawaited(_stopMenuMusic(fadeOut: true));
+      if (!mounted) {
+        return;
+      }
+
+      if (_activeSection == AppSection.analysis &&
+          !_playVsBot &&
+          !_playLocalFriendMatch) {
+        _persistAnalysisSnapshotIfNeeded();
+      }
+
+      setState(() {
+        _activeSection = AppSection.analysis;
+        _playVsBot = false;
+        _playLocalFriendMatch = true;
+        _selectedBot = null;
+        _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
+        _analysisEditMode = false;
+        _perspective = BoardPerspective.headToHead;
+        _suggestionsEnabled = false;
+        _openingMode = OpeningMode.off;
+        _selectedGambit = null;
+        _gambitPreviewLines = <EngineLine>[];
+        _gambitSelectedFrom = null;
+        _holdSelectedFrom = null;
+        _legalTargets.clear();
+        _gambitAvailableTargets.clear();
+      });
+
+      _resetBoard(initialLaunch: false, withIntro: false);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _initializeLocalFriendClocks();
+      });
+      _startLocalFriendClockForCurrentTurn();
+    } catch (e) {
+      _addLog('Start local friend match failed: $e');
+      debugPrint('Start local friend match failed: $e');
+    }
+  }
+
   Future<void> _lightHaptic() async {
     if (!_hapticsEnabled) return;
     await HapticFeedback.lightImpact();
@@ -4429,13 +4767,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _analysisEditMode && _canUseAnalysisEditMode;
 
   bool get _showsHeadToHeadEvalBar =>
-      !_playVsBot && _isHeadToHeadPerspective && _headToHeadEvalBarEnabled;
+      !_playVsBot &&
+      !_playLocalFriendMatch &&
+      _isHeadToHeadPerspective &&
+      _headToHeadEvalBarEnabled;
 
-  bool get _runsAnalysisMoveAssessment => !_playVsBot && _moveAssessmentEnabled;
+    bool get _runsAnalysisMoveAssessment =>
+      !_playVsBot && !_playLocalFriendMatch && _moveAssessmentEnabled;
 
   bool get _isEngineActive => _playVsBot
       ? _vsBotEvalEnabled
-      : !_isHeadToHeadPerspective && _suggestionsEnabled;
+      : !_playLocalFriendMatch && !_isHeadToHeadPerspective && _suggestionsEnabled;
 
   bool get _shouldShowVisualSuggestions => _playVsBot
       ? _vsBotOptimalLineRevealActive && _isHumanTurnInBotGame
@@ -4575,6 +4917,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   _GameResultReveal _createGameResultReveal(GameOutcome outcome) {
     final isDraw = outcome == GameOutcome.draw;
     final isWin = !isDraw && _playVsBot && _isWinningOutcomeForPov;
+    final isTimedLocalFriendFinish =
+      _playLocalFriendMatch && _localFriendEndedOnTime && !isDraw;
     final accent = isDraw
         ? const Color(0xFFD8B640)
         : isWin
@@ -4584,6 +4928,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? 'DRAW'
         : _playVsBot
         ? (isWin ? 'VICTORY' : 'DEFEAT')
+      : isTimedLocalFriendFinish
+      ? _localFriendTimeoutTitle(outcome)
         : 'CHECKMATE';
     final subtitle = isDraw
         ? _drawOutcomeRevealSubtitle(_gameDrawReason)
@@ -4591,9 +4937,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? (isWin
               ? 'Checkmate lands. Take in the final position.'
               : 'Checkmate lands. Watch the last strike finish.')
+      : isTimedLocalFriendFinish
+      ? _localFriendTimeoutSubtitle(outcome)
         : 'The final move is locked on the board.';
     final icon = isDraw
         ? Icons.balance_rounded
+      : isTimedLocalFriendFinish
+      ? Icons.flag_rounded
         : isWin
         ? Icons.emoji_events_rounded
         : Icons.crisis_alert_rounded;
@@ -5402,7 +5752,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _persistAnalysisSnapshotIfNeeded() {
-    if (_playVsBot || _activeSection != AppSection.analysis) return;
+    if (_playVsBot || _playLocalFriendMatch || _activeSection != AppSection.analysis) {
+      return;
+    }
     _persistCurrentSettings();
   }
 
@@ -5501,6 +5853,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _resetBoard({bool initialLaunch = false, bool withIntro = true}) {
     _send('stop');
     _send('ucinewgame');
+    _stopLocalFriendClock(clearDisplay: true);
     _clearBotGhostArrows();
     _clearVsBotOverlayState();
     _cancelGameResultReveal();
@@ -7421,6 +7774,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       };
 
       return IgnorePointer(
+
+    if (_playLocalFriendMatch && endedOutcome == null) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: compactBottom,
+          left: horizontal,
+          right: horizontal,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _iconBtn(Icons.arrow_back_rounded, _goToMenu),
+            _iconBtn(Icons.refresh, _confirmReset),
+            _marketplaceBtn(),
+            _iconBtn(
+              Icons.tune_rounded,
+              () => unawaited(_openSettings(fromAnalysisMode: false)),
+            ),
+          ],
+        ),
+      );
+    }
         child: Padding(
           padding: contentPadding,
           child: ConstrainedBox(
@@ -8143,6 +8518,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _clearGameOutcomeState() {
     _gameOutcome = null;
     _gameDrawReason = null;
+    _localFriendEndedOnTime = false;
     _clearCheckAlertState();
     _clearSquareToastState();
   }
@@ -8371,6 +8747,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (outcome == GameOutcome.draw) {
       return _drawOutcomePersistentTitle(_gameDrawReason);
     }
+    if (_playLocalFriendMatch && _localFriendEndedOnTime) {
+      return _localFriendTimeoutTitle(outcome);
+    }
     if (_playVsBot) {
       return _isWinningOutcomeForPov ? 'VICTORY' : 'DEFEAT';
     }
@@ -8380,6 +8759,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String _endMatchCardSubtitle(GameOutcome outcome) {
     if (outcome == GameOutcome.draw) {
       return _drawOutcomeRevealSubtitle(_gameDrawReason);
+    }
+    if (_playLocalFriendMatch && _localFriendEndedOnTime) {
+      return _localFriendTimeoutSubtitle(outcome);
     }
     if (_playVsBot) {
       return _isWinningOutcomeForPov
@@ -9844,6 +10226,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _openPuzzleAcademyFromMenu() {
     setState(() {
       _playVsBot = false;
+      _playLocalFriendMatch = false;
       _selectedBot = null;
       _botThinking = false;
       _vsBotSessionWins = 0;
@@ -9852,6 +10235,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _clearGameOutcomeState();
       _quizLaunchedFromAcademy = false;
       _activeSection = AppSection.puzzleAcademy;
+    });
+  }
+
+  void _openVsModeFromMenu() {
+    setState(() {
+      _playVsBot = false;
+      _playLocalFriendMatch = false;
+      _selectedBot = null;
+      _botThinking = false;
+      _vsBotSessionWins = 0;
+      _vsBotSessionLosses = 0;
+      _vsBotSessionDraws = 0;
+      _clearGameOutcomeState();
+      _quizLaunchedFromAcademy = false;
+      _activeSection = AppSection.vsMode;
     });
   }
 
@@ -9873,6 +10271,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       setState(() {
         _activeSection = AppSection.analysis;
         _playVsBot = false;
+        _playLocalFriendMatch = false;
         _selectedBot = null;
         _botThinking = false;
         _vsBotSessionWins = 0;
@@ -9915,6 +10314,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_activeSection == AppSection.botSetup) {
       setState(() {
         _playVsBot = false;
+        _playLocalFriendMatch = false;
         _selectedBot = null;
         _botThinking = false;
         _vsBotSessionWins = 0;
@@ -9922,6 +10322,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _vsBotSessionDraws = 0;
         _clearGameOutcomeState();
         _clearBotGhostArrows();
+        _quizLaunchedFromAcademy = false;
+        _activeSection = AppSection.vsMode;
+      });
+      return;
+    }
+
+    if (_activeSection == AppSection.vsMode) {
+      setState(() {
+        _playVsBot = false;
+        _playLocalFriendMatch = false;
+        _selectedBot = null;
+        _botThinking = false;
+        _vsBotSessionWins = 0;
+        _vsBotSessionLosses = 0;
+        _vsBotSessionDraws = 0;
+        _clearGameOutcomeState();
         _quizLaunchedFromAcademy = false;
         _activeSection = AppSection.menu;
       });
@@ -9931,6 +10347,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_activeSection == AppSection.puzzleAcademy) {
       setState(() {
         _playVsBot = false;
+        _playLocalFriendMatch = false;
         _selectedBot = null;
         _botThinking = false;
         _vsBotSessionWins = 0;
@@ -9944,10 +10361,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final wasBotGame = _playVsBot;
+    final wasLocalFriendGame = _playLocalFriendMatch;
     if (wasBotGame) {
       _send('stop');
-    } else {
+    } else if (!wasLocalFriendGame) {
       _persistAnalysisSnapshotIfNeeded();
+    }
+    if (wasLocalFriendGame) {
+      _stopLocalFriendClock();
     }
     unawaited(_releaseEngineSession());
 
@@ -9966,6 +10387,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _clearBotGhostArrows();
         }
         _playVsBot = false;
+        _playLocalFriendMatch = false;
         _selectedBot = null;
         _botThinking = false;
         _vsBotSessionWins = 0;
@@ -9992,6 +10414,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       setState(() {
         _activeSection = AppSection.menu;
         _playVsBot = false;
+        _playLocalFriendMatch = false;
         _selectedBot = null;
         _botThinking = false;
         _vsBotSessionWins = 0;
@@ -10042,6 +10465,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 opacity: opacity,
                 child: _activeSection == AppSection.menu
                     ? _buildStartMenu()
+                  : _activeSection == AppSection.vsMode
+                  ? _buildVsModeScreen()
                     : _activeSection == AppSection.botSetup
                     ? _buildBotSetupScreen()
                     : _activeSection == AppSection.puzzleAcademy
@@ -11393,10 +11818,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     });
 
+    _completeLocalFriendTurn(moverIsWhite: moverIsWhite);
+
     final detectedOutcome = _detectCurrentGameOutcome();
     if (detectedOutcome != null) {
       final gameOutcome = detectedOutcome.outcome;
       _send('stop');
+      _stopLocalFriendClock();
       setState(() {
         _pendingMoveQualityGrading = null;
         _recordVsBotSessionResult(gameOutcome);
@@ -11420,9 +11848,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     _persistAnalysisSnapshotIfNeeded();
-    _refreshAnalysisForCurrentPosition();
-    if (_playVsBot) {
-      unawaited(_maybeTriggerBotMove());
+    if (_playLocalFriendMatch) {
+      _startLocalFriendClockForCurrentTurn();
+    } else {
+      _refreshAnalysisForCurrentPosition();
+      if (_playVsBot) {
+        unawaited(_maybeTriggerBotMove());
+      }
     }
   }
 
@@ -13293,11 +13725,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             children: [
               _menuGlyphButton(
                 label: 'PLAY CHESS',
-                icon: Icons.smart_toy_outlined,
+                icon: Icons.sports_esports_outlined,
                 accent: isMono
                     ? scheme.onSurface.withValues(alpha: 0.88)
                     : const Color(0xFF5AAEE8),
-                onTap: _openBotSetupFromMenu,
+                onTap: _openVsModeFromMenu,
               ),
               _menuGlyphButton(
                 label: 'ANALYSIS',
@@ -13585,6 +14017,414 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Widget _buildVsModeScreen() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+    final selectedLocalFriendTimeControl = _selectedLocalFriendTimeControl;
+
+    Widget buildModeCard({
+      required String title,
+      required String subtitle,
+      required IconData icon,
+      required Color accent,
+      required VoidCallback onTap,
+    }) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            accent.withValues(alpha: isDark ? 0.10 : 0.05),
+            scheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: accent.withValues(alpha: 0.34)),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: isDark ? 0.16 : 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: accent, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.72),
+                          fontSize: 13,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: accent.withValues(alpha: 0.92),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color.alphaBlend(
+              arcade.cyan.withValues(alpha: useMonochrome ? 0.03 : 0.08),
+              scheme.surface,
+            ),
+            Color.alphaBlend(
+              arcade.amber.withValues(alpha: useMonochrome ? 0.03 : 0.06),
+              scheme.surfaceContainerHighest,
+            ),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: _goToMenu,
+                    tooltip: 'Back to menu',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Color.alphaBlend(
+                        scheme.surface.withValues(alpha: 0.82),
+                        arcade.panel,
+                      ),
+                      foregroundColor: scheme.onSurface,
+                      side: BorderSide(
+                        color: scheme.outline.withValues(alpha: 0.24),
+                      ),
+                    ),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    key: const ValueKey<String>('analysis_vs_mode_credits_trigger'),
+                    onPressed: _showCreditsDialog,
+                    tooltip: 'Credits and legal',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Color.alphaBlend(
+                        scheme.surface.withValues(alpha: 0.82),
+                        arcade.panel,
+                      ),
+                      foregroundColor: useMonochrome
+                          ? scheme.onSurface
+                          : arcade.cyan,
+                      side: BorderSide(
+                        color: scheme.outline.withValues(alpha: 0.24),
+                      ),
+                    ),
+                    icon: const Icon(Icons.info_outline_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Image.asset(
+                  _menuLogoAsset(context),
+                  width: 220,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'VS MODE',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Choose a bot match or a shared-board friend game.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  fontSize: 14,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          buildModeCard(
+                            title: 'VS BOT',
+                            subtitle:
+                                'Choose a character, difficulty, and side before the match starts.',
+                            icon: Icons.smart_toy_outlined,
+                            accent: useMonochrome
+                                ? scheme.onSurface
+                                : arcade.cyan,
+                            onTap: _openBotSetupFromMenu,
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Color.alphaBlend(
+                                arcade.amber.withValues(
+                                  alpha: isDark ? 0.10 : 0.05,
+                                ),
+                                scheme.surface,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: arcade.amber.withValues(alpha: 0.34),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: arcade.amber.withValues(
+                                    alpha: isDark ? 0.12 : 0.08,
+                                  ),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 54,
+                                        height: 54,
+                                        decoration: BoxDecoration(
+                                          color: arcade.amber.withValues(
+                                            alpha: isDark ? 0.16 : 0.12,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          Icons.people_alt_outlined,
+                                          color: arcade.amber,
+                                          size: 28,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'VS FRIEND',
+                                              style: TextStyle(
+                                                color: scheme.onSurface,
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'Shared-board play on one screen with head-to-head orientation and local clocks.',
+                                              style: TextStyle(
+                                                color: scheme.onSurface
+                                                    .withValues(alpha: 0.72),
+                                                fontSize: 13,
+                                                height: 1.35,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Text(
+                                    'Time Control',
+                                    style: TextStyle(
+                                      color: scheme.onSurface,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      for (
+                                        int index = 0;
+                                        index < _localFriendTimeControls.length;
+                                        index++
+                                      )
+                                        ChoiceChip(
+                                          label: Text(
+                                            _formatLocalFriendTimeControl(
+                                              _localFriendTimeControls[index],
+                                            ),
+                                          ),
+                                          selected:
+                                              _localFriendTimeControlIndex ==
+                                              index,
+                                          onSelected: (_) {
+                                            unawaited(
+                                              _setLocalFriendTimeControlIndex(
+                                                index,
+                                              ),
+                                            );
+                                          },
+                                          selectedColor: Color.alphaBlend(
+                                            arcade.amber.withValues(
+                                              alpha: 0.22,
+                                            ),
+                                            scheme.surface,
+                                          ),
+                                          side: BorderSide(
+                                            color: _localFriendTimeControlIndex ==
+                                                    index
+                                                ? arcade.amber.withValues(
+                                                    alpha: 0.72,
+                                                  )
+                                                : scheme.outline.withValues(
+                                                    alpha: 0.32,
+                                                  ),
+                                          ),
+                                          labelStyle: TextStyle(
+                                            color: scheme.onSurface,
+                                            fontWeight:
+                                                _localFriendTimeControlIndex ==
+                                                    index
+                                                ? FontWeight.w800
+                                                : FontWeight.w600,
+                                          ),
+                                          backgroundColor: Color.alphaBlend(
+                                            scheme.surface.withValues(
+                                              alpha: 0.88,
+                                            ),
+                                            arcade.panelAlt,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    selectedLocalFriendTimeControl.initialTime ==
+                                            null
+                                        ? 'Shared board without a clock.'
+                                        : 'Both sides start with ${_formatLocalFriendTimeControl(selectedLocalFriendTimeControl)} and the white clock runs first.',
+                                    style: TextStyle(
+                                      color: scheme.onSurface.withValues(
+                                        alpha: 0.68,
+                                      ),
+                                      fontSize: 12.5,
+                                      height: 1.35,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      onPressed: () =>
+                                          unawaited(_startLocalFriendMatch()),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Color.alphaBlend(
+                                          arcade.amber.withValues(alpha: 0.92),
+                                          scheme.surface,
+                                        ),
+                                        foregroundColor: const Color(
+                                          0xFF0B0F16,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.play_arrow_rounded,
+                                      ),
+                                      label: const Text(
+                                        'Start Shared Board',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBotSetupScreen();
   Color _botDifficultyColor(BotDifficulty difficulty);
 
@@ -13783,7 +14623,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                           72.0,
                                                                         );
                                                                 final hasLandscapeTitle =
-                                                                    !_playVsBot &&
+                                                                  !_playVsBot &&
+                                                                  !_playLocalFriendMatch &&
                                                                     (_selectedGambit !=
                                                                             null ||
                                                                         _currentOpening
@@ -13816,7 +14657,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                               ),
                                                                             ),
                                                                           ),
-                                                                          if (!_playVsBot &&
+                                                                            if (!_playVsBot &&
+                                                                              !_playLocalFriendMatch &&
                                                                               _selectedGambit !=
                                                                                   null)
                                                                             Align(
@@ -13843,7 +14685,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                                 ),
                                                                               ),
                                                                             )
-                                                                          else if (!_playVsBot &&
+                                                                            else if (!_playVsBot &&
+                                                                              !_playLocalFriendMatch &&
                                                                               _currentOpening.isNotEmpty)
                                                                             Align(
                                                                               alignment: Alignment.center,
@@ -13856,7 +14699,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                                 ),
                                                                               ),
                                                                             ),
-                                                                          if (!_playVsBot)
+                                                                          if (!_playVsBot &&
+                                                                              !_playLocalFriendMatch)
                                                                             _buildSuggestedMovesList(
                                                                               height: suggestionsHeight,
                                                                               padding: const EdgeInsets.symmetric(
@@ -13864,7 +14708,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                                 vertical: 8,
                                                                               ),
                                                                             ),
-                                                                          if (!_playVsBot)
+                                                                          if (!_playVsBot &&
+                                                                              !_playLocalFriendMatch)
                                                                             _buildHistoryBar(
                                                                               height: historyHeight,
                                                                               margin: const EdgeInsets.symmetric(
@@ -13960,9 +14805,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                           ),
                                         ),
                                       ),
-                                      if (!_playVsBot)
+                                      if (!_playVsBot && !_playLocalFriendMatch)
                                         _buildOpeningLabel(scale),
-                                      if (!_playVsBot)
+                                      if (!_playVsBot && !_playLocalFriendMatch)
                                         _buildSuggestedMovesList(
                                           height: 130,
                                           padding: const EdgeInsets.symmetric(
@@ -13970,7 +14815,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             horizontal: 20,
                                           ),
                                         ),
-                                      if (!_playVsBot) _buildHistoryBar(),
+                                      if (!_playVsBot && !_playLocalFriendMatch)
+                                        _buildHistoryBar(),
                                       _buildActionArea(),
                                     ],
                                   ),
@@ -14107,6 +14953,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : _isHumanTurnInBotGame
         ? 'PLAYER TURN'
         : 'BOT TURN';
+    final localFriendStatusAccent = _gameOutcome != null
+      ? (_gameOutcome == GameOutcome.draw
+          ? botArcade.amber
+          : const Color(0xFFE45C5C))
+      : _isWhiteTurn
+      ? botArcade.cyan
+      : botArcade.amber;
+    final localFriendStatusLabel = _gameOutcome != null
+      ? 'MATCH END'
+      : _isWhiteTurn
+      ? 'WHITE TURN'
+      : 'BLACK TURN';
     final portraitFilledTagForeground = botArcade.monochrome
         ? botArcade.text
         : const Color(0xFF0B0F16);
@@ -14291,8 +15149,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     width: 120 * scale,
                     child: !_playVsBot
                         ? Text(
-                            'Engine: Stockfish 18',
+                            _playLocalFriendMatch
+                                ? 'VS FRIEND'
+                                : 'Engine: Stockfish 18',
                             textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: scheme.onSurface.withValues(alpha: 0.54),
                               fontSize: 10 * scale,
@@ -14346,7 +15208,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final headerIdentity = buildHeaderIdentity();
     final centerEvalCounter = buildCenterEvalCounter();
     final depthCluster = _buildEditModeDepthCluster(scale, scheme);
-    final rightAccessoryAlignment = _playVsBot && selectedBot != null
+    final rightAccessoryAlignment =
+      (_playVsBot && selectedBot != null) || _playLocalFriendMatch
         ? Alignment.centerRight
         : Alignment.center;
     final rightAccessory = _playVsBot && selectedBot != null
@@ -14356,6 +15219,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               buildPortraitBotStatusTag(compact: true),
               if (_shouldShowDepthCounter) SizedBox(width: 10 * scale),
               if (_shouldShowDepthCounter) depthCluster,
+            ],
+          )
+        : _playLocalFriendMatch
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              PuzzleAcademyTag(
+                label: localFriendStatusLabel,
+                accent: localFriendStatusAccent,
+                compact: true,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _formatLocalFriendTimeControl(_selectedLocalFriendTimeControl),
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.62),
+                  fontSize: 10.5 * scale,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
             ],
           )
         : depthCluster;
@@ -15264,13 +16149,132 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Widget _buildBoardScene(bool reverse) {
     return Stack(
+      clipBehavior: Clip.none,
       children: [
         Opacity(opacity: _boardIntroOpacity(), child: _buildBoard(reverse)),
         Opacity(
           opacity: _boardIntroOpacity(),
           child: _buildAnimatedArrows(reverse),
         ),
+        if (_playLocalFriendMatch) _buildLocalFriendClockOverlay(),
       ],
+    );
+  }
+
+  Widget _buildLocalFriendClockOverlay() {
+    return IgnorePointer(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: -44,
+            left: 0,
+            right: 0,
+            child: Center(child: _buildLocalFriendClockCard(white: false)),
+          ),
+          Positioned(
+            bottom: -44,
+            left: 0,
+            right: 0,
+            child: Center(child: _buildLocalFriendClockCard(white: true)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocalFriendClockCard({required bool white}) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final isActive =
+        _gameOutcome == null && _localFriendActiveClockIsWhite == white;
+    final isWinner = _gameOutcome != null &&
+        ((white && _gameOutcome == GameOutcome.whiteWin) ||
+            (!white && _gameOutcome == GameOutcome.blackWin));
+    final isLoser = _gameOutcome != null &&
+        ((white && _gameOutcome == GameOutcome.blackWin) ||
+            (!white && _gameOutcome == GameOutcome.whiteWin));
+    final accent = isWinner
+        ? const Color(0xFF58E09A)
+        : isLoser
+        ? const Color(0xFFE45C5C)
+        : isActive
+        ? (white
+              ? (useMonochrome ? scheme.onSurface : const Color(0xFF5AAEE8))
+              : (useMonochrome ? scheme.onSurface : const Color(0xFFD8B640)))
+        : scheme.onSurface.withValues(alpha: 0.72);
+    final label = white ? 'WHITE' : 'BLACK';
+    final detail = _gameOutcome == null
+        ? (_hasTimedLocalFriendClock
+              ? (isActive ? 'TO MOVE' : 'WAITING')
+              : 'UNTIMED')
+        : _gameOutcome == GameOutcome.draw
+        ? 'DRAW'
+        : _localFriendEndedOnTime
+        ? (isWinner ? 'WON ON TIME' : 'FLAGGED')
+        : (isWinner ? 'WINNER' : 'CHECKMATED');
+    final timeText = _hasTimedLocalFriendClock
+        ? _formatLocalFriendClock(_localFriendDisplayedClock(white: white))
+        : 'UNTIMED';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      constraints: const BoxConstraints(minWidth: 136),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isDark ? 0.16 : 0.10),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.46), width: 1.4),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: isActive ? 0.20 : 0.10),
+            blurRadius: isActive ? 18 : 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: accent,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.7,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            timeText,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            detail,
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.66),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -18710,7 +19714,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         markChanged,
                       ),
                       _perspectiveOption(
-                        '1v1',
+                        'Head-to-head',
                         BoardPerspective.headToHead,
                         setSheetState,
                         markChanged,
@@ -18727,7 +19731,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         unawaited(_setLockedHeadToHeadPerspective(value));
                         setSheetState(() {});
                       },
-                      title: const Text('Lock 1v1 orientation'),
+                      title: const Text('Lock head-to-head orientation'),
                       subtitle: const Text(
                         'Keep white at the bottom and rotate black pieces toward the top player.',
                       ),
@@ -19119,6 +20123,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final adService = AdService.instance;
     final shouldAttemptAd =
         !_adFreeOwned && adService.boardResetCooldownRemaining == Duration.zero;
+    final wasLocalFriendMatch = _playLocalFriendMatch;
     if (shouldAttemptAd) {
       final shown = await adService.maybeShowBoardResetInterstitial();
       if (!shown) {
@@ -19133,9 +20138,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!mounted) return;
     setState(() {
       _resetBoard();
-      _analyze();
+      if (wasLocalFriendMatch) {
+        _initializeLocalFriendClocks();
+      } else {
+        _analyze();
+      }
     });
     _persistAnalysisSnapshotIfNeeded();
+    if (wasLocalFriendMatch) {
+      _startLocalFriendClockForCurrentTurn();
+    }
     unawaited(_maybeTriggerBotMove());
   }
 
@@ -21698,6 +22710,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void dispose() {
     _cancelGameResultReveal();
     _cancelIdleInterstitialTimer();
+    _stopLocalFriendClock(clearDisplay: true);
     _editModeHintTimer?.cancel();
     _moveQualityOverlayTimer?.cancel();
     _quizFeedbackOverlayTimer?.cancel();

@@ -897,7 +897,9 @@ abstract class _VsBotState extends _StoreState {
                             fillColor: arcade.marquee,
                           ),
                           child: Text(
-                            'HEAD TO HEAD',
+                            _playLocalFriendMatch
+                                ? 'VS FRIEND'
+                                : 'HEAD TO HEAD',
                             textAlign: TextAlign.center,
                             style: puzzleAcademyIdentityStyle(
                               palette: arcade.base,
@@ -1027,7 +1029,9 @@ abstract class _VsBotState extends _StoreState {
                             fillColor: arcade.panelAlt,
                           ),
                           child: Text(
-                            'ANALYSIS // 1V1',
+                            _playLocalFriendMatch
+                                ? 'VS // FRIEND'
+                                : 'ANALYSIS // HEAD-TO-HEAD',
                             textAlign: TextAlign.center,
                             style: puzzleAcademyIdentityStyle(
                               palette: arcade.base,

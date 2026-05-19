@@ -1259,12 +1259,22 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           final continueForeground = useMonochrome
               ? scheme.surface
               : scheme.onPrimary;
-          final title = isDraw ? 'Draw' : 'Checkmate';
+          final isTimedLocalFriendFinish =
+              _playLocalFriendMatch && _localFriendEndedOnTime && !isDraw;
+          final title = isDraw
+              ? 'Draw'
+              : isTimedLocalFriendFinish
+              ? 'Time'
+              : 'Checkmate';
           final message = isDraw
               ? _drawOutcomeDialogMessage(_gameDrawReason)
+              : isTimedLocalFriendFinish
+              ? _localFriendTimeoutDialogMessage(outcome)
               : 'Checkmate has been reached. Continue to inspect, or reset to start over.';
           final icon = isDraw
               ? Icons.balance_rounded
+              : isTimedLocalFriendFinish
+              ? Icons.flag_rounded
               : Icons.crisis_alert_rounded;
 
           return wrapDialogEntrance(
@@ -2258,6 +2268,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   void _openBotSetupFromMenu() {
     setState(() {
       _playVsBot = false;
+      _playLocalFriendMatch = false;
       _selectedBot = null;
       _botThinking = false;
       _vsBotSessionWins = 0;
@@ -2745,6 +2756,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       setState(() {
         _activeSection = AppSection.analysis;
         _playVsBot = true;
+        _playLocalFriendMatch = false;
         _selectedBot = bot;
         _selectedBotDifficulty = difficulty;
         _vsBotEvalEnabled = true;
