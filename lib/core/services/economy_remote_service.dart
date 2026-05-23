@@ -10,6 +10,7 @@ enum EconomyRewardKey {
   academyExamBonus,
   academyDailyPuzzle,
   academyRewardedAd,
+  quizMilestoneRewardedInterstitial,
   academyDailyChallenge,
   purchaseCoinPackS,
   purchaseCoinPackL,
@@ -28,6 +29,8 @@ extension on EconomyRewardKey {
         return 'academyDailyPuzzle';
       case EconomyRewardKey.academyRewardedAd:
         return 'academyRewardedAd';
+      case EconomyRewardKey.quizMilestoneRewardedInterstitial:
+        return 'quizMilestoneRewardedInterstitial';
       case EconomyRewardKey.academyDailyChallenge:
         return 'academyDailyChallenge';
       case EconomyRewardKey.purchaseCoinPackS:

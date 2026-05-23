@@ -9,6 +9,11 @@ canonical signed Android release workflow for ChessIQ. It builds Stockfish,
 runs the release guard, signs the Android App Bundle, and exports a release
 artifact from a tagged commit.
 
+For local Android emulator/device testing, the repo also includes
+`tool/build_stockfish_android.ps1`, which clones the same pinned Stockfish tag
+and populates `android/app/src/main/assets` with the native Android binaries
+used by local Flutter builds.
+
 ## Production Goal
 
 For Google Play submission, each release should come from:

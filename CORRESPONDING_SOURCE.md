@@ -33,6 +33,17 @@ helper script below to prepare the renamed Stockfish entrypoint:
 
 That helper is part of the release source footprint for iOS builds.
 
+## Android-Specific Build Inputs
+
+The Android release path now uses the committed helpers below to clone the
+pinned Stockfish source and package the Android engine assets that are copied
+into `android/app/src/main/assets`:
+
+- `tool/build_stockfish_android.py`
+- `tool/build_stockfish_android.ps1`
+
+These helpers are part of the release source footprint for Android builds.
+
 ## Minimum Release Checklist
 
 Before shipping a Stockfish-enabled mobile build:

@@ -30,15 +30,48 @@ extension RewardedPlacementDetails on RewardedPlacement {
   };
 }
 
+enum RewardedInterstitialPlacement {
+  quizMilestone,
+  academyExamBonus,
+  dailyChallenge,
+}
+
+extension RewardedInterstitialPlacementDetails
+    on RewardedInterstitialPlacement {
+  String get label => switch (this) {
+    RewardedInterstitialPlacement.quizMilestone => 'Quiz milestone',
+    RewardedInterstitialPlacement.academyExamBonus => 'Academy exam bonus',
+    RewardedInterstitialPlacement.dailyChallenge => 'Daily challenge',
+  };
+}
+
+enum RewardedInterstitialShowResult {
+  unavailable,
+  shownWithoutReward,
+  rewardEarned,
+}
+
+extension RewardedInterstitialShowResultDetails
+    on RewardedInterstitialShowResult {
+  bool get wasPresented => this != RewardedInterstitialShowResult.unavailable;
+
+  bool get rewardEarned => this == RewardedInterstitialShowResult.rewardEarned;
+}
+
 class AdService {
   AdService._();
 
   static final AdService instance = AdService._();
+  static const bool _forceTestAds = bool.fromEnvironment(
+    'ADMOB_FORCE_TEST_ADS',
+  );
 
   static const String _testInterstitialAdUnitId =
       'ca-app-pub-3940256099942544/4411468910';
   static const String _testRewardedAdUnitId =
       'ca-app-pub-3940256099942544/1712485313';
+  static const String _testRewardedInterstitialAdUnitId =
+      'ca-app-pub-3940256099942544/6978759866';
   static const String _iosDefaultInterstitialAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID',
     defaultValue: 'ca-app-pub-8366041710010578/4392988454',
@@ -79,6 +112,20 @@ class AdService {
     'ADMOB_IOS_REWARDED_ACADEMY_AD_UNIT_ID',
     defaultValue: 'ca-app-pub-8366041710010578/6532562448',
   );
+  static const String _iosDefaultRewardedInterstitialAdUnitId =
+      String.fromEnvironment('ADMOB_IOS_REWARDED_INTERSTITIAL_AD_UNIT_ID');
+  static const String _iosQuizMilestoneRewardedInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_IOS_REWARDED_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+      );
+  static const String _iosAcademyExamBonusRewardedInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_IOS_REWARDED_INTERSTITIAL_ACADEMY_EXAM_BONUS_AD_UNIT_ID',
+      );
+  static const String _iosDailyChallengeRewardedInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_IOS_REWARDED_INTERSTITIAL_DAILY_CHALLENGE_AD_UNIT_ID',
+      );
   static const String _androidDefaultInterstitialAdUnitId =
       String.fromEnvironment('ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID');
   static const String _androidBoardResetInterstitialAdUnitId =
@@ -108,6 +155,20 @@ class AdService {
   static const String _androidAcademyRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_ANDROID_REWARDED_ACADEMY_AD_UNIT_ID',
   );
+  static const String _androidDefaultRewardedInterstitialAdUnitId =
+      String.fromEnvironment('ADMOB_ANDROID_REWARDED_INTERSTITIAL_AD_UNIT_ID');
+  static const String _androidQuizMilestoneRewardedInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_ANDROID_REWARDED_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+      );
+  static const String _androidAcademyExamBonusRewardedInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_ANDROID_REWARDED_INTERSTITIAL_ACADEMY_EXAM_BONUS_AD_UNIT_ID',
+      );
+  static const String _androidDailyChallengeRewardedInterstitialAdUnitId =
+      String.fromEnvironment(
+        'ADMOB_ANDROID_REWARDED_INTERSTITIAL_DAILY_CHALLENGE_AD_UNIT_ID',
+      );
   static const Duration _boardResetCooldown = Duration(seconds: 90);
   static const Duration _interstitialRepeatGrace = Duration(seconds: 10);
 
@@ -117,8 +178,12 @@ class AdService {
   final Set<String> _loadingInterstitialAdUnitIds = <String>{};
   final Map<String, RewardedAd> _rewardedAds = <String, RewardedAd>{};
   final Set<String> _loadingRewardedAdUnitIds = <String>{};
+  final Map<String, RewardedInterstitialAd> _rewardedInterstitialAds =
+      <String, RewardedInterstitialAd>{};
+  final Set<String> _loadingRewardedInterstitialAdUnitIds = <String>{};
   bool _showingInterstitial = false;
   bool _showingRewarded = false;
+  bool _showingRewardedInterstitial = false;
   DateTime? _lastBoardResetInterstitialAt;
   DateTime? _lastInterstitialPresentedAt;
 
@@ -254,7 +319,10 @@ class AdService {
 
   Future<bool> showRewardedAd({required RewardedPlacement placement}) async {
     await initialize();
-    if (!isSupportedPlatform || _showingRewarded) {
+    if (!isSupportedPlatform ||
+        _showingInterstitial ||
+        _showingRewarded ||
+        _showingRewardedInterstitial) {
       return false;
     }
 
@@ -312,6 +380,87 @@ class AdService {
     return completer.future;
   }
 
+  Future<RewardedInterstitialShowResult> showRewardedInterstitialAd({
+    required RewardedInterstitialPlacement placement,
+  }) async {
+    await initialize();
+    if (!isSupportedPlatform ||
+        _showingInterstitial ||
+        _showingRewarded ||
+        _showingRewardedInterstitial) {
+      return RewardedInterstitialShowResult.unavailable;
+    }
+
+    final adUnitId = _rewardedInterstitialAdUnitIdFor(placement);
+    if (adUnitId == null) {
+      return RewardedInterstitialShowResult.unavailable;
+    }
+
+    final ad = _rewardedInterstitialAds.remove(adUnitId);
+    if (ad == null) {
+      _preloadRewardedInterstitial(adUnitId);
+      return RewardedInterstitialShowResult.unavailable;
+    }
+
+    final completer = Completer<RewardedInterstitialShowResult>();
+    var rewardEarned = false;
+
+    _showingRewardedInterstitial = true;
+    ad.fullScreenContentCallback =
+        FullScreenContentCallback<RewardedInterstitialAd>(
+          onAdShowedFullScreenContent: (_) {
+            _lastInterstitialPresentedAt = DateTime.now();
+          },
+          onAdImpression: (_) {
+            _lastInterstitialPresentedAt = DateTime.now();
+          },
+          onAdDismissedFullScreenContent: (ad) {
+            ad.dispose();
+            _showingRewardedInterstitial = false;
+            _preloadRewardedInterstitial(adUnitId);
+            if (!completer.isCompleted) {
+              completer.complete(
+                rewardEarned
+                    ? RewardedInterstitialShowResult.rewardEarned
+                    : RewardedInterstitialShowResult.shownWithoutReward,
+              );
+            }
+          },
+          onAdFailedToShowFullScreenContent: (ad, error) {
+            debugPrint(
+              '${placement.label} rewarded interstitial failed to show: '
+              '$error',
+            );
+            ad.dispose();
+            _showingRewardedInterstitial = false;
+            _preloadRewardedInterstitial(adUnitId);
+            if (!completer.isCompleted) {
+              completer.complete(RewardedInterstitialShowResult.unavailable);
+            }
+          },
+        );
+
+    try {
+      ad.show(
+        onUserEarnedReward: (_, _) {
+          rewardEarned = true;
+        },
+      );
+    } catch (error) {
+      debugPrint(
+        '${placement.label} rewarded interstitial show threw: $error',
+      );
+      ad.dispose();
+      _showingRewardedInterstitial = false;
+      _preloadRewardedInterstitial(adUnitId);
+      if (!completer.isCompleted) {
+        completer.complete(RewardedInterstitialShowResult.unavailable);
+      }
+    }
+
+    return completer.future;
+  }
+
   Future<void> _initializeInternal() async {
     try {
       await MobileAds.instance.initialize();
@@ -335,6 +484,16 @@ class AdService {
     };
     for (final adUnitId in rewardedAdUnitIds) {
       _preloadRewarded(adUnitId);
+    }
+
+    final rewardedInterstitialAdUnitIds = <String>{
+      for (final placement in RewardedInterstitialPlacement.values)
+        if (_rewardedInterstitialAdUnitIdFor(placement)
+            case final String adUnitId)
+          adUnitId,
+    };
+    for (final adUnitId in rewardedInterstitialAdUnitIds) {
+      _preloadRewardedInterstitial(adUnitId);
     }
   }
 
@@ -422,6 +581,46 @@ class AdService {
     );
   }
 
+  String? _rewardedInterstitialAdUnitIdFor(
+    RewardedInterstitialPlacement placement,
+  ) {
+    final iosAdUnitId = switch (placement) {
+      RewardedInterstitialPlacement.quizMilestone => _firstConfigured(
+        _iosQuizMilestoneRewardedInterstitialAdUnitId,
+        _iosDefaultRewardedInterstitialAdUnitId,
+      ),
+      RewardedInterstitialPlacement.academyExamBonus => _firstConfigured(
+        _iosAcademyExamBonusRewardedInterstitialAdUnitId,
+        _iosDefaultRewardedInterstitialAdUnitId,
+      ),
+      RewardedInterstitialPlacement.dailyChallenge => _firstConfigured(
+        _iosDailyChallengeRewardedInterstitialAdUnitId,
+        _iosDefaultRewardedInterstitialAdUnitId,
+      ),
+    };
+    final androidAdUnitId = switch (placement) {
+      RewardedInterstitialPlacement.quizMilestone => _firstConfigured(
+        _androidQuizMilestoneRewardedInterstitialAdUnitId,
+        _androidDefaultRewardedInterstitialAdUnitId,
+      ),
+      RewardedInterstitialPlacement.academyExamBonus => _firstConfigured(
+        _androidAcademyExamBonusRewardedInterstitialAdUnitId,
+        _androidDefaultRewardedInterstitialAdUnitId,
+      ),
+      RewardedInterstitialPlacement.dailyChallenge => _firstConfigured(
+        _androidDailyChallengeRewardedInterstitialAdUnitId,
+        _androidDefaultRewardedInterstitialAdUnitId,
+      ),
+    };
+
+    return _resolveAdUnitId(
+      formatLabel: '${placement.label} rewarded interstitial',
+      testAdUnitId: _testRewardedInterstitialAdUnitId,
+      iosAdUnitId: iosAdUnitId,
+      androidAdUnitId: androidAdUnitId,
+    );
+  }
+
   String _firstConfigured(String primary, String fallback) {
     if (primary.isNotEmpty) {
       return primary;
@@ -439,7 +638,7 @@ class AdService {
       return null;
     }
 
-    if (!kReleaseMode) {
+    if (_forceTestAds || !kReleaseMode) {
       return testAdUnitId;
     }
 
@@ -509,6 +708,35 @@ class AdService {
         onAdFailedToLoad: (error) {
           _loadingRewardedAdUnitIds.remove(adUnitId);
           debugPrint('Rewarded ad failed to load for $adUnitId: $error');
+        },
+      ),
+    );
+  }
+
+  void _preloadRewardedInterstitial(String adUnitId) {
+    if (!isSupportedPlatform ||
+        _loadingRewardedInterstitialAdUnitIds.contains(adUnitId) ||
+        _rewardedInterstitialAds.containsKey(adUnitId)) {
+      return;
+    }
+
+    _loadingRewardedInterstitialAdUnitIds.add(adUnitId);
+    RewardedInterstitialAd.load(
+      adUnitId: adUnitId,
+      request: const AdRequest(),
+      rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _loadingRewardedInterstitialAdUnitIds.remove(adUnitId);
+          ad.setImmersiveMode(true);
+          final previousAd = _rewardedInterstitialAds.remove(adUnitId);
+          previousAd?.dispose();
+          _rewardedInterstitialAds[adUnitId] = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _loadingRewardedInterstitialAdUnitIds.remove(adUnitId);
+          debugPrint(
+            'Rewarded interstitial failed to load for $adUnitId: $error',
+          );
         },
       ),
     );

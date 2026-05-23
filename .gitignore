@@ -46,6 +46,8 @@ app.*.map.json
 
 # Local engine binary exceeds GitHub file size limits.
 engine/stockfish.exe
+android/app/src/main/assets/stockfish-*
+android/app/src/main/jniLibs/*/libstockfish.so
 
 # Firebase config files containing API keys.
 # Provide these locally or inject via CI secrets – do NOT commit them.
@@ -68,5 +70,3 @@ puzzle_map_manual_stderr.txt
 .tmp_puzzle_map_test_output.txt
 pglite-debug.log
 
-# Local storefront helper notes
-store/README.md

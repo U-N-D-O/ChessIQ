@@ -4863,7 +4863,13 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     );
   }
 
-  void _openTodayDailyPuzzle(PuzzleAcademyProvider provider, bool monochrome) {
+  Future<void> _openTodayDailyPuzzle(
+    PuzzleAcademyProvider provider,
+    bool monochrome,
+  ) async {
+    await provider.refreshDailyPuzzle();
+    if (!mounted || provider.lastDailyPuzzleError != null) return;
+
     final daily = provider.todayDailyPuzzle;
     if (daily == null) return;
     final sequence = provider.dailyPuzzles;

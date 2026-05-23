@@ -96,6 +96,12 @@ const ECONOMY_REWARD_SPECS: Record<string, EconomyRewardSpec> = {
         minIntervalMs: 3 * 60 * 1000,
         dailyMax: 10,
     },
+    quizMilestoneRewardedInterstitial: {
+        amount: 10,
+        minIntervalMs: 3 * 60 * 1000,
+        dailyMax: 10,
+        requiresClaimKey: true,
+    },
     academyDailyChallenge: {
         amount: 200,
         dailyMax: 1,

@@ -5087,11 +5087,34 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   Future<void> _showQuizMilestoneInterstitial() async {
+    final rewardedInterstitialResult = await AdService.instance
+        .showRewardedInterstitialAd(
+          placement: RewardedInterstitialPlacement.quizMilestone,
+        );
+    if (rewardedInterstitialResult.rewardEarned) {
+      final economy = context.read<EconomyProvider>();
+      final claimed = await economy.claimQuizMilestoneRewardCoins(
+        claimKey: 'quiz-milestone:$_quizTotalAnswered',
+      );
+      if (claimed && mounted) {
+        _showQuizFeedbackOverlay(
+          message: 'Milestone reward earned: +10 coins.',
+          isCorrect: true,
+        );
+      }
+      return;
+    }
+
+    if (rewardedInterstitialResult.wasPresented) {
+      _addLog('Quiz rewarded interstitial closed before reward completion.');
+      return;
+    }
+
     final shown = await AdService.instance.showInterstitialAd(
       placement: InterstitialPlacement.quizMilestone,
     );
     if (!shown) {
-      _addLog('Quiz interstitial unavailable at 10-guess milestone.');
+      _addLog('Quiz milestone ad unavailable at 10-guess milestone.');
     }
   }
 

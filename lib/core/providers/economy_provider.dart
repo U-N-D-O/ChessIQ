@@ -231,6 +231,17 @@ class EconomyProvider extends ChangeNotifier {
     return _claimReward(EconomyRewardKey.academyRewardedAd, notify: notify);
   }
 
+  Future<bool> claimQuizMilestoneRewardCoins({
+    required String claimKey,
+    bool notify = true,
+  }) async {
+    return _claimReward(
+      EconomyRewardKey.quizMilestoneRewardedInterstitial,
+      claimKey: claimKey,
+      notify: notify,
+    );
+  }
+
   Future<bool> claimDailyChallengeCoins({
     required String claimKey,
     bool notify = true,
@@ -419,6 +430,7 @@ class EconomyProvider extends ChangeNotifier {
       case EconomyRewardKey.analysisInterstitial:
       case EconomyRewardKey.academyInterstitial:
       case EconomyRewardKey.academyRewardedAd:
+      case EconomyRewardKey.quizMilestoneRewardedInterstitial:
         return 10;
       case EconomyRewardKey.academyExamBonus:
         return 50;

@@ -8,12 +8,16 @@ import 'package:chessiq/core/services/firebase_auth_service.dart';
 import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:chessiq/core/services/scoreboard_service.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
+import 'package:chessiq/firebase_options.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String _basePuzzleAssetPath = 'assets/puzzles/base_puzzles.json';
+final Uri _dailyChallengeBaseUri = Uri.parse(
+  '$kFirebaseRealtimeDatabaseUrl/daily_challenges_public/v1',
+);
 final RegExp _ratingPattern = RegExp(r'"Rating"\s*:\s*(\d+)');
 
 String _nodeKeyForRating(int rating) {
@@ -272,9 +276,8 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   final Map<String, Future<void>> _nodePuzzleLoadFutures =
       <String, Future<void>>{};
   List<PuzzleItem> _dailyPuzzles = const <PuzzleItem>[];
-  List<String> _dailyPuzzleAssetPaths = const <String>[];
   PuzzleItem? _todayDailyPuzzle;
-  String? _todayDailyPuzzleAssetPath;
+  String? _loadedDailyPuzzleDateStamp;
   EconomyProvider? _economyProvider;
 
   bool _initialized = false;
@@ -306,7 +309,9 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   String? get celebrationNodeKey => _celebrationNodeKey;
   String? get lastRegistrationError => _lastRegistrationError;
   String? get lastProfileDeletionError => _lastProfileDeletionError;
-  List<PuzzleItem> get dailyPuzzles => _dailyPuzzles;
+  List<PuzzleItem> get dailyPuzzles => _hasCurrentDailyPuzzleSnapshot
+      ? _dailyPuzzles
+      : const <PuzzleItem>[];
   Duration get examDuration => _examDuration;
   int get examPuzzleCount => _examPuzzleCount;
   bool get showAcademyExamsDashboard => _showAcademyExamsDashboard;
@@ -315,24 +320,29 @@ class PuzzleAcademyProvider extends ChangeNotifier {
       .expand((items) => items)
       .toList(growable: false);
   PuzzleItem? get todayDailyPuzzle {
+    if (!_hasCurrentDailyPuzzleSnapshot) {
+      return null;
+    }
+
+    final activeDailyPuzzles = dailyPuzzles;
     final snapshot = _progress;
-    if (snapshot == null || _dailyPuzzles.isEmpty) {
+    if (snapshot == null || activeDailyPuzzles.isEmpty) {
       return _todayDailyPuzzle;
     }
 
-    for (final puzzle in _dailyPuzzles) {
+    for (final puzzle in activeDailyPuzzles) {
       if (!snapshot.completedDailyPuzzleIds.contains(puzzle.puzzleId)) {
         return puzzle;
       }
     }
 
-    return _dailyPuzzles.last;
+    return activeDailyPuzzles.last;
   }
 
   int get todayDailyPuzzleIndex {
     final activePuzzle = todayDailyPuzzle;
     if (activePuzzle == null) return -1;
-    return _dailyPuzzles.indexWhere(
+    return dailyPuzzles.indexWhere(
       (puzzle) => puzzle.puzzleId == activePuzzle.puzzleId,
     );
   }
@@ -341,11 +351,19 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   int get unresolvedSkippedPuzzleCount => progress.skippedPuzzleIds
       .where((puzzleId) => !progress.solvedPuzzleIds.contains(puzzleId))
       .length;
-  int get completedTodayDailyCount => _dailyPuzzles
+  int get completedTodayDailyCount => dailyPuzzles
       .where(
         (puzzle) => progress.completedDailyPuzzleIds.contains(puzzle.puzzleId),
       )
       .length;
+
+  bool get _hasCurrentDailyPuzzleSnapshot {
+    final loadedStamp = _loadedDailyPuzzleDateStamp;
+    if (loadedStamp == null) {
+      return false;
+    }
+    return loadedStamp == _todayStamp();
+  }
   List<AcademyExamResult> get academyExamResults {
     final results = List<AcademyExamResult>.from(progress.examResults);
     results.sort((a, b) {
@@ -591,9 +609,6 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     try {
       _basePuzzleCountsByNode = await _loadBasePuzzleCounts().catchError(
         (_) => <String, int>{},
-      );
-      _dailyPuzzleAssetPaths = await _loadDailyAssetPaths().catchError(
-        (_) => <String>[],
       );
       await _initServerDate().catchError((_) {});
       await _refreshTodayDailyPuzzle(notify: false).catchError((_) {});
@@ -1613,6 +1628,7 @@ class PuzzleAcademyProvider extends ChangeNotifier {
   void debugSetDailyPuzzles(List<PuzzleItem> puzzles) {
     _dailyPuzzles = List<PuzzleItem>.unmodifiable(puzzles);
     _todayDailyPuzzle = _dailyPuzzles.isEmpty ? null : _dailyPuzzles.first;
+    _loadedDailyPuzzleDateStamp = _todayStamp();
   }
 
   PuzzleProgressModel _applyUnlockingAndRewards(PuzzleProgressModel current) {
@@ -1818,65 +1834,70 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     }
   }
 
-  Future<List<PuzzleItem>> _loadPuzzleList(String assetPath) async {
-    final text = await rootBundle.loadString(assetPath);
-    final decoded = await compute(_decodePuzzleMaps, text);
+  Future<List<PuzzleItem>> _loadRemoteDailyPuzzles(String dateStamp) async {
+    final response = await http
+        .get(Uri.parse('$_dailyChallengeBaseUri/$dateStamp.json'))
+        .timeout(const Duration(seconds: 5));
+
+    if (response.statusCode != 200) {
+      throw StateError(
+        'Daily challenge request returned ${response.statusCode}.',
+      );
+    }
+
+    final body = response.body.trim();
+    if (body.isEmpty || body == 'null') {
+      return const <PuzzleItem>[];
+    }
+
+    final decoded = await compute(_decodePuzzleMaps, body);
     return decoded.map(PuzzleItem.fromMap).toList(growable: false);
   }
 
-  Future<List<String>> _loadDailyAssetPaths() async {
-    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-    final dailyPaths =
-        manifest
-            .listAssets()
-            .where(
-              (path) =>
-                  path.startsWith('assets/puzzles/daily_puzzles_') &&
-                  path.endsWith('.json'),
-            )
-            .toList(growable: false)
-          ..sort();
-    return dailyPaths;
-  }
-
   Future<void> _refreshTodayDailyPuzzle({required bool notify}) async {
-    final previousAssetPath = _todayDailyPuzzleAssetPath;
     final previousTodayPuzzle = _todayDailyPuzzle;
     final previousDailyPuzzles = _dailyPuzzles;
+    final previousLoadedStamp = _loadedDailyPuzzleDateStamp;
+    String? requestedStamp;
 
     _dailyPuzzleLoading = true;
     _lastDailyPuzzleError = null;
     if (notify) notifyListeners();
 
     try {
-      if (_dailyPuzzleAssetPaths.isEmpty) {
-        _dailyPuzzleAssetPaths = await _loadDailyAssetPaths();
-      }
-      if (_serverDateStamp == null) {
-        await _initServerDate().catchError((_) {});
-      }
-
-      final todayStamp = _todayStamp();
-      final matchedPath = _dailyPuzzleAssetPaths.lastWhere(
-        (path) => path.contains('daily_puzzles_${todayStamp}_'),
-        orElse: () => '',
-      );
-      _todayDailyPuzzleAssetPath = matchedPath.isEmpty ? null : matchedPath;
-      if (_todayDailyPuzzleAssetPath == null) {
-        _todayDailyPuzzle = null;
-        _dailyPuzzles = const <PuzzleItem>[];
-        return;
+      if (_serverDateStamp == null ||
+          _serverDateFetchedAt == null ||
+          DateTime.now().toUtc().difference(_serverDateFetchedAt!) >=
+              const Duration(hours: 6)) {
+        await _initServerDate();
       }
 
-      final puzzles = await _loadPuzzleList(_todayDailyPuzzleAssetPath!);
+      final todayStamp = _currentServerDayStamp();
+      if (todayStamp == null || todayStamp.length != 8) {
+        throw StateError('Server date unavailable for daily challenge fetch.');
+      }
+      requestedStamp = todayStamp;
+
+      final puzzles = await _loadRemoteDailyPuzzles(todayStamp);
       _dailyPuzzles = puzzles.take(20).toList(growable: false);
       _todayDailyPuzzle = _dailyPuzzles.isEmpty ? null : _dailyPuzzles.first;
+      _loadedDailyPuzzleDateStamp = todayStamp;
+      if (_todayDailyPuzzle == null) {
+        _lastDailyPuzzleError =
+            'Today\'s challenge is not published yet. Check back shortly.';
+      }
     } catch (_) {
-      _todayDailyPuzzleAssetPath = previousAssetPath;
-      _todayDailyPuzzle = previousTodayPuzzle;
-      _dailyPuzzles = previousDailyPuzzles;
+      if (requestedStamp != null && previousLoadedStamp != requestedStamp) {
+        _todayDailyPuzzle = null;
+        _dailyPuzzles = const <PuzzleItem>[];
+        _loadedDailyPuzzleDateStamp = requestedStamp;
+      } else {
+        _todayDailyPuzzle = previousTodayPuzzle;
+        _dailyPuzzles = previousDailyPuzzles;
+        _loadedDailyPuzzleDateStamp = previousLoadedStamp;
+      }
       _lastDailyPuzzleError =
-          'Unable to load today\'s challenge set right now.';
+          'Unable to load today\'s challenge set right now. Daily challenges require an internet connection.';
     } finally {
       _dailyPuzzleLoading = false;
       _dailyPuzzleLoaded = true;
@@ -1896,6 +1917,20 @@ class PuzzleAcademyProvider extends ChangeNotifier {
     final fetchedAt = _serverDateFetchedAt;
     if (stamp == null || fetchedAt == null) {
       return _dateStamp(DateTime.now().toUtc());
+    }
+    final year = int.parse(stamp.substring(0, 4));
+    final month = int.parse(stamp.substring(4, 6));
+    final day = int.parse(stamp.substring(6, 8));
+    final serverMidnight = DateTime.utc(year, month, day);
+    final elapsed = DateTime.now().toUtc().difference(fetchedAt);
+    return _dateStamp(serverMidnight.add(elapsed));
+  }
+
+  String? _currentServerDayStamp() {
+    final stamp = _serverDateStamp;
+    final fetchedAt = _serverDateFetchedAt;
+    if (stamp == null || fetchedAt == null) {
+      return null;
     }
     final year = int.parse(stamp.substring(0, 4));
     final month = int.parse(stamp.substring(4, 6));

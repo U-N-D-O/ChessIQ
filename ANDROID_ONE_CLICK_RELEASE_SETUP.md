@@ -68,6 +68,20 @@ That script will:
 4. push the tag
 5. start the GitHub workflow for the signed Android App Bundle
 
+## Local Android Stockfish Prep
+
+For emulator or device testing that needs the native Android Stockfish assets,
+run this from the repo root after the Android SDK/NDK and Git for Windows are
+installed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tool/build_stockfish_android.ps1
+```
+
+That script clones the pinned Stockfish release from `release_guard.json` and
+copies the Android binaries for `arm64-v8a`, `armeabi-v7a`, and `x86_64` into
+`android/app/src/main/assets` for local Flutter builds.
+
 ## What Still Comes From Google Play
 
 GitHub cannot invent your Android upload key. The following still have to come

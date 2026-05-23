@@ -140,6 +140,11 @@ Debug builds fall back to Google's sample Android AdMob app ID.
 Android release builds are guarded and should not proceed without a real
 Android AdMob app ID.
 
+For sideload or emulator-only release artifacts, pass
+`--dart-define=ADMOB_FORCE_TEST_ADS=true` and set `ADMOB_ANDROID_APP_ID` to
+Google's sample Android app ID (`ca-app-pub-3940256099942544~3347511713`).
+That keeps unsigned release-like builds on sample ads instead of live traffic.
+
 Example `android/local.properties` entry:
 
 ```properties

@@ -151,8 +151,20 @@ class _IosEngineBackend extends EngineTransport {
     EngineOutputCallback onOutput, {
     VoidCallback? onExit,
   }) async {
-    await _method.invokeMethod<void>('start');
-    _sub = _event.receiveBroadcastStream().cast<String>().listen(onOutput);
+    await _sub?.cancel();
+    _sub = _event.receiveBroadcastStream().cast<String>().listen(
+      onOutput,
+      onDone: onExit,
+      onError: (Object error, StackTrace stackTrace) => onExit?.call(),
+      cancelOnError: true,
+    );
+    try {
+      await _method.invokeMethod<void>('start');
+    } catch (_) {
+      await _sub?.cancel();
+      _sub = null;
+      rethrow;
+    }
   }
 
   @override
@@ -181,8 +193,20 @@ class _AndroidEngineBackend extends EngineTransport {
     EngineOutputCallback onOutput, {
     VoidCallback? onExit,
   }) async {
-    await _method.invokeMethod<void>('start');
-    _sub = _event.receiveBroadcastStream().cast<String>().listen(onOutput);
+    await _sub?.cancel();
+    _sub = _event.receiveBroadcastStream().cast<String>().listen(
+      onOutput,
+      onDone: onExit,
+      onError: (Object error, StackTrace stackTrace) => onExit?.call(),
+      cancelOnError: true,
+    );
+    try {
+      await _method.invokeMethod<void>('start');
+    } catch (_) {
+      await _sub?.cancel();
+      _sub = null;
+      rethrow;
+    }
   }
 
   @override

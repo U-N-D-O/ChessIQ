@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:chessiq/firebase_options.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,14 +17,13 @@ class FirebaseAuthService {
 
   static final FirebaseAuthService instance = FirebaseAuthService._();
 
-  // Web API key from ios/Runner/GoogleService-Info.plist
-  static const String _apiKey = 'AIzaSyAL5PbGAF9z-7C9DL01vTuz9ijEqMtyT60';
+  static String get _apiKey => kFirebaseAuthApiKey;
 
-  static const String _signInUrl =
+  static String get _signInUrl =>
       'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$_apiKey';
-  static const String _deleteUrl =
+  static String get _deleteUrl =>
       'https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$_apiKey';
-  static const String _refreshUrl =
+  static String get _refreshUrl =>
       'https://securetoken.googleapis.com/v1/token?key=$_apiKey';
 
   static const String _prefUid = 'fauth_uid';

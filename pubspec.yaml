@@ -80,7 +80,7 @@ flutter:
     - assets/sounds/
     - assets/bots/
     - store/
-    - assets/puzzles/
+    - assets/puzzles/base_puzzles.json
     - assets/ChessIQ.png
     - assets/QILAmodus.png
     - assets/logo.png

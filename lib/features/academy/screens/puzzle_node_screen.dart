@@ -624,9 +624,15 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
 
     final economy = context.read<EconomyProvider>();
     if (elapsed >= const Duration(minutes: 20)) {
-      final rewarded = await AdService.instance.showRewardedAd(
-        placement: RewardedPlacement.academyBonus,
-      );
+      final rewardedInterstitialResult = await AdService.instance
+          .showRewardedInterstitialAd(
+            placement: RewardedInterstitialPlacement.academyExamBonus,
+          );
+      final rewarded = rewardedInterstitialResult.rewardEarned ||
+          (!rewardedInterstitialResult.wasPresented &&
+              await AdService.instance.showRewardedAd(
+                placement: RewardedPlacement.academyBonus,
+              ));
       if (rewarded && mounted) {
         final claimed = await economy.claimAcademyExamBonusCoins(
           claimKey:
@@ -1514,9 +1520,21 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
     final academyAdFree = await _isAcademyTuitionPassOwned();
     final rewardEarned = academyAdFree
         ? true
-        : await AdService.instance.showRewardedAd(
-            placement: RewardedPlacement.academyBonus,
-          );
+        : await () async {
+            final rewardedInterstitialResult = await AdService.instance
+                .showRewardedInterstitialAd(
+                  placement: RewardedInterstitialPlacement.dailyChallenge,
+                );
+            if (rewardedInterstitialResult.rewardEarned) {
+              return true;
+            }
+            if (rewardedInterstitialResult.wasPresented) {
+              return false;
+            }
+            return AdService.instance.showRewardedAd(
+              placement: RewardedPlacement.academyBonus,
+            );
+          }();
     if (!mounted) {
       return;
     }
