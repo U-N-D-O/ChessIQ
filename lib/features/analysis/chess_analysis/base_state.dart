@@ -19827,7 +19827,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : _isHumanTurnInRemoteFriendGame
           ? const Color(0xFF5AAEE8)
           : const Color(0xFF7D8CA3);
-      final remoteStatusText = _remoteFriendLastError ??
+      final remoteStatusText =
+          _remoteFriendLastError ??
           (remoteSnapshot == null
               ? 'Synchronizing remote friend match...'
               : _isRemoteFriendPendingMatch
@@ -19996,20 +19997,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 Wrap(
                   spacing: 10,
                   runSpacing: 12,
-                  children: _availablePieceThemes.map((mode) {
-                    final selected =
-                        _remoteFriendPieceThemeForSeat(remoteSeat) == mode;
-                    return _remoteFriendPieceThemeChoiceTile(
-                      mode: mode,
-                      isWhitePiece: remoteSeat == RemoteFriendSeat.white,
-                      selected: selected,
-                      onTap: _remoteFriendOperationInProgress
-                          ? null
-                          : () => unawaited(
-                              _selectRemoteFriendPieceTheme(mode),
-                            ),
-                    );
-                  }).toList(growable: false),
+                  children: _availablePieceThemes
+                      .map((mode) {
+                        final selected =
+                            _remoteFriendPieceThemeForSeat(remoteSeat) == mode;
+                        return _remoteFriendPieceThemeChoiceTile(
+                          mode: mode,
+                          isWhitePiece: remoteSeat == RemoteFriendSeat.white,
+                          selected: selected,
+                          onTap: _remoteFriendOperationInProgress
+                              ? null
+                              : () => unawaited(
+                                  _selectRemoteFriendPieceTheme(mode),
+                                ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ],
               const SizedBox(height: 12),

@@ -80,11 +80,12 @@ class PushNotificationService {
       return;
     }
 
-    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
     _foregroundPresentationConfigured = true;
   }
 
@@ -136,15 +137,18 @@ class PushNotificationService {
       }
 
       _tokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh
-          .listen((token) {
-            unawaited(_registerPushTokenWithBackend(token));
-          }, onError: (Object error, StackTrace stackTrace) {
-            debugPrint(
-              '[PushNotificationService] Token refresh listener failed: '
-              '$error',
-            );
-            debugPrintStack(stackTrace: stackTrace);
-          });
+          .listen(
+            (token) {
+              unawaited(_registerPushTokenWithBackend(token));
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              debugPrint(
+                '[PushNotificationService] Token refresh listener failed: '
+                '$error',
+              );
+              debugPrintStack(stackTrace: stackTrace);
+            },
+          );
 
       final token = await currentToken();
       if (token == null || token.isEmpty) {

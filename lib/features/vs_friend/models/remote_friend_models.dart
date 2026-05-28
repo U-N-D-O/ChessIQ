@@ -423,7 +423,8 @@ class RemoteFriendMatchSnapshot {
       'updatedAtMs': updatedAt.millisecondsSinceEpoch,
       'startedAtMs': startedAt?.millisecondsSinceEpoch,
       'expiresAtMs': expiresAt?.millisecondsSinceEpoch,
-      'pieceSelectionDeadlineMs': pieceSelectionDeadlineAt?.millisecondsSinceEpoch,
+      'pieceSelectionDeadlineMs':
+          pieceSelectionDeadlineAt?.millisecondsSinceEpoch,
       'outcome': outcome?.toMap(),
       'moves': moves.map((move) => move.toMap()).toList(growable: false),
     };

@@ -210,10 +210,13 @@ class RemoteFriendService {
     required String matchId,
     required int pieceThemeIndex,
   }) async {
-    final result = await _callFunction(_selectPieceThemeFunction, <String, dynamic>{
-      'matchId': matchId.trim(),
-      'pieceThemeIndex': pieceThemeIndex,
-    });
+    final result = await _callFunction(
+      _selectPieceThemeFunction,
+      <String, dynamic>{
+        'matchId': matchId.trim(),
+        'pieceThemeIndex': pieceThemeIndex,
+      },
+    );
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 
