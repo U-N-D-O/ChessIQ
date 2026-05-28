@@ -15497,40 +15497,237 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final remoteAccent = useMonochrome
         ? scheme.onSurface
         : Color.lerp(arcade.cyan, arcade.amber, 0.34)!;
+    const displayFontFamily = 'PixelatedElegance';
+    const labelFontFamily = 'PressStart2P';
+
+    TextStyle buildDisplayStyle({
+      required Color color,
+      double size = 28,
+      double height = 0.94,
+      bool glow = false,
+    }) {
+      return TextStyle(
+        fontFamily: displayFontFamily,
+        color: color,
+        fontSize: size,
+        height: height,
+        letterSpacing: 0.12,
+        shadows: glow && !useMonochrome
+            ? <Shadow>[
+                Shadow(
+                  color: color.withValues(alpha: isDark ? 0.24 : 0.14),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
+      );
+    }
+
+    TextStyle buildBodyStyle({
+      required Color color,
+      double size = 14,
+      FontWeight fontWeight = FontWeight.w600,
+      double height = 1.24,
+    }) {
+      return GoogleFonts.pixelifySans(
+        color: color,
+        fontSize: size,
+        fontWeight: fontWeight,
+        height: height,
+      );
+    }
+
+    TextStyle buildLabelStyle({
+      required Color color,
+      double size = 8.6,
+    }) {
+      return TextStyle(
+        fontFamily: labelFontFamily,
+        color: color,
+        fontSize: size,
+        height: 1.3,
+        letterSpacing: 1.05,
+      );
+    }
+
+    ButtonStyle buildActionButtonStyle({
+      required Color accent,
+      bool tonal = false,
+    }) {
+      return FilledButton.styleFrom(
+        backgroundColor: tonal
+            ? Color.alphaBlend(accent.withValues(alpha: 0.14), scheme.surface)
+            : Color.alphaBlend(accent.withValues(alpha: 0.92), scheme.surface),
+        foregroundColor: tonal ? accent : const Color(0xFF081015),
+        textStyle: buildBodyStyle(
+          color: tonal ? accent : const Color(0xFF081015),
+          size: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        side: BorderSide(
+          color: tonal
+              ? accent.withValues(alpha: 0.24)
+              : accent.withValues(alpha: 0.32),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      );
+    }
 
     BoxDecoration buildVsDeckDecoration(
       Color accent, {
       bool emphasized = false,
     }) {
-      final baseAlpha = emphasized
-          ? (isDark ? 0.16 : 0.10)
-          : (isDark ? 0.10 : 0.05);
+      final radius = emphasized ? 30.0 : 24.0;
       return BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
             Color.alphaBlend(
-              accent.withValues(alpha: baseAlpha),
+              accent.withValues(alpha: emphasized ? (isDark ? 0.24 : 0.14) : (isDark ? 0.18 : 0.08)),
               scheme.surface,
             ),
             Color.alphaBlend(
               scheme.surface.withValues(alpha: isDark ? 0.94 : 0.98),
               scheme.surfaceContainerHighest,
             ),
+            Color.alphaBlend(
+              accent.withValues(alpha: isDark ? 0.06 : 0.04),
+              scheme.surface,
+            ),
           ],
+          stops: const [0.0, 0.58, 1.0],
         ),
-        borderRadius: BorderRadius.circular(emphasized ? 26 : 22),
+        borderRadius: BorderRadius.circular(radius),
         border: Border.all(
-          color: accent.withValues(alpha: emphasized ? 0.40 : 0.30),
+          color: accent.withValues(alpha: emphasized ? 0.38 : 0.24),
         ),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: isDark ? 0.14 : 0.08),
-            blurRadius: emphasized ? 28 : 20,
-            offset: const Offset(0, 10),
+            color: accent.withValues(alpha: isDark ? 0.18 : 0.10),
+            blurRadius: emphasized ? 36 : 24,
+            offset: const Offset(0, 14),
           ),
         ],
+      );
+    }
+
+    Widget buildDeckShell({
+      required Color accent,
+      required Widget child,
+      bool emphasized = false,
+      String? watermark,
+    }) {
+      final radius = emphasized ? 30.0 : 24.0;
+      return Container(
+        decoration: buildVsDeckDecoration(accent, emphasized: emphasized),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: -26,
+              right: -18,
+              child: IgnorePointer(
+                child: Container(
+                  width: emphasized ? 190 : 150,
+                  height: emphasized ? 190 : 150,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        accent.withValues(
+                          alpha: useMonochrome
+                              ? 0.08
+                              : (isDark ? 0.22 : 0.16),
+                        ),
+                        accent.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -34,
+              left: -18,
+              child: IgnorePointer(
+                child: Container(
+                  width: emphasized ? 130 : 100,
+                  height: emphasized ? 130 : 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        accent.withValues(alpha: isDark ? 0.12 : 0.09),
+                        accent.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (watermark != null)
+              Positioned(
+                top: emphasized ? 18 : 14,
+                right: 16,
+                child: IgnorePointer(
+                  child: Text(
+                    watermark,
+                    style: buildDisplayStyle(
+                      color: accent.withValues(alpha: isDark ? 0.09 : 0.07),
+                      size: emphasized ? 88 : 70,
+                    ),
+                  ),
+                ),
+              ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(radius),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withValues(alpha: isDark ? 0.04 : 0.10),
+                        Colors.transparent,
+                        accent.withValues(alpha: isDark ? 0.08 : 0.04),
+                      ],
+                      stops: const [0.0, 0.32, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            child,
+          ],
+        ),
+      );
+    }
+
+    Widget buildStageBadge({
+      required String label,
+      required Color accent,
+    }) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            accent.withValues(alpha: 0.12),
+            scheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: accent.withValues(alpha: 0.26)),
+        ),
+        child: Text(
+          label,
+          style: buildLabelStyle(
+            color: accent.withValues(alpha: 0.98),
+            size: 8.1,
+          ),
+        ),
       );
     }
 
@@ -15541,7 +15738,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       bool emphasized = false,
     }) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: Color.alphaBlend(
             accent.withValues(alpha: emphasized ? 0.18 : 0.10),
@@ -15557,15 +15754,262 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             const SizedBox(width: 8),
             Text(
               label,
-              style: TextStyle(
+              style: buildBodyStyle(
                 color: scheme.onSurface,
-                fontSize: 12,
+                size: 12,
                 fontWeight: emphasized ? FontWeight.w800 : FontWeight.w700,
-                letterSpacing: 0.2,
+                height: 1.0,
               ),
             ),
           ],
         ),
+      );
+    }
+
+    Widget buildMetricTile({
+      required String value,
+      required String label,
+      required Color accent,
+    }) {
+      return Container(
+        constraints: const BoxConstraints(minWidth: 88),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            accent.withValues(alpha: isDark ? 0.14 : 0.10),
+            scheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: accent.withValues(alpha: 0.22)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: buildDisplayStyle(
+                color: accent,
+                size: 18,
+                glow: true,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: buildLabelStyle(
+                color: scheme.onSurface.withValues(alpha: 0.74),
+                size: 7.3,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildSectionTitle(String label, Color accent) {
+      return Row(
+        children: [
+          Text(
+            label,
+            style: buildLabelStyle(
+              color: accent.withValues(alpha: 0.96),
+              size: 8.2,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    accent.withValues(alpha: 0.44),
+                    accent.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    Widget buildAccentArtwork({
+      required Color accent,
+      required IconData icon,
+      String? primaryAsset,
+      String? secondaryAsset,
+    }) {
+      return SizedBox(
+        width: 152,
+        height: 118,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              right: 8,
+              top: 10,
+              child: Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      accent.withValues(alpha: useMonochrome ? 0.14 : 0.28),
+                      accent.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 18,
+              top: 22,
+              child: Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    accent.withValues(alpha: isDark ? 0.18 : 0.12),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: accent.withValues(alpha: 0.28)),
+                ),
+                child: Icon(icon, color: accent, size: 32),
+              ),
+            ),
+            if (primaryAsset != null)
+              Positioned(
+                left: 0,
+                bottom: -4,
+                child: Transform.rotate(
+                  angle: -0.16,
+                  child: Image.asset(
+                    primaryAsset,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.medium,
+                  ),
+                ),
+              ),
+            if (secondaryAsset != null)
+              Positioned(
+                left: 46,
+                top: -2,
+                child: Opacity(
+                  opacity: 0.95,
+                  child: Transform.rotate(
+                    angle: 0.14,
+                    child: Image.asset(
+                      secondaryAsset,
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.medium,
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              left: 18,
+              right: 0,
+              bottom: 10,
+              child: Container(
+                height: 1.6,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      accent.withValues(alpha: 0.78),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildShowcaseHeader({
+      required String eyebrow,
+      required String title,
+      required String subtitle,
+      required Color accent,
+      required IconData icon,
+      required List<({String value, String label})> metrics,
+      String? primaryAsset,
+      String? secondaryAsset,
+    }) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 640;
+          final details = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildStageBadge(label: eyebrow, accent: accent),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                style: buildDisplayStyle(
+                  color: scheme.onSurface,
+                  size: compact ? 30 : 34,
+                  glow: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                style: buildBodyStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.78),
+                  size: 13.5,
+                ),
+              ),
+              if (metrics.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: metrics
+                      .map(
+                        (metric) => buildMetricTile(
+                          value: metric.value,
+                          label: metric.label,
+                          accent: accent,
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+            ],
+          );
+          final artwork = buildAccentArtwork(
+            accent: accent,
+            icon: icon,
+            primaryAsset: primaryAsset,
+            secondaryAsset: secondaryAsset,
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [details, const SizedBox(height: 18), artwork],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: details),
+              const SizedBox(width: 16),
+              artwork,
+            ],
+          );
+        },
       );
     }
 
@@ -15576,8 +16020,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       required Color accent,
     }) {
       return Container(
-        constraints: const BoxConstraints(minWidth: 170, maxWidth: 240),
-        padding: const EdgeInsets.all(14),
+        constraints: const BoxConstraints(minWidth: 180, maxWidth: 248),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Color.alphaBlend(
             accent.withValues(alpha: isDark ? 0.14 : 0.10),
@@ -15605,140 +16049,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
+                    style: buildDisplayStyle(
                       color: scheme.onSurface,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
+                      size: 18,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: TextStyle(
+                    style: buildBodyStyle(
                       color: scheme.onSurface.withValues(alpha: 0.68),
-                      fontSize: 11.5,
-                      height: 1.3,
-                      fontWeight: FontWeight.w600,
+                      size: 11.8,
                     ),
                   ),
                 ],
               ),
             ),
           ],
-        ),
-      );
-    }
-
-    Widget buildModeCard({
-      required String title,
-      required String subtitle,
-      required IconData icon,
-      required Color accent,
-      required VoidCallback onTap,
-      required List<({IconData icon, String label})> highlights,
-      String actionLabel = 'Open',
-    }) {
-      return Container(
-        decoration: buildVsDeckDecoration(accent),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(22),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: isDark ? 0.18 : 0.12),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Icon(icon, color: accent, size: 30),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: TextStyle(
-                                color: scheme.onSurface,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              subtitle,
-                              style: TextStyle(
-                                color: scheme.onSurface.withValues(alpha: 0.72),
-                                fontSize: 13,
-                                height: 1.35,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: isDark ? 0.18 : 0.12),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              actionLabel,
-                              style: TextStyle(
-                                color: accent.withValues(alpha: 0.96),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              color: accent.withValues(alpha: 0.96),
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: highlights
-                        .map(
-                          (entry) => buildModePill(
-                            icon: entry.icon,
-                            label: entry.label,
-                            accent: accent,
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
       );
     }
@@ -15765,13 +16092,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     Widget buildRemoteMembershipTile(RemoteFriendMatchMembership membership) {
       final accent = remoteMembershipAccent(membership.status);
+      final statusLabel = _remoteFriendMembershipStatusLabel(membership.status);
       final inviteCode = membership.inviteCode.isEmpty
           ? 'Private Match'
           : 'Code ${membership.inviteCode}';
 
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Color.alphaBlend(
             accent.withValues(alpha: isDark ? 0.10 : 0.06),
@@ -15780,81 +16107,49 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: accent.withValues(alpha: 0.26)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    inviteCode,
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Color.alphaBlend(
-                      accent.withValues(alpha: 0.14),
-                      scheme.surface,
-                    ),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: accent.withValues(alpha: 0.28)),
-                  ),
-                  child: Text(
-                    _remoteFriendMembershipStatusLabel(membership.status),
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ),
-              ],
+            Positioned(
+              top: 12,
+              right: 12,
+              child: buildStageBadge(label: statusLabel, accent: accent),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _formatRemoteFriendMembershipTimestamp(
-                      membership.updatedAt,
-                    ),
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.68),
-                      fontSize: 12.5,
-                      height: 1.3,
-                      fontWeight: FontWeight.w600,
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    inviteCode,
+                    style: buildDisplayStyle(
+                      color: scheme.onSurface,
+                      size: 22,
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                FilledButton.tonalIcon(
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(
-                          _openRemoteFriendMatch(membership.matchId),
-                        ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: Text(remoteMembershipActionLabel(membership.status)),
-                  style: FilledButton.styleFrom(
-                    foregroundColor: accent,
-                    backgroundColor: Color.alphaBlend(
-                      accent.withValues(alpha: 0.14),
-                      scheme.surface,
+                  const SizedBox(height: 8),
+                  Text(
+                    _formatRemoteFriendMembershipTimestamp(membership.updatedAt),
+                    style: buildBodyStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.70),
+                      size: 12.2,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton.tonalIcon(
+                      onPressed: _remoteFriendOperationInProgress
+                          ? null
+                          : () => unawaited(
+                              _openRemoteFriendMatch(membership.matchId),
+                            ),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: Text(remoteMembershipActionLabel(membership.status)),
+                      style: buildActionButtonStyle(accent: accent, tonal: true),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -15863,136 +16158,144 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     Widget buildVsHeroPanel() {
       final heroAccent = Color.lerp(arcade.cyan, remoteAccent, 0.5)!;
-      return Container(
-        decoration: buildVsDeckDecoration(heroAccent, emphasized: true),
+      return buildDeckShell(
+        accent: heroAccent,
+        emphasized: true,
+        watermark: 'VS',
         child: Padding(
-          padding: const EdgeInsets.all(22),
+          padding: const EdgeInsets.all(24),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 760;
-              final heroHeader = wide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          _menuLogoAsset(context),
-                          width: 170,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(width: 22),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'PLAY CHESS',
-                                style: TextStyle(
-                                  color: heroAccent.withValues(alpha: 0.95),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Choose Your Arena',
-                                style: TextStyle(
-                                  color: scheme.onSurface,
-                                  fontSize: 31,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1.05,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Battle a bot, pass the phone across the table, or launch a private code match on another device with synchronized clocks and server-validated moves.',
-                                style: TextStyle(
-                                  color: scheme.onSurface.withValues(
-                                    alpha: 0.74,
-                                  ),
-                                  fontSize: 14,
-                                  height: 1.4,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        Image.asset(
-                          _menuLogoAsset(context),
-                          width: 180,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'PLAY CHESS',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: heroAccent.withValues(alpha: 0.95),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Choose Your Arena',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: 30,
-                            fontWeight: FontWeight.w900,
-                            height: 1.05,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Battle a bot, pass the phone across the table, or launch a private code match on another device with synchronized clocks and server-validated moves.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.74),
-                            fontSize: 14,
-                            height: 1.4,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    );
-
-              return Column(
+              final wide = constraints.maxWidth >= 880;
+              final intro = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  heroHeader,
-                  const SizedBox(height: 18),
                   Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
+                    spacing: 10,
+                    runSpacing: 10,
                     children: [
-                      buildHeroStatCard(
-                        title: 'Bot Arena',
-                        subtitle: 'Choose a character, difficulty, and side.',
+                      buildStageBadge(label: 'PLAY CHESS', accent: heroAccent),
+                      buildStageBadge(
+                        label: useMonochrome ? 'MONO' : 'ARCADE',
+                        accent: useMonochrome ? scheme.onSurface : arcade.amber,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Image.asset(
+                    _menuLogoAsset(context),
+                    width: wide ? 186 : 154,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Pick Your Board',
+                    style: buildDisplayStyle(
+                      color: scheme.onSurface,
+                      size: wide ? 46 : 38,
+                      glow: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Three distinct arenas, one sharp front door. Jump into AI battles, a fixed local duel, or a polished private code match that feels worth opening.',
+                    style: buildBodyStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.78),
+                      size: 14.2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      buildModePill(
                         icon: Icons.smart_toy_outlined,
+                        label: 'Solo bot arena',
                         accent: useMonochrome ? scheme.onSurface : arcade.cyan,
                       ),
-                      buildHeroStatCard(
-                        title: 'Pass & Play',
-                        subtitle:
-                            'Stationary 1v1 on one phone with optional clocks.',
+                      buildModePill(
                         icon: Icons.people_alt_outlined,
+                        label: 'Pass-and-play',
                         accent: arcade.amber,
                       ),
-                      buildHeroStatCard(
-                        title: 'Private Code',
-                        subtitle: 'Cross-device match flow with server rules.',
+                      buildModePill(
                         icon: Icons.wifi_tethering_rounded,
+                        label: 'Private code match',
                         accent: remoteAccent,
                       ),
                     ],
                   ),
+                ],
+              );
+              final artwork = buildAccentArtwork(
+                accent: heroAccent,
+                icon: Icons.auto_awesome_rounded,
+                primaryAsset: _menuBackdropSpriteAsset(
+                  _MenuBackdropSpriteRole.king,
+                ),
+                secondaryAsset: _menuBackdropSpriteAsset(
+                  _MenuBackdropSpriteRole.queen,
+                  useDarkSprite: true,
+                ),
+              );
+              final stats = Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  buildHeroStatCard(
+                    title: 'Bot Arena',
+                    subtitle: 'Character pick, side select, and tuned pressure.',
+                    icon: Icons.smart_toy_outlined,
+                    accent: useMonochrome ? scheme.onSurface : arcade.cyan,
+                  ),
+                  buildHeroStatCard(
+                    title: 'Pass & Play',
+                    subtitle: 'One device, fixed board, and fast setup.',
+                    icon: Icons.people_alt_outlined,
+                    accent: arcade.amber,
+                  ),
+                  buildHeroStatCard(
+                    title: 'Private Code',
+                    subtitle: 'Invite-only matches with synced clocks.',
+                    icon: Icons.wifi_tethering_rounded,
+                    accent: remoteAccent,
+                  ),
+                ],
+              );
+
+              if (wide) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(flex: 7, child: intro),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          flex: 4,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: artwork,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    stats,
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  intro,
+                  const SizedBox(height: 20),
+                  Align(alignment: Alignment.centerRight, child: artwork),
+                  const SizedBox(height: 20),
+                  stats,
                 ],
               );
             },
@@ -16001,59 +16304,135 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
-    Widget buildLocalModeCard() {
-      return Container(
-        decoration: buildVsDeckDecoration(arcade.amber),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    Widget buildBotModeCard() {
+      final accent = useMonochrome ? scheme.onSurface : arcade.cyan;
+      return buildDeckShell(
+        accent: accent,
+        watermark: 'BOT',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _openBotSetupFromMenu,
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: arcade.amber.withValues(
-                        alpha: isDark ? 0.16 : 0.12,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
+                  buildShowcaseHeader(
+                    eyebrow: 'SOLO CIRCUIT',
+                    title: 'VS BOT',
+                    subtitle:
+                        'Pick a personality, tune the pressure, and walk straight into a cleaner solo duel.',
+                    icon: Icons.smart_toy_outlined,
+                    accent: accent,
+                    metrics: const [
+                      (value: 'SOLO', label: 'MODE'),
+                      (value: 'SIDE', label: 'PICK'),
+                      (value: 'PACE', label: 'TUNE'),
+                    ],
+                    primaryAsset: _menuBackdropSpriteAsset(
+                      _MenuBackdropSpriteRole.knight,
                     ),
-                    child: Icon(
-                      Icons.people_alt_outlined,
-                      color: arcade.amber,
-                      size: 28,
+                    secondaryAsset: _menuBackdropSpriteAsset(
+                      _MenuBackdropSpriteRole.king,
+                      useDarkSprite: true,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      buildModePill(
+                        icon: Icons.psychology_alt_outlined,
+                        label: 'Adaptive AI',
+                        accent: accent,
+                      ),
+                      buildModePill(
+                        icon: Icons.flag_outlined,
+                        label: 'Pick your side',
+                        accent: accent,
+                      ),
+                      buildModePill(
+                        icon: Icons.tune_rounded,
+                        label: 'Difficulty ladder',
+                        accent: accent,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                        accent.withValues(alpha: isDark ? 0.12 : 0.08),
+                        scheme.surface,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: accent.withValues(alpha: 0.20)),
+                    ),
+                    child: Row(
                       children: [
-                        Text(
-                          '1V1 ON THIS PHONE',
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                        Expanded(
+                          child: Text(
+                            'Curated characters, clean setup, and a stronger first impression the moment you open solo play.',
+                            style: buildBodyStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.76),
+                              size: 12.8,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Stationary over-the-board play on one phone. White stays at the bottom, black stays at the top, with optional clocks.',
-                          style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.72),
-                            fontSize: 13,
-                            height: 1.35,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        const SizedBox(width: 12),
+                        FilledButton.icon(
+                          onPressed: _openBotSetupFromMenu,
+                          style: buildActionButtonStyle(accent: accent),
+                          icon: const Icon(Icons.arrow_forward_rounded),
+                          label: const Text('Open Bot Select'),
                         ),
                       ],
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget buildLocalModeCard() {
+      final summaryLabel = selectedLocalFriendTimeControl.initialTime == null
+          ? 'Untimed'
+          : _formatLocalFriendTimeControl(selectedLocalFriendTimeControl);
+      return buildDeckShell(
+        accent: arcade.amber,
+        watermark: '1V1',
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildShowcaseHeader(
+                eyebrow: 'SOFA BATTLE',
+                title: '1V1 ON THIS PHONE',
+                subtitle:
+                    'A stronger local duel layout for two people on one device, with the board staying fixed and the setup staying fast.',
+                icon: Icons.people_alt_outlined,
+                accent: arcade.amber,
+                metrics: const [
+                  (value: 'TABLE', label: 'ARENA'),
+                  (value: 'FIXED', label: 'BOARD'),
+                  (value: 'CLOCK', label: 'OPTION'),
+                ],
+                primaryAsset: _menuBackdropSpriteAsset(
+                  _MenuBackdropSpriteRole.king,
+                ),
+                secondaryAsset: _menuBackdropSpriteAsset(
+                  _MenuBackdropSpriteRole.king,
+                  useDarkSprite: true,
+                ),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -16078,15 +16457,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 ],
               ),
               const SizedBox(height: 18),
-              Text(
-                'Time Control',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
-                ),
-              ),
+              buildSectionTitle('TIME CONTROL', arcade.amber),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -16107,6 +16478,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       onSelected: (_) {
                         unawaited(_setLocalFriendTimeControlIndex(index));
                       },
+                      showCheckmark: false,
                       selectedColor: Color.alphaBlend(
                         arcade.amber.withValues(alpha: 0.22),
                         scheme.surface,
@@ -16114,17 +16486,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       side: BorderSide(
                         color: _localFriendTimeControlIndex == index
                             ? arcade.amber.withValues(alpha: 0.72)
-                            : scheme.outline.withValues(alpha: 0.32),
+                            : scheme.outline.withValues(alpha: 0.28),
                       ),
-                      labelStyle: TextStyle(
+                      labelStyle: buildBodyStyle(
                         color: scheme.onSurface,
+                        size: 12.5,
                         fontWeight: _localFriendTimeControlIndex == index
                             ? FontWeight.w800
                             : FontWeight.w600,
+                        height: 1.0,
                       ),
                       backgroundColor: Color.alphaBlend(
                         scheme.surface.withValues(alpha: 0.88),
                         arcade.panelAlt,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 7,
                       ),
                     ),
                 ],
@@ -16132,7 +16510,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Color.alphaBlend(
                     arcade.amber.withValues(alpha: isDark ? 0.10 : 0.06),
@@ -16143,16 +16521,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     color: arcade.amber.withValues(alpha: 0.20),
                   ),
                 ),
-                child: Text(
-                  selectedLocalFriendTimeControl.initialTime == null
-                      ? 'Stationary 1v1 without a clock.'
-                      : 'Both sides start with ${_formatLocalFriendTimeControl(selectedLocalFriendTimeControl)}. White moves first and the board stays fixed.',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.68),
-                    fontSize: 12.5,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildStageBadge(label: 'BOARD READY', accent: arcade.amber),
+                    const SizedBox(height: 10),
+                    Text(
+                      summaryLabel.toUpperCase(),
+                      style: buildDisplayStyle(
+                        color: arcade.amber,
+                        size: 28,
+                        glow: true,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      selectedLocalFriendTimeControl.initialTime == null
+                          ? 'Stationary 1v1 without a clock. White opens, black answers, and the board never flips out from under the players.'
+                          : 'Both sides start with ${_formatLocalFriendTimeControl(selectedLocalFriendTimeControl)}. White moves first and the board stays fixed for a true across-the-table duel.',
+                      style: buildBodyStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.72),
+                        size: 12.6,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 18),
@@ -16160,17 +16552,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: () => unawaited(_startLocalFriendMatch()),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Color.alphaBlend(
-                      arcade.amber.withValues(alpha: 0.92),
-                      scheme.surface,
-                    ),
-                    foregroundColor: const Color(0xFF0B0F16),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
+                  style: buildActionButtonStyle(accent: arcade.amber),
                   icon: const Icon(Icons.play_arrow_rounded),
                   label: const Text('Start 1v1 Match'),
                 ),
@@ -16182,58 +16564,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     Widget buildRemoteModeCard() {
-      return Container(
-        decoration: buildVsDeckDecoration(remoteAccent, emphasized: true),
+      return buildDeckShell(
+        accent: remoteAccent,
+        emphasized: true,
+        watermark: 'LIVE',
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: remoteAccent.withValues(
-                        alpha: isDark ? 0.16 : 0.12,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.wifi_tethering_rounded,
-                      color: remoteAccent,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'FRIEND ON ANOTHER PHONE',
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Private invite-only play on another phone. Share a code with a friend you already know; no public matchmaking, with synchronized clocks and server-validated moves.',
-                          style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.72),
-                            fontSize: 13,
-                            height: 1.35,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              buildShowcaseHeader(
+                eyebrow: 'PRIVATE LINK',
+                title: 'FRIEND ON ANOTHER PHONE',
+                subtitle:
+                    'A stronger invite-only remote front door with private codes, cleaner setup, and a list that feels like a real live lobby.',
+                icon: Icons.wifi_tethering_rounded,
+                accent: remoteAccent,
+                metrics: const [
+                  (value: 'CODE', label: 'ENTRY'),
+                  (value: 'SYNC', label: 'CLOCK'),
+                  (value: 'LIVE', label: 'MATCH'),
                 ],
+                primaryAsset: _menuBackdropSpriteAsset(
+                  _MenuBackdropSpriteRole.queen,
+                ),
+                secondaryAsset: _menuBackdropSpriteAsset(
+                  _MenuBackdropSpriteRole.rook,
+                  useDarkSprite: true,
+                ),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -16258,15 +16616,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 ],
               ),
               const SizedBox(height: 18),
-              Text(
-                'Time Control',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
-                ),
-              ),
+              buildSectionTitle('TIME CONTROL', remoteAccent),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -16298,6 +16648,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           : (_) {
                               unawaited(_setLocalFriendTimeControlIndex(index));
                             },
+                      showCheckmark: false,
                       selectedColor: Color.alphaBlend(
                         remoteAccent.withValues(alpha: 0.22),
                         scheme.surface,
@@ -16305,31 +16656,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       side: BorderSide(
                         color: _localFriendTimeControlIndex == index
                             ? remoteAccent.withValues(alpha: 0.72)
-                            : scheme.outline.withValues(alpha: 0.32),
+                            : scheme.outline.withValues(alpha: 0.28),
                       ),
-                      labelStyle: TextStyle(
+                      labelStyle: buildBodyStyle(
                         color: scheme.onSurface,
+                        size: 12.5,
                         fontWeight: _localFriendTimeControlIndex == index
                             ? FontWeight.w800
                             : FontWeight.w600,
+                        height: 1.0,
                       ),
                       backgroundColor: Color.alphaBlend(
                         scheme.surface.withValues(alpha: 0.88),
                         arcade.panelAlt,
                       ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 7,
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 14),
-              Text(
-                'Seat Preference',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
-                ),
-              ),
+              buildSectionTitle('SEAT PREFERENCE', remoteAccent),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -16355,6 +16704,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       _remoteFriendSeatPreference = preference;
                                     });
                                   },
+                            showCheckmark: false,
                             selectedColor: Color.alphaBlend(
                               remoteAccent.withValues(alpha: 0.22),
                               scheme.surface,
@@ -16362,17 +16712,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             side: BorderSide(
                               color: selected
                                   ? remoteAccent.withValues(alpha: 0.72)
-                                  : scheme.outline.withValues(alpha: 0.32),
+                                  : scheme.outline.withValues(alpha: 0.28),
                             ),
-                            labelStyle: TextStyle(
+                            labelStyle: buildBodyStyle(
                               color: scheme.onSurface,
+                              size: 12.5,
                               fontWeight: selected
                                   ? FontWeight.w800
                                   : FontWeight.w600,
+                              height: 1.0,
                             ),
                             backgroundColor: Color.alphaBlend(
                               scheme.surface.withValues(alpha: 0.88),
                               arcade.panelAlt,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 7,
                             ),
                           );
                         })
@@ -16381,7 +16737,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Color.alphaBlend(
                     remoteAccent.withValues(alpha: isDark ? 0.10 : 0.06),
@@ -16392,42 +16748,47 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     color: remoteAccent.withValues(alpha: 0.20),
                   ),
                 ),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    buildModePill(
-                      icon: Icons.timer_outlined,
-                      label: selectedRemoteFriendTimeControl.isUntimed
-                          ? 'Untimed'
-                          : _formatRemoteFriendTimeControl(
-                              selectedRemoteFriendTimeControl,
-                            ),
-                      accent: remoteAccent,
-                      emphasized: true,
+                    buildStageBadge(label: 'MATCH PROFILE', accent: remoteAccent),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        buildModePill(
+                          icon: Icons.timer_outlined,
+                          label: selectedRemoteFriendTimeControl.isUntimed
+                              ? 'Untimed'
+                              : _formatRemoteFriendTimeControl(
+                                  selectedRemoteFriendTimeControl,
+                                ),
+                          accent: remoteAccent,
+                          emphasized: true,
+                        ),
+                        buildModePill(
+                          icon: Icons.flag_outlined,
+                          label: switch (_remoteFriendSeatPreference) {
+                            RemoteFriendSeatPreference.random => 'Seat: Random',
+                            RemoteFriendSeatPreference.white => 'Seat: White',
+                            RemoteFriendSeatPreference.black => 'Seat: Black',
+                          },
+                          accent: remoteAccent,
+                        ),
+                      ],
                     ),
-                    buildModePill(
-                      icon: Icons.flag_outlined,
-                      label: switch (_remoteFriendSeatPreference) {
-                        RemoteFriendSeatPreference.random => 'Seat: Random',
-                        RemoteFriendSeatPreference.white => 'Seat: White',
-                        RemoteFriendSeatPreference.black => 'Seat: Black',
-                      },
-                      accent: remoteAccent,
+                    const SizedBox(height: 10),
+                    Text(
+                      selectedRemoteFriendTimeControl.isUntimed
+                          ? 'Create an untimed private invite, or switch to a clocked match before sharing the code.'
+                          : 'Private invites start with ${_formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl)} and keep both clocks synchronized for both players.',
+                      style: buildBodyStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.72),
+                        size: 12.6,
+                      ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                selectedRemoteFriendTimeControl.isUntimed
-                    ? 'Create an untimed private invite, or switch to a clocked match before sharing the code.'
-                    : 'Private remote invites start with ${_formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl)} and keep both clocks synchronized for both players.',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.68),
-                  fontSize: 12.5,
-                  height: 1.35,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 18),
@@ -16439,20 +16800,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     onPressed: _remoteFriendOperationInProgress
                         ? null
                         : () => unawaited(_createRemoteFriendInvite()),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Color.alphaBlend(
-                        remoteAccent.withValues(alpha: 0.92),
-                        scheme.surface,
-                      ),
-                      foregroundColor: const Color(0xFF0B0F16),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
+                    style: buildActionButtonStyle(accent: remoteAccent),
                     icon: const Icon(Icons.add_link_rounded),
                     label: const Text('Create Invite'),
                   ),
@@ -16462,17 +16810,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         : () => unawaited(_joinRemoteFriendInvite()),
                     icon: const Icon(Icons.key_rounded),
                     label: const Text('Join Code'),
-                    style: FilledButton.styleFrom(
-                      foregroundColor: remoteAccent,
-                      backgroundColor: Color.alphaBlend(
-                        remoteAccent.withValues(alpha: 0.14),
-                        scheme.surface,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 14,
-                      ),
-                    ),
+                    style: buildActionButtonStyle(accent: remoteAccent, tonal: true),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: _remoteFriendMembershipsLoading
@@ -16489,31 +16827,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           )
                         : const Icon(Icons.refresh_rounded),
                     label: const Text('Refresh List'),
-                    style: FilledButton.styleFrom(
-                      foregroundColor: remoteAccent,
-                      backgroundColor: Color.alphaBlend(
-                        remoteAccent.withValues(alpha: 0.14),
-                        scheme.surface,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 14,
-                      ),
-                    ),
+                    style: buildActionButtonStyle(accent: remoteAccent, tonal: true),
                   ),
                 ],
               ),
               const SizedBox(height: 18),
               Row(
                 children: [
-                  Text(
-                    'Recent Private Matches',
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
-                    ),
+                  Expanded(
+                    child: buildSectionTitle('RECENT PRIVATE MATCHES', remoteAccent),
                   ),
                   const SizedBox(width: 8),
                   if (_remoteFriendMembershipsLoading)
@@ -16547,11 +16869,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     _remoteFriendLastError == null
                         ? 'No private remote matches yet. Create an invite or join a friend with a code.'
                         : 'Remote matches could not be refreshed just now. You can still create or join an invite above.',
-                    style: TextStyle(
+                    style: buildBodyStyle(
                       color: scheme.onSurface.withValues(alpha: 0.68),
-                      fontSize: 12.5,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
+                      size: 12.6,
                     ),
                   ),
                 )
@@ -16635,6 +16955,46 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
             ),
           ),
+          Positioned(
+            left: -70,
+            top: 220,
+            child: Transform.rotate(
+              angle: -0.42,
+              child: Container(
+                width: 220,
+                height: 34,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    colors: [
+                      arcade.cyan.withValues(alpha: isDark ? 0.14 : 0.09),
+                      arcade.cyan.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -80,
+            bottom: 140,
+            child: Transform.rotate(
+              angle: 0.36,
+              child: Container(
+                width: 240,
+                height: 38,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    colors: [
+                      arcade.amber.withValues(alpha: isDark ? 0.14 : 0.09),
+                      arcade.amber.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -16687,36 +17047,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   Expanded(
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1120),
+                        constraints: const BoxConstraints(maxWidth: 1180),
                         child: SingleChildScrollView(
                           child: LayoutBuilder(
                             builder: (context, constraints) {
-                              final wideLayout = constraints.maxWidth >= 960;
-                              final botCard = buildModeCard(
-                                title: 'VS BOT',
-                                subtitle:
-                                    'Choose a character, difficulty, and side before the match starts.',
-                                icon: Icons.smart_toy_outlined,
-                                accent: useMonochrome
-                                    ? scheme.onSurface
-                                    : arcade.cyan,
-                                onTap: _openBotSetupFromMenu,
-                                actionLabel: 'Enter',
-                                highlights: [
-                                  (
-                                    icon: Icons.psychology_alt_outlined,
-                                    label: 'Adaptive AI',
-                                  ),
-                                  (
-                                    icon: Icons.flag_outlined,
-                                    label: 'Pick your side',
-                                  ),
-                                  (
-                                    icon: Icons.tune_rounded,
-                                    label: 'Difficulty ladder',
-                                  ),
-                                ],
-                              );
+                              final wideLayout = constraints.maxWidth >= 980;
+                              final botCard = buildBotModeCard();
                               final localCard = buildLocalModeCard();
                               final remoteCard = buildRemoteModeCard();
 
