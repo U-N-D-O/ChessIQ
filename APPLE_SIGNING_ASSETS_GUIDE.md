@@ -151,12 +151,17 @@ That script will ask for:
 
 - your GitHub repo
 - your Apple Team ID
+- the `GoogleService-Info.plist` file path
 - the `.p12` file path
 - the `.p12` password
 - the `.mobileprovision` file path
 - optionally the `.p8` file path, key ID, and issuer ID
 
 It will upload the GitHub secrets for you.
+
+That includes the Firebase iOS config secret:
+
+- `FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64`
 
 ## 7. Start The Actual Release
 

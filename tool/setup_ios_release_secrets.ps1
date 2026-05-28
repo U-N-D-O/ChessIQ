@@ -2,6 +2,7 @@
 param(
     [string]$Repository,
     [string]$AppleTeamId,
+    [string]$FirebaseGoogleServiceInfoPlistPath,
     [string]$CertificatePath,
     [string]$CertificatePassword,
     [string]$ProvisioningProfilePath,
@@ -115,18 +116,22 @@ if (-not $resolvedRepository) {
 }
 
 $resolvedTeamId = Prompt-Value -CurrentValue $AppleTeamId -Prompt 'Apple Team ID'
+$resolvedFirebaseGoogleServiceInfoPlistPath = Prompt-Value -CurrentValue $FirebaseGoogleServiceInfoPlistPath -Prompt 'Path to Firebase GoogleService-Info.plist'
 $resolvedCertificatePath = Prompt-Value -CurrentValue $CertificatePath -Prompt 'Path to Apple Distribution .p12 certificate file'
 $resolvedCertificatePassword = Prompt-Value -CurrentValue $CertificatePassword -Prompt 'Password used when exporting the .p12 certificate' -Secret
 $resolvedProvisioningProfilePath = Prompt-Value -CurrentValue $ProvisioningProfilePath -Prompt 'Path to App Store provisioning profile (.mobileprovision)'
 
+Require-FilePath -PathValue $resolvedFirebaseGoogleServiceInfoPlistPath -Label 'Firebase GoogleService-Info.plist file'
 Require-FilePath -PathValue $resolvedCertificatePath -Label 'Certificate file'
 Require-FilePath -PathValue $resolvedProvisioningProfilePath -Label 'Provisioning profile'
 
+$firebaseGoogleServiceInfoPlistBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedFirebaseGoogleServiceInfoPlistPath)))
 $certificateBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedCertificatePath)))
 $provisioningProfileBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedProvisioningProfilePath)))
 
 Write-Host "Uploading signing secrets to $resolvedRepository ..."
 Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_TEAM_ID' -Value $resolvedTeamId
+Set-GitHubSecret -Repo $resolvedRepository -Name 'FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64' -Value $firebaseGoogleServiceInfoPlistBase64
 Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_DISTRIBUTION_CERTIFICATE_BASE64' -Value $certificateBase64
 Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD' -Value $resolvedCertificatePassword
 Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_PROVISIONING_PROFILE_BASE64' -Value $provisioningProfileBase64
@@ -156,6 +161,7 @@ Write-Host 'Done.'
 Write-Host "Repository: $resolvedRepository"
 Write-Host 'Configured signing secrets:'
 Write-Host '- APPLE_TEAM_ID'
+Write-Host '- FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64'
 Write-Host '- APPLE_DISTRIBUTION_CERTIFICATE_BASE64'
 Write-Host '- APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD'
 Write-Host '- APPLE_PROVISIONING_PROFILE_BASE64'

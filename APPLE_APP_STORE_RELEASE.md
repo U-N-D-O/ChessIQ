@@ -57,6 +57,7 @@ Required workflow inputs:
 Required GitHub secrets:
 
 - `APPLE_TEAM_ID`
+- `FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64`
 - `APPLE_DISTRIBUTION_CERTIFICATE_BASE64`
 - `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD`
 - `APPLE_PROVISIONING_PROFILE_BASE64`
@@ -127,6 +128,8 @@ Before submission, confirm:
 
 ## Secrets Notes
 
+- `FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64` should be a base64-encoded
+  `GoogleService-Info.plist` for the ChessIQ iOS app.
 - `APPLE_DISTRIBUTION_CERTIFICATE_BASE64` should be a base64-encoded `.p12`
   Apple Distribution certificate.
 - `APPLE_PROVISIONING_PROFILE_BASE64` should be a base64-encoded App Store

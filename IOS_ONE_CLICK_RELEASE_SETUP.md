@@ -8,6 +8,10 @@ This file explains the iOS/App Store release setup in plain language.
   This is Apple's ID for your developer team. It belongs to your Apple
   Developer account.
 
+- `FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64`
+  This is your Firebase iOS config file turned into text so GitHub can store
+  it securely. The original file is `GoogleService-Info.plist`.
+
 - `APPLE_DISTRIBUTION_CERTIFICATE_BASE64`
   This is your Apple Distribution signing certificate turned into text so
   GitHub can store it securely. The original file is a `.p12` file exported
@@ -55,6 +59,7 @@ You do this one time, then releases become much smoother.
 3. Run `gh auth login` and sign into GitHub.
 4. Make sure you have these Apple files/values ready:
    - Apple Team ID
+  - Firebase iOS `GoogleService-Info.plist`
    - Apple Distribution certificate exported as `.p12`
    - password for that `.p12`
    - App Store provisioning profile as `.mobileprovision`

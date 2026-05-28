@@ -91,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          : "${FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:?Missing secret FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64}"
+          : "${FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:?Missing secret FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64. Upload ios/Runner/GoogleService-Info.plist with tool/setup_ios_release_secrets.ps1 or add the GitHub secret manually.}"
 
           echo "$FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
 
