@@ -2,6 +2,10 @@ name: Build iOS Sideload IPA (Diagnostic)
 
 'on':
   workflow_dispatch:
+  workflow_call:
+    secrets:
+      FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:
+        required: true
 
 jobs:
   build-ios-ipa-diagnostic:
@@ -19,6 +23,16 @@ jobs:
 
       - name: Flutter pub get
         run: flutter pub get
+
+      - name: Install Firebase iOS config
+        env:
+          FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          : "${FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:?Missing secret FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64}"
+
+          echo "$FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
 
       - name: Clone Stockfish 18
         run: git clone --depth 1 --branch sf_18 https://github.com/official-stockfish/Stockfish.git

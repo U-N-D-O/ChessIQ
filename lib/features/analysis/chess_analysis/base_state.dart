@@ -4889,6 +4889,39 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Future<void> _shareRemoteFriendInviteCode({String? inviteCode}) async {
+    final code =
+        inviteCode?.trim().toUpperCase() ??
+        _remoteFriendInvite?.inviteCode ??
+        _remoteFriendSnapshot?.inviteCode;
+    if (code == null || code.isEmpty) {
+      return;
+    }
+
+    try {
+      final renderBox = context.findRenderObject() as RenderBox?;
+      final shareOrigin = renderBox == null
+          ? null
+          : renderBox.localToGlobal(Offset.zero) & renderBox.size;
+      await Share.share(
+        'Join my private ChessIQ match with invite code $code. '
+        'Open VS Mode, choose Friend on Another Phone, then enter the code.',
+        subject: 'ChessIQ private match invite',
+        sharePositionOrigin: shareOrigin,
+      );
+    } catch (e) {
+      _addLog('Share remote invite failed: $e');
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open the share sheet for this invite.'),
+        ),
+      );
+    }
+  }
+
   void _stopRemoteFriendSyncTimers() {
     _remoteFriendPollTimer?.cancel();
     _remoteFriendPollTimer = null;
@@ -4916,7 +4949,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    if (_isRemoteFriendTimedMatch &&
+    if ((_isRemoteFriendTimedMatch || _isRemoteFriendPieceSelectionOpen) &&
         snapshot.status == RemoteFriendMatchStatus.active &&
         snapshot.outcome == null) {
       _remoteFriendClockDisplayTimer = Timer.periodic(
@@ -4924,7 +4957,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         (timer) {
           if (!mounted ||
               !_isRemoteFriendMatchMode ||
-              !_isRemoteFriendTimedMatch ||
+              (!_isRemoteFriendTimedMatch &&
+                  !_isRemoteFriendPieceSelectionOpen) ||
               _remoteFriendSnapshot?.status != RemoteFriendMatchStatus.active ||
               _gameOutcome != null) {
             timer.cancel();
@@ -5288,6 +5322,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _applyRemoteFriendSnapshot(invite: invite, snapshot: snapshot);
       });
       _startRemoteFriendSyncTimers(immediateRefresh: true);
+      unawaited(
+        PushNotificationService.instance.prepareRemoteFriendNotifications(),
+      );
 
       if (previousOutcome == null && snapshot.outcome != null) {
         final gameOutcome = _remoteOutcomeToGameOutcome(snapshot.outcome?.code);
@@ -5302,6 +5339,167 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  ({String title, String message, bool includeInternetHint})
+  _remoteFriendJoinFailurePresentation(String? reason) {
+    switch ((reason ?? '').trim()) {
+      case 'match-full':
+        return (
+          title: 'Match Full',
+          message:
+              'That private invite has already been claimed by another player.',
+          includeInternetHint: false,
+        );
+      case 'expired':
+        return (
+          title: 'Invite Expired',
+          message:
+              'That private invite expired before you joined. Ask your friend to create a new code.',
+          includeInternetHint: false,
+        );
+      case 'cancelled':
+        return (
+          title: 'Invite Cancelled',
+          message: 'That private invite was cancelled by the host.',
+          includeInternetHint: false,
+        );
+      case 'completed':
+        return (
+          title: 'Match Finished',
+          message:
+              'That invite now belongs to a finished match. Ask your friend for a fresh code.',
+          includeInternetHint: false,
+        );
+      case 'match-unavailable':
+        return (
+          title: 'Invite Unavailable',
+          message:
+              'That private invite is no longer available. Ask your friend to create a new code.',
+          includeInternetHint: false,
+        );
+      default:
+        return (
+          title: 'Join Failed',
+          message:
+              'Could not join that private invite code. Make sure the code is correct and the match is still available.',
+          includeInternetHint: true,
+        );
+    }
+  }
+
+  ({String title, String message, bool includeInternetHint})
+  _remoteFriendActionFailurePresentation(
+    RemoteFriendMatchAction action,
+    String? reason,
+  ) {
+    switch ((reason ?? '').trim()) {
+      case 'cannot-cancel':
+        return (
+          title: 'Invite Already Changed',
+          message:
+              'This invite can no longer be cancelled because the match state changed.',
+          includeInternetHint: false,
+        );
+      case 'cannot-resign':
+        return (
+          title: 'Resign Unavailable',
+          message:
+              'You can only resign an active remote match that you are currently playing.',
+          includeInternetHint: false,
+        );
+      case 'cannot-offer-draw':
+        return (
+          title: 'Draw Unavailable',
+          message:
+              'A draw can only be offered while an active remote match is in progress.',
+          includeInternetHint: false,
+        );
+      case 'draw-offer-pending':
+        return (
+          title: 'Draw Already Offered',
+          message:
+              'A draw offer is already waiting for the other player to respond.',
+          includeInternetHint: false,
+        );
+      case 'cannot-accept-draw':
+      case 'cannot-decline-draw':
+      case 'no-draw-offer':
+        return (
+          title: 'Draw Offer Missing',
+          message:
+              'There is no active draw offer for you to respond to anymore.',
+          includeInternetHint: false,
+        );
+      case 'expired':
+      case 'cancelled':
+      case 'completed':
+      case 'match-unavailable':
+        return (
+          title: 'Match Unavailable',
+          message:
+              'That remote friend action could not be applied because the match is no longer active.',
+          includeInternetHint: false,
+        );
+      default:
+        final fallbackVerb = switch (action) {
+          RemoteFriendMatchAction.cancelPending => 'cancel the invite',
+          RemoteFriendMatchAction.resign => 'resign the match',
+          RemoteFriendMatchAction.offerDraw => 'offer a draw',
+          RemoteFriendMatchAction.acceptDraw => 'accept the draw',
+          RemoteFriendMatchAction.declineDraw => 'decline the draw',
+        };
+        return (
+          title: 'Action Unavailable',
+          message:
+              'ChessIQ could not $fallbackVerb because the match state changed. The board has been refreshed to the latest server state.',
+          includeInternetHint: false,
+        );
+    }
+  }
+
+  String _remoteFriendMoveRejectionMessage(String? reason) {
+    switch ((reason ?? '').trim()) {
+      case 'stale-client':
+        return 'The board changed before your move arrived. ChessIQ refreshed to the latest server position.';
+      case 'not-your-turn':
+        return 'It is no longer your turn. The board has been refreshed.';
+      case 'piece-selection-pending':
+        return 'Both players are still choosing piece skins. The match starts when the 10-second selection window ends.';
+      case 'illegal-move':
+        return 'That move is no longer legal in the current server position.';
+      case 'invalid-position':
+        return 'The server could not validate the current position. ChessIQ refreshed to the latest board state.';
+      case 'expired':
+      case 'cancelled':
+      case 'completed':
+        return 'This remote match is no longer active. The board has been refreshed.';
+      case 'match-unavailable':
+        return 'This remote match is no longer available. The board has been refreshed.';
+      case 'not-participant':
+        return 'This device is no longer recognized as a participant in that remote match.';
+      default:
+        return 'That move could not be synchronized, so ChessIQ refreshed to the latest server state.';
+    }
+  }
+
+  String _cleanRemoteFriendErrorMessage(Object error) {
+    final message = error.toString().trim();
+    for (final prefix in const <String>['Exception: ', 'Bad state: ']) {
+      if (message.startsWith(prefix)) {
+        return message.substring(prefix.length).trim();
+      }
+    }
+    return message;
+  }
+
+  void _showRemoteFriendSnackBar(String message) {
+    if (!mounted || message.trim().isEmpty) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _createRemoteFriendInvite() async {
     if (_remoteFriendOperationInProgress) {
       return;
@@ -5313,6 +5511,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       await _ensureRemoteFriendLocalUid();
       final result = await RemoteFriendService.instance.createInvite(
         timeControl: _selectedRemoteFriendTimeControl,
+        defaultPieceThemeIndex: _pieceThemeMode.index,
         seatPreference: _remoteFriendSeatPreference,
       );
       if (!mounted) {
@@ -5357,14 +5556,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
     try {
       await _ensureRemoteFriendLocalUid();
-      final result = await RemoteFriendService.instance.joinInvite(inviteCode);
+      final result = await RemoteFriendService.instance.joinInvite(
+        inviteCode,
+        defaultPieceThemeIndex: _pieceThemeMode.index,
+      );
       if (!mounted) {
         return;
       }
       if (!result.success) {
-        throw StateError(
-          result.reason ?? 'The invite code could not be joined.',
+        _addLog('Join remote invite rejected: ${result.reason ?? 'unknown'}');
+        final failure = _remoteFriendJoinFailurePresentation(result.reason);
+        await _showThemedErrorDialog(
+          title: failure.title,
+          message: failure.message,
+          includeInternetHint: failure.includeInternetHint,
         );
+        return;
       }
       await _enterRemoteFriendMatch(
         invite: result.invite,
@@ -5382,6 +5589,57 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             'Could not join that private invite code. Make sure the code is correct and the match is still available.',
         includeInternetHint: true,
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _remoteFriendOperationInProgress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectRemoteFriendPieceTheme(PieceThemeMode mode) async {
+    final snapshot = _remoteFriendSnapshot;
+    if (snapshot == null ||
+        snapshot.matchId.isEmpty ||
+        _remoteFriendOperationInProgress ||
+        !_isRemoteFriendPieceSelectionOpen) {
+      return;
+    }
+
+    setState(() {
+      _remoteFriendOperationInProgress = true;
+    });
+
+    try {
+      final result = await RemoteFriendService.instance.selectPieceTheme(
+        matchId: snapshot.matchId,
+        pieceThemeIndex: mode.index,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _applyRemoteFriendSnapshot(
+          invite: result.invite,
+          snapshot: result.snapshot,
+        );
+      });
+      _startRemoteFriendSyncTimers();
+      if (!result.success) {
+        _showRemoteFriendSnackBar(
+          'The piece-skin selection window already closed. The match will continue with the current skins.',
+        );
+      }
+    } catch (e) {
+      _addLog('Select remote friend piece theme failed: $e');
+      if (!mounted) {
+        return;
+      }
+      _showRemoteFriendSnackBar(
+        'Could not update your piece skin before the match started.',
+      );
+      await _refreshRemoteFriendMatch(silent: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -5464,7 +5722,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return;
       }
       setState(() {
-        _remoteFriendLastError = e.toString();
+        _remoteFriendLastError = _cleanRemoteFriendErrorMessage(e);
       });
       if (!silent) {
         await _showThemedErrorDialog(
@@ -5491,6 +5749,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _remoteFriendOperationInProgress = true;
     });
     try {
+      final previousOutcome = _remoteFriendSnapshot?.outcome?.code;
       final result = await RemoteFriendService.instance.actOnMatch(
         matchId: matchId,
         action: action,
@@ -5506,10 +5765,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       });
       _startRemoteFriendSyncTimers();
       unawaited(_loadRemoteFriendMemberships(silent: true));
+
+      if (!result.success) {
+        _addLog('Remote action rejected: ${result.reason ?? 'unknown'}');
+        final failure = _remoteFriendActionFailurePresentation(
+          action,
+          result.reason,
+        );
+        await _showThemedErrorDialog(
+          title: failure.title,
+          message: failure.message,
+          includeInternetHint: failure.includeInternetHint,
+        );
+        return;
+      }
+
       final gameOutcome = _remoteOutcomeToGameOutcome(
         result.snapshot.outcome?.code,
       );
-      if (gameOutcome != null) {
+      if (previousOutcome == null && gameOutcome != null) {
         unawaited(_startGameResultReveal(gameOutcome));
       }
     } catch (e) {
@@ -5568,6 +5842,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!result.acceptedMove) {
         _addLog('Remote move rejected: ${result.reason ?? 'unknown'}');
         await _refreshRemoteFriendMatch(silent: true);
+        if (mounted) {
+          _showRemoteFriendSnackBar(
+            _remoteFriendMoveRejectionMessage(result.reason),
+          );
+        }
         return;
       }
 
@@ -5693,6 +5972,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _isRemoteFriendMatchMode &&
       _remoteFriendSnapshot?.status == RemoteFriendMatchStatus.active;
 
+  DateTime? get _remoteFriendPieceSelectionDeadline =>
+      _remoteFriendSnapshot?.pieceSelectionDeadlineAt;
+
+  bool get _isRemoteFriendPieceSelectionOpen {
+    final deadline = _remoteFriendPieceSelectionDeadline;
+    return _isRemoteFriendActiveMatch &&
+        deadline != null &&
+        DateTime.now().isBefore(deadline);
+  }
+
+  Duration get _remoteFriendPieceSelectionRemaining {
+    final deadline = _remoteFriendPieceSelectionDeadline;
+    if (deadline == null) {
+      return Duration.zero;
+    }
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining.isNegative) {
+      return Duration.zero;
+    }
+    return remaining;
+  }
+
+  int get _remoteFriendPieceSelectionRemainingSeconds {
+    final remaining = _remoteFriendPieceSelectionRemaining;
+    if (remaining <= Duration.zero) {
+      return 0;
+    }
+    return ((remaining.inMilliseconds + 999) ~/ 1000).clamp(0, 10);
+  }
+
   bool get _isRemoteFriendTimedMatch =>
       _isRemoteFriendMatchMode &&
       !(_remoteFriendSnapshot?.timeControl.isUntimed ?? true);
@@ -5713,9 +6022,105 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         offerByUid == localUid;
   }
 
+  PieceThemeMode _pieceThemeModeFromIndex(int index) {
+    if (index < 0 || index >= PieceThemeMode.values.length) {
+      return PieceThemeMode.classic;
+    }
+    return PieceThemeMode.values[index];
+  }
+
+  PieceThemeMode _remoteFriendPieceThemeForSeat(RemoteFriendSeat seat) {
+    final snapshot = _remoteFriendSnapshot;
+    if (snapshot == null) {
+      return _pieceThemeMode;
+    }
+    return _pieceThemeModeFromIndex(
+      seat == RemoteFriendSeat.white
+          ? snapshot.whitePieceThemeIndex
+          : snapshot.blackPieceThemeIndex,
+    );
+  }
+
+  PieceThemeMode _activePieceThemeForPiece(
+    String piece, {
+    PieceThemeMode? theme,
+  }) {
+    if (theme != null) {
+      return theme;
+    }
+    if (_isRemoteFriendMatchMode) {
+      return _remoteFriendPieceThemeForSeat(
+        piece.endsWith('_w') ? RemoteFriendSeat.white : RemoteFriendSeat.black,
+      );
+    }
+    return _pieceThemeMode;
+  }
+
+  String _remoteFriendSeatLabel(RemoteFriendSeat? seat) {
+    switch (seat) {
+      case RemoteFriendSeat.white:
+        return 'White';
+      case RemoteFriendSeat.black:
+        return 'Black';
+      case null:
+        return 'Unknown';
+    }
+  }
+
+  Widget _remoteFriendPieceThemeChoiceTile({
+    required PieceThemeMode mode,
+    required bool isWhitePiece,
+    required bool selected,
+    required VoidCallback? onTap,
+  }) {
+    final enabled = onTap != null;
+    return AnimatedOpacity(
+      opacity: enabled ? 1.0 : 0.52,
+      duration: const Duration(milliseconds: 150),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IgnorePointer(
+            ignoring: !enabled,
+            child: ThemeSelectorTile(
+              selected: selected,
+              onTap: onTap ?? () {},
+              size: 74,
+              child: _pieceImage(
+                isWhitePiece ? 'q_w' : 'q_b',
+                width: 28,
+                height: 28,
+                theme: mode,
+                orientForHeadToHeadPerspective: false,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: 74,
+            child: Text(
+              _pieceThemeLabel(mode),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool get _isHumanTurnInRemoteFriendGame {
     final seat = _remoteFriendPlayerSeat;
-    if (!_isRemoteFriendActiveMatch || seat == null || _gameOutcome != null) {
+    if (!_isRemoteFriendActiveMatch ||
+        seat == null ||
+        _gameOutcome != null ||
+        _isRemoteFriendPieceSelectionOpen) {
       return false;
     }
     return (seat == RemoteFriendSeat.white) == _isWhiteTurn;
@@ -19410,18 +19815,27 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     if (_isRemoteFriendMatchMode && endedOutcome == null) {
       final remoteSnapshot = _remoteFriendSnapshot;
-      final remoteAccent =
-          _hasIncomingRemoteDrawOffer || _hasOutgoingRemoteDrawOffer
+      final remoteSeat = _remoteFriendPlayerSeat;
+      final remoteSeatLabel = _remoteFriendSeatLabel(remoteSeat);
+      final remotePieceSelectionOpen = _isRemoteFriendPieceSelectionOpen;
+      final remoteSelectionRemainingSeconds =
+          _remoteFriendPieceSelectionRemainingSeconds;
+      final remoteAccent = remotePieceSelectionOpen
+          ? const Color(0xFFD8B640)
+          : _hasIncomingRemoteDrawOffer || _hasOutgoingRemoteDrawOffer
           ? const Color(0xFFD8B640)
           : _isHumanTurnInRemoteFriendGame
           ? const Color(0xFF5AAEE8)
           : const Color(0xFF7D8CA3);
-      final remoteStatusText =
-          _remoteFriendLastError ??
+      final remoteStatusText = _remoteFriendLastError ??
           (remoteSnapshot == null
               ? 'Synchronizing remote friend match...'
               : _isRemoteFriendPendingMatch
               ? 'Share code ${remoteSnapshot.inviteCode} with your friend to start the match.'
+              : remotePieceSelectionOpen
+              ? remoteSeat == null
+                    ? 'Choose your piece skin in $remoteSelectionRemainingSeconds seconds. If you do nothing, your current default skin will be used.'
+                    : 'You are $remoteSeatLabel. Choose the skin for your ${remoteSeatLabel.toLowerCase()} pieces in $remoteSelectionRemainingSeconds seconds. If you do nothing, your current default skin will be used.'
               : remoteSnapshot.status == RemoteFriendMatchStatus.expired
               ? 'This invite expired before the game began. Return to VS mode to create a new code.'
               : remoteSnapshot.status == RemoteFriendMatchStatus.cancelled
@@ -19450,6 +19864,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             accent: const Color(0xFF5AAEE8),
           ),
           buildRemoteActionButton(
+            label: 'Share Code',
+            icon: Icons.share_rounded,
+            onPressed: _remoteFriendOperationInProgress
+                ? null
+                : () => unawaited(_shareRemoteFriendInviteCode()),
+            accent: const Color(0xFF5AAEE8),
+          ),
+          buildRemoteActionButton(
             label: 'Cancel',
             icon: Icons.close_rounded,
             onPressed: _remoteFriendOperationInProgress
@@ -19463,7 +19885,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             primary: true,
           ),
         ] else if (_isRemoteFriendActiveMatch) ...[
-          if (_hasIncomingRemoteDrawOffer)
+          if (!remotePieceSelectionOpen && _hasIncomingRemoteDrawOffer)
             buildRemoteActionButton(
               label: 'Accept Draw',
               icon: Icons.handshake_outlined,
@@ -19477,7 +19899,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               accent: const Color(0xFFD8B640),
               primary: true,
             ),
-          if (_hasIncomingRemoteDrawOffer)
+          if (!remotePieceSelectionOpen && _hasIncomingRemoteDrawOffer)
             buildRemoteActionButton(
               label: 'Decline',
               icon: Icons.close_rounded,
@@ -19490,7 +19912,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ),
               accent: scheme.onSurface,
             ),
-          if (!_hasIncomingRemoteDrawOffer)
+          if (!remotePieceSelectionOpen && !_hasIncomingRemoteDrawOffer)
             buildRemoteActionButton(
               label: _hasOutgoingRemoteDrawOffer ? 'Draw Sent' : 'Offer Draw',
               icon: Icons.handshake_outlined,
@@ -19569,6 +19991,27 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (remotePieceSelectionOpen && remoteSeat != null) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 12,
+                  children: _availablePieceThemes.map((mode) {
+                    final selected =
+                        _remoteFriendPieceThemeForSeat(remoteSeat) == mode;
+                    return _remoteFriendPieceThemeChoiceTile(
+                      mode: mode,
+                      isWhitePiece: remoteSeat == RemoteFriendSeat.white,
+                      selected: selected,
+                      onTap: _remoteFriendOperationInProgress
+                          ? null
+                          : () => unawaited(
+                              _selectRemoteFriendPieceTheme(mode),
+                            ),
+                    );
+                  }).toList(growable: false),
+                ),
+              ],
               const SizedBox(height: 12),
               Wrap(spacing: 10, runSpacing: 10, children: buttons),
             ],
@@ -25024,7 +25467,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     bool orientForHeadToHeadPerspective = false,
     String? motionSeed,
   }) {
-    final activeTheme = theme ?? _pieceThemeMode;
+    final activeTheme = _activePieceThemeForPiece(piece, theme: theme);
     final assetPiece = AppThemeProvider.pieceAssetForIndex(
       activeTheme.index,
       piece,

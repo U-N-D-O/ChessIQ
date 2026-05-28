@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:chessiq/core/services/firebase_auth_service.dart';
@@ -75,29 +76,40 @@ class RemoteFriendService {
   static final RemoteFriendService instance = RemoteFriendService._();
 
   static const String _databaseUrl = kFirebaseRealtimeDatabaseUrl;
-  static const String _cfBase =
-      'https://us-central1-chessiq-89b45.cloudfunctions.net';
+  static const String _cfBase = kFirebaseCloudFunctionsBaseUrl;
   static const String _createInviteFunction = 'createFriendMatchInvite';
   static const String _joinInviteFunction = 'joinFriendMatchInvite';
   static const String _refreshMatchFunction = 'refreshFriendMatchState';
   static const String _submitMoveFunction = 'submitFriendMatchMove';
   static const String _actOnMatchFunction = 'actOnFriendMatch';
+  static const String _selectPieceThemeFunction = 'selectFriendMatchPieceTheme';
+  static const List<Duration> _transientRetryBackoff = <Duration>[
+    Duration.zero,
+    Duration(seconds: 1),
+    Duration(seconds: 3),
+  ];
 
   Future<RemoteFriendMutationResult> createInvite({
     required RemoteFriendTimeControl timeControl,
+    required int defaultPieceThemeIndex,
     RemoteFriendSeatPreference seatPreference =
         RemoteFriendSeatPreference.random,
   }) async {
     final result = await _callFunction(_createInviteFunction, <String, dynamic>{
       'timeControl': timeControl.toMap(),
       'seatPreference': seatPreference.wireName,
+      'defaultPieceThemeIndex': defaultPieceThemeIndex,
     });
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 
-  Future<RemoteFriendMutationResult> joinInvite(String inviteCode) async {
+  Future<RemoteFriendMutationResult> joinInvite(
+    String inviteCode, {
+    required int defaultPieceThemeIndex,
+  }) async {
     final result = await _callFunction(_joinInviteFunction, <String, dynamic>{
       'inviteCode': inviteCode.trim().toUpperCase(),
+      'defaultPieceThemeIndex': defaultPieceThemeIndex,
     });
     return RemoteFriendMutationResult.fromResultMap(result);
   }
@@ -194,6 +206,17 @@ class RemoteFriendService {
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 
+  Future<RemoteFriendMutationResult> selectPieceTheme({
+    required String matchId,
+    required int pieceThemeIndex,
+  }) async {
+    final result = await _callFunction(_selectPieceThemeFunction, <String, dynamic>{
+      'matchId': matchId.trim(),
+      'pieceThemeIndex': pieceThemeIndex,
+    });
+    return RemoteFriendMutationResult.fromResultMap(result);
+  }
+
   Future<Uri> _authedUrl(String path, [Map<String, String>? extra]) async {
     final token = await FirebaseAuthService.instance.getIdToken();
     if (token == null || token.isEmpty) {
@@ -210,29 +233,36 @@ class RemoteFriendService {
   }
 
   Future<dynamic> _readAuthedJson(String path) async {
-    final response = await http
-        .get(await _authedUrl(path))
-        .timeout(
-          const Duration(seconds: 20),
-          onTimeout: () {
-            throw Exception('Remote friend read timed out.');
-          },
-        );
+    return _runWithTransientRetries<dynamic>(
+      action: 'read remote friend match state',
+      operation: () async {
+        final response = await http
+            .get(await _authedUrl(path))
+            .timeout(
+              const Duration(seconds: 20),
+              onTimeout: () => throw const _RetryableRemoteFriendException(
+                'Remote friend read timed out.',
+              ),
+            );
 
-    if (response.statusCode != 200) {
-      throw Exception(
-        _formatHttpFailure(
-          action: 'read remote friend match state',
-          response: response,
-        ),
-      );
-    }
+        if (response.statusCode != 200) {
+          final message = _formatHttpFailure(
+            action: 'read remote friend match state',
+            response: response,
+          );
+          if (_isRetryableHttpStatus(response.statusCode)) {
+            throw _RetryableRemoteFriendException(message);
+          }
+          throw Exception(message);
+        }
 
-    final trimmedBody = response.body.trim();
-    if (trimmedBody.isEmpty || trimmedBody == 'null') {
-      return null;
-    }
-    return jsonDecode(trimmedBody);
+        final trimmedBody = response.body.trim();
+        if (trimmedBody.isEmpty || trimmedBody == 'null') {
+          return null;
+        }
+        return jsonDecode(trimmedBody);
+      },
+    );
   }
 
   Future<Map<String, dynamic>> _callFunction(
@@ -257,44 +287,109 @@ class RemoteFriendService {
     debugPrint('[RemoteFriendService] Calling Cloud Function: $uri');
 
     try {
-      final response = await http
-          .post(uri, headers: headers, body: jsonEncode({'data': data}))
-          .timeout(
-            const Duration(seconds: 20),
-            onTimeout: () {
-              throw Exception('Cloud Function request timed out');
-            },
-          );
+      return await _runWithTransientRetries<Map<String, dynamic>>(
+        action: 'reach the remote friend service',
+        operation: () async {
+          final response = await http
+              .post(uri, headers: headers, body: jsonEncode({'data': data}))
+              .timeout(
+                const Duration(seconds: 20),
+                onTimeout: () => throw const _RetryableRemoteFriendException(
+                  'Cloud Function request timed out.',
+                ),
+              );
 
-      Map<String, dynamic> body = const <String, dynamic>{};
-      final trimmedBody = response.body.trim();
-      final looksLikeJson =
-          trimmedBody.startsWith('{') || trimmedBody.startsWith('[');
-      if (trimmedBody.isNotEmpty && looksLikeJson) {
-        final decoded = jsonDecode(trimmedBody);
-        if (decoded is Map<String, dynamic>) {
-          body = decoded;
-        }
-      }
+          Map<String, dynamic> body = const <String, dynamic>{};
+          final trimmedBody = response.body.trim();
+          final looksLikeJson =
+              trimmedBody.startsWith('{') || trimmedBody.startsWith('[');
+          if (trimmedBody.isNotEmpty && looksLikeJson) {
+            final decoded = jsonDecode(trimmedBody);
+            if (decoded is Map<String, dynamic>) {
+              body = decoded;
+            }
+          }
 
-      if (response.statusCode != 200) {
-        final error = body['error'];
-        final message = error is Map<String, dynamic>
-            ? (error['message']?.toString().trim() ?? '')
-            : '';
-        throw Exception(
-          message.isNotEmpty
-              ? message
-              : 'Remote friend service returned ${response.statusCode}.',
-        );
-      }
+          if (response.statusCode != 200) {
+            final error = body['error'];
+            final message = error is Map<String, dynamic>
+                ? (error['message']?.toString().trim() ?? '')
+                : '';
+            final failureMessage = message.isNotEmpty
+                ? message
+                : 'Remote friend service returned ${response.statusCode}.';
+            if (_isRetryableHttpStatus(response.statusCode)) {
+              throw _RetryableRemoteFriendException(failureMessage);
+            }
+            throw Exception(failureMessage);
+          }
 
-      return (body['result'] as Map<String, dynamic>?) ??
-          const <String, dynamic>{};
+          return (body['result'] as Map<String, dynamic>?) ??
+              const <String, dynamic>{};
+        },
+      );
     } catch (error) {
       debugPrint('[RemoteFriendService] Exception: $error');
       rethrow;
     }
+  }
+
+  Future<T> _runWithTransientRetries<T>({
+    required String action,
+    required Future<T> Function() operation,
+  }) async {
+    Object? lastError;
+
+    for (int attempt = 0; attempt < _transientRetryBackoff.length; attempt++) {
+      if (attempt > 0) {
+        final delay = _transientRetryBackoff[attempt];
+        debugPrint(
+          '[RemoteFriendService] Retrying $action in '
+          '${delay.inSeconds}s after: $lastError',
+        );
+        await Future<void>.delayed(delay);
+      }
+
+      try {
+        return await operation();
+      } on _RetryableRemoteFriendException catch (error) {
+        lastError = error;
+      } on TimeoutException catch (error) {
+        lastError = error;
+      } on http.ClientException catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw _finalizeTransportFailure(action: action, error: lastError);
+  }
+
+  Exception _finalizeTransportFailure({
+    required String action,
+    required Object? error,
+  }) {
+    if (error is _RetryableRemoteFriendException) {
+      return Exception(error.message);
+    }
+    if (error is TimeoutException) {
+      return Exception(
+        'ChessIQ could not $action before the network timed out. '
+        'Check your connection and try again.',
+      );
+    }
+    if (error is http.ClientException) {
+      return Exception(
+        'ChessIQ could not $action because the network connection was interrupted. '
+        'Check your connection and try again.',
+      );
+    }
+    return Exception(
+      'ChessIQ could not $action. Check your connection and try again.',
+    );
+  }
+
+  bool _isRetryableHttpStatus(int statusCode) {
+    return statusCode == 408 || statusCode == 429 || statusCode >= 500;
   }
 
   String _formatHttpFailure({
@@ -335,6 +430,15 @@ class _ParsedRemoteFriendMutationPayload {
 
   final RemoteFriendInvite invite;
   final RemoteFriendMatchSnapshot snapshot;
+}
+
+class _RetryableRemoteFriendException implements Exception {
+  const _RetryableRemoteFriendException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 _ParsedRemoteFriendMutationPayload _parseRemoteFriendMutationPayload(

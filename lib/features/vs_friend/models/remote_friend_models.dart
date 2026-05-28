@@ -288,6 +288,8 @@ class RemoteFriendMatchSnapshot {
     required this.timeControl,
     required this.whiteTimeRemainingMs,
     required this.blackTimeRemainingMs,
+    required this.whitePieceThemeIndex,
+    required this.blackPieceThemeIndex,
     required this.lastTickStartedAt,
     required this.createdAt,
     required this.updatedAt,
@@ -299,6 +301,7 @@ class RemoteFriendMatchSnapshot {
     this.drawOfferByUid,
     this.startedAt,
     this.expiresAt,
+    this.pieceSelectionDeadlineAt,
     this.outcome,
   });
 
@@ -330,6 +333,8 @@ class RemoteFriendMatchSnapshot {
               initialSeconds: 0,
               incrementSeconds: 0,
             ),
+      whitePieceThemeIndex: _intFromDynamic(map['whitePieceThemeIndex']),
+      blackPieceThemeIndex: _intFromDynamic(map['blackPieceThemeIndex']),
       whiteTimeRemainingMs: _intFromDynamic(
         clockMap['whiteMsRemaining'] ?? map['whiteMsRemaining'],
       ),
@@ -352,6 +357,9 @@ class RemoteFriendMatchSnapshot {
       expiresAt: _nullableDateTimeFromDynamic(
         map['expiresAtMs'] ?? map['expiresAt'],
       ),
+      pieceSelectionDeadlineAt: _nullableDateTimeFromDynamic(
+        map['pieceSelectionDeadlineMs'],
+      ),
       outcome: rawOutcome is Map
           ? RemoteFriendOutcome.fromMap(rawOutcome.cast<String, dynamic>())
           : null,
@@ -373,6 +381,8 @@ class RemoteFriendMatchSnapshot {
   final RemoteFriendTimeControl timeControl;
   final int whiteTimeRemainingMs;
   final int blackTimeRemainingMs;
+  final int whitePieceThemeIndex;
+  final int blackPieceThemeIndex;
   final DateTime? lastTickStartedAt;
   final RemoteFriendSeat? activeClockSeat;
   final String? drawOfferByUid;
@@ -380,6 +390,7 @@ class RemoteFriendMatchSnapshot {
   final DateTime updatedAt;
   final DateTime? startedAt;
   final DateTime? expiresAt;
+  final DateTime? pieceSelectionDeadlineAt;
   final RemoteFriendOutcome? outcome;
   final List<RemoteFriendMoveRecord> moves;
 
@@ -399,6 +410,8 @@ class RemoteFriendMatchSnapshot {
       'nextPly': nextPly,
       'whiteToMove': whiteToMove,
       'timeControl': timeControl.toMap(),
+      'whitePieceThemeIndex': whitePieceThemeIndex,
+      'blackPieceThemeIndex': blackPieceThemeIndex,
       'clocks': <String, dynamic>{
         'whiteMsRemaining': whiteTimeRemainingMs,
         'blackMsRemaining': blackTimeRemainingMs,
@@ -410,6 +423,7 @@ class RemoteFriendMatchSnapshot {
       'updatedAtMs': updatedAt.millisecondsSinceEpoch,
       'startedAtMs': startedAt?.millisecondsSinceEpoch,
       'expiresAtMs': expiresAt?.millisecondsSinceEpoch,
+      'pieceSelectionDeadlineMs': pieceSelectionDeadlineAt?.millisecondsSinceEpoch,
       'outcome': outcome?.toMap(),
       'moves': moves.map((move) => move.toMap()).toList(growable: false),
     };

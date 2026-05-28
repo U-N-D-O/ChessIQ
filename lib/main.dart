@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:chessiq/core/app/chess_iq_app.dart';
 import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/services/firebase_auth_service.dart';
+import 'package:chessiq/core/services/push_notification_service.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/services/system_audio_service.dart';
 import 'package:flutter/foundation.dart';
@@ -67,6 +68,13 @@ void _startDeferredStartupWarmups() {
   );
   unawaited(
     _runStartupTask(
+      'PushNotificationService.initialize',
+      PushNotificationService.instance.initialize,
+      timeout: const Duration(seconds: 20),
+    ),
+  );
+  unawaited(
+    _runStartupTask(
       'PurchaseService.initialize',
       PurchaseService.instance.initialize,
       timeout: const Duration(seconds: 20),
@@ -83,6 +91,7 @@ void _startDeferredStartupWarmups() {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PushNotificationService.registerBackgroundHandler();
 
   runApp(const ChessIQApp());
 

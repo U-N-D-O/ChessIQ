@@ -61,6 +61,8 @@ const FRIEND_MATCH_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_ACTIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_MAX_INITIAL_SECONDS = 4 * 60 * 60;
 const FRIEND_MATCH_MAX_INCREMENT_SECONDS = 60;
+const FRIEND_MATCH_PIECE_SELECTION_WINDOW_MS = 10 * 1000;
+const FRIEND_MATCH_MAX_PIECE_THEME_INDEX = 5;
 const FRIEND_MATCH_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 type EconomyRewardSpec = {
     amount: number;
@@ -2012,6 +2014,9 @@ type FriendMatchRecord = {
     whiteToMove: boolean;
     timeControl: FriendTimeControl;
     clocks: FriendMatchClocks;
+    whitePieceThemeIndex: number;
+    blackPieceThemeIndex: number;
+    pieceSelectionDeadlineMs: number | null;
     createdAtMs: number;
     updatedAtMs: number;
     startedAtMs: number | null;
@@ -2034,6 +2039,18 @@ type FriendMembershipRecord = {
     inviteCode: string;
     status: FriendMatchStatus;
     updatedAtMs: number;
+};
+
+type PushTokenPlatform = "android" | "ios";
+
+type PushDeviceTokenRecord = {
+    token: string;
+    platform: PushTokenPlatform;
+    updatedAtMs: number;
+};
+
+type StoredPushDeviceToken = PushDeviceTokenRecord & {
+    installationId: string;
 };
 
 type FriendMoveInput = {
@@ -2153,6 +2170,17 @@ function readFriendExpectedPly(rawValue: unknown): number | null {
     return readFriendNonNegativeInt(rawValue, "expectedPly", 4096);
 }
 
+function readFriendPieceThemeIndex(
+    rawValue: unknown,
+    fieldName: string,
+): number {
+    return readFriendNonNegativeInt(
+        rawValue,
+        fieldName,
+        FRIEND_MATCH_MAX_PIECE_THEME_INDEX,
+    );
+}
+
 function readFriendTimeControl(rawValue: unknown): FriendTimeControl {
     const payload = rawValue && typeof rawValue === "object"
         ? rawValue as Record<string, unknown>
@@ -2194,6 +2222,54 @@ function readFriendMoveInput(rawMove: unknown): FriendMoveInput {
         to: moveUci.slice(2, 4),
         promotion: moveUci.length > 4 ? moveUci.slice(4, 5) : undefined,
     };
+}
+
+function readPushInstallationId(rawInstallationId: unknown): string {
+    if (typeof rawInstallationId !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "installationId must be a string.",
+        );
+    }
+    const installationId = rawInstallationId.trim().toLowerCase();
+    if (!/^[a-z0-9_-]{16,128}$/.test(installationId)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "installationId is invalid.",
+        );
+    }
+    return installationId;
+}
+
+function readPushToken(rawToken: unknown): string {
+    if (typeof rawToken !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "token must be a string.",
+        );
+    }
+    const token = rawToken.trim();
+    if (token.length < 32 || token.length > 4096) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "token length is invalid.",
+        );
+    }
+    return token;
+}
+
+function readPushTokenPlatform(rawPlatform: unknown): PushTokenPlatform {
+    switch ((rawPlatform ?? "").toString().trim().toLowerCase()) {
+        case "android":
+            return "android";
+        case "ios":
+            return "ios";
+        default:
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "platform must be android or ios.",
+            );
+    }
 }
 
 function normalizeFriendMatchStatus(rawStatus: unknown): FriendMatchStatus {
@@ -2366,6 +2442,21 @@ function normalizeFriendMatchRecord(
         whiteToMove: payload.whiteToMove === false ? false : true,
         timeControl,
         clocks: normalizeFriendMatchClocks(payload.clocks, timeControl),
+        whitePieceThemeIndex: readFriendPieceThemeIndex(
+            payload.whitePieceThemeIndex,
+            "whitePieceThemeIndex",
+        ),
+        blackPieceThemeIndex: readFriendPieceThemeIndex(
+            payload.blackPieceThemeIndex,
+            "blackPieceThemeIndex",
+        ),
+        pieceSelectionDeadlineMs: payload.pieceSelectionDeadlineMs == null
+            ? null
+            : readFriendNonNegativeInt(
+                payload.pieceSelectionDeadlineMs,
+                "pieceSelectionDeadlineMs",
+                Number.MAX_SAFE_INTEGER,
+            ),
         createdAtMs,
         updatedAtMs: readFriendNonNegativeInt(
             payload.updatedAtMs,
@@ -2418,6 +2509,34 @@ function normalizeFriendInviteRecord(
     };
 }
 
+function normalizePushDeviceTokenRecord(
+    rawValue: unknown,
+    installationId: string,
+): StoredPushDeviceToken | null {
+    if (!rawValue || typeof rawValue !== "object") {
+        return null;
+    }
+    const payload = rawValue as Record<string, unknown>;
+    const token = (payload.token ?? "").toString().trim();
+    const platform = (payload.platform ?? "").toString().trim();
+    if (!token) {
+        return null;
+    }
+    if (platform !== "android" && platform !== "ios") {
+        return null;
+    }
+    return {
+        installationId,
+        token,
+        platform: platform as PushTokenPlatform,
+        updatedAtMs: readFriendNonNegativeInt(
+            payload.updatedAtMs,
+            "pushToken.updatedAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ),
+    };
+}
+
 function otherFriendSeat(seat: FriendSeat): FriendSeat {
     return seat === "white" ? "black" : "white";
 }
@@ -2454,6 +2573,7 @@ function createFriendMatchRecord(params: {
     inviteCode: string;
     hostUid: string;
     hostSeat: FriendSeat;
+    hostPieceThemeIndex: number;
     timeControl: FriendTimeControl;
     nowMs: number;
 }): FriendMatchRecord {
@@ -2478,6 +2598,13 @@ function createFriendMatchRecord(params: {
             activeSeat: null,
             lastTickStartedAtMs: null,
         },
+        whitePieceThemeIndex: params.hostSeat === "white"
+            ? params.hostPieceThemeIndex
+            : 0,
+        blackPieceThemeIndex: params.hostSeat === "black"
+            ? params.hostPieceThemeIndex
+            : 0,
+        pieceSelectionDeadlineMs: null,
         createdAtMs: params.nowMs,
         updatedAtMs: params.nowMs,
         startedAtMs: null,
@@ -2554,6 +2681,39 @@ function concludeFriendMatch(
     };
 }
 
+function friendPieceSelectionOpen(
+    match: FriendMatchRecord,
+    nowMs: number,
+): boolean {
+    return match.status === "active" &&
+        match.outcome == null &&
+        match.pieceSelectionDeadlineMs != null &&
+        match.pieceSelectionDeadlineMs > nowMs;
+}
+
+function startFriendMatchClocksIfNeeded(
+    match: FriendMatchRecord,
+    startAtMs: number,
+): FriendMatchRecord {
+    if (match.status !== "active" || match.outcome != null) {
+        return match;
+    }
+    if (match.timeControl.initialSeconds <= 0 || match.nextPly > 0) {
+        return match;
+    }
+    if (match.clocks.activeSeat != null || match.clocks.lastTickStartedAtMs != null) {
+        return match;
+    }
+    return {
+        ...match,
+        clocks: {
+            ...match.clocks,
+            activeSeat: "white",
+            lastTickStartedAtMs: startAtMs,
+        },
+    };
+}
+
 function synchronizeFriendMatchForNow(
     match: FriendMatchRecord,
     nowMs: number,
@@ -2578,33 +2738,47 @@ function synchronizeFriendMatchForNow(
         });
     }
 
-    if (match.status !== "active" || match.timeControl.initialSeconds <= 0) {
-        return match;
+    let synchronizedMatch = match;
+    const pieceSelectionDeadlineMs = synchronizedMatch.pieceSelectionDeadlineMs;
+    if (pieceSelectionDeadlineMs != null && pieceSelectionDeadlineMs <= nowMs) {
+        synchronizedMatch = startFriendMatchClocksIfNeeded(
+            {
+                ...synchronizedMatch,
+                updatedAtMs: nowMs,
+                pieceSelectionDeadlineMs: null,
+            },
+            pieceSelectionDeadlineMs,
+        );
     }
 
-    const activeSeat = match.clocks.activeSeat;
-    const lastTickStartedAtMs = match.clocks.lastTickStartedAtMs;
+    if (synchronizedMatch.status !== "active" ||
+        synchronizedMatch.timeControl.initialSeconds <= 0) {
+        return synchronizedMatch;
+    }
+
+    const activeSeat = synchronizedMatch.clocks.activeSeat;
+    const lastTickStartedAtMs = synchronizedMatch.clocks.lastTickStartedAtMs;
     if (activeSeat == null || lastTickStartedAtMs == null) {
-        return match;
+        return synchronizedMatch;
     }
 
     const elapsedMs = Math.max(0, nowMs - lastTickStartedAtMs);
     if (elapsedMs <= 0) {
-        return match;
+        return synchronizedMatch;
     }
 
     const whiteMsRemaining = activeSeat === "white"
-        ? Math.max(0, match.clocks.whiteMsRemaining - elapsedMs)
-        : match.clocks.whiteMsRemaining;
+        ? Math.max(0, synchronizedMatch.clocks.whiteMsRemaining - elapsedMs)
+        : synchronizedMatch.clocks.whiteMsRemaining;
     const blackMsRemaining = activeSeat === "black"
-        ? Math.max(0, match.clocks.blackMsRemaining - elapsedMs)
-        : match.clocks.blackMsRemaining;
+        ? Math.max(0, synchronizedMatch.clocks.blackMsRemaining - elapsedMs)
+        : synchronizedMatch.clocks.blackMsRemaining;
 
-    const synchronizedMatch: FriendMatchRecord = {
-        ...match,
+    synchronizedMatch = {
+        ...synchronizedMatch,
         updatedAtMs: nowMs,
         clocks: {
-            ...match.clocks,
+            ...synchronizedMatch.clocks,
             whiteMsRemaining,
             blackMsRemaining,
             lastTickStartedAtMs: nowMs,
@@ -2633,6 +2807,9 @@ function synchronizeFriendMatchForNow(
 function friendDrawReasonFromChess(chess: Chess): string {
     if (chess.isStalemate()) {
         return "stalemate";
+    }
+    if (chess.isDrawByFiftyMoves()) {
+        return "fiftyMoveRule";
     }
     if (chess.isThreefoldRepetition()) {
         return "threefoldRepetition";
@@ -2685,6 +2862,127 @@ async function persistFriendMatchIndexes(match: FriendMatchRecord): Promise<void
     await db.ref().update(updates);
 }
 
+async function listPushDeviceTokensForUser(
+    uid: string | null,
+): Promise<StoredPushDeviceToken[]> {
+    if (!uid) {
+        return [];
+    }
+
+    const tokensSnap = await db.ref(`push_device_tokens/${uid}`).once("value");
+    if (!tokensSnap.exists()) {
+        return [];
+    }
+
+    const rawTokens = tokensSnap.val();
+    if (!rawTokens || typeof rawTokens !== "object") {
+        return [];
+    }
+
+    const tokens: StoredPushDeviceToken[] = [];
+    for (const [installationId, rawToken] of Object.entries(
+        rawTokens as Record<string, unknown>,
+    )) {
+        const token = normalizePushDeviceTokenRecord(rawToken, installationId);
+        if (token != null) {
+            tokens.push(token);
+        }
+    }
+    return tokens;
+}
+
+async function sendPushToUser(params: {
+    uid: string | null;
+    type: string;
+    title: string;
+    body: string;
+    data: Record<string, string>;
+}): Promise<void> {
+    const registrations = await listPushDeviceTokensForUser(params.uid);
+    if (registrations.length === 0) {
+        return;
+    }
+
+    const response = await admin.messaging().sendEachForMulticast({
+        tokens: registrations.map((registration) => registration.token),
+        notification: {
+            title: params.title,
+            body: params.body,
+        },
+        data: {
+            ...params.data,
+            type: params.type,
+        },
+        android: {
+            priority: "high",
+        },
+        apns: {
+            headers: {
+                "apns-priority": "10",
+            },
+            payload: {
+                aps: {
+                    sound: "default",
+                },
+            },
+        },
+    });
+
+    const invalidInstallationIds: string[] = [];
+    response.responses.forEach((result, index) => {
+        if (result.success) {
+            return;
+        }
+        const code = result.error?.code ?? "";
+        if (
+            code === "messaging/invalid-registration-token" ||
+            code === "messaging/registration-token-not-registered"
+        ) {
+            invalidInstallationIds.push(registrations[index].installationId);
+        }
+    });
+
+    if (invalidInstallationIds.length === 0 || !params.uid) {
+        return;
+    }
+
+    const updates: Record<string, null> = {};
+    for (const installationId of invalidInstallationIds) {
+        updates[`push_device_tokens/${params.uid}/${installationId}`] = null;
+    }
+    await db.ref().update(updates);
+}
+
+function friendMatchPushData(match: FriendMatchRecord): Record<string, string> {
+    return {
+        matchId: match.matchId,
+        inviteCode: match.inviteCode,
+        status: match.status,
+    };
+}
+
+async function registerPushDeviceTokenImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const installationId = readPushInstallationId(data?.installationId);
+    const token = readPushToken(data?.token);
+    const platform = readPushTokenPlatform(data?.platform);
+    const updatedAtMs = Date.now();
+
+    await db.ref(`push_device_tokens/${uid}/${installationId}`).set({
+        token,
+        platform,
+        updatedAtMs,
+    });
+
+    return {
+        success: true,
+        updatedAtMs,
+    };
+}
+
 async function createFriendMatchInviteImpl(
     data: any,
     context: functions.https.CallableContext,
@@ -2692,6 +2990,10 @@ async function createFriendMatchInviteImpl(
     const uid = requireAuthUid(context);
     const timeControl = readFriendTimeControl(data?.timeControl);
     const seatPreference = readFriendSeatPreference(data?.seatPreference);
+    const defaultPieceThemeIndex = readFriendPieceThemeIndex(
+        data?.defaultPieceThemeIndex,
+        "defaultPieceThemeIndex",
+    );
     const hostSeat = seatPreference === "random"
         ? randomFriendSeat()
         : seatPreference;
@@ -2711,6 +3013,7 @@ async function createFriendMatchInviteImpl(
         inviteCode,
         hostUid: uid,
         hostSeat,
+        hostPieceThemeIndex: defaultPieceThemeIndex,
         timeControl,
         nowMs,
     });
@@ -2734,6 +3037,10 @@ async function joinFriendMatchInviteImpl(
 ) {
     const uid = requireAuthUid(context);
     const inviteCode = readFriendInviteCode(data?.inviteCode);
+    const defaultPieceThemeIndex = readFriendPieceThemeIndex(
+        data?.defaultPieceThemeIndex,
+        "defaultPieceThemeIndex",
+    );
     const inviteSnap = await db
         .ref(`friend_match_invites/by_code/${inviteCode}`)
         .once("value");
@@ -2797,17 +3104,20 @@ async function joinFriendMatchInviteImpl(
             guestUid: uid,
             whiteUid: guestSeat === "white" ? uid : synchronizedMatch.whiteUid,
             blackUid: guestSeat === "black" ? uid : synchronizedMatch.blackUid,
+            whitePieceThemeIndex: guestSeat === "white"
+                ? defaultPieceThemeIndex
+                : synchronizedMatch.whitePieceThemeIndex,
+            blackPieceThemeIndex: guestSeat === "black"
+                ? defaultPieceThemeIndex
+                : synchronizedMatch.blackPieceThemeIndex,
+            pieceSelectionDeadlineMs: nowMs + FRIEND_MATCH_PIECE_SELECTION_WINDOW_MS,
             updatedAtMs: nowMs,
             startedAtMs: synchronizedMatch.startedAtMs ?? nowMs,
             expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
             clocks: {
                 ...synchronizedMatch.clocks,
-                activeSeat: synchronizedMatch.timeControl.initialSeconds > 0
-                    ? "white"
-                    : null,
-                lastTickStartedAtMs: synchronizedMatch.timeControl.initialSeconds > 0
-                    ? nowMs
-                    : null,
+                activeSeat: null,
+                lastTickStartedAtMs: null,
             },
         };
         responseMatch = nextMatch;
@@ -2828,6 +3138,13 @@ async function joinFriendMatchInviteImpl(
 
     if (transactionResult.committed) {
         await persistFriendMatchIndexes(match);
+        await sendPushToUser({
+            uid: match.hostUid,
+            type: "friend_match_joined",
+            title: "Your ChessIQ match is ready",
+            body: "Your friend joined. Choose your piece skin before the match begins.",
+            data: friendMatchPushData(match),
+        });
     }
 
     return {
@@ -2878,6 +3195,14 @@ async function submitFriendMatchMoveImpl(
 
         if (synchronizedMatch.status !== "active") {
             blockedReason = synchronizedMatch.status;
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        if (friendPieceSelectionOpen(synchronizedMatch, nowMs)) {
+            blockedReason = "piece-selection-pending";
             responseMatch = synchronizedMatch;
             return friendMatchChanged(existingMatch, synchronizedMatch)
                 ? synchronizedMatch
@@ -3005,6 +3330,24 @@ async function submitFriendMatchMoveImpl(
 
     if (transactionResult.committed) {
         await persistFriendMatchIndexes(match);
+        if (match.outcome == null) {
+            const nextUid = match.whiteToMove ? match.whiteUid : match.blackUid;
+            await sendPushToUser({
+                uid: nextUid,
+                type: "friend_match_your_turn",
+                title: "Your move in ChessIQ",
+                body: "Your friend played a move. It is your turn.",
+                data: friendMatchPushData(match),
+            });
+        } else {
+            await sendPushToUser({
+                uid: friendMatchOpponentUid(match, uid),
+                type: "friend_match_outcome",
+                title: "Your ChessIQ match ended",
+                body: "The private match has a result waiting for you.",
+                data: friendMatchPushData(match),
+            });
+        }
     }
 
     return {
@@ -3156,11 +3499,138 @@ async function actOnFriendMatchImpl(
 
     if (transactionResult.committed) {
         await persistFriendMatchIndexes(match);
+        switch (action) {
+            case "offerDraw":
+                await sendPushToUser({
+                    uid: friendMatchOpponentUid(match, uid),
+                    type: "friend_match_draw_offer",
+                    title: "Draw offer in ChessIQ",
+                    body: "Your friend offered a draw in your private match.",
+                    data: friendMatchPushData(match),
+                });
+                break;
+            case "acceptDraw":
+                await sendPushToUser({
+                    uid: friendMatchOpponentUid(match, uid),
+                    type: "friend_match_outcome",
+                    title: "Your ChessIQ match is a draw",
+                    body: "The private match ended in a draw.",
+                    data: friendMatchPushData(match),
+                });
+                break;
+            case "declineDraw":
+                await sendPushToUser({
+                    uid: friendMatchOpponentUid(match, uid),
+                    type: "friend_match_draw_declined",
+                    title: "Draw offer declined",
+                    body: "Your friend declined the draw offer.",
+                    data: friendMatchPushData(match),
+                });
+                break;
+            case "resign":
+                await sendPushToUser({
+                    uid: friendMatchOpponentUid(match, uid),
+                    type: "friend_match_outcome",
+                    title: "Your ChessIQ match ended",
+                    body: "Your friend resigned the private match.",
+                    data: friendMatchPushData(match),
+                });
+                break;
+            case "cancelPending":
+                break;
+        }
     }
 
     return {
         success: actionApplied,
         reason: actionApplied ? null : blockedReason,
+        invite: buildFriendInviteRecord(match),
+        snapshot: buildFriendMatchClientPayload(match),
+    };
+}
+
+async function selectFriendMatchPieceThemeImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const matchId = readFriendMatchId(data?.matchId);
+    const pieceThemeIndex = readFriendPieceThemeIndex(
+        data?.pieceThemeIndex,
+        "pieceThemeIndex",
+    );
+    const matchRef = db.ref(`friend_matches/${matchId}`);
+    let blockedReason = "match-unavailable";
+    let responseMatch: FriendMatchRecord | null = null;
+
+    const transactionResult = await matchRef.transaction((currentValue) => {
+        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        if (existingMatch == null) {
+            blockedReason = "match-unavailable";
+            return;
+        }
+
+        const nowMs = Date.now();
+        const synchronizedMatch = synchronizeFriendMatchForNow(
+            existingMatch,
+            nowMs,
+        );
+        const playerSeat = friendMatchParticipantSeat(synchronizedMatch, uid);
+        if (playerSeat == null) {
+            blockedReason = "not-participant";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+        if (synchronizedMatch.status !== "active") {
+            blockedReason = synchronizedMatch.status;
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+        if (!friendPieceSelectionOpen(synchronizedMatch, nowMs)) {
+            blockedReason = "piece-selection-closed";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        const nextMatch: FriendMatchRecord = {
+            ...synchronizedMatch,
+            updatedAtMs: nowMs,
+            whitePieceThemeIndex: playerSeat === "white"
+                ? pieceThemeIndex
+                : synchronizedMatch.whitePieceThemeIndex,
+            blackPieceThemeIndex: playerSeat === "black"
+                ? pieceThemeIndex
+                : synchronizedMatch.blackPieceThemeIndex,
+        };
+        responseMatch = nextMatch;
+        blockedReason = "";
+        return nextMatch;
+    });
+
+    const match = responseMatch ?? normalizeFriendMatchRecord(
+        transactionResult.snapshot.val(),
+        matchId,
+    );
+    if (match == null) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "That match no longer exists.",
+        );
+    }
+
+    if (transactionResult.committed) {
+        await persistFriendMatchIndexes(match);
+    }
+
+    return {
+        success: transactionResult.committed,
+        reason: transactionResult.committed ? null : blockedReason,
         invite: buildFriendInviteRecord(match),
         snapshot: buildFriendMatchClientPayload(match),
     };
@@ -3301,6 +3771,14 @@ export const spendEconomyCoins = functions.https.onCall(
 
 export const grantEconomyReward = functions.https.onCall(
     async (data, context) => grantEconomyRewardImpl(data, context),
+);
+
+export const registerPushDeviceToken = functions.https.onCall(
+    async (data, context) => registerPushDeviceTokenImpl(data, context),
+);
+
+export const selectFriendMatchPieceTheme = functions.https.onCall(
+    async (data, context) => selectFriendMatchPieceThemeImpl(data, context),
 );
 
 export const createFriendMatchInvite = functions.https.onCall(
