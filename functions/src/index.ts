@@ -3614,7 +3614,7 @@ async function selectFriendMatchPieceThemeImpl(
                 ? pieceThemeIndex
                 : synchronizedMatch.blackPieceThemeIndex,
         };
-            selectionApplied = true;
+        selectionApplied = true;
         responseMatch = nextMatch;
         blockedReason = "";
         return nextMatch;
