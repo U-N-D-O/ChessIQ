@@ -3237,11 +3237,16 @@ async function submitFriendMatchMoveImpl(
                 : undefined;
         }
 
-        const moveResult = chess.move({
-            from: moveInput.from,
-            to: moveInput.to,
-            promotion: moveInput.promotion,
-        });
+        let moveResult: ReturnType<Chess["move"]> | null = null;
+        try {
+            moveResult = chess.move({
+                from: moveInput.from,
+                to: moveInput.to,
+                promotion: moveInput.promotion,
+            });
+        } catch {
+            moveResult = null;
+        }
         if (moveResult == null) {
             blockedReason = "illegal-move";
             responseMatch = synchronizedMatch;
@@ -3561,6 +3566,7 @@ async function selectFriendMatchPieceThemeImpl(
     );
     const matchRef = db.ref(`friend_matches/${matchId}`);
     let blockedReason = "match-unavailable";
+    let selectionApplied = false;
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
@@ -3608,6 +3614,7 @@ async function selectFriendMatchPieceThemeImpl(
                 ? pieceThemeIndex
                 : synchronizedMatch.blackPieceThemeIndex,
         };
+            selectionApplied = true;
         responseMatch = nextMatch;
         blockedReason = "";
         return nextMatch;
@@ -3629,8 +3636,8 @@ async function selectFriendMatchPieceThemeImpl(
     }
 
     return {
-        success: transactionResult.committed,
-        reason: transactionResult.committed ? null : blockedReason,
+        success: selectionApplied,
+        reason: selectionApplied ? null : blockedReason,
         invite: buildFriendInviteRecord(match),
         snapshot: buildFriendMatchClientPayload(match),
     };
