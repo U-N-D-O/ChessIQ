@@ -102,6 +102,12 @@ jobs:
           cat >> ios/Flutter/Release.xcconfig <<'EOF'
           LIBRARY_SEARCH_PATHS=$(inherited) $(PROJECT_DIR)/Runner
           OTHER_LDFLAGS=$(inherited) -lstockfish_ios -lc++
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGNING_IDENTITY=
+          DEVELOPMENT_TEAM=
+          PROVISIONING_PROFILE_SPECIFIER=
+          PROVISIONING_PROFILE=
           EOF
 
       - name: Build Flutter iOS app (no codesign)
