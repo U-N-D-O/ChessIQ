@@ -108,7 +108,34 @@ jobs:
           EOF
 
       - name: Build Flutter iOS app (no codesign)
-        run: flutter build ios --release --no-codesign
+        run: |
+          set -euo pipefail
+
+          flutter build ios --release --no-codesign --config-only
+
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            DEVELOPMENT_TEAM='' \
+            PROVISIONING_PROFILE_SPECIFIER='' \
+            PROVISIONING_PROFILE='' \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+          APP_FROM_ARCHIVE='build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app'
+          APP_PATH='build/ios/iphoneos/Runner.app'
+
+          test -d "$APP_FROM_ARCHIVE"
+          rm -rf "$APP_PATH"
+          mkdir -p "$(dirname "$APP_PATH")"
+          /usr/bin/ditto "$APP_FROM_ARCHIVE" "$APP_PATH"
 
       - name: Collect bundle diagnostics
         continue-on-error: true
