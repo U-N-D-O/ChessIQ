@@ -4,7 +4,7 @@ param(
     [string]$AppleTeamId,
     [string]$FirebaseGoogleServiceInfoPlistPath,
     [string]$CertificatePath,
-    [string]$CertificatePassword,
+    [Security.SecureString]$CertificatePassword,
     [string]$ProvisioningProfilePath,
     [string]$AppStoreConnectApiKeyPath,
     [string]$AppStoreConnectApiKeyId,
@@ -36,7 +36,7 @@ function Get-GitHubRepositoryFromRemote {
     throw "Could not determine the GitHub repository from origin remote: $remoteUrl"
 }
 
-function Require-Command {
+function Assert-Command {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$InstallHint
@@ -47,25 +47,33 @@ function Require-Command {
     }
 }
 
-function Prompt-Value {
+function Read-Value {
     param(
         [Parameter(Mandatory = $true)][string]$CurrentValue,
-        [Parameter(Mandatory = $true)][string]$Prompt,
-        [switch]$Secret
+        [Parameter(Mandatory = $true)][string]$Prompt
     )
 
     if ($CurrentValue) {
         return $CurrentValue
     }
 
-    if ($Secret) {
-        return Get-PlainTextFromSecureString -SecureString (Read-Host $Prompt -AsSecureString)
-    }
-
     return (Read-Host $Prompt).Trim()
 }
 
-function Prompt-YesNo {
+function Read-SecretValue {
+    param(
+        [Security.SecureString]$CurrentValue,
+        [Parameter(Mandatory = $true)][string]$Prompt
+    )
+
+    if ($null -ne $CurrentValue -and $CurrentValue.Length -gt 0) {
+        return $CurrentValue
+    }
+
+    return Read-Host $Prompt -AsSecureString
+}
+
+function Confirm-YesNo {
     param(
         [Parameter(Mandatory = $true)][string]$Prompt,
         [bool]$DefaultYes = $true
@@ -80,7 +88,7 @@ function Prompt-YesNo {
     return $answer -in @('y', 'yes')
 }
 
-function Require-FilePath {
+function Assert-FilePath {
     param(
         [Parameter(Mandatory = $true)][string]$PathValue,
         [Parameter(Mandatory = $true)][string]$Label
@@ -105,48 +113,49 @@ function Set-GitHubSecret {
     $Value | gh secret set $Name --repo $Repo | Out-Null
 }
 
-Require-Command -Name 'git' -InstallHint 'Install Git and retry.'
-Require-Command -Name 'gh' -InstallHint 'Install GitHub CLI from https://cli.github.com/ and run gh auth login first.'
+Assert-Command -Name 'git' -InstallHint 'Install Git and retry.'
+Assert-Command -Name 'gh' -InstallHint 'Install GitHub CLI from https://cli.github.com/ and run gh auth login first.'
 
 & gh auth status | Out-Null
 
-$resolvedRepository = Prompt-Value -CurrentValue $Repository -Prompt "GitHub repository (owner/name)" 
+$resolvedRepository = Read-Value -CurrentValue $Repository -Prompt "GitHub repository (owner/name)"
 if (-not $resolvedRepository) {
     $resolvedRepository = Get-GitHubRepositoryFromRemote
 }
 
-$resolvedTeamId = Prompt-Value -CurrentValue $AppleTeamId -Prompt 'Apple Team ID'
-$resolvedFirebaseGoogleServiceInfoPlistPath = Prompt-Value -CurrentValue $FirebaseGoogleServiceInfoPlistPath -Prompt 'Path to Firebase GoogleService-Info.plist'
-$resolvedCertificatePath = Prompt-Value -CurrentValue $CertificatePath -Prompt 'Path to Apple Distribution .p12 certificate file'
-$resolvedCertificatePassword = Prompt-Value -CurrentValue $CertificatePassword -Prompt 'Password used when exporting the .p12 certificate' -Secret
-$resolvedProvisioningProfilePath = Prompt-Value -CurrentValue $ProvisioningProfilePath -Prompt 'Path to App Store provisioning profile (.mobileprovision)'
+$resolvedTeamId = Read-Value -CurrentValue $AppleTeamId -Prompt 'Apple Team ID'
+$resolvedFirebaseGoogleServiceInfoPlistPath = Read-Value -CurrentValue $FirebaseGoogleServiceInfoPlistPath -Prompt 'Path to Firebase GoogleService-Info.plist'
+$resolvedCertificatePath = Read-Value -CurrentValue $CertificatePath -Prompt 'Path to Apple Distribution .p12 certificate file'
+$resolvedCertificatePassword = Read-SecretValue -CurrentValue $CertificatePassword -Prompt 'Password used when exporting the .p12 certificate'
+$resolvedProvisioningProfilePath = Read-Value -CurrentValue $ProvisioningProfilePath -Prompt 'Path to App Store provisioning profile (.mobileprovision)'
 
-Require-FilePath -PathValue $resolvedFirebaseGoogleServiceInfoPlistPath -Label 'Firebase GoogleService-Info.plist file'
-Require-FilePath -PathValue $resolvedCertificatePath -Label 'Certificate file'
-Require-FilePath -PathValue $resolvedProvisioningProfilePath -Label 'Provisioning profile'
+Assert-FilePath -PathValue $resolvedFirebaseGoogleServiceInfoPlistPath -Label 'Firebase GoogleService-Info.plist file'
+Assert-FilePath -PathValue $resolvedCertificatePath -Label 'Certificate file'
+Assert-FilePath -PathValue $resolvedProvisioningProfilePath -Label 'Provisioning profile'
 
 $firebaseGoogleServiceInfoPlistBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedFirebaseGoogleServiceInfoPlistPath)))
 $certificateBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedCertificatePath)))
 $provisioningProfileBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedProvisioningProfilePath)))
+$resolvedCertificatePasswordPlainText = Get-PlainTextFromSecureString -SecureString $resolvedCertificatePassword
 
 Write-Host "Uploading signing secrets to $resolvedRepository ..."
 Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_TEAM_ID' -Value $resolvedTeamId
 Set-GitHubSecret -Repo $resolvedRepository -Name 'FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64' -Value $firebaseGoogleServiceInfoPlistBase64
 Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_DISTRIBUTION_CERTIFICATE_BASE64' -Value $certificateBase64
-Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD' -Value $resolvedCertificatePassword
+Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD' -Value $resolvedCertificatePasswordPlainText
 Set-GitHubSecret -Repo $resolvedRepository -Name 'APPLE_PROVISIONING_PROFILE_BASE64' -Value $provisioningProfileBase64
 
 $configureUpload = -not $SkipAppStoreUploadSetup.IsPresent
 if (-not $SkipAppStoreUploadSetup.IsPresent) {
-    $configureUpload = Prompt-YesNo -Prompt 'Do you also want the workflow to upload directly to App Store Connect?' -DefaultYes $true
+    $configureUpload = Confirm-YesNo -Prompt 'Do you also want the workflow to upload directly to App Store Connect?' -DefaultYes $true
 }
 
 if ($configureUpload) {
-    $resolvedApiKeyPath = Prompt-Value -CurrentValue $AppStoreConnectApiKeyPath -Prompt 'Path to App Store Connect API key (.p8)'
-    $resolvedApiKeyId = Prompt-Value -CurrentValue $AppStoreConnectApiKeyId -Prompt 'App Store Connect API key ID'
-    $resolvedApiIssuerId = Prompt-Value -CurrentValue $AppStoreConnectApiIssuerId -Prompt 'App Store Connect API issuer ID'
+    $resolvedApiKeyPath = Read-Value -CurrentValue $AppStoreConnectApiKeyPath -Prompt 'Path to App Store Connect API key (.p8)'
+    $resolvedApiKeyId = Read-Value -CurrentValue $AppStoreConnectApiKeyId -Prompt 'App Store Connect API key ID'
+    $resolvedApiIssuerId = Read-Value -CurrentValue $AppStoreConnectApiIssuerId -Prompt 'App Store Connect API issuer ID'
 
-    Require-FilePath -PathValue $resolvedApiKeyPath -Label 'App Store Connect API key file'
+    Assert-FilePath -PathValue $resolvedApiKeyPath -Label 'App Store Connect API key file'
 
     $apiKeyBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedApiKeyPath)))
 

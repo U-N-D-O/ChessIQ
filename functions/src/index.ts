@@ -58,12 +58,16 @@ const ECONOMY_MAX_TRACKED_CLAIM_KEYS = 60;
 const ECONOMY_MAX_TRACKED_FINGERPRINTS = 200;
 const FRIEND_MATCH_INVITE_CODE_LENGTH = 6;
 const FRIEND_MATCH_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
-const FRIEND_MATCH_ACTIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const FRIEND_MATCH_ACTIVE_TTL_MS = 24 * 60 * 60 * 1000;
+const FRIEND_MATCH_TERMINAL_RETENTION_MS = 24 * 60 * 60 * 1000;
+const FRIEND_MATCH_ABORTED_RETENTION_MS = 6 * 60 * 60 * 1000;
 const FRIEND_MATCH_MAX_INITIAL_SECONDS = 4 * 60 * 60;
 const FRIEND_MATCH_MAX_INCREMENT_SECONDS = 60;
 const FRIEND_MATCH_PIECE_SELECTION_WINDOW_MS = 10 * 1000;
 const FRIEND_MATCH_MAX_PIECE_THEME_INDEX = 5;
 const FRIEND_MATCH_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const FRIEND_MATCH_CLEANUP_BATCH_SIZE = 200;
+const FRIEND_MATCH_CLEANUP_MAX_BATCHES_PER_RUN = 8;
 type EconomyRewardSpec = {
     amount: number;
     minIntervalMs?: number;
@@ -2661,11 +2665,15 @@ function concludeFriendMatch(
         nowMs: number;
     },
 ): FriendMatchRecord {
+    const status = params.status ?? "completed";
+    const retentionMs = status === "completed"
+        ? FRIEND_MATCH_TERMINAL_RETENTION_MS
+        : FRIEND_MATCH_ABORTED_RETENTION_MS;
     return {
         ...match,
-        status: params.status ?? "completed",
+        status,
         updatedAtMs: params.nowMs,
-        expiresAtMs: params.nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+        expiresAtMs: params.nowMs + retentionMs,
         drawOfferByUid: null,
         clocks: {
             ...match.clocks,
@@ -2849,15 +2857,45 @@ async function generateUniqueFriendInviteCode(): Promise<string> {
     );
 }
 
-async function persistFriendMatchIndexes(match: FriendMatchRecord): Promise<void> {
+function buildFriendMatchPersistenceUpdates(
+    match: FriendMatchRecord,
+    includeMatchRecord = false,
+): Record<string, unknown> {
     const updates: Record<string, unknown> = {
         [`friend_match_invites/by_code/${match.inviteCode}`]: buildFriendInviteRecord(match),
         [`friend_match_memberships/${match.hostUid}/${match.matchId}`]: buildFriendMembershipRecord(match),
     };
+    if (includeMatchRecord) {
+        updates[`friend_matches/${match.matchId}`] = match;
+    }
     if (match.guestUid != null) {
         updates[
             `friend_match_memberships/${match.guestUid}/${match.matchId}`
         ] = buildFriendMembershipRecord(match);
+    }
+    return updates;
+}
+
+async function persistFriendMatchIndexes(match: FriendMatchRecord): Promise<void> {
+    await db.ref().update(buildFriendMatchPersistenceUpdates(match));
+}
+
+async function persistFriendMatchState(match: FriendMatchRecord): Promise<void> {
+    await db.ref().update(buildFriendMatchPersistenceUpdates(match, true));
+}
+
+async function deleteFriendMatchArtifacts(match: FriendMatchRecord): Promise<void> {
+    const updates: Record<string, null> = {
+        [`friend_matches/${match.matchId}`]: null,
+    };
+    if (match.inviteCode) {
+        updates[`friend_match_invites/by_code/${match.inviteCode}`] = null;
+    }
+    if (match.hostUid) {
+        updates[`friend_match_memberships/${match.hostUid}/${match.matchId}`] = null;
+    }
+    if (match.guestUid) {
+        updates[`friend_match_memberships/${match.guestUid}/${match.matchId}`] = null;
     }
     await db.ref().update(updates);
 }
@@ -3701,6 +3739,78 @@ async function refreshFriendMatchStateImpl(
     };
 }
 
+type FriendMatchCleanupBatchResult = {
+    scannedCount: number;
+    updatedCount: number;
+    deletedCount: number;
+};
+
+async function cleanupExpiredFriendMatchesBatch(
+    nowMs: number,
+): Promise<FriendMatchCleanupBatchResult> {
+    const expiredMatchesSnap = await db
+        .ref("friend_matches")
+        .orderByChild("expiresAtMs")
+        .endAt(nowMs)
+        .limitToFirst(FRIEND_MATCH_CLEANUP_BATCH_SIZE)
+        .once("value");
+
+    if (!expiredMatchesSnap.exists()) {
+        return {
+            scannedCount: 0,
+            updatedCount: 0,
+            deletedCount: 0,
+        };
+    }
+
+    const rawMatches = expiredMatchesSnap.val();
+    if (!rawMatches || typeof rawMatches !== "object") {
+        return {
+            scannedCount: 0,
+            updatedCount: 0,
+            deletedCount: 0,
+        };
+    }
+
+    let scannedCount = 0;
+    let updatedCount = 0;
+    let deletedCount = 0;
+
+    for (const [matchId, rawMatch] of Object.entries(
+        rawMatches as Record<string, unknown>,
+    )) {
+        const existingMatch = normalizeFriendMatchRecord(rawMatch, matchId);
+        if (existingMatch == null) {
+            console.warn(`Skipped cleanup for invalid friend match payload: ${matchId}`);
+            continue;
+        }
+
+        scannedCount += 1;
+        const synchronizedMatch = synchronizeFriendMatchForNow(existingMatch, nowMs);
+
+        if (friendMatchChanged(existingMatch, synchronizedMatch)) {
+            if (synchronizedMatch.expiresAtMs > nowMs) {
+                await persistFriendMatchState(synchronizedMatch);
+                updatedCount += 1;
+                continue;
+            }
+        }
+
+        if (synchronizedMatch.expiresAtMs > nowMs) {
+            continue;
+        }
+
+        await deleteFriendMatchArtifacts(synchronizedMatch);
+        deletedCount += 1;
+    }
+
+    return {
+        scannedCount,
+        updatedCount,
+        deletedCount,
+    };
+}
+
 // ---------------------------------------------------------------------------
 // submitAcademyScore
 //
@@ -3807,6 +3917,33 @@ export const submitFriendMatchMove = functions.https.onCall(
 export const actOnFriendMatch = functions.https.onCall(
     async (data, context) => actOnFriendMatchImpl(data, context),
 );
+
+export const cleanupExpiredFriendMatches = functions.pubsub
+    .schedule("every 5 minutes")
+    .onRun(async () => {
+        let scannedCount = 0;
+        let updatedCount = 0;
+        let deletedCount = 0;
+
+        for (
+            let batchIndex = 0;
+            batchIndex < FRIEND_MATCH_CLEANUP_MAX_BATCHES_PER_RUN;
+            batchIndex += 1
+        ) {
+            const batchResult = await cleanupExpiredFriendMatchesBatch(Date.now());
+            scannedCount += batchResult.scannedCount;
+            updatedCount += batchResult.updatedCount;
+            deletedCount += batchResult.deletedCount;
+            if (batchResult.scannedCount < FRIEND_MATCH_CLEANUP_BATCH_SIZE) {
+                break;
+            }
+        }
+
+        console.log(
+            `Friend match cleanup complete: scanned=${scannedCount} updated=${updatedCount} deleted=${deletedCount}`,
+        );
+        return null;
+    });
 
 // ---------------------------------------------------------------------------
 // deleteAcademyProfile

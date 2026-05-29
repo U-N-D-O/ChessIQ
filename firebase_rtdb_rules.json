@@ -55,6 +55,9 @@
             ".write": false
         },
         "friend_matches": {
+            ".indexOn": [
+                "expiresAtMs"
+            ],
             "$matchId": {
                 ".read": "auth != null && root.child('friend_match_memberships/' + auth.uid + '/' + $matchId).exists()",
                 ".write": false

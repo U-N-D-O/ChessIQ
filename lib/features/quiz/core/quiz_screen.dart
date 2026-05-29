@@ -5087,12 +5087,12 @@ abstract class _QuizScreen extends _AnalysisPageShared {
   }
 
   Future<void> _showQuizMilestoneInterstitial() async {
+    final economy = context.read<EconomyProvider>();
     final rewardedInterstitialResult = await AdService.instance
         .showRewardedInterstitialAd(
           placement: RewardedInterstitialPlacement.quizMilestone,
         );
     if (rewardedInterstitialResult.rewardEarned) {
-      final economy = context.read<EconomyProvider>();
       final claimed = await economy.claimQuizMilestoneRewardCoins(
         claimKey: 'quiz-milestone:$_quizTotalAnswered',
       );

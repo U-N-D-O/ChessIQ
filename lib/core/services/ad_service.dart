@@ -447,9 +447,7 @@ class AdService {
         },
       );
     } catch (error) {
-      debugPrint(
-        '${placement.label} rewarded interstitial show threw: $error',
-      );
+      debugPrint('${placement.label} rewarded interstitial show threw: $error');
       ad.dispose();
       _showingRewardedInterstitial = false;
       _preloadRewardedInterstitial(adUnitId);
