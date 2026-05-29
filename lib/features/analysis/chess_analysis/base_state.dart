@@ -1,4 +1,4 @@
-﻿part of '../screens/chess_analysis_page.dart';
+part of '../screens/chess_analysis_page.dart';
 
 class _GameResultReveal {
   const _GameResultReveal({
@@ -160,951 +160,1126 @@ class _MenuFloorActorState {
   _MenuFloorMovePlan? activeMove;
   double? capturedSceneTime;
   bool blocksNewSpawnsUntilExit = false;
-  Widget _buildVsModeScreen() {
-    final media = MediaQuery.of(context);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final useMonochrome =
-        context.watch<AppThemeProvider>().isMonochrome ||
-        _isCinematicThemeEnabled;
-    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
-    final selectedLocalFriendTimeControl = _selectedLocalFriendTimeControl;
-    final selectedRemoteFriendTimeControl = _selectedRemoteFriendTimeControl;
-    final remoteAccent = useMonochrome
-        ? scheme.onSurface
-        : Color.lerp(arcade.cyan, arcade.amber, 0.34)!;
-    final heroAccent = Color.lerp(arcade.cyan, remoteAccent, 0.5)!;
-    final compactWidth = media.size.width <= 390;
-    final chromePadding = compactWidth ? 12.0 : 16.0;
-    final sectionGap = compactWidth ? 12.0 : 14.0;
+}
 
-    String botDifficultyLabel(BotDifficulty difficulty) {
-      return switch (difficulty) {
-        BotDifficulty.easy => 'Easy',
-        BotDifficulty.medium => 'Medium',
-        BotDifficulty.hard => 'Hard',
-      };
-    }
+class _PendingMoveQualityGrading {
+  static const Object _sentinel = Object();
 
-    TextStyle buildDisplayStyle({
-      required Color color,
-      double size = 24,
-      bool glow = true,
-    }) {
-      return puzzleAcademyDisplayStyle(
-        palette: arcade.base,
-        size: size,
-        color: color,
-        withGlow: glow && !arcade.reducedEffects,
-        letterSpacing: size >= 30 ? 0.72 : 0.56,
-        height: size >= 30 ? 0.94 : 0.98,
-      );
-    }
+  const _PendingMoveQualityGrading({
+    required this.moveIndex,
+    required this.uci,
+    required this.moverIsWhite,
+    required this.earliestPublishAt,
+    required this.preMoveFen,
+    required this.preMoveLines,
+    required this.moverMaterialBefore,
+    required this.moverMaterialAfter,
+    required this.chargeBefore,
+    required this.chargeEpoch,
+    this.playedMoveRank,
+    this.cpGapFromBest,
+    this.cpGapFromNextBetter,
+    this.totalLegalMoveCount,
+    this.analyzedLegalMoveCount,
+    this.preMoveMoverWinProbability,
+    this.preMoveMoverEvalPawns,
+    this.postMoveFen,
+    this.postMoveWhiteToMove,
+  });
 
-    TextStyle buildHudStyle({
-      required Color color,
-      double size = 12.0,
-      FontWeight weight = FontWeight.w700,
-      bool glow = false,
-      double letterSpacing = 0.66,
-      double height = 1.22,
-    }) {
-      return puzzleAcademyHudStyle(
-        palette: arcade.base,
-        size: size,
-        weight: weight,
-        color: color,
-        withGlow: glow && !arcade.reducedEffects,
-        letterSpacing: letterSpacing,
-        height: height,
-      );
-    }
+  final int moveIndex;
+  final String uci;
+  final bool moverIsWhite;
+  final DateTime earliestPublishAt;
+  final String preMoveFen;
+  final List<EngineLine> preMoveLines;
+  final double moverMaterialBefore;
+  final double moverMaterialAfter;
+  final int chargeBefore;
+  final int chargeEpoch;
+  final int? playedMoveRank;
+  final int? cpGapFromBest;
+  final int? cpGapFromNextBetter;
+  final int? totalLegalMoveCount;
+  final int? analyzedLegalMoveCount;
+  final double? preMoveMoverWinProbability;
+  final double? preMoveMoverEvalPawns;
+  final String? postMoveFen;
+  final bool? postMoveWhiteToMove;
 
-    TextStyle buildBodyStyle({
-      required Color color,
-      double size = 11.8,
-      FontWeight weight = FontWeight.w600,
-    }) {
-      return puzzleAcademyHudStyle(
-        palette: arcade.base,
-        size: size,
-        weight: weight,
-        color: color,
-        withGlow: false,
-        letterSpacing: 0.16,
-        height: 1.34,
-      );
-    }
-
-    Widget buildCardShell({
-      required Color accent,
-      required Widget child,
-      VoidCallback? onTap,
-      bool emphasized = false,
-    }) {
-      final radius = emphasized ? 24.0 : 22.0;
-      final shellBase = Color.alphaBlend(
-        arcade.backdrop.withValues(alpha: isDark ? 0.22 : 0.08),
-        arcade.panel,
-      );
-      final fillColor = Color.alphaBlend(
-        accent.withValues(
-          alpha: emphasized
-              ? (arcade.monochrome ? 0.08 : (isDark ? 0.24 : 0.18))
-              : (arcade.monochrome ? 0.06 : (isDark ? 0.18 : 0.14)),
-        ),
-        shellBase,
-      );
-      final decoration = _vsBotArcadePanelDecoration(
-        palette: arcade,
-        accent: accent,
-        glowAccent: Color.lerp(accent, Colors.white, 0.10),
-        radius: radius,
-        borderWidth: emphasized ? 2.8 : 2.6,
-        fillColor: fillColor,
-      );
-      final content = Stack(
-        fit: StackFit.passthrough,
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: isDark ? 0.05 : 0.11),
-                      Colors.transparent,
-                      accent.withValues(alpha: arcade.monochrome ? 0.04 : 0.10),
-                    ],
-                    stops: const [0.0, 0.32, 1.0],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(compactWidth ? 14 : 16),
-            child: child,
-          ),
-        ],
-      );
-      if (onTap == null) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          child: DecoratedBox(decoration: decoration, child: content),
-        );
-      }
-      return puzzleAcademyDecoratedInkWell(
-        decoration: decoration,
-        borderRadius: BorderRadius.circular(radius),
-        onTap: onTap,
-        overlayColor: puzzleAcademyInteractiveOverlay(
-          palette: arcade.base,
-          accent: accent,
-        ),
-        child: content,
-      );
-    }
-
-    Widget buildInsetShell({
-      required Color accent,
-      required Widget child,
-      EdgeInsetsGeometry padding = const EdgeInsets.all(12),
-    }) {
-      final fillColor = Color.alphaBlend(
-        accent.withValues(
-          alpha: arcade.monochrome ? 0.08 : (isDark ? 0.18 : 0.14),
-        ),
-        arcade.panelAlt,
-      );
-      return Container(
-        decoration: _vsBotArcadePanelDecoration(
-          palette: arcade,
-          accent: accent,
-          glowAccent: Color.lerp(accent, arcade.text, 0.10),
-          radius: 18,
-          borderWidth: 2.2,
-          inset: true,
-          fillColor: fillColor,
-        ),
-        child: Padding(padding: padding, child: child),
-      );
-    }
-
-    Widget buildTag(
-      String label,
-      Color accent, {
-      IconData? icon,
-      bool filled = false,
-    }) {
-      return PuzzleAcademyTag(
-        label: label,
-        accent: accent,
-        icon: icon,
-        compact: true,
-        filled: filled,
-        monochromeOverride: arcade.monochrome,
-        foregroundColor: filled
-            ? _vsBotFilledButtonForegroundColor(accent, arcade)
-            : null,
-      );
-    }
-
-    ButtonStyle buildActionButtonStyle({
-      required Color accent,
-      bool filled = true,
-    }) {
-      final background = filled
-          ? accent
-          : Color.alphaBlend(
-              accent.withValues(alpha: arcade.monochrome ? 0.14 : 0.20),
-              arcade.panelAlt,
-            );
-      final foreground = filled
-          ? _vsBotFilledButtonForegroundColor(background, arcade)
-          : _vsBotReadableAccentColor(accent, arcade);
-      return FilledButton.styleFrom(
-        backgroundColor: background,
-        foregroundColor: foreground,
-        textStyle: buildHudStyle(
-          color: foreground,
-          size: 11.0,
-          weight: FontWeight.w800,
-          letterSpacing: 0.60,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        side: BorderSide(color: accent.withValues(alpha: 0.56)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      );
-    }
-
-    Widget buildActionButton({
-      required String label,
-      required IconData icon,
-      required VoidCallback? onPressed,
-      required Color accent,
-      bool filled = true,
-    }) {
-      return FilledButton.icon(
-        onPressed: onPressed,
-        style: buildActionButtonStyle(accent: accent, filled: filled),
-        icon: Icon(icon, size: 18),
-        label: Text(label),
-      );
-    }
-
-    ChoiceChip buildChoiceChip({
-      required String label,
-      required bool selected,
-      required ValueChanged<bool>? onSelected,
-      required Color accent,
-    }) {
-      return ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: onSelected,
-        showCheckmark: false,
-        backgroundColor: Color.alphaBlend(
-          scheme.surface.withValues(alpha: 0.10),
-          arcade.panelAlt,
-        ),
-        selectedColor: Color.alphaBlend(
-          accent.withValues(alpha: arcade.monochrome ? 0.12 : 0.22),
-          arcade.panelAlt,
-        ),
-        side: BorderSide(
-          color: selected
-              ? accent.withValues(alpha: 0.82)
-              : scheme.outline.withValues(alpha: 0.28),
-        ),
-        labelStyle: buildHudStyle(
-          color: selected
-              ? _vsBotReadableAccentColor(accent, arcade)
-              : arcade.text,
-          size: 11.0,
-          weight: selected ? FontWeight.w800 : FontWeight.w700,
-          letterSpacing: 0.46,
-          height: 1.0,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      );
-    }
-
-    Widget buildSectionTitle(String label, Color accent) {
-      return Row(
-        children: [
-          Text(
-            label,
-            style: buildHudStyle(
-              color: accent,
-              size: 10.6,
-              weight: FontWeight.w800,
-              glow: !arcade.monochrome,
-              letterSpacing: 0.82,
-              height: 1.0,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              height: 2,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    accent.withValues(alpha: 0.58),
-                    accent.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    Widget buildCardHeader({
-      required String label,
-      required String title,
-      required String subtitle,
-      required IconData icon,
-      required Color accent,
-    }) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 420;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: compact ? 42 : 46,
-                height: compact ? 42 : 46,
-                decoration: _vsBotArcadePanelDecoration(
-                  palette: arcade,
-                  accent: accent,
-                  radius: 14,
-                  borderWidth: 2.0,
-                  inset: true,
-                  elevated: false,
-                  fillColor: Color.alphaBlend(
-                    accent.withValues(
-                      alpha: arcade.monochrome ? 0.10 : (isDark ? 0.18 : 0.14),
-                    ),
-                    arcade.panelAlt,
-                  ),
-                ),
-                child: Icon(
-                  icon,
-                  color: _vsBotReadableAccentColor(accent, arcade),
-                  size: compact ? 20 : 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    buildTag(label, accent, filled: !arcade.monochrome),
-                    const SizedBox(height: 8),
-                    Text(
-                      title,
-                      style: buildDisplayStyle(
-                        color: arcade.text,
-                        size: compact ? 22 : 26,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: buildBodyStyle(color: arcade.textMuted),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    }
-
-    Color remoteMembershipAccent(RemoteFriendMatchStatus status) {
-      return switch (status) {
-        RemoteFriendMatchStatus.pending => arcade.amber,
-        RemoteFriendMatchStatus.active => remoteAccent,
-        RemoteFriendMatchStatus.completed => const Color(0xFF58E09A),
-        RemoteFriendMatchStatus.expired || RemoteFriendMatchStatus.cancelled =>
-          arcade.textMuted,
-      };
-    }
-
-    String remoteMembershipActionLabel(RemoteFriendMatchStatus status) {
-      return switch (status) {
-        RemoteFriendMatchStatus.pending => 'Open Invite',
-        RemoteFriendMatchStatus.active => 'Resume Match',
-        RemoteFriendMatchStatus.completed => 'View Match',
-        RemoteFriendMatchStatus.expired => 'View Expired',
-        RemoteFriendMatchStatus.cancelled => 'View Cancelled',
-      };
-    }
-
-    Widget buildRemoteMembershipTile(RemoteFriendMatchMembership membership) {
-      final accent = remoteMembershipAccent(membership.status);
-      final statusLabel = _remoteFriendMembershipStatusLabel(membership.status);
-      final inviteCode = membership.inviteCode.isEmpty
-          ? 'Private Match'
-          : 'Code ${membership.inviteCode}';
-
-      return buildInsetShell(
-        accent: accent,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 360;
-            final titleBlock = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  inviteCode,
-                  style: buildDisplayStyle(
-                    color: arcade.text,
-                    size: compact ? 18 : 20,
-                    glow: false,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _formatRemoteFriendMembershipTimestamp(membership.updatedAt),
-                  style: buildBodyStyle(color: arcade.textMuted, size: 11.4),
-                ),
-              ],
-            );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (compact) ...[
-                  buildTag(statusLabel, accent),
-                  const SizedBox(height: 10),
-                  titleBlock,
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: titleBlock),
-                      const SizedBox(width: 10),
-                      buildTag(statusLabel, accent),
-                    ],
-                  ),
-                const SizedBox(height: 12),
-                buildActionButton(
-                  label: remoteMembershipActionLabel(membership.status),
-                  icon: Icons.open_in_new_rounded,
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(
-                          _openRemoteFriendMatch(membership.matchId),
-                        ),
-                  accent: accent,
-                  filled: false,
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    }
-
-    Widget buildHeroPanel() {
-      return buildCardShell(
-        accent: heroAccent,
-        emphasized: true,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 500;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (compact) ...[
-                  buildTag(
-                    'PLAY CHESS',
-                    heroAccent,
-                    icon: Icons.sports_esports_rounded,
-                    filled: true,
-                  ),
-                  const SizedBox(height: 10),
-                  Image.asset(
-                    _menuLogoAsset(context),
-                    height: 44,
-                    fit: BoxFit.contain,
-                  ),
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        _menuLogoAsset(context),
-                        height: 50,
-                        fit: BoxFit.contain,
-                      ),
-                      const SizedBox(width: 14),
-                      buildTag(
-                        'PLAY CHESS',
-                        heroAccent,
-                        icon: Icons.sports_esports_rounded,
-                        filled: true,
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 12),
-                Text(
-                  'Pick Your Arena',
-                  style: buildDisplayStyle(
-                    color: arcade.text,
-                    size: compact ? 28 : 34,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'A compact premium front door for solo, local, and private play.',
-                  style: buildBodyStyle(color: arcade.textMuted, size: 12.0),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    buildTag('BOT', arcade.cyan, icon: Icons.smart_toy_outlined),
-                    buildTag('1V1', arcade.amber, icon: Icons.people_alt_outlined),
-                    buildTag(
-                      'PRIVATE',
-                      remoteAccent,
-                      icon: Icons.wifi_tethering_rounded,
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    }
-
-    Widget buildBotModeCard() {
-      final selectedBot = _selectedBot;
-      final accent = selectedBot == null
-          ? (useMonochrome ? scheme.onSurface : arcade.cyan)
-          : _vsBotProfileAccent(selectedBot.profile, arcade);
-      final difficultyAccent = selectedBot == null
-          ? arcade.amber
-          : _botDifficultyColor(_selectedBotDifficulty);
-
-      return buildCardShell(
-        accent: accent,
-        onTap: _openBotSetupFromMenu,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            buildCardHeader(
-              label: 'BOT SELECTOR',
-              title: 'VS BOT',
-              subtitle: selectedBot?.description ??
-                  'Open the tuned selector to choose character, side, and pressure.',
-              icon: Icons.smart_toy_outlined,
-              accent: accent,
-            ),
-            const SizedBox(height: 12),
-            buildInsetShell(
-              accent: difficultyAccent,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  buildTag(
-                    selectedBot == null
-                        ? 'CHOOSE BOT'
-                        : selectedBot.name.toUpperCase(),
-                    accent,
-                    icon: Icons.person_rounded,
-                  ),
-                  buildTag(
-                    botDifficultyLabel(_selectedBotDifficulty).toUpperCase(),
-                    difficultyAccent,
-                    icon: Icons.bolt_rounded,
-                  ),
-                  buildTag('SIDE PICK', arcade.amber, icon: Icons.flag_outlined),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              selectedBot == null
-                  ? 'Everything for bot play happens in the refined selector screen.'
-                  : 'Current bot is queued. Reopen the selector any time to retune the matchup.',
-              style: buildBodyStyle(color: arcade.textMuted),
-            ),
-            const SizedBox(height: 12),
-            buildActionButton(
-              label: selectedBot == null ? 'Open Bot Selector' : 'Retune Bot Match',
-              icon: Icons.arrow_forward_rounded,
-              onPressed: _openBotSetupFromMenu,
-              accent: accent,
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget buildLocalModeCard() {
-      final summaryLabel = selectedLocalFriendTimeControl.initialTime == null
-          ? 'Untimed'
-          : _formatLocalFriendTimeControl(selectedLocalFriendTimeControl);
-
-      return buildCardShell(
-        accent: arcade.amber,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            buildCardHeader(
-              label: 'SOFA BATTLE',
-              title: '1V1 ON THIS PHONE',
-              subtitle: 'Two players, one device, fixed board, compact setup.',
-              icon: Icons.people_alt_outlined,
-              accent: arcade.amber,
-            ),
-            const SizedBox(height: 12),
-            buildSectionTitle('TIME CONTROL', arcade.amber),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (
-                  int index = 0;
-                  index < _localFriendTimeControls.length;
-                  index++
-                )
-                  buildChoiceChip(
-                    label: _formatLocalFriendTimeControl(
-                      _localFriendTimeControls[index],
-                    ),
-                    selected: _localFriendTimeControlIndex == index,
-                    onSelected: (_) {
-                      unawaited(_setLocalFriendTimeControlIndex(index));
-                    },
-                    accent: arcade.amber,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Current setup: ${summaryLabel.toLowerCase()} local match with a fixed board.',
-              style: buildBodyStyle(color: arcade.textMuted),
-            ),
-            const SizedBox(height: 12),
-            buildActionButton(
-              label: 'Start Local 1V1',
-              icon: Icons.play_arrow_rounded,
-              onPressed: () => unawaited(_startLocalFriendMatch()),
-              accent: arcade.amber,
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget buildRemoteModeCard() {
-      final seatLabel = switch (_remoteFriendSeatPreference) {
-        RemoteFriendSeatPreference.random => 'random seat',
-        RemoteFriendSeatPreference.white => 'white seat',
-        RemoteFriendSeatPreference.black => 'black seat',
-      };
-      final matchSummary = selectedRemoteFriendTimeControl.isUntimed
-          ? 'Current setup: untimed invite with $seatLabel.'
-          : 'Current setup: ${_formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl)} with $seatLabel.';
-
-      return buildCardShell(
-        accent: remoteAccent,
-        emphasized: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            buildCardHeader(
-              label: 'PRIVATE LINK',
-              title: 'FRIEND ON ANOTHER PHONE',
-              subtitle: 'Invite-only play with synced clocks and a compact live lobby.',
-              icon: Icons.wifi_tethering_rounded,
-              accent: remoteAccent,
-            ),
-            const SizedBox(height: 12),
-            buildSectionTitle('TIME CONTROL', remoteAccent),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (
-                  int index = 0;
-                  index < _localFriendTimeControls.length;
-                  index++
-                )
-                  buildChoiceChip(
-                    label: _formatRemoteFriendTimeControl(
-                      RemoteFriendTimeControl(
-                        initialSeconds:
-                            _localFriendTimeControls[index]
-                                .initialTime
-                                ?.inSeconds ??
-                            0,
-                        incrementSeconds:
-                            _localFriendTimeControls[index].increment.inSeconds,
-                      ),
-                    ),
-                    selected: _localFriendTimeControlIndex == index,
-                    onSelected: _remoteFriendOperationInProgress
-                        ? null
-                        : (_) {
-                            unawaited(_setLocalFriendTimeControlIndex(index));
-                          },
-                    accent: remoteAccent,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            buildSectionTitle('SEAT PREFERENCE', remoteAccent),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final entry in <(
-                  RemoteFriendSeatPreference,
-                  String,
-                )>[
-                  (RemoteFriendSeatPreference.random, 'Random'),
-                  (RemoteFriendSeatPreference.white, 'White'),
-                  (RemoteFriendSeatPreference.black, 'Black'),
-                ])
-                  buildChoiceChip(
-                    label: entry.$2,
-                    selected: _remoteFriendSeatPreference == entry.$1,
-                    onSelected: _remoteFriendOperationInProgress
-                        ? null
-                        : (_) {
-                            setState(() {
-                              _remoteFriendSeatPreference = entry.$1;
-                            });
-                          },
-                    accent: remoteAccent,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              matchSummary,
-              style: buildBodyStyle(color: arcade.textMuted),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                buildActionButton(
-                  label: 'Create Invite',
-                  icon: Icons.add_link_rounded,
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(_createRemoteFriendInvite()),
-                  accent: remoteAccent,
-                ),
-                buildActionButton(
-                  label: 'Join Code',
-                  icon: Icons.key_rounded,
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(_joinRemoteFriendInvite()),
-                  accent: remoteAccent,
-                  filled: false,
-                ),
-                buildActionButton(
-                  label: 'Refresh List',
-                  icon: Icons.refresh_rounded,
-                  onPressed: _remoteFriendMembershipsLoading
-                      ? null
-                      : () => unawaited(_loadRemoteFriendMemberships()),
-                  accent: remoteAccent,
-                  filled: false,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: buildSectionTitle('RECENT PRIVATE MATCHES', remoteAccent),
-                ),
-                if (_remoteFriendMembershipsLoading) ...[
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: remoteAccent,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 10),
-            if (_remoteFriendMemberships.isEmpty &&
-                !_remoteFriendMembershipsLoading)
-              buildInsetShell(
-                accent: remoteAccent,
-                child: Text(
-                  _remoteFriendLastError == null
-                      ? 'No private remote matches yet. Create an invite or join a friend with a code.'
-                      : 'Remote matches could not be refreshed just now. You can still create or join an invite above.',
-                  style: buildBodyStyle(color: arcade.textMuted),
-                ),
-              )
-            else
-              Column(
-                children: List<Widget>.generate(
-                  _remoteFriendMemberships.length,
-                  (index) => Padding(
-                    padding: EdgeInsets.only(
-                      bottom: index == _remoteFriendMemberships.length - 1
-                          ? 0
-                          : 10,
-                    ),
-                    child: buildRemoteMembershipTile(
-                      _remoteFriendMemberships[index],
-                    ),
-                  ),
-                  growable: false,
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              heroAccent.withValues(alpha: useMonochrome ? 0.04 : 0.14),
-              Color.alphaBlend(
-                arcade.backdrop.withValues(alpha: isDark ? 0.20 : 0.06),
-                scheme.surface,
-              ),
-            ),
-            Color.alphaBlend(
-              arcade.backdrop.withValues(alpha: isDark ? 0.18 : 0.05),
-              scheme.surface,
-            ),
-            Color.alphaBlend(
-              arcade.amber.withValues(alpha: useMonochrome ? 0.04 : 0.12),
-              Color.alphaBlend(
-                arcade.backdrop.withValues(alpha: isDark ? 0.12 : 0.04),
-                scheme.surfaceContainerHighest,
-              ),
-            ),
-          ],
-          stops: const [0.0, 0.46, 1.0],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -90,
-            left: -70,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: arcade.cyan.withValues(alpha: isDark ? 0.12 : 0.07),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -100,
-            right: -80,
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: arcade.amber.withValues(alpha: isDark ? 0.10 : 0.06),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                chromePadding,
-                compactWidth ? 12 : 14,
-                chromePadding,
-                compactWidth ? 12 : 16,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      _buildVsBotControlButton(
-                        icon: Icons.arrow_back_rounded,
-                        onTap: _goToMenu,
-                        accent: arcade.crimson,
-                      ),
-                      const Spacer(),
-                      _buildVsBotControlButton(
-                        controlKey: const ValueKey<String>(
-                          'analysis_vs_mode_credits_trigger',
-                        ),
-                        icon: Icons.info_outline_rounded,
-                        onTap: _showCreditsDialog,
-                        accent: useMonochrome ? scheme.onSurface : arcade.cyan,
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: sectionGap),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 820),
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.only(bottom: sectionGap),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              buildHeroPanel(),
-                              SizedBox(height: sectionGap),
-                              buildBotModeCard(),
-                              SizedBox(height: sectionGap),
-                              buildLocalModeCard(),
-                              SizedBox(height: sectionGap),
-                              buildRemoteModeCard(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+  _PendingMoveQualityGrading copyWith({
+    Object? postMoveFen = _sentinel,
+    Object? postMoveWhiteToMove = _sentinel,
+  }) {
+    return _PendingMoveQualityGrading(
+      moveIndex: moveIndex,
+      uci: uci,
+      moverIsWhite: moverIsWhite,
+      earliestPublishAt: earliestPublishAt,
+      preMoveFen: preMoveFen,
+      preMoveLines: preMoveLines,
+      moverMaterialBefore: moverMaterialBefore,
+      moverMaterialAfter: moverMaterialAfter,
+      chargeBefore: chargeBefore,
+      chargeEpoch: chargeEpoch,
+      playedMoveRank: playedMoveRank,
+      cpGapFromBest: cpGapFromBest,
+      cpGapFromNextBetter: cpGapFromNextBetter,
+      totalLegalMoveCount: totalLegalMoveCount,
+      analyzedLegalMoveCount: analyzedLegalMoveCount,
+      preMoveMoverWinProbability: preMoveMoverWinProbability,
+      preMoveMoverEvalPawns: preMoveMoverEvalPawns,
+      postMoveFen: identical(postMoveFen, _sentinel)
+          ? this.postMoveFen
+          : postMoveFen as String?,
+      postMoveWhiteToMove: identical(postMoveWhiteToMove, _sentinel)
+          ? this.postMoveWhiteToMove
+          : postMoveWhiteToMove as bool?,
     );
   }
+
+  bool get isSacrifice => moverMaterialAfter < moverMaterialBefore;
+}
+
+class _GradingSearchSnapshot {
+  const _GradingSearchSnapshot({
+    required this.lines,
+    required this.whiteToMove,
+  });
+
+  final List<EngineLine> lines;
+  final bool whiteToMove;
+}
+
+class _DeferredMoveQualityPublication {
+  const _DeferredMoveQualityPublication({
+    required this.pending,
+    required this.assessment,
+    required this.preMoveMoverWinProbability,
+    required this.postMoveMoverWinProbability,
+    required this.deltaWpLoss,
+    required this.sourceRole,
+  });
+
+  final _PendingMoveQualityGrading pending;
+  final MoveQualityAssessment assessment;
+  final double preMoveMoverWinProbability;
+  final double postMoveMoverWinProbability;
+  final double deltaWpLoss;
+  final EngineRequestRole? sourceRole;
+}
+
+class _SacrificePreviewCandidate {
+  const _SacrificePreviewCandidate({
+    required this.line,
+    required this.materialLossCp,
+    required this.positionalCompensationCp,
+    required this.offeredExchangeCp,
+    required this.hasImmediateRecapture,
+  });
+
+  final EngineLine line;
+  final int materialLossCp;
+  final int positionalCompensationCp;
+  final int offeredExchangeCp;
+  final bool hasImmediateRecapture;
+}
+
+class _SacrificeRecapturePreview {
+  const _SacrificeRecapturePreview({
+    required this.uciMove,
+    required this.evalCp,
+    required this.searchDepth,
+  });
+
+  final String uciMove;
+  final int evalCp;
+  final int searchDepth;
+}
+
+class _SacrificePreviewPosition {
+  const _SacrificePreviewPosition({
+    required this.boardState,
+    required this.fen,
+    required this.whiteToMove,
+  });
+
+  final Map<String, String> boardState;
+  final String fen;
+  final bool whiteToMove;
+}
+
+class _BoardDragPayload {
+  const _BoardDragPayload._({required this.piece, this.fromSquare});
+
+  const _BoardDragPayload.fromBoard({
+    required String fromSquare,
+    required String piece,
+  }) : this._(piece: piece, fromSquare: fromSquare);
+
+  const _BoardDragPayload.palette({required String piece})
+    : this._(piece: piece);
+
+  final String piece;
+  final String? fromSquare;
+}
+
+class _EditToolboxPiece {
+  const _EditToolboxPiece({required this.piece, required this.label});
+
+  final String piece;
+  final String label;
+}
+
+const List<_EditToolboxPiece> _editToolboxPieces = <_EditToolboxPiece>[
+  _EditToolboxPiece(piece: 'q_w', label: 'White queen'),
+  _EditToolboxPiece(piece: 't_w', label: 'White rook'),
+  _EditToolboxPiece(piece: 'b_w', label: 'White bishop'),
+  _EditToolboxPiece(piece: 'n_w', label: 'White knight'),
+  _EditToolboxPiece(piece: 'p_w', label: 'White pawn'),
+  _EditToolboxPiece(piece: 'q_b', label: 'Black queen'),
+  _EditToolboxPiece(piece: 't_b', label: 'Black rook'),
+  _EditToolboxPiece(piece: 'b_b', label: 'Black bishop'),
+  _EditToolboxPiece(piece: 'n_b', label: 'Black knight'),
+  _EditToolboxPiece(piece: 'p_b', label: 'Black pawn'),
+];
+
+abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  static const String _lastBotIndexKey = 'last_bot_index_v1';
+  static const String _vsBotCompletedTiersKey = 'vs_bot_completed_tiers_v1';
+  static const BoardPerspective _defaultPerspective = BoardPerspective.white;
+  static const BoardThemeMode _defaultBoardTheme = BoardThemeMode.dark;
+  static const PieceThemeMode _defaultPieceTheme = PieceThemeMode.classic;
+  static const int _defaultEngineDepth = 20;
+  static const int _oracleInfiniteDepth = 30;
+  static const int _defaultMultiPvCount = 1;
+  static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
+  static const String _storeStateKey = 'store_state_v1';
+  static const String _storeIntegrityScope = 'economy_store';
+  static const String _storeVsBotMatchStartCountKey = 'vsBotMatchStartCount';
+  static const String _cleanPlayPassTitle = 'Clean Play No-Ad Pass';
+  static const String _cleanPlayPassBenefit =
+      'analysis resets, bot rematches, and new bot matches stay ad-free';
+  static const String _muteSoundsKey = 'mute_sounds_v1';
+  static const String _hapticsEnabledKey = 'haptics_enabled_v1';
+  static const String _cinematicThemeEnabledKey = 'cinematic_theme_enabled_v1';
+  static const String _analysisPerspectiveKey = 'analysis_perspective_v1';
+  static const String _analysisLockedHeadToHeadPerspectiveKey =
+      'analysis_locked_head_to_head_perspective_v1';
+  static const String _analysisEngineDepthKey = 'analysis_engine_depth_v1';
+  static const String _analysisMultiPvKey = 'analysis_multi_pv_v1';
+  static const String _analysisMoveAssessmentEnabledKey =
+      'analysis_move_assessment_enabled_v1';
+  static const String _analysisHeadToHeadEvalBarEnabledKey =
+      'analysis_head_to_head_eval_bar_enabled_v1';
+  static const String _analysisLocalFriendTimeControlKey =
+      'analysis_local_friend_time_control_v1';
+  static const String _analysisEngineOwner = 'analysis.board';
+  static const String _vsBotEngineOwner = 'analysis.vsbot';
+  static const int _vsBotInterstitialMatchInterval = 3;
+  static const int _bookOpeningPlyLimit = 6;
+  static const int _sacrificeModePrice = 2850;
+  static const int _pixelArrowThemePrice = 850;
+  static const int _heavyArrowThemePrice = 1200;
+  static const int _moveQualityGradingMultiPv = 4;
+  static const int _moveQualityInitialPublishDepth = 2;
+  static const int _moveQualityGradingDepth = 10;
+  static const Duration _moveQualityPublishDelay = Duration(milliseconds: 500);
+  static const int _positionAnalysisCacheLimit = 24;
+  static const Duration _gameResultRevealDuration = Duration(
+    milliseconds: 1150,
+  );
+  static const List<_LocalFriendTimeControlPreset> _localFriendTimeControls =
+      <_LocalFriendTimeControlPreset>[
+        _LocalFriendTimeControlPreset(
+          id: 'untimed',
+          label: 'Untimed',
+          initialTime: null,
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '3_0',
+          label: '3+0',
+          initialTime: Duration(minutes: 3),
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '5_0',
+          label: '5+0',
+          initialTime: Duration(minutes: 5),
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '10_0',
+          label: '10+0',
+          initialTime: Duration(minutes: 10),
+        ),
+        _LocalFriendTimeControlPreset(
+          id: '10_5',
+          label: '10+5',
+          initialTime: Duration(minutes: 10),
+          increment: Duration(seconds: 5),
+        ),
+      ];
+  static const Duration _gameResultRevealSkipDelay = Duration(
+    milliseconds: 250,
+  );
+  static const Duration _moveQualityOverlayDuration = Duration(
+    milliseconds: 3400,
+  );
+  static const Duration _bookMoveQualityOverlayDuration = Duration(
+    milliseconds: 4400,
+  );
+  static const Duration _checkAlertDuration = Duration(milliseconds: 1500);
+  static const Duration _squareToastDuration = Duration(milliseconds: 1500);
+  static const Duration _extraSuggestionLaunchDelay = Duration(
+    milliseconds: 170,
+  );
+  static const Duration _secondExtraSuggestionLaunchDelay = Duration(
+    milliseconds: 200,
+  );
+  static const Duration _creditsModernDwell = Duration(seconds: 45);
+  static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
+  static const Duration _creditsRetroDwell = Duration(seconds: 15);
+  static const bool _creditsDisableLoopForTests = bool.fromEnvironment(
+    'FLUTTER_TEST',
+  );
+
+  late Map<String, String> boardState;
+  CoordinatedEngineService? _engine;
+  CoordinatedEngineService? _sacrificeScanEngine;
+  String? _engineOwner;
+  late AnimationController _pulseController;
+  late AnimationController _introController;
+  late AnimationController _menuRevealController;
+  late AnimationController _launchController;
+  late AnimationController _extraLaunchController;
+  late AnimationController _secondExtraLaunchController;
+  late AnimationController _menuMusicFadeController;
+  late AnimationController _sectionTransitionController;
+  late AnimationController _menuExitAnimationController;
+  late AnimationController _buttonRippleController;
+  late AnimationController _openingButtonFlashController;
+  late AnimationController _storeCoinGainController;
+  final Stopwatch _spectralMotionClock = Stopwatch()..start();
+  bool _openingButtonFlashRed = false;
+  Timer? _openingModeFeedbackTimer;
+  String? _openingModeFeedbackLabel;
+  Color? _openingModeFeedbackColor;
+  Offset? _buttonRippleCenter;
+  Offset? _storeCoinGainCenter;
+  int _storeCoinGainAmount = 10;
+  bool _buttonUnlocked = false;
+  final AudioPlayer _introAudioPlayer = AudioPlayer();
+  final AudioPlayer _menuAudioPlayer = AudioPlayer();
+  final AudioPlayer _sfxAudioPlayer = AudioPlayer();
+  final List<_MenuSparkParticle> _menuSparkParticles = <_MenuSparkParticle>[];
+  final List<_CreditsBackdropDot> _creditsBackdropDots =
+      <_CreditsBackdropDot>[];
+  final Random _creditsBackdropRandom = Random();
+  bool _creditsDialogOpen = false;
+  _CreditsVisualMode _creditsVisualMode = _CreditsVisualMode.modern;
+  double _creditsVisualElapsed = 0.0;
+  bool _menuDotsPreviouslyColliding = false;
+  Offset _blueMenuDotPosition = Offset.zero;
+  Offset _yellowMenuDotPosition = Offset.zero;
+  Offset _blueMenuDotVelocity = Offset.zero;
+  Offset _yellowMenuDotVelocity = Offset.zero;
+  Size? _botSetupLastLayoutSize;
+  double _botSetupLastScrollPosition = 0.0;
+  double _botSetupScrollForce = 0.0;
+  double _blueDotScrollVelocity = 0.0;
+  double _blueDotScrollOffset = 0.0;
+  Timer? _idleInterstitialTimer;
+  DateTime? _menuSparkLastUpdate;
+  DateTime? _creditsBackdropLastUpdate;
+  late final Future<String> _creditsVersionFuture = _loadCreditsVersionLabel();
+  double _menuDotTime = 0.0;
+  double _mainMenuSceneTime = 0.0;
+  double _blueYellowContactTime = 0.0;
+  late final double _blueDotPhase;
+  late final double _yellowDotPhase;
+  late final String _menuFloorSequenceSeed;
+  final List<_MenuFloorActorState> _menuFloorActors = <_MenuFloorActorState>[];
+  int _menuFloorActionIndex = 0;
+  int _menuFloorActorSerial = 0;
+  bool _menuFloorReducedEffects = false;
+  double _menuFloorNextActionSceneTime = 0.0;
+  double _menuFloorExitRowThreshold = 8.9;
+  late final double _blueDotSpeed;
+  late final double _yellowDotSpeed;
+  late final double _blueDotRadius;
+  late final double _yellowDotRadius;
+  late final double _blueDotTrajectoryNoise;
+  late final double _yellowDotTrajectoryNoise;
+  late final double _blueDotShapeSeed;
+  late final double _yellowDotShapeSeed;
+  static const double _menuCenterBaseSpinSpeed = 0.24;
+  static const double _menuCenterMaxSpinSpeed = 6.0;
+  static const double _menuCenterSpinDecayRate = 0.9;
+  static const double _menuCenterCollisionStreakWindow = 1.2;
+  static const List<_MenuBackdropSpritePlacement> _menuBackdropMotifs =
+      <_MenuBackdropSpritePlacement>[];
+
+  double _menuCenterRotationA = 0.0;
+  double _menuCenterRotationB = 0.0;
+  int _menuCenterShapeSidesA = 4;
+  int _menuCenterShapeSidesB = 5;
+  double _menuCenterShapeChangeTimerA = 1.6;
+  double _menuCenterShapeChangeTimerB = 1.2;
+  double _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
+  double _menuCenterImpact = 0.0;
+  DateTime? _menuCenterLastUpdate;
+  DateTime? _menuCenterLastCollision;
+  int _menuCenterCollisionStreakCount = 0;
+  static const int _boardSfxPlayerPoolSize = 4;
+  final List<AudioPlayer> _boardSfxPlayers = List<AudioPlayer>.generate(
+    _boardSfxPlayerPoolSize,
+    (_) => AudioPlayer(),
+  );
+  int _nextBoardSfxPlayerIndex = 0;
+  bool _menuMusicPlaying = false;
+  bool _isHotkeyResetting = false;
+  Future<void>? _engineStartFuture;
+  Future<void>? _sacrificeScanEngineStartFuture;
+  final GlobalKey _sceneKey = GlobalKey();
+  final GlobalKey _boardKey = GlobalKey();
+  final GlobalKey _actionAreaKey = GlobalKey();
+  final GlobalKey _suggestionButtonKey = GlobalKey();
+  final GlobalKey _storeButtonKey = GlobalKey();
+  final GlobalKey _evalBarHorizontalKey = GlobalKey();
+  final GlobalKey _evalBarVerticalKey = GlobalKey();
+
+  int _currentDepth = 0;
+  double _currentEval = 0.0;
+  bool _evalWhiteTurn =
+      true; // whose turn it was when _currentEval was last set
+  int _multiPvCount = _defaultMultiPvCount;
+  int _engineDepth = _defaultEngineDepth;
+  bool _isWhiteTurn = true;
+  bool _whiteKingMoved = false;
+  bool _blackKingMoved = false;
+  bool _whiteKingsideRookMoved = false;
+  bool _whiteQueensideRookMoved = false;
+  bool _blackKingsideRookMoved = false;
+  bool _blackQueensideRookMoved = false;
+  String? _enPassantTarget;
+  BoardPerspective _perspective = _defaultPerspective;
+  BoardThemeMode _boardThemeMode = _defaultBoardTheme;
+  PieceThemeMode _pieceThemeMode = _defaultPieceTheme;
+  ArrowThemeMode _arrowThemeMode = ArrowThemeMode.classic;
+  List<EngineLine> _topLines = [];
+  List<EngineLine> _analysisLines = [];
+  String? _analysisLinesFen;
+  final List<MoveRecord> _moveHistory = [];
+  int _historyIndex = -1;
+  late ScrollController _historyScrollController;
+  late ScrollController _quizStudyLibraryScrollController;
+  late ScrollController _quizStudyLandscapeDetailScrollController;
+  late ScrollController _quizQuestionOptionsScrollController;
+  final Map<String, String> _ecoOpenings = {};
+  final List<EcoLine> _ecoLines = [];
+  int _quizEligibleCount = 0;
+  final Map<String, List<EcoLine>> _quizEligiblePoolCache =
+      <String, List<EcoLine>>{};
+  final Map<String, Set<String>> _quizEligibleNameCache =
+      <String, Set<String>>{};
+  final Map<String, List<EcoLine>> _quizStudyPoolCache =
+      <String, List<EcoLine>>{};
+  bool _quizPoolsPrecomputed = false;
+  Map<String, dynamic>? _precomputedQuizPoolData;
+  bool _ecoOpeningsLoading = false;
+  String _currentOpening = '';
+  final List<String> _logs = [];
+  OpeningMode _openingMode = OpeningMode.off;
+  String? _gambitSelectedFrom;
+  String? _holdSelectedFrom;
+  final Set<String> _legalTargets = <String>{};
+  final Set<String> _gambitAvailableTargets = <String>{};
+  EcoLine? _selectedGambit;
+  List<EngineLine> _gambitPreviewLines = [];
+  final Random _rng = Random();
+  MatchMode _matchMode = MatchMode.analysis;
+  bool _humanPlaysWhite = true;
+  bool _botThinking = false;
+  final List<_GhostArrow> _botGhostArrows = <_GhostArrow>[];
+  final Map<int, Timer> _botGhostArrowTimers = <int, Timer>{};
+  int _ghostArrowIdSeed = 0;
+  BotCharacter? _selectedBot;
+  BotDifficulty _selectedBotDifficulty = BotDifficulty.easy;
+  int _vsBotSessionWins = 0;
+  int _vsBotSessionLosses = 0;
+  int _vsBotSessionDraws = 0;
+  EngineSearchHandle? _botSearchHandle;
+  int _engineRequestSequence = 0;
+  EvalSnapshot? _currentEvalSnapshot;
+  final Map<String, PositionAnalysisCacheEntry> _positionAnalysisCacheByFen =
+      <String, PositionAnalysisCacheEntry>{};
+  final Map<String, EngineSearchUpdate> _primaryEngineUpdateByFen =
+      <String, EngineSearchUpdate>{};
+  final Map<String, EngineSearchHandle>
+  _backgroundMoveQualityConfirmationsByFen = <String, EngineSearchHandle>{};
+  Completer<List<EngineLine>>? _botSearchCompleter;
+  final Map<int, EngineLine> _botSearchLines = <int, EngineLine>{};
+  int _botSearchMultiPv = 1;
+  Completer<_GradingSearchSnapshot?>? _gradingSearchCompleter;
+  final Map<int, EngineLine> _gradingSearchLines = <int, EngineLine>{};
+  int _gradingSearchMultiPv = 1;
+  bool _gradingSearchWhiteToMove = true;
+  Future<void> _moveQualityGradingOperation = Future<void>.value();
+  int _moveQualityGradingGeneration = 0;
+  bool _analysisRefreshQueuedWhileGrading = false;
+  _PendingMoveQualityGrading? _pendingMoveQualityGrading;
+  Timer? _moveQualityPublishTimer;
+  _DeferredMoveQualityPublication? _deferredMoveQualityPublication;
+  Future<void> _sacrificePreviewScanOperation = Future<void>.value();
+  int _sacrificePreviewScanToken = 0;
+  String? _lastSacrificeAnalysisSignature;
+  bool _preferOpeningModeOnNextToggleAfterSacrifice = false;
+  String? _sacrificePreviewFen;
+  List<EngineLine> _sacrificePreviewLines = <EngineLine>[];
+  DateTime? _sacrificeAvailabilityAlertUntil;
+  String? _lastSacrificeAvailabilityAlertSignature;
+  static const int _sacrificeRelativeEvalAllowanceCp = 100;
+  static const int _sacrificeAcceptanceReplyAllowanceCp = 150;
+  static const int _sacrificePreviewLineLimit = 3;
+  static const int _sacrificeEligibleRootMoveLimit = 5;
+  static const int _sacrificeFastConfirmationDepth = 15;
+  static const Duration _sacrificeAvailabilityAlertDuration = Duration(
+    seconds: 1,
+  );
+  static const Duration _sacrificeFastPathBudget = Duration(seconds: 5);
+
+  static const Duration _sacrificeFastPathSearchTimeout = Duration(
+    milliseconds: 900,
+  );
+  static const double _botSetupDefaultViewportFraction = 0.60;
+  PageController _botSetupPageController = PageController(
+    viewportFraction: _botSetupDefaultViewportFraction,
+  );
+  double _botSetupViewportFraction = _botSetupDefaultViewportFraction;
+  int _botSetupSelectedIndex = 0;
+  BotDifficulty _botSetupSelectedDifficulty = BotDifficulty.easy;
+  final Set<String> _completedBotTierIds = <String>{};
+  String? _vsBotProgressTitle;
+  String? _vsBotProgressMessage;
+  BotCharacter? _vsBotProgressNextBot;
+  BotDifficulty? _vsBotProgressNextDifficulty;
+
+  Future<void> _loadVsBotSetupPrefs();
+  String? _selectedBotAvatarAsset(BotCharacter bot);
+
+  BotSideChoice _botSideChoice = BotSideChoice.random;
+
+  void _configureBotSetupPageController(double viewportFraction) {
+    final normalizedViewport = viewportFraction.clamp(0.32, 0.86).toDouble();
+    if ((_botSetupViewportFraction - normalizedViewport).abs() < 0.001) {
+      return;
+    }
+
+    final previousController = _botSetupPageController;
+    _botSetupViewportFraction = normalizedViewport;
+    _botSetupPageController = PageController(
+      initialPage: _botSetupSelectedIndex,
+      viewportFraction: normalizedViewport,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      previousController.dispose();
+      if (!mounted || !_botSetupPageController.hasClients) {
+        return;
+      }
+      _botSetupPageController.jumpToPage(_botSetupSelectedIndex);
+    });
+  }
+
+  int _depthTier = 1; // 1=pro,2=expert,3=grandmaster,4=oracle
+  int _extraSuggestionPurchases = 0; // each +1 up to max 10 suggestions
+  bool _themePackOwned = false;
+  bool _sakuraBoardOwned = false;
+  bool _tropicalBoardOwned = false;
+  bool _tuttiFruttiOwned = false;
+  bool _spectralOwned = false;
+  bool _monochromePiecesOwned = false;
+  bool _piecePackOwned = false;
+  bool _pixelArrowThemeOwned = false;
+  bool _heavyArrowThemeOwned = false;
+  bool _sacrificeModeOwned = false;
+  bool _adFreeOwned = false;
+  bool _academyTuitionPassOwned = false;
+  static const String _dismissedStoreCampaignBannersKey =
+      'dismissed_store_campaign_banners_v1';
+  final Set<String> _dismissedStoreCampaignBanners = <String>{};
+  bool _dismissedStoreCampaignBannersLoaded = false;
+  bool _introCompleted = true;
+  bool _suggestionsEnabled = false;
+  bool _moveAssessmentEnabled = false;
+  bool _lockedHeadToHeadPerspective = false;
+  bool _headToHeadEvalBarEnabled = false;
+  bool _vsBotEvalEnabled = false;
+  bool _vsBotOptimalLineRevealActive = false;
+  int _vsBotCharge = 0;
+  int _vsBotMatchStartCount = 0;
+  int _vsBotChargeEpoch = 0;
+  bool _suggestionLaunchInProgress = false;
+  bool _suggestionBurstActive = false;
+  Offset? _launchStart;
+  List<Offset> _launchTargets = <Offset>[];
+  Offset? _extraLaunchStart;
+  List<Offset> _extraLaunchTargets = <Offset>[];
+  Offset? _secondExtraLaunchStart;
+  List<Offset> _secondExtraLaunchTargets = <Offset>[];
+  bool _launchTargetsEvalBar = false;
+  GameOutcome? _gameOutcome;
+  DrawReason? _gameDrawReason;
+  bool _localFriendEndedOnTime = false;
+  bool _gameResultDialogVisible = false;
+  _GameResultReveal? _gameResultReveal;
+  int _gameResultRevealSequence = 0;
+  Timer? _localFriendClockTimer;
+  int _localFriendTimeControlIndex = 2;
+  Duration _localFriendWhiteClockRemaining = Duration.zero;
+  Duration _localFriendBlackClockRemaining = Duration.zero;
+  Duration _localFriendActiveClockBaseline = Duration.zero;
+  DateTime? _localFriendActiveClockStartedAt;
+  bool? _localFriendActiveClockIsWhite;
+  RemoteFriendSeatPreference _remoteFriendSeatPreference =
+      RemoteFriendSeatPreference.random;
+  String? _remoteFriendLocalUid;
+  RemoteFriendInvite? _remoteFriendInvite;
+  RemoteFriendMatchSnapshot? _remoteFriendSnapshot;
+  List<RemoteFriendMatchMembership> _remoteFriendMemberships =
+      <RemoteFriendMatchMembership>[];
+  bool _remoteFriendMembershipsLoading = false;
+  bool _remoteFriendOperationInProgress = false;
+  bool _remoteFriendPollInFlight = false;
+  Timer? _remoteFriendPollTimer;
+  Timer? _remoteFriendClockDisplayTimer;
+  String? _remoteFriendLastError;
+  String? _remoteFriendOutcomeReason;
+  Timer? _checkAlertTimer;
+  _CheckAlert? _checkAlert;
+  Timer? _squareToastTimer;
+  _SquareToast? _squareToast;
+  final List<String> _positionHistoryKeys = <String>[];
+  final List<int> _halfmoveClockHistory = <int>[];
+  bool _quizLaunchedFromAcademy = false;
+
+  AppSection _activeSection = AppSection.menu;
+  GambitQuizMode _quizMode = GambitQuizMode.guessName;
+  bool _menuReady = false;
+  bool _muteSounds = false;
+  bool _hapticsEnabled = true;
+  bool _isCinematicThemeEnabled = false;
+  final ValueNotifier<bool> _cinematicThemeNotifier = ValueNotifier<bool>(
+    false,
+  );
+  bool _analysisEditMode = false;
+  String? _selectedEditToolboxPiece;
+  bool _editToolboxEraserSelected = false;
+  String? _lastEditDragEraseSquare;
+  bool _pendingEditToolboxMetricsRefresh = false;
+  Timer? _editModeHintTimer;
+  String? _editModeHintText;
+  Timer? _moveQualityOverlayTimer;
+  MoveQuality? _moveQualityOverlayQuality;
+  String? _moveQualityOverlayTitle;
+  String? _moveQualityOverlayMessage;
+  int? _moveQualityOverlayChargeDelta;
+  MoveQualityScoringSuppressionReason?
+  _moveQualityOverlayScoringSuppressedReason;
+  MoveQuality? _lastMoveQualityBadgeQuality;
+  String? _lastMoveQualityBadgeSquare;
+  final Set<String> _viewedGambits = <String>{};
+  String _quizPrompt = '';
+  String _quizPromptFocus = '';
+  List<String> _quizOptions = <String>[];
+  int _quizCorrectIndex = 0;
+  Timer? _quizFeedbackOverlayTimer;
+  String? _quizFeedbackOverlayMessage;
+  bool? _quizFeedbackOverlayCorrect;
+  Map<String, String> _quizBoardState = <String, String>{};
+  List<EngineLine> _quizContinuation = <EngineLine>[];
+  bool _quizWhiteToMove = true;
+  int _quizShownPly = 0;
+  // Quiz piece-by-piece playback state
+  Map<String, String> _quizPlayBoard = <String, String>{};
+  int _quizPlayArrowCount = 0;
+  bool _quizPlayActive = false;
+  String? _quizFlyFrom;
+  String? _quizFlyTo;
+  String? _quizFlyPiece;
+  double _quizFlyProgress = 0.0;
+  bool _quizAnswered = false;
+  int _quizSelectedIndex = -1;
+  List<EngineLine> _quizPreviewContinuation = <EngineLine>[];
+  final List<_QuizRoundReview> _quizReviewHistory = <_QuizRoundReview>[];
+  int? _quizReviewIndex;
+  QuizDifficulty _quizDifficulty = QuizDifficulty.easy;
+  QuizAcademyProgress _quizAcademyProgress = QuizAcademyProgress.initial();
+  bool _quizStudyMode = false;
+  bool _quizOpeningsRoutePage = false;
+  QuizStudyCategory _quizStudyCategory = QuizStudyCategory.basic;
+  String _quizStudySearchQuery = '';
+  bool _quizStudyDetailOpen = false;
+  bool _quizStudyInfoExpanded = false;
+  String? _quizStudySelectedOpeningName;
+  String? _quizStudyExpandedFamily;
+  Map<String, int> _quizStudyOpeningCounts = <String, int>{};
+  bool _quizStudyIntroSeen = false;
+  int _quizStudyShownPly = 0;
+  bool _quizStudyBoardFlipped = false;
+  bool _quizStudyFollowUpMode = false;
+  bool _quizStudyFollowUpSuggestionsVisible = true;
+  bool _quizStudyFollowUpEvalVisible = true;
+  bool _quizStudyFollowUpAutoReply = true;
+  bool _quizStudyFollowUpBusy = false;
+  String? _quizStudyFollowUpError;
+  bool? _quizStudyFollowUpUserIsWhite;
+  Map<String, String> _quizStudyFollowUpBoardState = <String, String>{};
+  bool _quizStudyFollowUpWhiteToMove = true;
+  String? _quizStudyFollowUpFen;
+  String? _quizStudyFollowUpSelectedSquare;
+  String? _quizStudyFollowUpLastAutoReplyMove;
+  List<String> _quizStudyFollowUpBranchMoves = <String>[];
+  List<EngineLine> _quizStudyFollowUpLines = <EngineLine>[];
+  EvalSnapshot? _quizStudyFollowUpEvalSnapshot;
+  EngineSearchHandle? _quizStudyFollowUpHandle;
+  int _quizStudyFollowUpRequestToken = 0;
+  int _quizStudyFollowUpStreak = 0;
+  int _quizStudyFollowUpBestBranch = 0;
+  int _quizStreak = 0;
+  int _quizBestStreak = 0;
+  int _quizTotalAnswered = 0;
+  int _quizCorrectAnswers = 0;
+  int _quizScore = 0;
+  Map<String, int> _quizDailyScore = <String, int>{};
+  Map<String, int> _quizDailyAttempts = <String, int>{};
+  Map<String, int> _quizDailyCorrectByDay = <String, int>{};
+  Map<String, int> _quizNameDailyAttempts = <String, int>{};
+  Map<String, int> _quizNameDailyCorrect = <String, int>{};
+  Map<String, int> _quizLineDailyAttempts = <String, int>{};
+  Map<String, int> _quizLineDailyCorrect = <String, int>{};
+  Map<String, int> _quizDailyQuestionsAsked = <String, int>{};
+  // Per-difficulty daily stat maps
+  Map<String, int> _quizEasyDailyAttempts = <String, int>{};
+  Map<String, int> _quizEasyDailyCorrect = <String, int>{};
+  Map<String, int> _quizMediumDailyAttempts = <String, int>{};
+  Map<String, int> _quizMediumDailyCorrect = <String, int>{};
+  Map<String, int> _quizHardDailyAttempts = <String, int>{};
+  Map<String, int> _quizHardDailyCorrect = <String, int>{};
+  Map<String, int> _quizVeryHardDailyAttempts = <String, int>{};
+  Map<String, int> _quizVeryHardDailyCorrect = <String, int>{};
+  int _quizQuestionsTarget = 10;
+  int _quizSessionAnswered = 0;
+  int _quizSessionCorrect = 0;
+  bool _quizSessionStarted = false;
+
+  Future<void> _showThemedErrorDialog({
+    required String message,
+    String title = 'Something went wrong',
+    bool includeInternetHint = false,
+  });
+
+  void _loadQuizPrefs(SharedPreferences prefs);
+
+  void _precomputeQuizEligiblePools();
+
+  List<EcoLine> _quizEligiblePool({
+    required GambitQuizMode mode,
+    required QuizDifficulty difficulty,
+  });
+
+  void _markGambitViewed(String name);
+
+  void _resetQuizToSetupState();
+
+  void _openGambitQuizFromAcademy();
+
+  Widget _buildMoveSequenceText(
+    String notation, {
+    double fontSize = 12,
+    Color color = Colors.white70,
+    FontWeight fontWeight = FontWeight.w600,
+    int? maxLines,
+    TextOverflow overflow = TextOverflow.clip,
+  });
+
+  Widget _buildGambitQuizScreen();
+
+  void _addLog(String message) {
+    setState(() {
+      _logs.add('${DateTime.now().toIso8601String()} - $message');
+      if (_logs.length > 200) {
+        _logs.removeAt(0);
+      }
+    });
+  }
+
+  bool get _shouldAnimateMainMenu =>
+      _activeSection == AppSection.menu && !_creditsDialogOpen;
+
+  @visibleForTesting
+  bool get debugMainMenuAnimationsActive => _shouldAnimateMainMenu;
+
+  void _scheduleEditModeHintHide() {
+    _editModeHintTimer?.cancel();
+    _editModeHintTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      setState(() {
+        _editModeHintText = null;
+      });
+    });
+  }
+
+  void _setAnalysisEditMode(bool enabled) {
+    final nextEnabled = enabled && _canUseAnalysisEditMode;
+    setState(() {
+      _analysisEditMode = nextEnabled;
+      _selectedEditToolboxPiece = null;
+      _editToolboxEraserSelected = false;
+      _holdSelectedFrom = null;
+      _gambitSelectedFrom = null;
+      _legalTargets.clear();
+      _gambitAvailableTargets.clear();
+      _editModeHintText = nextEnabled
+          ? 'Edit mode on'
+          : enabled && !_canUseAnalysisEditMode
+          ? 'Edit mode unavailable in head-to-head'
+          : 'Edit mode off';
+    });
+    _scheduleEditModeHintHide();
+  }
+
+  void _startIdleInterstitialTimer() {
+    _cancelIdleInterstitialTimer();
+  }
+
+  void _cancelIdleInterstitialTimer() {
+    _idleInterstitialTimer?.cancel();
+    _idleInterstitialTimer = null;
+  }
+
+  void _resetIdleTimer() {
+    _startIdleInterstitialTimer();
+  }
+
+  void _scheduleEditToolboxMetricsRefresh() {
+    if (_pendingEditToolboxMetricsRefresh || !_isAnalysisEditModeActive) {
+      return;
+    }
+    _pendingEditToolboxMetricsRefresh = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingEditToolboxMetricsRefresh = false;
+      if (!mounted || !_isAnalysisEditModeActive) {
+        return;
+      }
+      setState(() {});
+    });
+  }
+
+  void _handleQuizStudyMetricsChange() {}
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _scheduleEditToolboxMetricsRefresh();
+    _handleQuizStudyMetricsChange();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (!_isRemoteFriendMatchMode) {
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      _startRemoteFriendSyncTimers(immediateRefresh: true);
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _stopRemoteFriendSyncTimers();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadVsBotSetupPrefs();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+    _pulseController.addListener(_updateMenuSparks);
+    _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
+    _startIdleInterstitialTimer();
+    _menuSparkLastUpdate = DateTime.now();
+    _creditsBackdropLastUpdate = DateTime.now();
+    final random = Random();
+    _menuFloorSequenceSeed =
+        '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${random.nextInt(1 << 32).toRadixString(36)}';
+    const menuDotRadiusScale = 1.15;
+    _blueDotPhase = random.nextDouble() * 2 * pi;
+    _yellowDotPhase = random.nextDouble() * 2 * pi;
+    _blueDotSpeed = (0.28 + random.nextDouble() * 0.12) * 1.40;
+    _yellowDotSpeed = (0.25 + random.nextDouble() * 0.12) * 1.40;
+    _blueDotRadius = (0.58 + random.nextDouble() * 0.12) * menuDotRadiusScale;
+    _yellowDotRadius = (0.52 + random.nextDouble() * 0.12) * menuDotRadiusScale;
+    _blueDotTrajectoryNoise = random.nextDouble();
+    _yellowDotTrajectoryNoise = random.nextDouble();
+    _blueDotShapeSeed = random.nextDouble() * 3.2;
+    _yellowDotShapeSeed = random.nextDouble() * 3.2;
+    _menuCenterRotationA = 0.0;
+    _menuCenterRotationB = 0.0;
+    _menuCenterShapeSidesA = 4;
+    _menuCenterShapeSidesB = 5;
+    _menuCenterShapeChangeTimerA = 2.4 + random.nextDouble() * 2.0;
+    _menuCenterShapeChangeTimerB = 2.8 + random.nextDouble() * 1.8;
+    _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
+    _menuCenterLastUpdate = DateTime.now();
+    _menuCenterLastCollision = null;
+    _menuCenterCollisionStreakCount = 0;
+    _menuDotTime = 0.0;
+    _mainMenuSceneTime = 0.0;
+    _menuFloorActors.clear();
+    _menuFloorActionIndex = 0;
+    _menuFloorActorSerial = 0;
+    _menuFloorNextActionSceneTime = 0.0;
+    _menuFloorExitRowThreshold = 8.9;
+    _blueMenuDotPosition = Offset(
+      cos(_blueDotPhase) * 0.58,
+      sin(_blueDotPhase) * 0.56,
+    );
+    _yellowMenuDotPosition = Offset(
+      cos(_yellowDotPhase) * 0.54,
+      sin(_yellowDotPhase) * 0.52,
+    );
+    _blueMenuDotVelocity = Offset(
+      0.18 - random.nextDouble() * 0.32,
+      0.18 - random.nextDouble() * 0.32,
+    );
+    _yellowMenuDotVelocity = Offset(
+      0.18 - random.nextDouble() * 0.32,
+      0.18 - random.nextDouble() * 0.32,
+    );
+    _introController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 3315),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed && mounted) {
+            setState(() {
+              _introCompleted = true;
+            });
+            if (_isBotMatchMode &&
+                !_isHumanTurnInBotGame &&
+                !_botThinking &&
+                _gameOutcome == null) {
+              unawaited(_maybeTriggerBotMove());
+            }
+          }
+        });
+    _menuRevealController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _launchController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _extraLaunchController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _secondExtraLaunchController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _buttonRippleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _storeCoinGainController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _menuMusicFadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _sectionTransitionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _menuExitAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _openingButtonFlashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _historyScrollController = ScrollController();
+    _quizStudyLibraryScrollController = ScrollController();
+    _quizStudyLandscapeDetailScrollController = ScrollController();
+    _quizQuestionOptionsScrollController = ScrollController();
+    _resetBoard(withIntro: false);
+    _loadEcoOpenings();
+    _restoreSnapshotAndStart();
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      setState(() => _menuReady = true);
+      _menuRevealController.forward(from: 0);
+      _sectionTransitionController.forward(from: 0);
+    });
+  }
+
+  void _updateMenuSparks() {
+    final now = DateTime.now();
+    final last = _menuSparkLastUpdate ?? now;
+    final dt = now.difference(last).inMilliseconds / 1000.0;
+    _menuSparkLastUpdate = now;
+
+    _menuDotTime += dt;
+    if (_menuDotTime > 1e6) {
+      _menuDotTime %= 2 * pi;
+    }
+
+    if (_shouldAnimateMainMenu) {
+      _mainMenuSceneTime += dt;
+      if (_mainMenuSceneTime > 1e6) {
+        _mainMenuSceneTime %= 2 * pi;
+      }
+      _updateMenuFloorPieces();
+
+      final centerTime = _menuCenterLastUpdate == null
+          ? 0.0
+          : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
+      _menuCenterLastUpdate = now;
+      _menuCenterImpact = max(0.0, _menuCenterImpact - centerTime * 1.5);
+      _menuCenterSpinSpeed = max(
+        _menuCenterBaseSpinSpeed,
+        _menuCenterSpinSpeed - _menuCenterSpinDecayRate * centerTime,
+      );
+      _menuCenterRotationA += centerTime * _menuCenterSpinSpeed;
+      _menuCenterRotationB += centerTime * _menuCenterSpinSpeed;
+
+      _menuCenterShapeChangeTimerA -= centerTime;
+      _menuCenterShapeChangeTimerB -= centerTime;
+
+      if (_menuCenterShapeChangeTimerA <= 0.0) {
+        final rollA = _creditsBackdropRandom.nextDouble();
+        _menuCenterShapeSidesA = rollA < (1.0 / 31.0)
+            ? 5
+            : rollA < (16.0 / 31.0)
+            ? 0
+            : 4;
+        _menuCenterShapeChangeTimerA =
+            2.4 + _creditsBackdropRandom.nextDouble() * 2.0;
+      }
+      if (_menuCenterShapeChangeTimerB <= 0.0) {
+        final rollB = _creditsBackdropRandom.nextDouble();
+        _menuCenterShapeSidesB = rollB < (1.0 / 31.0)
+            ? 5
+            : rollB < (16.0 / 31.0)
+            ? 0
+            : 4;
+        _menuCenterShapeChangeTimerB =
+            2.8 + _creditsBackdropRandom.nextDouble() * 1.8;
+      }
+
+      final pulse = _mainMenuSceneTime;
+      final blueTargetAlignment = _menuDotAlignment(
+        _blueDotPhase,
+        _blueDotSpeed,
+        _blueDotRadius,
+        pulse,
+        _blueDotTrajectoryNoise,
+        _blueDotShapeSeed,
+        false,
+      );
+      final yellowTargetAlignment = _menuDotAlignment(
+        _yellowDotPhase,
+        _yellowDotSpeed,
+        _yellowDotRadius,
+        pulse,
+        _yellowDotTrajectoryNoise,
+        _yellowDotShapeSeed,
+        true,
+      );
+      final blueTarget = Offset(blueTargetAlignment.x, blueTargetAlignment.y);
+      final yellowTarget = Offset(
+        yellowTargetAlignment.x * -1.0,
+        yellowTargetAlignment.y,
+      );
+
+      final separation = _blueMenuDotPosition - _yellowMenuDotPosition;
+      final collisionDistance = separation.distance;
+      final currentlyColliding = collisionDistance < 0.045;
+      final reducedEffects =
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .accessibilityFeatures
+              .disableAnimations ||
+          _useReducedMenuWindowsVisualEffects;
+
+      if (currentlyColliding && !_menuDotsPreviouslyColliding) {
+        final collisionAge = _menuCenterLastCollision == null
+            ? double.infinity
+            : now.difference(_menuCenterLastCollision!).inMilliseconds / 1000.0;
+        if (collisionAge <= _menuCenterCollisionStreakWindow) {
+          _menuCenterCollisionStreakCount += 1;
+        } else {
+          _menuCenterCollisionStreakCount = 1;
+        }
+        _menuCenterLastCollision = now;
+
+        final collisionBonus = 1.4 + _menuCenterCollisionStreakCount * 0.55;
+        _menuCenterSpinSpeed = min(
+          _menuCenterSpinSpeed + collisionBonus,
+          _menuCenterMaxSpinSpeed,
+        );
+        _menuCenterImpact = min(
+          1.0,
+          _menuCenterImpact + 0.42 + _menuCenterCollisionStreakCount * 0.10,
+        );
+
+        final origin = Offset(
+          (_blueMenuDotPosition.dx + _yellowMenuDotPosition.dx) / 2,
+          (_blueMenuDotPosition.dy + _yellowMenuDotPosition.dy) / 2,
+        );
+        _spawnMenuCollisionParticles(origin, reducedEffects: reducedEffects);
+
+        unawaited(_lightHaptic());
+
+        final safeDistance = max(collisionDistance, 0.0001);
+        final direction = separation / safeDistance;
+        const repulsionStrength = 14.7;
+        final impulse =
+            direction * repulsionStrength +
+            Offset(-direction.dy, direction.dx) * 2.7;
+        _blueMenuDotVelocity += impulse;
+        _yellowMenuDotVelocity -= impulse;
+      }
+
+      _menuDotsPreviouslyColliding = currentlyColliding;
+
+      final blueCenter = _blueMenuDotPosition;
+      final yellowCenter = _yellowMenuDotPosition;
+      final blueSpring = (blueTarget - blueCenter) * 4.4;
+      final yellowSpring = (yellowTarget - yellowCenter) * 4.2;
+      final blueOrbit = Offset(-blueCenter.dy, blueCenter.dx) * 3.8;
+      final yellowOrbit = Offset(yellowCenter.dy, -yellowCenter.dx) * 3.7;
+      final blueTwist =
+          Offset(-_blueMenuDotVelocity.dy, _blueMenuDotVelocity.dx) * 2.4;
+      final yellowTwist =
+          Offset(_yellowMenuDotVelocity.dy, -_yellowMenuDotVelocity.dx) * 2.3;
+      final blueNoise = Offset(
+        sin(pulse * 3.1 + 1.7) * 0.28,
+        cos(pulse * 3.5 - 0.5) * 0.28,
+      );
       final yellowNoise = Offset(
         cos(pulse * 2.9 + 1.1) * 0.27,
         sin(pulse * 3.2 - 1.0) * 0.27,
@@ -4582,10 +4757,18 @@ class _MenuFloorActorState {
       return 0;
     }
 
+    return _remoteFriendDisplayedClockMsForSnapshot(snapshot, white: white);
+  }
+
+  int _remoteFriendDisplayedClockMsForSnapshot(
+    RemoteFriendMatchSnapshot snapshot, {
+    required bool white,
+  }) {
+
     final storedMs = white
         ? snapshot.whiteTimeRemainingMs
         : snapshot.blackTimeRemainingMs;
-    if (!_isRemoteFriendTimedMatch ||
+    if (snapshot.timeControl.isUntimed ||
         snapshot.status != RemoteFriendMatchStatus.active ||
         snapshot.outcome != null) {
       return max(0, storedMs);
@@ -4607,6 +4790,106 @@ class _MenuFloorActorState {
 
   Duration _remoteFriendDisplayedClock({required bool white}) {
     return Duration(milliseconds: _remoteFriendDisplayedClockMs(white: white));
+  }
+
+  RemoteFriendSeat? _remoteFriendPlayerSeatForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    final uid = _remoteFriendLocalUid;
+    if (uid == null || uid.isEmpty) {
+      return null;
+    }
+    if (snapshot.whiteUid == uid) {
+      return RemoteFriendSeat.white;
+    }
+    if (snapshot.blackUid == uid) {
+      return RemoteFriendSeat.black;
+    }
+    return null;
+  }
+
+  bool _remoteFriendPieceSelectionOpenForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    final deadline = snapshot.pieceSelectionDeadlineAt;
+    return snapshot.status == RemoteFriendMatchStatus.active &&
+        snapshot.outcome == null &&
+        deadline != null &&
+        DateTime.now().isBefore(deadline);
+  }
+
+  RemoteFriendInvite _remoteFriendInviteFromSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    return RemoteFriendInvite(
+      matchId: snapshot.matchId,
+      inviteCode: snapshot.inviteCode,
+      hostUid: snapshot.hostUid,
+      status: snapshot.status,
+      createdAt: snapshot.createdAt,
+      expiresAt: snapshot.expiresAt ?? snapshot.updatedAt,
+    );
+  }
+
+  bool _remoteFriendSnapshotNeedsAuthoritativeRefresh(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    final now = DateTime.now();
+    final expiresAt = snapshot.expiresAt;
+    if (snapshot.status == RemoteFriendMatchStatus.pending) {
+      return expiresAt != null && !now.isBefore(expiresAt);
+    }
+
+    if (snapshot.status != RemoteFriendMatchStatus.active ||
+        snapshot.outcome != null) {
+      return false;
+    }
+
+    final pieceSelectionDeadlineAt = snapshot.pieceSelectionDeadlineAt;
+    if (pieceSelectionDeadlineAt != null &&
+        !now.isBefore(pieceSelectionDeadlineAt)) {
+      return true;
+    }
+
+    if (expiresAt != null && !now.isBefore(expiresAt)) {
+      return true;
+    }
+
+    final activeSeat = snapshot.activeClockSeat;
+    if (snapshot.timeControl.isUntimed || activeSeat == null) {
+      return false;
+    }
+
+    return _remoteFriendDisplayedClockMsForSnapshot(
+          snapshot,
+          white: activeSeat == RemoteFriendSeat.white,
+        ) <=
+        0;
+  }
+
+  Duration _remoteFriendPollIntervalForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    if (snapshot.status == RemoteFriendMatchStatus.pending) {
+      return const Duration(seconds: 4);
+    }
+
+    if (snapshot.status != RemoteFriendMatchStatus.active ||
+        snapshot.outcome != null) {
+      return const Duration(seconds: 6);
+    }
+
+    if (_remoteFriendPieceSelectionOpenForSnapshot(snapshot)) {
+      return const Duration(seconds: 2);
+    }
+
+    final playerSeat = _remoteFriendPlayerSeatForSnapshot(snapshot);
+    final isPlayersTurn = playerSeat != null &&
+        ((playerSeat == RemoteFriendSeat.white && snapshot.whiteToMove) ||
+            (playerSeat == RemoteFriendSeat.black && !snapshot.whiteToMove));
+    return isPlayersTurn
+        ? const Duration(seconds: 4)
+        : const Duration(seconds: 2);
   }
 
   String _formatRemoteFriendMembershipTimestamp(DateTime updatedAt) {
@@ -4800,7 +5083,7 @@ class _MenuFloorActorState {
     if (snapshot.status == RemoteFriendMatchStatus.pending ||
         snapshot.status == RemoteFriendMatchStatus.active) {
       _remoteFriendPollTimer = Timer.periodic(
-        const Duration(seconds: 2),
+        _remoteFriendPollIntervalForSnapshot(snapshot),
         (_) => unawaited(_refreshRemoteFriendMatch(silent: true)),
       );
       if (immediateRefresh) {
@@ -5522,19 +5805,31 @@ class _MenuFloorActorState {
     _remoteFriendPollInFlight = true;
     try {
       final previousOutcome = _remoteFriendSnapshot?.outcome?.code;
-      final result = await RemoteFriendService.instance.refreshMatch(matchId);
+      final fetchedSnapshot = await RemoteFriendService.instance.fetchMatch(
+        matchId,
+      );
       if (!mounted) {
         return;
       }
+      var nextInvite = _remoteFriendInviteFromSnapshot(fetchedSnapshot);
+      var nextSnapshot = fetchedSnapshot;
+      if (_remoteFriendSnapshotNeedsAuthoritativeRefresh(fetchedSnapshot)) {
+        final result = await RemoteFriendService.instance.refreshMatch(matchId);
+        if (!mounted) {
+          return;
+        }
+        nextInvite = result.invite;
+        nextSnapshot = result.snapshot;
+      }
       setState(() {
         _applyRemoteFriendSnapshot(
-          invite: result.invite,
-          snapshot: result.snapshot,
+          invite: nextInvite,
+          snapshot: nextSnapshot,
         );
       });
       _startRemoteFriendSyncTimers();
 
-      final nextOutcome = result.snapshot.outcome?.code;
+      final nextOutcome = nextSnapshot.outcome?.code;
       if (previousOutcome == null && nextOutcome != null) {
         final gameOutcome = _remoteOutcomeToGameOutcome(nextOutcome);
         if (gameOutcome != null) {
@@ -5776,17 +6071,10 @@ class _MenuFloorActorState {
 
   RemoteFriendSeat? get _remoteFriendPlayerSeat {
     final snapshot = _remoteFriendSnapshot;
-    final uid = _remoteFriendLocalUid;
-    if (snapshot == null || uid == null || uid.isEmpty) {
+    if (snapshot == null) {
       return null;
     }
-    if (snapshot.whiteUid == uid) {
-      return RemoteFriendSeat.white;
-    }
-    if (snapshot.blackUid == uid) {
-      return RemoteFriendSeat.black;
-    }
-    return null;
+    return _remoteFriendPlayerSeatForSnapshot(snapshot);
   }
 
   bool get _isRemoteFriendPendingMatch =>
@@ -5801,10 +6089,11 @@ class _MenuFloorActorState {
       _remoteFriendSnapshot?.pieceSelectionDeadlineAt;
 
   bool get _isRemoteFriendPieceSelectionOpen {
-    final deadline = _remoteFriendPieceSelectionDeadline;
-    return _isRemoteFriendActiveMatch &&
-        deadline != null &&
-        DateTime.now().isBefore(deadline);
+    final snapshot = _remoteFriendSnapshot;
+    if (snapshot == null) {
+      return false;
+    }
+    return _remoteFriendPieceSelectionOpenForSnapshot(snapshot);
   }
 
   Duration get _remoteFriendPieceSelectionRemaining {
@@ -6721,7 +7010,7 @@ class _MenuFloorActorState {
         );
       }
 
-      // â”€â”€ Restore IAP-delivered non-consumable flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // ── Restore IAP-delivered non-consumable flags ────────────────────────
       if (await PurchaseService.instance.isOwned(IapProducts.resetBoardPass)) {
         _adFreeOwned = true;
       }
@@ -9699,10 +9988,10 @@ class _MenuFloorActorState {
       return '=';
     }
     if (_isWinningOutcomeForPov) {
-      return '+âˆž';
+      return '+∞';
     }
     if (_isLosingOutcomeForPov) {
-      return '-âˆž';
+      return '-∞';
     }
     return '${displayedEval > 0 ? '+' : ''}${displayedEval.toStringAsFixed(2)}';
   }
@@ -11355,7 +11644,7 @@ class _MenuFloorActorState {
                           ),
                         ),
                         Text(
-                          '$notation  Â·  ${gambits.length} line${gambits.length == 1 ? '' : 's'}',
+                          '$notation  ·  ${gambits.length} line${gambits.length == 1 ? '' : 's'}',
                           style: const TextStyle(
                             fontSize: 11,
                             color: Colors.white38,
@@ -15329,8 +15618,6 @@ class _MenuFloorActorState {
     final shortHeight = media.size.height <= 430;
     final chromePadding = compactWidth ? 12.0 : (isLandscape ? 16.0 : 20.0);
     final sectionGap = shortHeight ? 12.0 : 16.0;
-    final useTwoColumnLayout =
-        media.size.width >= 1280 && media.size.height >= 760;
 
     String botDifficultyLabel(BotDifficulty difficulty) {
       return switch (difficulty) {
@@ -15460,31 +15747,83 @@ class _MenuFloorActorState {
       );
     }
 
-    Widget buildMetricTile({
-      required String title,
+    Widget buildSnapshotTile({
+      required String label,
       required String value,
+      required String detail,
+      required IconData icon,
       required Color accent,
+      double minWidth = 148,
+      double maxWidth = 280,
     }) {
       return ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 120, maxWidth: 168),
+        constraints: BoxConstraints(minWidth: minWidth, maxWidth: maxWidth),
         child: buildInsetShell(
           accent: accent,
-          child: Column(
+          padding: const EdgeInsets.all(12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                value,
-                style: buildDisplayStyle(color: accent, size: 18, glow: false),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: _vsBotArcadePanelDecoration(
+                  palette: arcade,
+                  accent: accent,
+                  radius: 12,
+                  borderWidth: 1.8,
+                  inset: true,
+                  elevated: false,
+                  fillColor: Color.alphaBlend(
+                    accent.withValues(
+                      alpha: arcade.monochrome ? 0.10 : (isDark ? 0.18 : 0.14),
+                    ),
+                    arcade.panelAlt,
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: _vsBotReadableAccentColor(accent, arcade),
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: buildHudStyle(
-                  color: arcade.textMuted,
-                  size: 10.6,
-                  weight: FontWeight.w800,
-                  letterSpacing: 0.76,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: buildHudStyle(
+                        color: accent,
+                        size: 10.4,
+                        weight: FontWeight.w800,
+                        letterSpacing: 0.72,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: buildDisplayStyle(
+                        color: accent,
+                        size: 17.5,
+                        glow: false,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: buildBodyStyle(
+                        color: arcade.textMuted,
+                        size: 11.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -15515,6 +15854,7 @@ class _MenuFloorActorState {
           weight: FontWeight.w800,
           letterSpacing: 0.62,
         ),
+        minimumSize: const Size(0, 48),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         side: BorderSide(color: accent.withValues(alpha: 0.54)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -15605,6 +15945,26 @@ class _MenuFloorActorState {
       );
     }
 
+    Widget buildSectionPanel({
+      required String title,
+      required Color accent,
+      required Widget child,
+      EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+    }) {
+      return buildInsetShell(
+        accent: accent,
+        padding: padding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildSectionTitle(title, accent),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
+      );
+    }
+
     Widget buildCardHeader({
       required String label,
       required String title,
@@ -15633,6 +15993,14 @@ class _MenuFloorActorState {
           );
         },
       );
+    }
+
+    String remoteSeatPreferenceLabel(RemoteFriendSeatPreference preference) {
+      return switch (preference) {
+        RemoteFriendSeatPreference.random => 'Random Seat',
+        RemoteFriendSeatPreference.white => 'White Pieces',
+        RemoteFriendSeatPreference.black => 'Black Pieces',
+      };
     }
 
     Color remoteMembershipAccent(RemoteFriendMatchStatus status) {
@@ -15703,16 +16071,19 @@ class _MenuFloorActorState {
                     ],
                   ),
                 const SizedBox(height: 12),
-                buildActionButton(
-                  label: remoteMembershipActionLabel(membership.status),
-                  icon: Icons.open_in_new_rounded,
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(
-                          _openRemoteFriendMatch(membership.matchId),
-                        ),
-                  accent: accent,
-                  filled: false,
+                SizedBox(
+                  width: double.infinity,
+                  child: buildActionButton(
+                    label: remoteMembershipActionLabel(membership.status),
+                    icon: Icons.open_in_new_rounded,
+                    onPressed: _remoteFriendOperationInProgress
+                        ? null
+                        : () => unawaited(
+                            _openRemoteFriendMatch(membership.matchId),
+                          ),
+                    accent: accent,
+                    filled: false,
+                  ),
                 ),
               ],
             );
@@ -15721,7 +16092,317 @@ class _MenuFloorActorState {
       );
     }
 
+    Widget buildRemoteInfoRow({
+      required String title,
+      required String body,
+      required IconData icon,
+      required Color accent,
+    }) {
+      return buildInsetShell(
+        accent: accent,
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: _vsBotArcadePanelDecoration(
+                palette: arcade,
+                accent: accent,
+                radius: 12,
+                borderWidth: 1.8,
+                inset: true,
+                elevated: false,
+                fillColor: Color.alphaBlend(
+                  accent.withValues(
+                    alpha: arcade.monochrome ? 0.10 : (isDark ? 0.18 : 0.14),
+                  ),
+                  arcade.panelAlt,
+                ),
+              ),
+              child: Icon(
+                icon,
+                size: 17,
+                color: _vsBotReadableAccentColor(accent, arcade),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: buildHudStyle(
+                      color: accent,
+                      size: 10.8,
+                      weight: FontWeight.w800,
+                      letterSpacing: 0.74,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    body,
+                    style: buildBodyStyle(
+                      color: arcade.textMuted,
+                      size: 11.6,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildRemoteLifecycleRow({
+      required String label,
+      required String detail,
+      required IconData icon,
+      required Color accent,
+    }) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: _vsBotArcadePanelDecoration(
+              palette: arcade,
+              accent: accent,
+              radius: 11,
+              borderWidth: 1.6,
+              inset: true,
+              elevated: false,
+              fillColor: Color.alphaBlend(
+                accent.withValues(
+                  alpha: arcade.monochrome ? 0.08 : (isDark ? 0.16 : 0.12),
+                ),
+                arcade.panelAlt,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 15,
+              color: _vsBotReadableAccentColor(accent, arcade),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: buildHudStyle(
+                    color: accent,
+                    size: 10.5,
+                    weight: FontWeight.w800,
+                    letterSpacing: 0.68,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  detail,
+                  style: buildBodyStyle(
+                    color: arcade.textMuted,
+                    size: 11.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    Future<void> showRemoteMatchInfoDialog() async {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          final dialogMedia = MediaQuery.of(dialogContext);
+          final compactDialog =
+              dialogMedia.size.width <= 420 || dialogMedia.size.height <= 620;
+
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: compactDialog ? 12 : 20,
+              vertical: compactDialog ? 12 : 24,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 560,
+                maxHeight: min(dialogMedia.size.height * 0.9, 760.0),
+              ),
+              child: buildCardShell(
+                accent: remoteAccent,
+                emphasized: true,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                buildTag(
+                                  'CROSS-DEVICE 1V1',
+                                  remoteAccent,
+                                  icon: Icons.info_outline_rounded,
+                                  filled: true,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'How Private Match Works',
+                                  style: buildDisplayStyle(
+                                    color: arcade.text,
+                                    size: compactDialog ? 24 : 28,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Compact overview of fairness, private invite flow, and how long remote matches stay on the server before cleanup removes them.',
+                                  style: buildBodyStyle(
+                                    color: arcade.textMuted,
+                                    size: 11.8,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildVsBotControlButton(
+                            icon: Icons.close_rounded,
+                            onTap: () => Navigator.of(dialogContext).pop(),
+                            accent: remoteAccent,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          buildTag(
+                            'PRIVATE CODE',
+                            remoteAccent,
+                            icon: Icons.password_rounded,
+                          ),
+                          buildTag(
+                            'SERVER VALIDATED',
+                            arcade.cyan,
+                            icon: Icons.verified_outlined,
+                          ),
+                          buildTag(
+                            'AUTO CLEANUP',
+                            arcade.amber,
+                            icon: Icons.auto_delete_rounded,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      buildRemoteInfoRow(
+                        title: 'START FLOW',
+                        body:
+                            'Create a private code, your friend joins from another device, colors are assigned, and each player gets 10 seconds to choose a skin for only their own color. If no choice is made, the default skin is used.',
+                        icon: Icons.link_rounded,
+                        accent: remoteAccent,
+                      ),
+                      const SizedBox(height: 12),
+                      buildRemoteInfoRow(
+                        title: 'FAIR MATCH',
+                        body:
+                            'Moves, turn order, draw and resign actions, clocks, and end conditions are validated on the server. Illegal moves are rejected before the shared match state updates.',
+                        icon: Icons.shield_moon_outlined,
+                        accent: arcade.cyan,
+                      ),
+                      const SizedBox(height: 12),
+                      buildSectionTitle('SERVER LIFECYCLE', remoteAccent),
+                      const SizedBox(height: 10),
+                      buildInsetShell(
+                        accent: remoteAccent,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            buildRemoteLifecycleRow(
+                              label: 'PENDING INVITE | UP TO 24 HOURS',
+                              detail:
+                                  'Pending invites stay pending for up to 24 hours.',
+                              icon: Icons.schedule_rounded,
+                              accent: arcade.amber,
+                            ),
+                            const SizedBox(height: 10),
+                            buildRemoteLifecycleRow(
+                              label: 'ACTIVE MATCH | UP TO 24 HOURS',
+                              detail:
+                                  'Active matches stay active for up to 24 hours since the last authoritative server event.',
+                              icon: Icons.sync_rounded,
+                              accent: remoteAccent,
+                            ),
+                            const SizedBox(height: 10),
+                            buildRemoteLifecycleRow(
+                              label: 'COMPLETED MATCH | 24 HOURS',
+                              detail:
+                                  'Completed matches stay available for 24 hours after finish, then the cleanup job deletes them.',
+                              icon: Icons.emoji_events_outlined,
+                              accent: const Color(0xFF58E09A),
+                            ),
+                            const SizedBox(height: 10),
+                            buildRemoteLifecycleRow(
+                              label: 'CANCELLED OR EXPIRED | 6 HOURS',
+                              detail:
+                                  'Cancelled or expired matches stay for 6 hours after they become terminal, then the cleanup job deletes them.',
+                              icon: Icons.hourglass_disabled_rounded,
+                              accent: arcade.crimson,
+                            ),
+                            const SizedBox(height: 10),
+                            buildRemoteLifecycleRow(
+                              label: 'CLEANUP SWEEP | EVERY 5 MINUTES',
+                              detail:
+                                  'The cleanup job runs every 5 minutes, so actual removal usually happens within one scheduler cycle after the retention window.',
+                              icon: Icons.cleaning_services_outlined,
+                              accent: arcade.cyan,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      buildInsetShell(
+                        accent: remoteAccent,
+                        child: Text(
+                          'If a code has already expired or cleanup removed a terminal match, just create a fresh invite. The recent private matches list helps you reopen matches that are still inside their retention window.',
+                          style: buildBodyStyle(
+                            color: arcade.textMuted,
+                            size: 11.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     Widget buildHeroPanel() {
+      final localTimeSummary = selectedLocalFriendTimeControl.initialTime == null
+          ? 'Untimed'
+          : _formatLocalFriendTimeControl(selectedLocalFriendTimeControl);
+      final remoteTimeSummary = selectedRemoteFriendTimeControl.isUntimed
+          ? 'Untimed Invite'
+          : _formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl);
+      final selectedBot = _selectedBot;
+
       return buildCardShell(
         accent: heroAccent,
         emphasized: true,
@@ -15780,60 +16461,53 @@ class _MenuFloorActorState {
                 if (compact) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'Choose The Arena',
+                    'Choose Your Match',
                     style: buildDisplayStyle(color: arcade.text, size: 30),
                   ),
                 ],
                 const SizedBox(height: 8),
                 Text(
-                  'Battle the bot, pass the phone across the table, or launch a private invite. This screen now uses the tighter arcade panel language from the tuned bot selector so portrait and landscape stay scrollable instead of spilling out.',
+                  'Jump into bot play, local pass-and-play, or a private cross-device match from one cleaner control hub. The layout stays tight on phones and opens up into a clearer grid on larger screens.',
                   style: buildBodyStyle(color: arcade.textMuted, size: 12.2),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    buildTag(
-                      'VS BOT',
-                      arcade.cyan,
-                      icon: Icons.smart_toy_outlined,
-                    ),
-                    buildTag(
-                      'LOCAL 1V1',
-                      arcade.amber,
-                      icon: Icons.people_alt_outlined,
-                    ),
-                    buildTag(
-                      'PRIVATE CODE',
-                      remoteAccent,
-                      icon: Icons.wifi_tethering_rounded,
-                    ),
-                  ],
                 ),
               ],
             );
 
-            final metrics = Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                buildMetricTile(
-                  title: 'SOLO',
-                  value: 'BOT',
-                  accent: arcade.cyan,
-                ),
-                buildMetricTile(
-                  title: 'LOCAL',
-                  value: '1V1',
-                  accent: arcade.amber,
-                ),
-                buildMetricTile(
-                  title: 'REMOTE',
-                  value: 'CODE',
-                  accent: remoteAccent,
-                ),
-              ],
+            final summaryPanel = buildSectionPanel(
+              title: 'LIVE PRESETS',
+              accent: heroAccent,
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  buildSnapshotTile(
+                    label: 'VS BOT',
+                    value: botDifficultyLabel(_selectedBotDifficulty),
+                    detail: selectedBot == null
+                        ? 'Pick an opponent and tune the pressure.'
+                        : selectedBot.name,
+                    icon: Icons.smart_toy_outlined,
+                    accent: arcade.cyan,
+                  ),
+                  buildSnapshotTile(
+                    label: 'LOCAL 1V1',
+                    value: localTimeSummary,
+                    detail:
+                        'Single-device play with a fixed board orientation.',
+                    icon: Icons.people_alt_outlined,
+                    accent: arcade.amber,
+                  ),
+                  buildSnapshotTile(
+                    label: 'REMOTE',
+                    value: remoteSeatPreferenceLabel(
+                      _remoteFriendSeatPreference,
+                    ),
+                    detail: remoteTimeSummary,
+                    icon: Icons.wifi_tethering_rounded,
+                    accent: remoteAccent,
+                  ),
+                ],
+              ),
             );
 
             if (compact) {
@@ -15842,9 +16516,7 @@ class _MenuFloorActorState {
                 children: [
                   lead,
                   const SizedBox(height: 14),
-                  buildSectionTitle('ARENAS', heroAccent),
-                  const SizedBox(height: 10),
-                  metrics,
+                  summaryPanel,
                 ],
               );
             }
@@ -15854,17 +16526,7 @@ class _MenuFloorActorState {
               children: [
                 Expanded(flex: 6, child: lead),
                 const SizedBox(width: 16),
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      buildSectionTitle('ARENAS', heroAccent),
-                      const SizedBox(height: 10),
-                      metrics,
-                    ],
-                  ),
-                ),
+                Expanded(flex: 5, child: summaryPanel),
               ],
             );
           },
@@ -15888,11 +16550,11 @@ class _MenuFloorActorState {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             buildCardHeader(
-              label: 'BOT SELECTOR',
-              title: 'VS BOT',
+              label: 'BOT MATCH',
+              title: 'Play vs Bot',
               subtitle:
                   selectedBot?.description ??
-                  'Open the tuned bot selector to choose a character, your side, and the match pressure before the board loads.',
+                  'Open the refined setup flow to choose an opponent, your side, and the match pressure before the board loads.',
               icon: Icons.smart_toy_outlined,
               accent: accent,
             ),
@@ -15907,49 +16569,50 @@ class _MenuFloorActorState {
                   icon: Icons.bolt_rounded,
                 ),
                 buildTag('SIDE PICK', arcade.amber, icon: Icons.flag_outlined),
-                buildTag('TUNED UI', arcade.cyan, icon: Icons.tune_rounded),
+                buildTag(
+                  'QUICK SETUP',
+                  arcade.cyan,
+                  icon: Icons.tune_rounded,
+                ),
               ],
-            ),
-            const SizedBox(height: 12),
-            buildInsetShell(
-              accent: difficultyAccent,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    selectedBot == null
-                        ? 'Ready to configure'
-                        : '${selectedBot.name} is queued',
-                    style: buildDisplayStyle(
-                      color: difficultyAccent,
-                      size: 18,
-                      glow: false,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    selectedBot == null
-                        ? 'Jump straight into the same refined setup flow the bot mode has already been tuned around.'
-                        : 'Current difficulty: ${botDifficultyLabel(_selectedBotDifficulty)}. Reopen the selector any time to change bot, side, or pressure.',
-                    style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
-                buildActionButton(
-                  label: selectedBot == null
-                      ? 'Open Bot Selector'
-                      : 'Retune Bot Match',
-                  icon: Icons.arrow_forward_rounded,
-                  onPressed: _openBotSetupFromMenu,
+                buildSnapshotTile(
+                  label: 'BOT',
+                  value: selectedBot?.name ?? 'Select Bot',
+                  detail: selectedBot?.description ??
+                      'Choose a character profile before you launch the board.',
+                  icon: Icons.smart_toy_outlined,
                   accent: accent,
+                  minWidth: 170,
+                ),
+                buildSnapshotTile(
+                  label: 'PRESSURE',
+                  value: botDifficultyLabel(_selectedBotDifficulty),
+                  detail: selectedBot == null
+                      ? 'Difficulty, side, and pacing are all set before launch.'
+                      : 'Reopen setup any time to retune difficulty or side.',
+                  icon: Icons.bolt_rounded,
+                  accent: difficultyAccent,
+                  minWidth: 170,
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: buildActionButton(
+                label: selectedBot == null
+                    ? 'Open Bot Selector'
+                    : 'Retune Bot Match',
+                icon: Icons.arrow_forward_rounded,
+                onPressed: _openBotSetupFromMenu,
+                accent: accent,
+              ),
             ),
           ],
         ),
@@ -15960,6 +16623,62 @@ class _MenuFloorActorState {
       final summaryLabel = selectedLocalFriendTimeControl.initialTime == null
           ? 'Untimed'
           : _formatLocalFriendTimeControl(selectedLocalFriendTimeControl);
+      final timeControlPanel = buildSectionPanel(
+        title: 'TIME CONTROL',
+        accent: arcade.amber,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (
+              int index = 0;
+              index < _localFriendTimeControls.length;
+              index++
+            )
+              buildChoiceChip(
+                label: _formatLocalFriendTimeControl(
+                  _localFriendTimeControls[index],
+                ),
+                selected: _localFriendTimeControlIndex == index,
+                onSelected: (_) {
+                  unawaited(_setLocalFriendTimeControlIndex(index));
+                },
+                accent: arcade.amber,
+              ),
+          ],
+        ),
+      );
+      final summaryPanel = buildSectionPanel(
+        title: 'MATCH SNAPSHOT',
+        accent: arcade.amber,
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            buildSnapshotTile(
+              label: 'CLOCK',
+              value: summaryLabel,
+              detail: selectedLocalFriendTimeControl.initialTime == null
+                  ? 'Untimed pass-and-play on a single board.'
+                  : 'Both players share one device with the same start time.',
+              icon: Icons.timer_outlined,
+              accent: arcade.amber,
+              minWidth: 170,
+              maxWidth: 240,
+            ),
+            buildSnapshotTile(
+              label: 'BOARD',
+              value: 'Fixed Orientation',
+              detail:
+                  'The board stays anchored for both players across the table.',
+              icon: Icons.stay_current_portrait_rounded,
+              accent: arcade.amber,
+              minWidth: 170,
+              maxWidth: 240,
+            ),
+          ],
+        ),
+      );
 
       return buildCardShell(
         accent: arcade.amber,
@@ -15967,10 +16686,10 @@ class _MenuFloorActorState {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             buildCardHeader(
-              label: 'SOFA BATTLE',
-              title: '1V1 ON THIS PHONE',
+              label: 'LOCAL MATCH',
+              title: '1v1 on This Device',
               subtitle:
-                  'Two players, one device, fixed board orientation, and a setup that stays compact on portrait and landscape screens.',
+                  'Two players, one device, fixed board orientation, and optional clocks in a cleaner pass-and-play setup.',
               icon: Icons.people_alt_outlined,
               accent: arcade.amber,
             ),
@@ -15997,67 +16716,39 @@ class _MenuFloorActorState {
               ],
             ),
             const SizedBox(height: 12),
-            buildSectionTitle('TIME CONTROL', arcade.amber),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (
-                  int index = 0;
-                  index < _localFriendTimeControls.length;
-                  index++
-                )
-                  buildChoiceChip(
-                    label: _formatLocalFriendTimeControl(
-                      _localFriendTimeControls[index],
-                    ),
-                    selected: _localFriendTimeControlIndex == index,
-                    onSelected: (_) {
-                      unawaited(_setLocalFriendTimeControlIndex(index));
-                    },
-                    accent: arcade.amber,
-                  ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 620;
+                if (!wide) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      timeControlPanel,
+                      const SizedBox(height: 12),
+                      summaryPanel,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 6, child: timeControlPanel),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 5, child: summaryPanel),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 12),
-            buildInsetShell(
-              accent: arcade.amber,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  buildTag('BOARD READY', arcade.amber, filled: true),
-                  const SizedBox(height: 10),
-                  Text(
-                    summaryLabel,
-                    style: buildDisplayStyle(
-                      color: arcade.amber,
-                      size: 22,
-                      glow: false,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    selectedLocalFriendTimeControl.initialTime == null
-                        ? 'Stationary 1v1 without a clock. White opens, black answers, and the board stays anchored for both players.'
-                        : 'Both sides start with ${_formatLocalFriendTimeControl(selectedLocalFriendTimeControl)}. White moves first and the board never flips away from the table setup.',
-                    style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
-                  ),
-                ],
+            SizedBox(
+              width: double.infinity,
+              child: buildActionButton(
+                label: 'Start Local 1V1',
+                icon: Icons.play_arrow_rounded,
+                onPressed: () => unawaited(_startLocalFriendMatch()),
+                accent: arcade.amber,
               ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                buildActionButton(
-                  label: 'Start Local 1V1',
-                  icon: Icons.play_arrow_rounded,
-                  onPressed: () => unawaited(_startLocalFriendMatch()),
-                  accent: arcade.amber,
-                ),
-              ],
             ),
           ],
         ),
@@ -16065,6 +16756,152 @@ class _MenuFloorActorState {
     }
 
     Widget buildRemoteModeCard() {
+      Widget buildRecentMatchesContent() {
+        if (_remoteFriendMemberships.isEmpty) {
+          return Text(
+            _remoteFriendMembershipsLoading
+                ? 'Checking your recent private matches...'
+                : _remoteFriendLastError == null
+                ? 'No private remote matches yet. Create an invite or join a friend with a code.'
+                : 'Remote matches could not be refreshed just now. You can still create or join an invite above.',
+            style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
+          );
+        }
+
+        if (_remoteFriendMemberships.length <= 3) {
+          return Column(
+            children: List<Widget>.generate(
+              _remoteFriendMemberships.length,
+              (index) => Padding(
+                padding: EdgeInsets.only(
+                  bottom: index == _remoteFriendMemberships.length - 1 ? 0 : 10,
+                ),
+                child: buildRemoteMembershipTile(_remoteFriendMemberships[index]),
+              ),
+              growable: false,
+            ),
+          );
+        }
+
+        final listHeight = min(
+          336.0,
+          96.0 * _remoteFriendMemberships.length,
+        );
+
+        return SizedBox(
+          height: listHeight,
+          child: Scrollbar(
+            child: ListView.separated(
+              primary: false,
+              padding: EdgeInsets.zero,
+              itemCount: _remoteFriendMemberships.length,
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                return buildRemoteMembershipTile(_remoteFriendMemberships[index]);
+              },
+            ),
+          ),
+        );
+      }
+
+      final remoteSnapshotPanel = buildSectionPanel(
+        title: 'MATCH SNAPSHOT',
+        accent: remoteAccent,
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            buildSnapshotTile(
+              label: 'CLOCK',
+              value: selectedRemoteFriendTimeControl.isUntimed
+                  ? 'Untimed Invite'
+                  : _formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl),
+              detail: 'Server-synced time state across both devices.',
+              icon: Icons.timer_outlined,
+              accent: remoteAccent,
+              minWidth: 170,
+            ),
+            buildSnapshotTile(
+              label: 'SEAT',
+              value: remoteSeatPreferenceLabel(_remoteFriendSeatPreference),
+              detail: 'Your color request is applied before piece selection opens.',
+              icon: Icons.flag_outlined,
+              accent: remoteAccent,
+              minWidth: 170,
+            ),
+            buildSnapshotTile(
+              label: 'RETENTION',
+              value: '24h / 6h Cleanup',
+              detail: 'Finished or expired matches are swept away automatically.',
+              icon: Icons.auto_delete_rounded,
+              accent: arcade.amber,
+              minWidth: 170,
+            ),
+          ],
+        ),
+      );
+      final timeControlPanel = buildSectionPanel(
+        title: 'TIME CONTROL',
+        accent: remoteAccent,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (
+              int index = 0;
+              index < _localFriendTimeControls.length;
+              index++
+            )
+              buildChoiceChip(
+                label: _formatRemoteFriendTimeControl(
+                  RemoteFriendTimeControl(
+                    initialSeconds:
+                        _localFriendTimeControls[index].initialTime?.inSeconds ??
+                        0,
+                    incrementSeconds:
+                        _localFriendTimeControls[index].increment.inSeconds,
+                  ),
+                ),
+                selected: _localFriendTimeControlIndex == index,
+                onSelected: _remoteFriendOperationInProgress
+                    ? null
+                    : (_) {
+                        unawaited(_setLocalFriendTimeControlIndex(index));
+                      },
+                accent: remoteAccent,
+              ),
+          ],
+        ),
+      );
+      final seatPreferencePanel = buildSectionPanel(
+        title: 'SEAT PREFERENCE',
+        accent: remoteAccent,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final entry in <(RemoteFriendSeatPreference, String)>[
+              (RemoteFriendSeatPreference.random, 'Random'),
+              (RemoteFriendSeatPreference.white, 'White'),
+              (RemoteFriendSeatPreference.black, 'Black'),
+            ])
+              buildChoiceChip(
+                label: entry.$2,
+                selected: _remoteFriendSeatPreference == entry.$1,
+                onSelected: _remoteFriendOperationInProgress
+                    ? null
+                    : (_) {
+                        setState(() {
+                          _remoteFriendSeatPreference = entry.$1;
+                        });
+                      },
+                accent: remoteAccent,
+              ),
+          ],
+        ),
+      );
+
       return buildCardShell(
         accent: remoteAccent,
         emphasized: true,
@@ -16072,94 +16909,139 @@ class _MenuFloorActorState {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             buildCardHeader(
-              label: 'PRIVATE LINK',
-              title: 'FRIEND ON ANOTHER PHONE',
+              label: 'PRIVATE MATCH',
+              title: 'Cross-Device 1v1',
               subtitle:
-                  'Invite-only play across devices with server-validated rules, synced clocks, and a compact lobby that stays usable on mobile.',
+                  'Invite-only play across devices with server validation, synced clocks, and a cleaner lobby that stays usable on mobile.',
               icon: Icons.wifi_tethering_rounded,
               accent: remoteAccent,
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                buildTag(
-                  'PRIVATE CODE',
-                  remoteAccent,
-                  icon: Icons.password_rounded,
-                ),
-                buildTag(
-                  'SERVER RULES',
-                  remoteAccent,
-                  icon: Icons.verified_outlined,
-                ),
-                buildTag(
-                  'SYNCED CLOCKS',
-                  remoteAccent,
-                  icon: Icons.sync_alt_rounded,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            buildSectionTitle('TIME CONTROL', remoteAccent),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (
-                  int index = 0;
-                  index < _localFriendTimeControls.length;
-                  index++
-                )
-                  buildChoiceChip(
-                    label: _formatRemoteFriendTimeControl(
-                      RemoteFriendTimeControl(
-                        initialSeconds:
-                            _localFriendTimeControls[index]
-                                .initialTime
-                                ?.inSeconds ??
-                            0,
-                        incrementSeconds:
-                            _localFriendTimeControls[index].increment.inSeconds,
-                      ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final modeTags = Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    buildTag(
+                      'INVITE ONLY',
+                      remoteAccent,
+                      icon: Icons.password_rounded,
                     ),
-                    selected: _localFriendTimeControlIndex == index,
-                    onSelected: _remoteFriendOperationInProgress
-                        ? null
-                        : (_) {
-                            unawaited(_setLocalFriendTimeControlIndex(index));
-                          },
+                    buildTag(
+                      'SERVER RULES',
+                      remoteAccent,
+                      icon: Icons.verified_outlined,
+                    ),
+                    buildTag(
+                      'SYNCED CLOCKS',
+                      remoteAccent,
+                      icon: Icons.sync_alt_rounded,
+                    ),
+                  ],
+                );
+                final infoPod = _buildVsBotActionPod(
+                  label: 'Guide',
+                  accent: remoteAccent,
+                  control: _buildVsBotControlButton(
+                    icon: Icons.info_outline_rounded,
+                    onTap: () => unawaited(showRemoteMatchInfoDialog()),
                     accent: remoteAccent,
                   ),
-              ],
+                );
+
+                if (constraints.maxWidth < 470) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      modeTags,
+                      const SizedBox(height: 10),
+                      infoPod,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: modeTags),
+                    const SizedBox(width: 12),
+                    infoPod,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 12),
-            buildSectionTitle('SEAT PREFERENCE', remoteAccent),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final entry in <(RemoteFriendSeatPreference, String)>[
-                  (RemoteFriendSeatPreference.random, 'Random'),
-                  (RemoteFriendSeatPreference.white, 'White'),
-                  (RemoteFriendSeatPreference.black, 'Black'),
-                ])
-                  buildChoiceChip(
-                    label: entry.$2,
-                    selected: _remoteFriendSeatPreference == entry.$1,
-                    onSelected: _remoteFriendOperationInProgress
+            remoteSnapshotPanel,
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 650;
+                if (!wide) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      timeControlPanel,
+                      const SizedBox(height: 12),
+                      seatPreferencePanel,
+                    ],
+                  );
+                }
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: timeControlPanel),
+                    const SizedBox(width: 12),
+                    Expanded(child: seatPreferencePanel),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            buildSectionPanel(
+              title: 'LOBBY ACTIONS',
+              accent: remoteAccent,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final createInviteButton = buildActionButton(
+                    label: 'Create Invite',
+                    icon: Icons.add_link_rounded,
+                    onPressed: _remoteFriendOperationInProgress
                         ? null
-                        : (_) {
-                            setState(() {
-                              _remoteFriendSeatPreference = entry.$1;
-                            });
-                          },
+                        : () => unawaited(_createRemoteFriendInvite()),
                     accent: remoteAccent,
-                  ),
-              ],
+                  );
+                  final joinCodeButton = buildActionButton(
+                    label: 'Join Code',
+                    icon: Icons.key_rounded,
+                    onPressed: _remoteFriendOperationInProgress
+                        ? null
+                        : () => unawaited(_joinRemoteFriendInvite()),
+                    accent: remoteAccent,
+                    filled: false,
+                  );
+
+                  if (constraints.maxWidth < 470) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(width: double.infinity, child: createInviteButton),
+                        const SizedBox(height: 10),
+                        SizedBox(width: double.infinity, child: joinCodeButton),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: createInviteButton),
+                      const SizedBox(width: 10),
+                      Expanded(child: joinCodeButton),
+                    ],
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 12),
             buildInsetShell(
@@ -16167,126 +17049,37 @@ class _MenuFloorActorState {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  buildTag('MATCH PROFILE', remoteAccent, filled: true),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  Row(
                     children: [
-                      buildTag(
-                        selectedRemoteFriendTimeControl.isUntimed
-                            ? 'UNTIMED'
-                            : _formatRemoteFriendTimeControl(
-                                selectedRemoteFriendTimeControl,
-                              ).toUpperCase(),
-                        remoteAccent,
-                        icon: Icons.timer_outlined,
+                      Expanded(
+                        child: buildSectionTitle(
+                          'RECENT PRIVATE MATCHES',
+                          remoteAccent,
+                        ),
                       ),
-                      buildTag(
-                        switch (_remoteFriendSeatPreference) {
-                          RemoteFriendSeatPreference.random => 'SEAT RANDOM',
-                          RemoteFriendSeatPreference.white => 'SEAT WHITE',
-                          RemoteFriendSeatPreference.black => 'SEAT BLACK',
-                        },
-                        remoteAccent,
-                        icon: Icons.flag_outlined,
-                      ),
+                      const SizedBox(width: 8),
+                      if (_remoteFriendMembershipsLoading)
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: remoteAccent,
+                          ),
+                        )
+                      else
+                        _buildVsBotControlButton(
+                          icon: Icons.refresh_rounded,
+                          onTap: () => unawaited(_loadRemoteFriendMemberships()),
+                          accent: remoteAccent,
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    selectedRemoteFriendTimeControl.isUntimed
-                        ? 'Create an untimed invite, or switch to a clocked match before sharing the code.'
-                        : 'Private invites start with ${_formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl)} and keep both clocks synchronized for both players.',
-                    style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
-                  ),
+                  const SizedBox(height: 10),
+                  buildRecentMatchesContent(),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                buildActionButton(
-                  label: 'Create Invite',
-                  icon: Icons.add_link_rounded,
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(_createRemoteFriendInvite()),
-                  accent: remoteAccent,
-                ),
-                buildActionButton(
-                  label: 'Join Code',
-                  icon: Icons.key_rounded,
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(_joinRemoteFriendInvite()),
-                  accent: remoteAccent,
-                  filled: false,
-                ),
-                buildActionButton(
-                  label: 'Refresh List',
-                  icon: Icons.refresh_rounded,
-                  onPressed: _remoteFriendMembershipsLoading
-                      ? null
-                      : () => unawaited(_loadRemoteFriendMemberships()),
-                  accent: remoteAccent,
-                  filled: false,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: buildSectionTitle(
-                    'RECENT PRIVATE MATCHES',
-                    remoteAccent,
-                  ),
-                ),
-                if (_remoteFriendMembershipsLoading) ...[
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: remoteAccent,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 10),
-            if (_remoteFriendMemberships.isEmpty &&
-                !_remoteFriendMembershipsLoading)
-              buildInsetShell(
-                accent: remoteAccent,
-                child: Text(
-                  _remoteFriendLastError == null
-                      ? 'No private remote matches yet. Create an invite or join a friend with a code.'
-                      : 'Remote matches could not be refreshed just now. You can still create or join an invite above.',
-                  style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
-                ),
-              )
-            else
-              Column(
-                children: List<Widget>.generate(
-                  _remoteFriendMemberships.length,
-                  (index) => Padding(
-                    padding: EdgeInsets.only(
-                      bottom: index == _remoteFriendMemberships.length - 1
-                          ? 0
-                          : 10,
-                    ),
-                    child: buildRemoteMembershipTile(
-                      _remoteFriendMemberships[index],
-                    ),
-                  ),
-                  growable: false,
-                ),
-              ),
           ],
         ),
       );
@@ -16371,7 +17164,7 @@ class _MenuFloorActorState {
                     child: Align(
                       alignment: Alignment.topCenter,
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1080),
+                        constraints: const BoxConstraints(maxWidth: 1160),
                         child: SingleChildScrollView(
                           padding: EdgeInsets.only(bottom: sectionGap),
                           child: LayoutBuilder(
@@ -16379,8 +17172,12 @@ class _MenuFloorActorState {
                               final botCard = buildBotModeCard();
                               final localCard = buildLocalModeCard();
                               final remoteCard = buildRemoteModeCard();
+                              final splitPairLayout =
+                                  constraints.maxWidth >= 780;
+                              final wideFeatureLayout =
+                                  constraints.maxWidth >= 980;
 
-                              final modes = useTwoColumnLayout
+                              final modes = wideFeatureLayout
                                   ? Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -16397,6 +17194,22 @@ class _MenuFloorActorState {
                                         ),
                                         SizedBox(width: sectionGap),
                                         Expanded(flex: 6, child: remoteCard),
+                                      ],
+                                    )
+                                  : splitPairLayout
+                                  ? Column(
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(child: botCard),
+                                            SizedBox(width: sectionGap),
+                                            Expanded(child: localCard),
+                                          ],
+                                        ),
+                                        SizedBox(height: sectionGap),
+                                        remoteCard,
                                       ],
                                     )
                                   : Column(
@@ -21428,7 +22241,7 @@ class _MenuFloorActorState {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'â€¢ ',
+                                        '• ',
                                         style: TextStyle(
                                           color: dialogAccentColor.withValues(
                                             alpha: 0.9,
@@ -23775,7 +24588,7 @@ class _MenuFloorActorState {
                                 icon: Icons.palette_outlined,
                                 title: 'Board Theme Pack',
                                 subtitle: _themePackOwned
-                                    ? 'Owned Â· unlocks Ember and Sea boards'
+                                    ? 'Owned · unlocks Ember and Sea boards'
                                     : 'Unlock Ember and Sea board palettes',
                                 priceLabel: _storefrontCoinPriceLabel(
                                   StoreOfferIds.themePack,
@@ -23882,7 +24695,7 @@ class _MenuFloorActorState {
                                 icon: Icons.extension_outlined,
                                 title: 'Piece Set Pack',
                                 subtitle: _piecePackOwned
-                                    ? 'Owned Â· unlocks Ember and Frost pieces'
+                                    ? 'Owned · unlocks Ember and Frost pieces'
                                     : 'Unlock Ember and Frost piece styles',
                                 priceLabel: _storefrontCoinPriceLabel(
                                   StoreOfferIds.piecePack,
@@ -24233,7 +25046,7 @@ class _MenuFloorActorState {
                                 icon: Icons.local_fire_department_outlined,
                                 title: 'Sacrifice Mode',
                                 subtitle: _sacrificeModeOwned
-                                    ? 'Owned Â· unlocks the red sacrifice scan on the analysis opening button'
+                                    ? 'Owned · unlocks the red sacrifice scan on the analysis opening button'
                                     : 'Unlock the red sacrifice scan with yellow glare on the analysis opening button',
                                 priceLabel: _storefrontCoinPriceLabel(
                                   StoreOfferIds.sacrificeMode,
@@ -24470,7 +25283,7 @@ class _MenuFloorActorState {
           ),
           const SizedBox(height: 4),
           Text(
-            'Board: ${_boardThemeLabel(_boardThemeMode)} Â· Pieces: ${_pieceThemeLabel(_pieceThemeMode)} Â· Arrows: ${_arrowThemeLabel(_arrowThemeMode)} Â· UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
+            'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · Arrows: ${_arrowThemeLabel(_arrowThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
             style: TextStyle(
               color: scheme.onSurface.withValues(alpha: 0.64),
               fontSize: 12,
