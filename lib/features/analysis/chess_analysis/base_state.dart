@@ -747,7 +747,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _localFriendBottomSeatIsWhite = false;
   int _localFriendBottomSeatWins = 0;
   int _localFriendTopSeatWins = 0;
-  int _localFriendDrawCount = 0;
   RemoteFriendSeatPreference _remoteFriendSeatPreference =
       RemoteFriendSeatPreference.random;
   _VsModeQuickOption _selectedVsModeQuickOption =
@@ -4716,7 +4715,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _localFriendBottomSeatIsWhite = false;
     _localFriendBottomSeatWins = 0;
     _localFriendTopSeatWins = 0;
-    _localFriendDrawCount = 0;
   }
 
   bool get _localFriendTopSeatIsWhite => !_localFriendBottomSeatIsWhite;
@@ -4742,7 +4740,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     if (outcome == GameOutcome.draw) {
-      _localFriendDrawCount += 1;
       return;
     }
 
@@ -17674,6 +17671,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ],
         ),
       );
+      final syncedClocksSelector = Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          buildTag('SYNCED CLOCKS', remoteAccent, icon: Icons.sync_alt_rounded),
+        ],
+      );
 
       return buildCardShell(
         accent: remoteAccent,
@@ -17705,17 +17709,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       'SERVER RULES',
                       remoteAccent,
                       icon: Icons.verified_outlined,
-                    ),
-                  ],
-                );
-                final syncedClocksSelector = Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    buildTag(
-                      'SYNCED CLOCKS',
-                      remoteAccent,
-                      icon: Icons.sync_alt_rounded,
                     ),
                   ],
                 );
@@ -18208,16 +18201,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                               child: Column(
                                                                                 children: [
                                                                                   _buildFriendClockPanel(
-                                                                                    white:
-                                                                                        _friendClockTopShowsWhite,
+                                                                                    white: _friendClockTopShowsWhite,
                                                                                     isLandscape: true,
                                                                                   ),
                                                                                   const SizedBox(
                                                                                     height: 10,
                                                                                   ),
                                                                                   _buildFriendClockPanel(
-                                                                                    white:
-                                                                                        _friendClockBottomShowsWhite,
+                                                                                    white: _friendClockBottomShowsWhite,
                                                                                     isLandscape: true,
                                                                                   ),
                                                                                 ],
