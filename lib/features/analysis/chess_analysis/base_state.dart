@@ -20388,10 +20388,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? _remoteFriendDangerAccent(scheme, useMonochrome: useMonochrome)
         : isActive
         ? (isLocalSeat
-              ? _remoteFriendLocalAccent(
-                  scheme,
-                  useMonochrome: useMonochrome,
-                )
+              ? _remoteFriendLocalAccent(scheme, useMonochrome: useMonochrome)
               : _remoteFriendOpponentAccent(
                   scheme,
                   useMonochrome: useMonochrome,
@@ -21980,7 +21977,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : (remoteSeat == RemoteFriendSeat.white
                 ? RemoteFriendSeat.black
                 : RemoteFriendSeat.white);
-        final remoteOpponentSeatLabel = _remoteFriendSeatLabel(remoteOpponentSeat);
+      final remoteOpponentSeatLabel = _remoteFriendSeatLabel(
+        remoteOpponentSeat,
+      );
       final remoteOpponentTheme = remoteOpponentSeat == null
           ? _pieceThemeMode
           : _remoteFriendPieceThemeForSeat(remoteOpponentSeat);
@@ -22022,35 +22021,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remoteSelectionAccent = remoteSelectionUrgent
           ? remoteDangerAccent
           : remoteAccent;
-      final remoteStatusText =
-          (remoteSnapshot == null
-              ? 'Synchronizing remote friend match...'
-              : _isRemoteFriendPendingMatch
-              ? 'Share code ${remoteSnapshot.inviteCode} with your friend to start the match.'
-              : remotePieceSelectionOpen
-              ? _remoteFriendPieceSelectionReady
-                    ? remoteSeat == null
-                          ? 'Ready. Your saved default skin is locked in, and the match starts in $remoteSelectionRemainingSeconds seconds.'
-                          : 'Ready. Your ${remoteSeatLabel.toLowerCase()} pieces will use ${_pieceThemeLabel(remotePlayerTheme)} while your friend keeps ${_pieceThemeLabel(remoteOpponentTheme)} on the other side. Match starts in $remoteSelectionRemainingSeconds seconds.'
-                    : remoteSeat == null
-                    ? 'Choose your piece skin in $remoteSelectionRemainingSeconds seconds. If you do nothing, your current default skin will be used.'
-                    : 'You are $remoteSeatLabel. Pick the skin for your ${remoteSeatLabel.toLowerCase()} pieces. Your friend keeps their own ${_remoteFriendSeatLabel(remoteOpponentSeat).toLowerCase()}-side skin, and the match starts in $remoteSelectionRemainingSeconds seconds.'
-              : remoteSnapshot.status == RemoteFriendMatchStatus.expired
-              ? 'This invite expired before the game began. Return to VS mode to create a new code.'
-              : remoteSnapshot.status == RemoteFriendMatchStatus.cancelled
-              ? 'This invite was cancelled. Return to VS mode to create a new private match.'
-              : _hasIncomingRemoteDrawOffer
-              ? 'Your friend offered a draw. Accept or decline to continue.'
-              : _hasOutgoingRemoteDrawOffer
-              ? 'Draw offer sent. The board will update when your friend responds.'
-              : 'Moves and clocks are synchronized from the private match.');
+      final remoteStatusText = (remoteSnapshot == null
+          ? 'Synchronizing remote friend match...'
+          : _isRemoteFriendPendingMatch
+          ? 'Share code ${remoteSnapshot.inviteCode} with your friend to start the match.'
+          : remotePieceSelectionOpen
+          ? _remoteFriendPieceSelectionReady
+                ? remoteSeat == null
+                      ? 'Ready. Your saved default skin is locked in, and the match starts in $remoteSelectionRemainingSeconds seconds.'
+                      : 'Ready. Your ${remoteSeatLabel.toLowerCase()} pieces will use ${_pieceThemeLabel(remotePlayerTheme)} while your friend keeps ${_pieceThemeLabel(remoteOpponentTheme)} on the other side. Match starts in $remoteSelectionRemainingSeconds seconds.'
+                : remoteSeat == null
+                ? 'Choose your piece skin in $remoteSelectionRemainingSeconds seconds. If you do nothing, your current default skin will be used.'
+                : 'You are $remoteSeatLabel. Pick the skin for your ${remoteSeatLabel.toLowerCase()} pieces. Your friend keeps their own ${_remoteFriendSeatLabel(remoteOpponentSeat).toLowerCase()}-side skin, and the match starts in $remoteSelectionRemainingSeconds seconds.'
+          : remoteSnapshot.status == RemoteFriendMatchStatus.expired
+          ? 'This invite expired before the game began. Return to VS mode to create a new code.'
+          : remoteSnapshot.status == RemoteFriendMatchStatus.cancelled
+          ? 'This invite was cancelled. Return to VS mode to create a new private match.'
+          : _hasIncomingRemoteDrawOffer
+          ? 'Your friend offered a draw. Accept or decline to continue.'
+          : _hasOutgoingRemoteDrawOffer
+          ? 'Draw offer sent. The board will update when your friend responds.'
+          : 'Moves and clocks are synchronized from the private match.');
       final remoteBusyText = !_remoteFriendOperationInProgress
-              ? null
-              : _isRemoteFriendPendingMatch
-              ? 'Updating the invite for both phones...'
-              : remotePieceSelectionOpen
-              ? 'Saving your piece-skin pairing choice...'
-              : 'Synchronizing the private match...';
+          ? null
+          : _isRemoteFriendPendingMatch
+          ? 'Updating the invite for both phones...'
+          : remotePieceSelectionOpen
+          ? 'Saving your piece-skin pairing choice...'
+          : 'Synchronizing the private match...';
       final buttons = <Widget>[
         buildRemoteActionButton(
           label: compactPendingInviteOverlay ? 'Back' : 'VS Mode',
@@ -22238,9 +22236,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          remoteAccent,
-                        ),
+                        valueColor: AlwaysStoppedAnimation<Color>(remoteAccent),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -22382,8 +22378,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       children: [
                         _remoteFriendPieceThemePreviewCard(
                           title: 'You | $remoteSeatLabel',
-                          subtitle:
-                              'Skin shown on your $remoteSeatLabel side',
+                          subtitle: 'Skin shown on your $remoteSeatLabel side',
                           theme: remotePlayerTheme,
                           isWhitePiece: remoteSeat == RemoteFriendSeat.white,
                           accent: remoteLocalAccent,
