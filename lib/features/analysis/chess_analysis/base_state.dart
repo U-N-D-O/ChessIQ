@@ -104,6 +104,8 @@ class _CheckAlert {
   final DateTime startedAt;
 }
 
+enum _VsModeQuickOption { crossDevice, sharedScreen, vsCpu, quickJoin }
+
 class _CheckedKingState {
   const _CheckedKingState({
     required this.square,
@@ -563,6 +565,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _blackQueensideRookMoved = false;
   String? _enPassantTarget;
   BoardPerspective _perspective = _defaultPerspective;
+  BoardPerspective _analysisStandardPerspective = _defaultPerspective;
   BoardThemeMode _boardThemeMode = _defaultBoardTheme;
   PieceThemeMode _pieceThemeMode = _defaultPieceTheme;
   ArrowThemeMode _arrowThemeMode = ArrowThemeMode.classic;
@@ -741,8 +744,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Duration _localFriendActiveClockBaseline = Duration.zero;
   DateTime? _localFriendActiveClockStartedAt;
   bool? _localFriendActiveClockIsWhite;
+  bool _localFriendBottomSeatIsWhite = false;
+  int _localFriendBottomSeatWins = 0;
+  int _localFriendTopSeatWins = 0;
+  int _localFriendDrawCount = 0;
   RemoteFriendSeatPreference _remoteFriendSeatPreference =
       RemoteFriendSeatPreference.random;
+  _VsModeQuickOption _selectedVsModeQuickOption =
+      _VsModeQuickOption.crossDevice;
   String? _remoteFriendLocalUid;
   RemoteFriendInvite? _remoteFriendInvite;
   RemoteFriendMatchSnapshot? _remoteFriendSnapshot;
@@ -4359,6 +4368,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           savedPerspective >= 0 &&
           savedPerspective < BoardPerspective.values.length) {
         _perspective = BoardPerspective.values[savedPerspective];
+        if (_perspective != BoardPerspective.headToHead) {
+          _analysisStandardPerspective = _perspective;
+        }
       }
       if (savedDepth != null) {
         _engineDepth = savedDepth.clamp(10, _maxDepthAllowed);
@@ -4673,6 +4685,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
     setState(() {
       _localFriendEndedOnTime = true;
+      _recordLocalFriendSeriesOutcome(outcome);
       _gameOutcome = outcome;
       _gameDrawReason = null;
       _botThinking = false;
@@ -4699,6 +4712,53 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : 'White flagged before completing the move. Continue to inspect, or reset the board to start another shared game.';
   }
 
+  void _resetLocalFriendSeries() {
+    _localFriendBottomSeatIsWhite = false;
+    _localFriendBottomSeatWins = 0;
+    _localFriendTopSeatWins = 0;
+    _localFriendDrawCount = 0;
+  }
+
+  bool get _localFriendTopSeatIsWhite => !_localFriendBottomSeatIsWhite;
+
+  bool get _friendClockTopShowsWhite =>
+      _isLocalFriendMatchMode ? _localFriendTopSeatIsWhite : false;
+
+  bool get _friendClockBottomShowsWhite =>
+      _isLocalFriendMatchMode ? _localFriendBottomSeatIsWhite : true;
+
+  String _localFriendSeatLabelForColor(bool white) {
+    return white == _localFriendBottomSeatIsWhite ? 'BOTTOM' : 'TOP';
+  }
+
+  int _localFriendSeatScoreForColor(bool white) {
+    return white == _localFriendBottomSeatIsWhite
+        ? _localFriendBottomSeatWins
+        : _localFriendTopSeatWins;
+  }
+
+  void _recordLocalFriendSeriesOutcome(GameOutcome outcome) {
+    if (!_isLocalFriendMatchMode) {
+      return;
+    }
+    if (outcome == GameOutcome.draw) {
+      _localFriendDrawCount += 1;
+      return;
+    }
+
+    final whiteWon = outcome == GameOutcome.whiteWin;
+    final bottomSeatWon = _localFriendBottomSeatIsWhite == whiteWon;
+    if (bottomSeatWon) {
+      _localFriendBottomSeatWins += 1;
+    } else {
+      _localFriendTopSeatWins += 1;
+    }
+  }
+
+  void _advanceLocalFriendSeriesToNextRound() {
+    _localFriendBottomSeatIsWhite = !_localFriendBottomSeatIsWhite;
+  }
+
   Future<void> _startLocalFriendMatch() async {
     try {
       unawaited(_stopMenuMusic(fadeOut: true));
@@ -4711,6 +4771,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
 
       setState(() {
+        _resetLocalFriendSeries();
         _prepareAnalysisMatchEntry(MatchMode.localFriend);
         _resetVsBotSessionState();
         _perspective = BoardPerspective.headToHead;
@@ -4764,7 +4825,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     RemoteFriendMatchSnapshot snapshot, {
     required bool white,
   }) {
-
     final storedMs = white
         ? snapshot.whiteTimeRemainingMs
         : snapshot.blackTimeRemainingMs;
@@ -4884,7 +4944,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final playerSeat = _remoteFriendPlayerSeatForSnapshot(snapshot);
-    final isPlayersTurn = playerSeat != null &&
+    final isPlayersTurn =
+        playerSeat != null &&
         ((playerSeat == RemoteFriendSeat.white && snapshot.whiteToMove) ||
             (playerSeat == RemoteFriendSeat.black && !snapshot.whiteToMove));
     return isPlayersTurn
@@ -5822,10 +5883,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         nextSnapshot = result.snapshot;
       }
       setState(() {
-        _applyRemoteFriendSnapshot(
-          invite: nextInvite,
-          snapshot: nextSnapshot,
-        );
+        _applyRemoteFriendSnapshot(invite: nextInvite, snapshot: nextSnapshot);
       });
       _startRemoteFriendSyncTimers();
 
@@ -7122,6 +7180,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           savedPerspective >= 0 &&
           savedPerspective < BoardPerspective.values.length) {
         _perspective = BoardPerspective.values[savedPerspective];
+        if (_perspective != BoardPerspective.headToHead) {
+          _analysisStandardPerspective = _perspective;
+        }
       }
       if (!prefs.containsKey(_analysisEngineDepthKey) && savedDepth is int) {
         _engineDepth = savedDepth.clamp(10, _maxDepthAllowed);
@@ -9942,6 +10003,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_isBotMatchMode && _selectedBot != null) {
       return !_humanPlaysWhite;
     }
+    if (_isLocalFriendMatchMode && _forcesStationaryLocalFriendPerspective) {
+      return !_localFriendBottomSeatIsWhite;
+    }
     return _perspective == BoardPerspective.black ||
         (_usesTurnAwarePerspective && !_isWhiteTurn);
   }
@@ -9977,6 +10041,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   bool get _boardReversed {
+    if (_isLocalFriendMatchMode && _forcesStationaryLocalFriendPerspective) {
+      return !_localFriendBottomSeatIsWhite;
+    }
     return _isBotMatchMode
         ? !_humanPlaysWhite
         : (_perspective == BoardPerspective.black) ||
@@ -11883,6 +11950,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _openVsModeFromMenu() {
     setState(() {
       _applyAnalysisModeSectionState(AppSection.vsMode);
+      _selectedVsModeQuickOption = _VsModeQuickOption.crossDevice;
     });
     unawaited(_loadRemoteFriendMemberships(silent: true));
   }
@@ -13409,6 +13477,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       setState(() {
         _pendingMoveQualityGrading = null;
         _recordVsBotSessionResult(gameOutcome);
+        if (_isLocalFriendMatchMode) {
+          _recordLocalFriendSeriesOutcome(gameOutcome);
+        }
         _gameOutcome = gameOutcome;
         _gameDrawReason = detectedOutcome.drawReason;
         _botThinking = false;
@@ -16144,10 +16215,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   const SizedBox(height: 6),
                   Text(
                     body,
-                    style: buildBodyStyle(
-                      color: arcade.textMuted,
-                      size: 11.6,
-                    ),
+                    style: buildBodyStyle(color: arcade.textMuted, size: 11.6),
                   ),
                 ],
               ),
@@ -16206,10 +16274,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 const SizedBox(height: 4),
                 Text(
                   detail,
-                  style: buildBodyStyle(
-                    color: arcade.textMuted,
-                    size: 11.3,
-                  ),
+                  style: buildBodyStyle(color: arcade.textMuted, size: 11.3),
                 ),
               ],
             ),
@@ -16394,146 +16459,849 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
-    Widget buildHeroPanel() {
-      final localTimeSummary = selectedLocalFriendTimeControl.initialTime == null
-          ? 'Untimed'
-          : _formatLocalFriendTimeControl(selectedLocalFriendTimeControl);
-      final remoteTimeSummary = selectedRemoteFriendTimeControl.isUntimed
-          ? 'Untimed Invite'
-          : _formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl);
-      final selectedBot = _selectedBot;
+    Future<void> showPlayChessInfoDialog() async {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          final dialogMedia = MediaQuery.of(dialogContext);
+          final compactDialog =
+              dialogMedia.size.width <= 420 || dialogMedia.size.height <= 620;
 
-      return buildCardShell(
-        accent: heroAccent,
-        emphasized: true,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 760;
-            final lead = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    buildTag(
-                      'PLAY CHESS',
-                      heroAccent,
-                      icon: Icons.sports_esports_rounded,
-                      filled: true,
-                    ),
-                    buildTag(
-                      useMonochrome ? 'MONO' : 'ARCADE',
-                      arcade.amber,
-                      icon: Icons.auto_awesome_rounded,
-                      filled: !useMonochrome,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (compact)
-                  Image.asset(
-                    _menuLogoAsset(context),
-                    height: shortHeight ? 44 : 52,
-                    fit: BoxFit.contain,
-                  )
-                else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        _menuLogoAsset(context),
-                        height: shortHeight ? 48 : 58,
-                        fit: BoxFit.contain,
+          Widget infoRow({
+            required String title,
+            required String detail,
+            required IconData icon,
+            required Color accent,
+          }) {
+            return buildInsetShell(
+              accent: accent,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: _vsBotArcadePanelDecoration(
+                      palette: arcade,
+                      accent: accent,
+                      radius: 10,
+                      borderWidth: 1.6,
+                      inset: true,
+                      elevated: false,
+                      fillColor: Color.alphaBlend(
+                        accent.withValues(
+                          alpha: arcade.monochrome
+                              ? 0.10
+                              : (isDark ? 0.18 : 0.14),
+                        ),
+                        arcade.panelAlt,
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 16,
+                      color: _vsBotReadableAccentColor(accent, arcade),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: buildHudStyle(
+                            color: accent,
+                            size: 10.8,
+                            weight: FontWeight.w800,
+                            letterSpacing: 0.68,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          detail,
+                          style: buildBodyStyle(
+                            color: arcade.textMuted,
+                            size: 11.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: compactDialog ? 12 : 20,
+              vertical: compactDialog ? 12 : 24,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 560,
+                maxHeight: min(dialogMedia.size.height * 0.9, 760.0),
+              ),
+              child: buildCardShell(
+                accent: heroAccent,
+                emphasized: true,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                buildTag(
+                                  'PLAY CHESS GUIDE',
+                                  heroAccent,
+                                  icon: Icons.info_outline_rounded,
+                                  filled: true,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Mode Overview',
+                                  style: buildDisplayStyle(
+                                    color: arcade.text,
+                                    size: compactDialog ? 24 : 28,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Use the four main menu options to jump into the right match flow quickly.',
+                                  style: buildBodyStyle(
+                                    color: arcade.textMuted,
+                                    size: 11.8,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildVsBotControlButton(
+                            icon: Icons.close_rounded,
+                            onTap: () => Navigator.of(dialogContext).pop(),
+                            accent: heroAccent,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      infoRow(
+                        title: '1V1 CROSS-PLAY',
+                        detail:
+                            'Private online match across devices with server-validated turns and synced clocks.',
+                        icon: Icons.wifi_tethering_rounded,
+                        accent: remoteAccent,
+                      ),
+                      const SizedBox(height: 10),
+                      infoRow(
+                        title: '1V1 SHARED SCREEN',
+                        detail:
+                            'Pass-and-play on one device with optional timers and fixed board orientation.',
+                        icon: Icons.people_alt_outlined,
+                        accent: arcade.amber,
+                      ),
+                      const SizedBox(height: 10),
+                      infoRow(
+                        title: '1 PLAYER VS CPU',
+                        detail:
+                            'Select a bot profile, set difficulty, and launch a solo match instantly.',
+                        icon: Icons.smart_toy_outlined,
+                        accent: arcade.cyan,
+                      ),
+                      const SizedBox(height: 10),
+                      infoRow(
+                        title: 'QUICK JOIN CODE',
+                        detail:
+                            'Pick this option to open the quick-join panel and enter a friend invite code.',
+                        icon: Icons.key_rounded,
+                        accent: heroAccent,
+                      ),
+                      const SizedBox(height: 12),
+                      buildInsetShell(
+                        accent: heroAccent,
                         child: Text(
-                          'Choose The Arena',
-                          style: buildDisplayStyle(
-                            color: arcade.text,
-                            size: 36,
+                          'Tip: tap an option tile first, then use the setup panel below to configure and start that mode.',
+                          style: buildBodyStyle(
+                            color: arcade.textMuted,
+                            size: 11.4,
                           ),
                         ),
                       ),
                     ],
                   ),
-                if (compact) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Choose Your Match',
-                    style: buildDisplayStyle(color: arcade.text, size: 30),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Text(
-                  'Jump into bot play, local pass-and-play, or a private cross-device match from one cleaner control hub. The layout stays tight on phones and opens up into a clearer grid on larger screens.',
-                  style: buildBodyStyle(color: arcade.textMuted, size: 12.2),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    Widget buildHeroPanel() {
+      Widget buildShineHeading(String text) {
+        final headingStyle = buildDisplayStyle(color: arcade.text, size: 30);
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: const Alignment(-0.9, -0.2),
+              end: const Alignment(1.0, 0.2),
+              colors: [
+                arcade.text.withValues(alpha: 0.86),
+                Colors.white.withValues(alpha: 0.98),
+                arcade.text.withValues(alpha: 0.9),
+              ],
+              stops: const [0.08, 0.46, 0.9],
+            ).createShader(bounds);
+          },
+          child: Text(
+            text,
+            style: headingStyle.copyWith(
+              color: Colors.white,
+              shadows: const [
+                Shadow(
+                  color: Color(0xB3000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
                 ),
               ],
-            );
+            ),
+          ),
+        );
+      }
 
-            final summaryPanel = buildSectionPanel(
-              title: 'LIVE PRESETS',
-              accent: heroAccent,
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  buildSnapshotTile(
-                    label: 'VS BOT',
-                    value: botDifficultyLabel(_selectedBotDifficulty),
-                    detail: selectedBot == null
-                        ? 'Pick an opponent and tune the pressure.'
-                        : selectedBot.name,
-                    icon: Icons.smart_toy_outlined,
-                    accent: arcade.cyan,
-                  ),
-                  buildSnapshotTile(
-                    label: 'LOCAL 1V1',
-                    value: localTimeSummary,
-                    detail:
-                        'Single-device play with a fixed board orientation.',
-                    icon: Icons.people_alt_outlined,
-                    accent: arcade.amber,
-                  ),
-                  buildSnapshotTile(
-                    label: 'REMOTE',
-                    value: remoteSeatPreferenceLabel(
-                      _remoteFriendSeatPreference,
-                    ),
-                    detail: remoteTimeSummary,
-                    icon: Icons.wifi_tethering_rounded,
-                    accent: remoteAccent,
-                  ),
-                ],
-              ),
-            );
-
-            if (compact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  lead,
-                  const SizedBox(height: 14),
-                  summaryPanel,
-                ],
-              );
+      Widget buildModeOptionCard({
+        required _VsModeQuickOption option,
+        required String title,
+        required String subtitle,
+        required IconData icon,
+        required Color accent,
+        required String imageAsset,
+      }) {
+        final selected = _selectedVsModeQuickOption == option;
+        return puzzleAcademyDecoratedInkWell(
+          decoration: _vsBotArcadePanelDecoration(
+            palette: arcade,
+            accent: accent,
+            radius: 16,
+            borderWidth: selected ? 2.6 : 2.0,
+            fillColor: arcade.panelAlt,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          overlayColor: puzzleAcademyInteractiveOverlay(
+            palette: arcade.base,
+            accent: accent,
+          ),
+          onTap: () {
+            if (option == _VsModeQuickOption.vsCpu) {
+              _openBotSetupFromMenu();
+              return;
             }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 6, child: lead),
-                const SizedBox(width: 16),
-                Expanded(flex: 5, child: summaryPanel),
-              ],
-            );
+            setState(() {
+              _selectedVsModeQuickOption = option;
+            });
           },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compactCard = constraints.maxHeight < 120;
+                final zoom = compactCard ? 1.12 : 1.08;
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FractionallySizedBox(
+                          widthFactor: zoom,
+                          heightFactor: zoom,
+                          alignment: Alignment.centerRight,
+                          child: Image.asset(
+                            imageAsset,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.centerRight,
+                            errorBuilder: (context, error, stackTrace) {
+                              return DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      accent.withValues(alpha: 0.30),
+                                      arcade.panelAlt,
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Colors.black.withValues(
+                                alpha: selected ? 0.46 : 0.42,
+                              ),
+                              Colors.black.withValues(
+                                alpha: selected ? 0.14 : 0.10,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              accent.withValues(alpha: selected ? 0.18 : 0.12),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.22),
+                            ],
+                            stops: const [0.0, 0.62, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: selected ? 1 : 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: _vsBotArcadePanelDecoration(
+                            palette: arcade,
+                            accent: accent,
+                            radius: 10,
+                            borderWidth: 1.4,
+                            inset: true,
+                            elevated: false,
+                            fillColor: Color.alphaBlend(
+                              accent.withValues(alpha: 0.30),
+                              Colors.black.withValues(alpha: 0.30),
+                            ),
+                          ),
+                          child: Text(
+                            'SELECTED',
+                            style: buildHudStyle(
+                              color: _vsBotReadableAccentColor(accent, arcade),
+                              size: 9.2,
+                              weight: FontWeight.w800,
+                              letterSpacing: 0.52,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 10,
+                      right: 10,
+                      bottom: compactCard ? 8 : 10,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            width: compactCard ? 32 : 34,
+                            height: compactCard ? 32 : 34,
+                            decoration: _vsBotArcadePanelDecoration(
+                              palette: arcade,
+                              accent: accent,
+                              radius: 11,
+                              borderWidth: 1.6,
+                              inset: true,
+                              elevated: false,
+                              fillColor: Color.alphaBlend(
+                                accent.withValues(
+                                  alpha: selected ? 0.24 : 0.16,
+                                ),
+                                Colors.black.withValues(alpha: 0.42),
+                              ),
+                            ),
+                            child: Icon(
+                              icon,
+                              size: compactCard ? 17 : 18,
+                              color: _vsBotReadableAccentColor(accent, arcade),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style:
+                                      buildHudStyle(
+                                        color: accent,
+                                        size: compactCard ? 10.2 : 10.9,
+                                        weight: FontWeight.w800,
+                                        letterSpacing: 0.68,
+                                        height: 1.0,
+                                      ).copyWith(
+                                        shadows: const [
+                                          Shadow(
+                                            color: Color(0xCC000000),
+                                            blurRadius: 8,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style:
+                                      buildBodyStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.95,
+                                        ),
+                                        size: compactCard ? 10.2 : 11.0,
+                                        weight: FontWeight.w700,
+                                      ).copyWith(
+                                        shadows: const [
+                                          Shadow(
+                                            color: Color(0xCC000000),
+                                            blurRadius: 8,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      }
+
+      final selectedBot = _selectedBot;
+      final localTimeSummary =
+          selectedLocalFriendTimeControl.initialTime == null
+          ? 'Untimed'
+          : _formatLocalFriendTimeControl(selectedLocalFriendTimeControl);
+      final remoteTimeSummary = selectedRemoteFriendTimeControl.isUntimed
+          ? 'Untimed Invite'
+          : _formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl);
+
+      return buildCardShell(
+        accent: heroAccent,
+        emphasized: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.sports_esports_rounded, size: 18, color: heroAccent),
+                const SizedBox(width: 8),
+                Text(
+                  'PLAY CHESS',
+                  style: buildHudStyle(
+                    color: heroAccent,
+                    size: 11.0,
+                    weight: FontWeight.w800,
+                    letterSpacing: 0.78,
+                    height: 1.0,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: _vsBotArcadePanelDecoration(
+                    palette: arcade,
+                    accent: arcade.amber,
+                    radius: 10,
+                    borderWidth: 1.4,
+                    inset: true,
+                    elevated: false,
+                    fillColor: Color.alphaBlend(
+                      arcade.amber.withValues(
+                        alpha: useMonochrome ? 0.08 : 0.16,
+                      ),
+                      arcade.panelAlt,
+                    ),
+                  ),
+                  child: Text(
+                    useMonochrome ? 'MONO' : 'ARCADE',
+                    style: buildHudStyle(
+                      color: arcade.amber,
+                      size: 9.6,
+                      weight: FontWeight.w800,
+                      letterSpacing: 0.62,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            buildShineHeading('Choose Match Type'),
+            const SizedBox(height: 6),
+            Text(
+              'Four clear options, inspired by classic arcade mode select screens.',
+              style: buildBodyStyle(color: arcade.textMuted, size: 11.6),
+            ),
+            const SizedBox(height: 10),
+            GridView.count(
+              crossAxisCount: media.size.width < 350 ? 1 : 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: media.size.width >= 1100
+                  ? 2.95
+                  : media.size.width >= 800
+                  ? (isLandscape ? 2.75 : 2.45)
+                  : media.size.width >= 600
+                  ? (isLandscape ? 2.55 : 2.20)
+                  : (isLandscape ? 2.35 : 1.75),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                buildModeOptionCard(
+                  option: _VsModeQuickOption.crossDevice,
+                  title: '1V1 CROSS-PLAY',
+                  subtitle: remoteTimeSummary,
+                  icon: Icons.wifi_tethering_rounded,
+                  accent: remoteAccent,
+                  imageAsset: 'assets/vs/a1.png',
+                ),
+                buildModeOptionCard(
+                  option: _VsModeQuickOption.sharedScreen,
+                  title: '1V1 SHARED SCREEN',
+                  subtitle: localTimeSummary,
+                  icon: Icons.people_alt_outlined,
+                  accent: arcade.amber,
+                  imageAsset: 'assets/vs/a2.png',
+                ),
+                buildModeOptionCard(
+                  option: _VsModeQuickOption.vsCpu,
+                  title: '1 PLAYER VS CPU',
+                  subtitle: selectedBot == null
+                      ? botDifficultyLabel(_selectedBotDifficulty)
+                      : selectedBot.name,
+                  icon: Icons.smart_toy_outlined,
+                  accent: arcade.cyan,
+                  imageAsset: 'assets/vs/a4.png',
+                ),
+                buildModeOptionCard(
+                  option: _VsModeQuickOption.quickJoin,
+                  title: 'QUICK JOIN CODE',
+                  subtitle: _remoteFriendOperationInProgress
+                      ? 'Working...'
+                      : 'Paste invite code',
+                  icon: Icons.key_rounded,
+                  accent: heroAccent,
+                  imageAsset: 'assets/vs/a3.png',
+                ),
+              ],
+            ),
+          ],
         ),
       );
     }
 
+    Widget buildFocusedModePanel() {
+      Widget buildCompactBotPanel() {
+        final selectedBot = _selectedBot;
+        final accent = selectedBot == null
+            ? (useMonochrome ? scheme.onSurface : arcade.cyan)
+            : _vsBotProfileAccent(selectedBot.profile, arcade);
+        return buildCardShell(
+          accent: accent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildSectionTitle('CPU MATCH SETUP', accent),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  buildTag(
+                    'BOT ${selectedBot?.name.toUpperCase() ?? 'NOT SELECTED'}',
+                    accent,
+                    icon: Icons.smart_toy_outlined,
+                  ),
+                  buildTag(
+                    botDifficultyLabel(_selectedBotDifficulty).toUpperCase(),
+                    _botDifficultyColor(_selectedBotDifficulty),
+                    icon: Icons.bolt_rounded,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: buildActionButton(
+                  label: selectedBot == null
+                      ? 'Open Bot Selector'
+                      : 'Retune Bot Match',
+                  icon: Icons.arrow_forward_rounded,
+                  onPressed: _openBotSetupFromMenu,
+                  accent: accent,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      Widget buildCompactLocalPanel() {
+        return buildCardShell(
+          accent: arcade.amber,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildSectionTitle('SHARED SCREEN SETTINGS', arcade.amber),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (
+                    int index = 0;
+                    index < _localFriendTimeControls.length;
+                    index++
+                  )
+                    buildChoiceChip(
+                      label: _formatLocalFriendTimeControl(
+                        _localFriendTimeControls[index],
+                      ),
+                      selected: _localFriendTimeControlIndex == index,
+                      onSelected: (_) {
+                        unawaited(_setLocalFriendTimeControlIndex(index));
+                      },
+                      accent: arcade.amber,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: buildActionButton(
+                  label: 'Start Shared Screen 1V1',
+                  icon: Icons.play_arrow_rounded,
+                  onPressed: () => unawaited(_startLocalFriendMatch()),
+                  accent: arcade.amber,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      Widget buildCompactRemotePanel() {
+        final mainActionBusy = _remoteFriendOperationInProgress;
+        return buildCardShell(
+          accent: remoteAccent,
+          emphasized: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildSectionTitle('ONLINE MATCH SETTINGS', remoteAccent),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  buildTag(
+                    'INVITE ONLY',
+                    remoteAccent,
+                    icon: Icons.password_rounded,
+                  ),
+                  buildTag(
+                    'SERVER RULES',
+                    remoteAccent,
+                    icon: Icons.verified_outlined,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              buildSectionPanel(
+                title: 'TIME CONTROL',
+                accent: remoteAccent,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (
+                      int index = 0;
+                      index < _localFriendTimeControls.length;
+                      index++
+                    )
+                      buildChoiceChip(
+                        label: _formatRemoteFriendTimeControl(
+                          RemoteFriendTimeControl(
+                            initialSeconds:
+                                _localFriendTimeControls[index]
+                                    .initialTime
+                                    ?.inSeconds ??
+                                0,
+                            incrementSeconds: _localFriendTimeControls[index]
+                                .increment
+                                .inSeconds,
+                          ),
+                        ),
+                        selected: _localFriendTimeControlIndex == index,
+                        onSelected: mainActionBusy
+                            ? null
+                            : (_) {
+                                unawaited(
+                                  _setLocalFriendTimeControlIndex(index),
+                                );
+                              },
+                        accent: remoteAccent,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              buildSectionPanel(
+                title: 'COLOR PREFERENCE',
+                accent: remoteAccent,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final entry in <(RemoteFriendSeatPreference, String)>[
+                      (RemoteFriendSeatPreference.random, 'Random'),
+                      (RemoteFriendSeatPreference.white, 'White'),
+                      (RemoteFriendSeatPreference.black, 'Black'),
+                    ])
+                      buildChoiceChip(
+                        label: entry.$2,
+                        selected: _remoteFriendSeatPreference == entry.$1,
+                        onSelected: mainActionBusy
+                            ? null
+                            : (_) {
+                                setState(() {
+                                  _remoteFriendSeatPreference = entry.$1;
+                                });
+                              },
+                        accent: remoteAccent,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  buildTag(
+                    'SYNCED CLOCKS',
+                    remoteAccent,
+                    icon: Icons.sync_alt_rounded,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: buildActionButton(
+                      label: 'Create Invite',
+                      icon: Icons.add_link_rounded,
+                      onPressed: mainActionBusy
+                          ? null
+                          : () => unawaited(_createRemoteFriendInvite()),
+                      accent: remoteAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: buildActionButton(
+                      label: 'Join Code',
+                      icon: Icons.key_rounded,
+                      onPressed: mainActionBusy
+                          ? null
+                          : () => unawaited(_joinRemoteFriendInvite()),
+                      accent: remoteAccent,
+                      filled: false,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }
+
+      Widget buildQuickJoinPanel() {
+        return buildCardShell(
+          accent: heroAccent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              buildSectionTitle('QUICK JOIN', heroAccent),
+              const SizedBox(height: 10),
+              Text(
+                'Paste an invite code and jump directly into your private match lobby.',
+                style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: buildActionButton(
+                  label: 'Join With Code',
+                  icon: Icons.login_rounded,
+                  onPressed: _remoteFriendOperationInProgress
+                      ? null
+                      : () => unawaited(_joinRemoteFriendInvite()),
+                  accent: heroAccent,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return switch (_selectedVsModeQuickOption) {
+        _VsModeQuickOption.crossDevice => buildCompactRemotePanel(),
+        _VsModeQuickOption.sharedScreen => buildCompactLocalPanel(),
+        _VsModeQuickOption.vsCpu => buildCompactBotPanel(),
+        _VsModeQuickOption.quickJoin => buildQuickJoinPanel(),
+      };
+    }
+
+    // ignore: unused_element
     Widget buildBotModeCard() {
       final selectedBot = _selectedBot;
       final accent = selectedBot == null
@@ -16569,11 +17337,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   icon: Icons.bolt_rounded,
                 ),
                 buildTag('SIDE PICK', arcade.amber, icon: Icons.flag_outlined),
-                buildTag(
-                  'QUICK SETUP',
-                  arcade.cyan,
-                  icon: Icons.tune_rounded,
-                ),
+                buildTag('QUICK SETUP', arcade.cyan, icon: Icons.tune_rounded),
               ],
             ),
             const SizedBox(height: 12),
@@ -16584,7 +17348,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 buildSnapshotTile(
                   label: 'BOT',
                   value: selectedBot?.name ?? 'Select Bot',
-                  detail: selectedBot?.description ??
+                  detail:
+                      selectedBot?.description ??
                       'Choose a character profile before you launch the board.',
                   icon: Icons.smart_toy_outlined,
                   accent: accent,
@@ -16619,6 +17384,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
+    // ignore: unused_element
     Widget buildLocalModeCard() {
       final summaryLabel = selectedLocalFriendTimeControl.initialTime == null
           ? 'Untimed'
@@ -16755,6 +17521,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
+    // ignore: unused_element
     Widget buildRemoteModeCard() {
       Widget buildRecentMatchesContent() {
         if (_remoteFriendMemberships.isEmpty) {
@@ -16776,17 +17543,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 padding: EdgeInsets.only(
                   bottom: index == _remoteFriendMemberships.length - 1 ? 0 : 10,
                 ),
-                child: buildRemoteMembershipTile(_remoteFriendMemberships[index]),
+                child: buildRemoteMembershipTile(
+                  _remoteFriendMemberships[index],
+                ),
               ),
               growable: false,
             ),
           );
         }
 
-        final listHeight = min(
-          336.0,
-          96.0 * _remoteFriendMemberships.length,
-        );
+        final listHeight = min(336.0, 96.0 * _remoteFriendMemberships.length);
 
         return SizedBox(
           height: listHeight,
@@ -16795,10 +17561,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               primary: false,
               padding: EdgeInsets.zero,
               itemCount: _remoteFriendMemberships.length,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: 10),
+              separatorBuilder: (context, index) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                return buildRemoteMembershipTile(_remoteFriendMemberships[index]);
+                return buildRemoteMembershipTile(
+                  _remoteFriendMemberships[index],
+                );
               },
             ),
           ),
@@ -16816,7 +17583,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               label: 'CLOCK',
               value: selectedRemoteFriendTimeControl.isUntimed
                   ? 'Untimed Invite'
-                  : _formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl),
+                  : _formatRemoteFriendTimeControl(
+                      selectedRemoteFriendTimeControl,
+                    ),
               detail: 'Server-synced time state across both devices.',
               icon: Icons.timer_outlined,
               accent: remoteAccent,
@@ -16825,7 +17594,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             buildSnapshotTile(
               label: 'SEAT',
               value: remoteSeatPreferenceLabel(_remoteFriendSeatPreference),
-              detail: 'Your color request is applied before piece selection opens.',
+              detail:
+                  'Your color request is applied before piece selection opens.',
               icon: Icons.flag_outlined,
               accent: remoteAccent,
               minWidth: 170,
@@ -16833,7 +17603,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             buildSnapshotTile(
               label: 'RETENTION',
               value: '24h / 6h Cleanup',
-              detail: 'Finished or expired matches are swept away automatically.',
+              detail:
+                  'Finished or expired matches are swept away automatically.',
               icon: Icons.auto_delete_rounded,
               accent: arcade.amber,
               minWidth: 170,
@@ -16857,7 +17628,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 label: _formatRemoteFriendTimeControl(
                   RemoteFriendTimeControl(
                     initialSeconds:
-                        _localFriendTimeControls[index].initialTime?.inSeconds ??
+                        _localFriendTimeControls[index]
+                            .initialTime
+                            ?.inSeconds ??
                         0,
                     incrementSeconds:
                         _localFriendTimeControls[index].increment.inSeconds,
@@ -16933,6 +17706,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       remoteAccent,
                       icon: Icons.verified_outlined,
                     ),
+                  ],
+                );
+                final syncedClocksSelector = Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
                     buildTag(
                       'SYNCED CLOCKS',
                       remoteAccent,
@@ -16953,11 +17732,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 if (constraints.maxWidth < 470) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      modeTags,
-                      const SizedBox(height: 10),
-                      infoPod,
-                    ],
+                    children: [modeTags, const SizedBox(height: 10), infoPod],
                   );
                 }
 
@@ -16984,6 +17759,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       timeControlPanel,
                       const SizedBox(height: 12),
                       seatPreferencePanel,
+                      const SizedBox(height: 12),
+                      syncedClocksSelector,
                     ],
                   );
                 }
@@ -16993,7 +17770,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   children: [
                     Expanded(child: timeControlPanel),
                     const SizedBox(width: 12),
-                    Expanded(child: seatPreferencePanel),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          seatPreferencePanel,
+                          const SizedBox(height: 12),
+                          syncedClocksSelector,
+                        ],
+                      ),
+                    ),
                   ],
                 );
               },
@@ -17026,7 +17812,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SizedBox(width: double.infinity, child: createInviteButton),
+                        SizedBox(
+                          width: double.infinity,
+                          child: createInviteButton,
+                        ),
                         const SizedBox(height: 10),
                         SizedBox(width: double.infinity, child: joinCodeButton),
                       ],
@@ -17070,7 +17859,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       else
                         _buildVsBotControlButton(
                           icon: Icons.refresh_rounded,
-                          onTap: () => unawaited(_loadRemoteFriendMemberships()),
+                          onTap: () =>
+                              unawaited(_loadRemoteFriendMemberships()),
                           accent: remoteAccent,
                         ),
                     ],
@@ -17154,7 +17944,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           'analysis_vs_mode_credits_trigger',
                         ),
                         icon: Icons.info_outline_rounded,
-                        onTap: _showCreditsDialog,
+                        onTap: () => unawaited(showPlayChessInfoDialog()),
                         accent: useMonochrome ? scheme.onSurface : arcade.cyan,
                       ),
                     ],
@@ -17169,65 +17959,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           padding: EdgeInsets.only(bottom: sectionGap),
                           child: LayoutBuilder(
                             builder: (context, constraints) {
-                              final botCard = buildBotModeCard();
-                              final localCard = buildLocalModeCard();
-                              final remoteCard = buildRemoteModeCard();
-                              final splitPairLayout =
-                                  constraints.maxWidth >= 780;
-                              final wideFeatureLayout =
-                                  constraints.maxWidth >= 980;
-
-                              final modes = wideFeatureLayout
-                                  ? Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          flex: 5,
-                                          child: Column(
-                                            children: [
-                                              botCard,
-                                              SizedBox(height: sectionGap),
-                                              localCard,
-                                            ],
-                                          ),
-                                        ),
-                                        SizedBox(width: sectionGap),
-                                        Expanded(flex: 6, child: remoteCard),
-                                      ],
-                                    )
-                                  : splitPairLayout
-                                  ? Column(
-                                      children: [
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(child: botCard),
-                                            SizedBox(width: sectionGap),
-                                            Expanded(child: localCard),
-                                          ],
-                                        ),
-                                        SizedBox(height: sectionGap),
-                                        remoteCard,
-                                      ],
-                                    )
-                                  : Column(
-                                      children: [
-                                        botCard,
-                                        SizedBox(height: sectionGap),
-                                        localCard,
-                                        SizedBox(height: sectionGap),
-                                        remoteCard,
-                                      ],
-                                    );
-
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   buildHeroPanel(),
                                   SizedBox(height: sectionGap),
-                                  modes,
+                                  buildFocusedModePanel(),
                                 ],
                               );
                             },
@@ -17471,32 +18208,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                               child: Column(
                                                                                 children: [
                                                                                   _buildFriendClockPanel(
-                                                                                    white: false,
+                                                                                    white:
+                                                                                        _friendClockTopShowsWhite,
                                                                                     isLandscape: true,
                                                                                   ),
                                                                                   const SizedBox(
                                                                                     height: 10,
                                                                                   ),
                                                                                   _buildFriendClockPanel(
-                                                                                    white: true,
+                                                                                    white:
+                                                                                        _friendClockBottomShowsWhite,
                                                                                     isLandscape: true,
                                                                                   ),
                                                                                 ],
                                                                               ),
                                                                             ),
-                                                                          Padding(
-                                                                            padding: const EdgeInsets.only(
-                                                                              bottom: 10,
-                                                                            ),
-                                                                            child: Align(
-                                                                              alignment: Alignment.center,
-                                                                              child: _buildEditModeDepthCluster(
-                                                                                scale,
-                                                                                scheme,
-                                                                                includeEvalCounter: true,
+                                                                          if (!(_isRemoteFriendMatchMode &&
+                                                                              _isRemoteFriendPendingMatch))
+                                                                            Padding(
+                                                                              padding: const EdgeInsets.only(
+                                                                                bottom: 10,
+                                                                              ),
+                                                                              child: Align(
+                                                                                alignment: Alignment.center,
+                                                                                child: _buildEditModeDepthCluster(
+                                                                                  scale,
+                                                                                  scheme,
+                                                                                  includeEvalCounter: true,
+                                                                                ),
                                                                               ),
                                                                             ),
-                                                                          ),
                                                                           if (_isAnalysisMatchMode &&
                                                                               _selectedGambit !=
                                                                                   null)
@@ -17617,7 +18358,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             6,
                                           ),
                                           child: _buildFriendClockPanel(
-                                            white: false,
+                                            white: _friendClockTopShowsWhite,
                                             isLandscape: false,
                                           ),
                                         ),
@@ -17663,7 +18404,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             8,
                                           ),
                                           child: _buildFriendClockPanel(
-                                            white: true,
+                                            white: _friendClockBottomShowsWhite,
                                             isLandscape: false,
                                           ),
                                         ),
@@ -19123,10 +19864,69 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return const SizedBox.shrink();
     }
 
+    final facesOppositePlayer =
+        _isLocalFriendMatchMode && white == _friendClockTopShowsWhite;
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isLandscape ? 0 : 12),
-      child: Align(alignment: Alignment.center, child: card),
+      child: Align(
+        alignment: Alignment.center,
+        child: facesOppositePlayer
+            ? Transform.rotate(angle: pi, child: card)
+            : card,
+      ),
     );
+  }
+
+  int _clockLowTimeWarningThresholdMs(Duration initialTime) {
+    final warningSeconds = max(
+      12,
+      min(90, (initialTime.inSeconds / 6).round()),
+    );
+    return warningSeconds * Duration.millisecondsPerSecond;
+  }
+
+  int _clockCriticalTimeWarningThresholdMs(Duration initialTime) {
+    final criticalSeconds = max(
+      5,
+      min(30, (initialTime.inSeconds / 12).round()),
+    );
+    return criticalSeconds * Duration.millisecondsPerSecond;
+  }
+
+  double _clockLowTimePulseStrength({
+    required Duration remaining,
+    required Duration? initialTime,
+  }) {
+    if (initialTime == null || initialTime <= Duration.zero) {
+      return 0;
+    }
+
+    final remainingMs = max(0, remaining.inMilliseconds);
+    final warningThresholdMs = _clockLowTimeWarningThresholdMs(initialTime);
+    if (remainingMs >= warningThresholdMs) {
+      return 0;
+    }
+
+    final pulse = (sin(_pulseController.value * pi * 2) + 1) / 2;
+    final warningProgress =
+        1 - (remainingMs / warningThresholdMs).clamp(0.0, 1.0);
+    var strength =
+        Curves.easeOut.transform(warningProgress.clamp(0.0, 1.0)) *
+        (0.12 + pulse * 0.12);
+
+    final criticalThresholdMs = _clockCriticalTimeWarningThresholdMs(
+      initialTime,
+    );
+    if (remainingMs <= criticalThresholdMs) {
+      final criticalProgress =
+          1 - (remainingMs / criticalThresholdMs).clamp(0.0, 1.0);
+      strength +=
+          Curves.easeOut.transform(criticalProgress.clamp(0.0, 1.0)) *
+          (0.08 + pulse * 0.10);
+    }
+
+    return strength.clamp(0.0, 0.42);
   }
 
   Widget _buildRemoteFriendClockCard({required bool white}) {
@@ -19295,7 +20095,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ? (useMonochrome ? scheme.onSurface : const Color(0xFF5AAEE8))
               : (useMonochrome ? scheme.onSurface : const Color(0xFFD8B640)))
         : scheme.onSurface.withValues(alpha: 0.72);
-    final label = white ? 'WHITE' : 'BLACK';
+    final label =
+        '${_localFriendSeatLabelForColor(white)} | ${white ? 'WHITE' : 'BLACK'}';
+    final seatScore = _localFriendSeatScoreForColor(white);
     final detail = _gameOutcome == null
         ? (_hasTimedLocalFriendClock
               ? (isActive ? 'TO MOVE' : 'WAITING')
@@ -19305,64 +20107,151 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : _localFriendEndedOnTime
         ? (isWinner ? 'WON ON TIME' : 'FLAGGED')
         : (isWinner ? 'WINNER' : 'CHECKMATED');
-    final timeText = _hasTimedLocalFriendClock
-        ? _formatLocalFriendClock(_localFriendDisplayedClock(white: white))
-        : 'UNTIMED';
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      constraints: const BoxConstraints(minWidth: 136),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          accent.withValues(alpha: isDark ? 0.16 : 0.10),
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final remaining = _hasTimedLocalFriendClock
+            ? _localFriendDisplayedClock(white: white)
+            : Duration.zero;
+        final warningStrength = isActive && _gameOutcome == null
+            ? _clockLowTimePulseStrength(
+                remaining: remaining,
+                initialTime: _selectedLocalFriendTimeControl.initialTime,
+              )
+            : 0.0;
+        const warningColor = Color(0xFFE66565);
+        final displayAccent =
+            Color.lerp(accent, warningColor, warningStrength) ?? accent;
+        final fillColor = Color.alphaBlend(
+          Color.lerp(
+                accent.withValues(alpha: isDark ? 0.16 : 0.10),
+                warningColor.withValues(alpha: isDark ? 0.22 : 0.14),
+                warningStrength,
+              ) ??
+              accent.withValues(alpha: isDark ? 0.16 : 0.10),
           scheme.surface,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withValues(alpha: 0.46), width: 1.4),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: isActive ? 0.20 : 0.10),
-            blurRadius: isActive ? 18 : 12,
-            offset: const Offset(0, 6),
+        );
+        final borderColor =
+            Color.lerp(
+              accent.withValues(alpha: 0.46),
+              warningColor.withValues(alpha: isDark ? 0.70 : 0.58),
+              warningStrength,
+            ) ??
+            accent.withValues(alpha: 0.46);
+        final shadowColor =
+            Color.lerp(
+              accent.withValues(alpha: isActive ? 0.20 : 0.10),
+              warningColor.withValues(alpha: isActive ? 0.24 : 0.12),
+              warningStrength,
+            ) ??
+            accent.withValues(alpha: isActive ? 0.20 : 0.10);
+        final timeTextColor =
+            Color.lerp(
+              scheme.onSurface,
+              warningColor.withValues(alpha: 0.96),
+              warningStrength * 0.24,
+            ) ??
+            scheme.onSurface;
+        final detailColor =
+            Color.lerp(
+              scheme.onSurface.withValues(alpha: 0.66),
+              warningColor.withValues(alpha: 0.88),
+              warningStrength * 0.16,
+            ) ??
+            scheme.onSurface.withValues(alpha: 0.66);
+        final timeText = _hasTimedLocalFriendClock
+            ? _formatLocalFriendClock(remaining)
+            : 'UNTIMED';
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          constraints: const BoxConstraints(minWidth: 136),
+          decoration: BoxDecoration(
+            color: fillColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1.4),
+            boxShadow: [
+              BoxShadow(
+                color: shadowColor,
+                blurRadius: isActive ? 18 + warningStrength * 5 : 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: accent,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.7,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: displayAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.7,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: displayAccent.withValues(
+                          alpha: isDark ? 0.20 : 0.12,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: displayAccent.withValues(alpha: 0.34),
+                        ),
+                      ),
+                      child: Text(
+                        'S $seatScore',
+                        style: TextStyle(
+                          color: displayAccent,
+                          fontSize: 9.2,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.42,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                timeText,
+                style: TextStyle(
+                  color: timeTextColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                detail,
+                style: TextStyle(
+                  color: detailColor,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            timeText,
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            detail,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.66),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -20644,6 +21533,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remotePieceSelectionOpen = _isRemoteFriendPieceSelectionOpen;
       final remoteSelectionRemainingSeconds =
           _remoteFriendPieceSelectionRemainingSeconds;
+      final compactPendingInviteOverlay =
+          _isRemoteFriendPendingMatch &&
+          isLandscape &&
+          media.size.height <= 760;
       final remoteAccent = remotePieceSelectionOpen
           ? const Color(0xFFD8B640)
           : _hasIncomingRemoteDrawOffer || _hasOutgoingRemoteDrawOffer
@@ -20672,7 +21565,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               : 'Moves and clocks are synchronized from the private match.');
       final buttons = <Widget>[
         buildRemoteActionButton(
-          label: 'VS Mode',
+          label: compactPendingInviteOverlay ? 'Back' : 'VS Mode',
           icon: Icons.arrow_back_rounded,
           onPressed: _remoteFriendOperationInProgress
               ? null
@@ -20681,23 +21574,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ),
         if (_isRemoteFriendPendingMatch) ...[
           buildRemoteActionButton(
-            label: 'Copy Code',
+            label: compactPendingInviteOverlay ? 'Copy' : 'Copy Code',
             icon: Icons.copy_all_rounded,
             onPressed: _remoteFriendOperationInProgress
                 ? null
                 : () => unawaited(_copyRemoteFriendInviteCode()),
             accent: const Color(0xFF5AAEE8),
           ),
+          if (!compactPendingInviteOverlay)
+            buildRemoteActionButton(
+              label: 'Share Code',
+              icon: Icons.share_rounded,
+              onPressed: _remoteFriendOperationInProgress
+                  ? null
+                  : () => unawaited(_shareRemoteFriendInviteCode()),
+              accent: const Color(0xFF5AAEE8),
+            ),
           buildRemoteActionButton(
-            label: 'Share Code',
-            icon: Icons.share_rounded,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(_shareRemoteFriendInviteCode()),
-            accent: const Color(0xFF5AAEE8),
-          ),
-          buildRemoteActionButton(
-            label: 'Cancel',
+            label: compactPendingInviteOverlay ? 'Cancel Invite' : 'Cancel',
             icon: Icons.close_rounded,
             onPressed: _remoteFriendOperationInProgress
                 ? null
@@ -20763,15 +21657,114 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             primary: true,
           ),
         ],
-        buildRemoteActionButton(
-          label: 'Refresh',
-          icon: Icons.sync_rounded,
-          onPressed: _remoteFriendOperationInProgress
-              ? null
-              : () => unawaited(_refreshRemoteFriendMatch()),
-          accent: remoteAccent,
-        ),
+        if (!compactPendingInviteOverlay)
+          buildRemoteActionButton(
+            label: 'Refresh',
+            icon: Icons.sync_rounded,
+            onPressed: _remoteFriendOperationInProgress
+                ? null
+                : () => unawaited(_refreshRemoteFriendMatch()),
+            accent: remoteAccent,
+          ),
       ];
+
+      final remoteActionCard = Container(
+        width: double.infinity,
+        padding: compactPendingInviteOverlay
+            ? const EdgeInsets.fromLTRB(12, 10, 12, 10)
+            : const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            remoteAccent.withValues(alpha: isLight ? 0.08 : 0.14),
+            scheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: remoteAccent.withValues(alpha: 0.30)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _isRemoteFriendPendingMatch
+                  ? 'Remote Friend Invite'
+                  : _isRemoteFriendActiveMatch
+                  ? 'Remote Friend Match'
+                  : 'Remote Friend Session',
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontSize: compactPendingInviteOverlay ? 13.8 : 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              remoteStatusText,
+              maxLines: compactPendingInviteOverlay ? 2 : null,
+              overflow: compactPendingInviteOverlay
+                  ? TextOverflow.ellipsis
+                  : TextOverflow.visible,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.72),
+                fontSize: compactPendingInviteOverlay ? 11.5 : 12.5,
+                height: 1.32,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (remotePieceSelectionOpen && remoteSeat != null) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 12,
+                children: _availablePieceThemes
+                    .map((mode) {
+                      final selected =
+                          _remoteFriendPieceThemeForSeat(remoteSeat) == mode;
+                      return _remoteFriendPieceThemeChoiceTile(
+                        mode: mode,
+                        isWhitePiece: remoteSeat == RemoteFriendSeat.white,
+                        selected: selected,
+                        onTap: _remoteFriendOperationInProgress
+                            ? null
+                            : () => unawaited(
+                                _selectRemoteFriendPieceTheme(mode),
+                              ),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(spacing: 10, runSpacing: 10, children: buttons),
+            if (compactPendingInviteOverlay) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: buildRemoteActionButton(
+                  label: 'Refresh',
+                  icon: Icons.sync_rounded,
+                  onPressed: _remoteFriendOperationInProgress
+                      ? null
+                      : () => unawaited(_refreshRemoteFriendMatch()),
+                  accent: remoteAccent,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+
+      final remoteActionBody = compactPendingInviteOverlay
+          ? ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: min(200.0, media.size.height * 0.34),
+              ),
+              child: SingleChildScrollView(
+                primary: false,
+                child: remoteActionCard,
+              ),
+            )
+          : remoteActionCard;
 
       return Padding(
         padding: EdgeInsets.only(
@@ -20779,71 +21772,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           left: horizontal,
           right: horizontal,
         ),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              remoteAccent.withValues(alpha: isLight ? 0.08 : 0.14),
-              scheme.surface,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: remoteAccent.withValues(alpha: 0.30)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _isRemoteFriendPendingMatch
-                    ? 'Remote Friend Invite'
-                    : _isRemoteFriendActiveMatch
-                    ? 'Remote Friend Match'
-                    : 'Remote Friend Session',
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                remoteStatusText,
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                  fontSize: 12.5,
-                  height: 1.32,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (remotePieceSelectionOpen && remoteSeat != null) ...[
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 12,
-                  children: _availablePieceThemes
-                      .map((mode) {
-                        final selected =
-                            _remoteFriendPieceThemeForSeat(remoteSeat) == mode;
-                        return _remoteFriendPieceThemeChoiceTile(
-                          mode: mode,
-                          isWhitePiece: remoteSeat == RemoteFriendSeat.white,
-                          selected: selected,
-                          onTap: _remoteFriendOperationInProgress
-                              ? null
-                              : () => unawaited(
-                                  _selectRemoteFriendPieceTheme(mode),
-                                ),
-                        );
-                      })
-                      .toList(growable: false),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Wrap(spacing: 10, runSpacing: 10, children: buttons),
-            ],
-          ),
-        ),
+        child: remoteActionBody,
       );
     }
 
@@ -22984,6 +23913,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final showEngineControlsSection =
         !isAcademyMode && (isBoardAnalysisPage || isVsBotPage);
 
+    if (isBoardAnalysisPage && _perspective != BoardPerspective.headToHead) {
+      _analysisStandardPerspective = _perspective;
+    }
+
     await showUniversalSettingsSheet(
       context: context,
       title: 'Settings',
@@ -23077,30 +24010,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         setSheetState,
                         markChanged,
                       ),
-                      _perspectiveOption(
-                        'Head-to-head',
-                        BoardPerspective.headToHead,
-                        setSheetState,
-                        markChanged,
-                      ),
                     ],
                   ),
-                  if (_isHeadToHeadPerspective) ...[
-                    const SizedBox(height: 12),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: _lockedHeadToHeadPerspective,
-                      onChanged: (value) {
-                        markChanged();
-                        unawaited(_setLockedHeadToHeadPerspective(value));
-                        setSheetState(() {});
-                      },
-                      title: const Text('Lock head-to-head orientation'),
-                      subtitle: const Text(
-                        'Keep white at the bottom and rotate black pieces toward the top player.',
-                      ),
-                    ),
-                  ],
                 ],
               );
             }
@@ -23179,40 +24090,92 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final hasAllStockfishUpgrades =
             _depthTier >= 3 && _maxSuggestionsAllowed >= 10;
 
-        if (hasAllThemes && hasAllStockfishUpgrades) {
-          return sections;
+        if (!hasAllThemes || !hasAllStockfishUpgrades) {
+          final storeButtonLabel = hasAllThemes
+              ? 'Open Stockfish Upgrades'
+              : 'Open Theme Store';
+          final storeButtonIcon = hasAllThemes
+              ? Icons.upgrade_rounded
+              : Icons.auto_awesome_rounded;
+          final initialStoreSection = hasAllThemes
+              ? StoreSection.general
+              : StoreSection.themes;
+
+          sections.add(
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: sectionColor,
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  Future.microtask(
+                    () => _openStore(initialSection: initialStoreSection),
+                  );
+                },
+                icon: Icon(storeButtonIcon, size: 18),
+                label: Text(storeButtonLabel),
+              ),
+            ),
+          );
         }
 
-        final storeButtonLabel = hasAllThemes
-            ? 'Open Stockfish Upgrades'
-            : 'Open Theme Store';
-        final storeButtonIcon = hasAllThemes
-            ? Icons.upgrade_rounded
-            : Icons.auto_awesome_rounded;
-        final initialStoreSection = hasAllThemes
-            ? StoreSection.general
-            : StoreSection.themes;
-
-        sections.add(
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: sectionColor,
-              border: Border.all(color: borderColor),
-              borderRadius: BorderRadius.circular(16),
+        if (isBoardAnalysisPage) {
+          sections.add(
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+              decoration: BoxDecoration(
+                color: sectionColor,
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _isHeadToHeadPerspective,
+                    onChanged: (enabled) {
+                      markChanged();
+                      _applyPerspectiveSelection(
+                        enabled
+                            ? BoardPerspective.headToHead
+                            : (_analysisStandardPerspective ==
+                                      BoardPerspective.headToHead
+                                  ? _defaultPerspective
+                                  : _analysisStandardPerspective),
+                      );
+                      setSheetState(() {});
+                    },
+                    title: const Text('Head-to-head board'),
+                    subtitle: const Text(
+                      'Rare face-to-face analysis view. It overrides the White / Black / Auto choice above while enabled.',
+                    ),
+                  ),
+                  if (_isHeadToHeadPerspective) ...[
+                    const SizedBox(height: 6),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _lockedHeadToHeadPerspective,
+                      onChanged: (value) {
+                        markChanged();
+                        unawaited(_setLockedHeadToHeadPerspective(value));
+                        setSheetState(() {});
+                      },
+                      title: const Text('Lock head-to-head orientation'),
+                      subtitle: const Text(
+                        'Keep white at the bottom and rotate black pieces toward the top player.',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            child: FilledButton.icon(
-              onPressed: () {
-                Navigator.of(sheetContext).pop();
-                Future.microtask(
-                  () => _openStore(initialSection: initialStoreSection),
-                );
-              },
-              icon: Icon(storeButtonIcon, size: 18),
-              label: Text(storeButtonLabel),
-            ),
-          ),
-        );
+          );
+        }
 
         return sections;
       },
@@ -23505,6 +24468,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         !_adFreeOwned && adService.boardResetCooldownRemaining == Duration.zero;
     final wasLocalFriendMatch = _isLocalFriendMatchMode;
     final wasBotMatch = _isBotMatchMode;
+    final advanceCompletedLocalFriendRound =
+        wasLocalFriendMatch && _gameOutcome != null;
     if (shouldAttemptAd) {
       final shown = await adService.maybeShowBoardResetInterstitial();
       if (!shown) {
@@ -23518,6 +24483,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
     if (!mounted) return;
     setState(() {
+      if (advanceCompletedLocalFriendRound) {
+        _advanceLocalFriendSeriesToNextRound();
+      }
       _resetBoard();
       if (wasLocalFriendMatch) {
         _initializeLocalFriendClocks();
@@ -26070,13 +27038,63 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  void _applyPerspectiveSelection(BoardPerspective perspective) {
+    if (perspective != BoardPerspective.headToHead) {
+      _analysisStandardPerspective = perspective;
+    } else if (_perspective != BoardPerspective.headToHead) {
+      _analysisStandardPerspective = _perspective;
+    }
+
+    if (_perspective == perspective) {
+      return;
+    }
+
+    setState(() {
+      _perspective = perspective;
+      if (perspective == BoardPerspective.headToHead) {
+        _suggestionsEnabled = false;
+        _openingMode = OpeningMode.off;
+        _preferOpeningModeOnNextToggleAfterSacrifice = false;
+        _openingModeFeedbackLabel = null;
+        _openingModeFeedbackColor = null;
+        _selectedGambit = null;
+        _gambitPreviewLines = <EngineLine>[];
+        _gambitSelectedFrom = null;
+        _legalTargets.clear();
+        _gambitAvailableTargets.clear();
+        _topLines = <EngineLine>[];
+        _analysisLines = <EngineLine>[];
+        _analysisLinesFen = null;
+        _currentDepth = 0;
+      }
+    });
+
+    if (perspective == BoardPerspective.headToHead) {
+      _cancelSacrificeScanSearches(reason: 'head-to-head perspective');
+      if (_analysisEditMode) {
+        _setAnalysisEditMode(false);
+      }
+      _send('stop');
+      if (_headToHeadEvalBarEnabled) {
+        _analyze();
+      }
+    }
+
+    _persistCurrentSettings();
+  }
+
   Widget _perspectiveOption(
     String label,
     BoardPerspective p,
     StateSetter setL,
     VoidCallback markChanged,
   ) {
-    final sel = _perspective == p;
+    final selectedPerspective = _perspective == BoardPerspective.headToHead
+        ? (_analysisStandardPerspective == BoardPerspective.headToHead
+              ? _defaultPerspective
+              : _analysisStandardPerspective)
+        : _perspective;
+    final sel = selectedPerspective == p;
     final scheme = Theme.of(context).colorScheme;
     Widget kingWidget;
     if (p == BoardPerspective.white) {
@@ -26103,37 +27121,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       onTap: () {
         if (sel) return;
         markChanged();
-        setState(() {
-          _perspective = p;
-          if (p == BoardPerspective.headToHead) {
-            _suggestionsEnabled = false;
-            _openingMode = OpeningMode.off;
-            _preferOpeningModeOnNextToggleAfterSacrifice = false;
-            _openingModeFeedbackLabel = null;
-            _openingModeFeedbackColor = null;
-            _selectedGambit = null;
-            _gambitPreviewLines = <EngineLine>[];
-            _gambitSelectedFrom = null;
-            _legalTargets.clear();
-            _gambitAvailableTargets.clear();
-            _topLines = <EngineLine>[];
-            _analysisLines = <EngineLine>[];
-            _analysisLinesFen = null;
-            _currentDepth = 0;
-          }
-        });
-        if (p == BoardPerspective.headToHead) {
-          _cancelSacrificeScanSearches(reason: 'head-to-head perspective');
-          if (_analysisEditMode) {
-            _setAnalysisEditMode(false);
-          }
-          _send('stop');
-          if (_headToHeadEvalBarEnabled) {
-            _analyze();
-          }
-        }
+        _applyPerspectiveSelection(p);
         setL(() {});
-        _persistCurrentSettings();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -26323,7 +27312,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return child;
       }
 
-      if (!_isLockedHeadToHeadPerspective || !isBlackPiece) {
+      if (!_isLockedHeadToHeadPerspective) {
+        return child;
+      }
+
+      final shouldRotateForTopSeat = _isLocalFriendMatchMode
+          ? isBlackPiece == _localFriendBottomSeatIsWhite
+          : isBlackPiece;
+
+      if (!shouldRotateForTopSeat) {
         return child;
       }
 

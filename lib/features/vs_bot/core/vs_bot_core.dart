@@ -1262,6 +1262,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           final isTimedLocalFriendFinish = _isTimedLocalFriendFinish && !isDraw;
           final isTimedRemoteFriendFinish =
               _isTimedRemoteFriendFinish && !isDraw;
+            final resetLabel = _isLocalFriendMatchMode
+              ? 'Next Round'
+              : 'Reset Board';
           final title = isDraw
               ? 'Draw'
               : _isRemoteFriendMatchMode
@@ -1398,7 +1401,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                           ),
                         ),
                         icon: const Icon(Icons.replay_rounded, size: 18),
-                        label: const Text('Reset Board'),
+                        label: Text(resetLabel),
                       ),
                     ),
                   ],
