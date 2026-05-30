@@ -1091,10 +1091,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _yellowDotPhase = random.nextDouble() * 2 * pi;
     _blueDotSpeed = (0.28 + random.nextDouble() * 0.12) * 1.40;
     _yellowDotSpeed = (0.25 + random.nextDouble() * 0.12) * 1.40;
-    _blueDotRadius =
-        (0.58 + random.nextDouble() * 0.12) * menuDotRadiusScale;
-    _yellowDotRadius =
-        (0.52 + random.nextDouble() * 0.12) * menuDotRadiusScale;
+    _blueDotRadius = (0.58 + random.nextDouble() * 0.12) * menuDotRadiusScale;
+    _yellowDotRadius = (0.52 + random.nextDouble() * 0.12) * menuDotRadiusScale;
     _blueDotTrajectoryNoise = random.nextDouble();
     _yellowDotTrajectoryNoise = random.nextDouble();
     _blueDotShapeSeed = random.nextDouble() * 3.2;
@@ -1370,10 +1368,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
         final safeDistance = max(collisionDistance, 0.0001);
         final direction = separation / safeDistance;
-    const repulsionStrength = 10.8;
+        const repulsionStrength = 10.8;
         final impulse =
             direction * repulsionStrength +
-      Offset(-direction.dy, direction.dx) * 1.85;
+            Offset(-direction.dy, direction.dx) * 1.85;
         _blueMenuDotVelocity += impulse;
         _yellowMenuDotVelocity -= impulse;
       }
@@ -1424,24 +1422,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           yellowChaos +
           yellowRadial;
 
-        final velocityDamping = pow(0.78, dt / (1.0 / 60.0)).toDouble();
+      final velocityDamping = pow(0.78, dt / (1.0 / 60.0)).toDouble();
 
-      _blueMenuDotVelocity =
-          clampMenuDotVelocity(
-          (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) *
+      _blueMenuDotVelocity = clampMenuDotVelocity(
+        (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) * velocityDamping,
+      );
+      _yellowMenuDotVelocity = clampMenuDotVelocity(
+        (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) *
             velocityDamping,
-          );
-      _yellowMenuDotVelocity =
-          clampMenuDotVelocity(
-          (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) *
-            velocityDamping,
-          );
+      );
 
       _blueMenuDotPosition += _blueMenuDotVelocity * dt;
       _yellowMenuDotPosition += _yellowMenuDotVelocity * dt;
 
-        settleMenuDotAtBoundary(isBlue: true);
-        settleMenuDotAtBoundary(isBlue: false);
+      settleMenuDotAtBoundary(isBlue: true);
+      settleMenuDotAtBoundary(isBlue: false);
 
       _menuSparkParticles.removeWhere((particle) {
         particle.position += particle.velocity * dt;
@@ -17629,11 +17624,271 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
+    Widget buildCompactBotPanel() {
+      final selectedBot = _selectedBot;
+      final accent = selectedBot == null
+          ? (useMonochrome ? scheme.onSurface : arcade.cyan)
+          : _vsBotProfileAccent(selectedBot.profile, arcade);
+      return buildCardShell(
+        accent: accent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildSectionTitle('CPU MATCH SETUP', accent),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                buildTag(
+                  'BOT ${selectedBot?.name.toUpperCase() ?? 'NOT SELECTED'}',
+                  accent,
+                  icon: Icons.smart_toy_outlined,
+                ),
+                buildTag(
+                  botDifficultyLabel(_selectedBotDifficulty).toUpperCase(),
+                  _botDifficultyColor(_selectedBotDifficulty),
+                  icon: Icons.bolt_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: buildActionButton(
+                label: selectedBot == null
+                    ? 'Open Bot Selector'
+                    : 'Retune Bot Match',
+                icon: Icons.arrow_forward_rounded,
+                onPressed: _openBotSetupFromMenu,
+                accent: accent,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildCompactLocalPanel() {
+      return buildCardShell(
+        accent: arcade.amber,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildSectionTitle('SHARED SCREEN SETTINGS', arcade.amber),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (
+                  int index = 0;
+                  index < _localFriendTimeControls.length;
+                  index++
+                )
+                  buildChoiceChip(
+                    label: _formatLocalFriendTimeControl(
+                      _localFriendTimeControls[index],
+                    ),
+                    selected: _localFriendTimeControlIndex == index,
+                    onSelected: (_) {
+                      unawaited(_setLocalFriendTimeControlIndex(index));
+                    },
+                    accent: arcade.amber,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: buildActionButton(
+                label: 'Start Shared Screen 1V1',
+                icon: Icons.play_arrow_rounded,
+                onPressed: () => unawaited(_startLocalFriendMatch()),
+                accent: arcade.amber,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildCompactRemotePanel() {
+      final mainActionBusy = _remoteFriendOperationInProgress;
+      return buildCardShell(
+        accent: remoteAccent,
+        emphasized: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildSectionTitle('ONLINE MATCH SETTINGS', remoteAccent),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                buildTag(
+                  'INVITE ONLY',
+                  remoteAccent,
+                  icon: Icons.password_rounded,
+                ),
+                buildTag(
+                  'SERVER RULES',
+                  remoteAccent,
+                  icon: Icons.verified_outlined,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            buildSectionPanel(
+              title: 'TIME CONTROL',
+              accent: remoteAccent,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (
+                    int index = 0;
+                    index < _localFriendTimeControls.length;
+                    index++
+                  )
+                    buildChoiceChip(
+                      label: _formatRemoteFriendTimeControl(
+                        RemoteFriendTimeControl(
+                          initialSeconds:
+                              _localFriendTimeControls[index]
+                                  .initialTime
+                                  ?.inSeconds ??
+                              0,
+                          incrementSeconds: _localFriendTimeControls[index]
+                              .increment
+                              .inSeconds,
+                        ),
+                      ),
+                      selected: _localFriendTimeControlIndex == index,
+                      onSelected: mainActionBusy
+                          ? null
+                          : (_) {
+                              unawaited(_setLocalFriendTimeControlIndex(index));
+                            },
+                      accent: remoteAccent,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            buildSectionPanel(
+              title: 'COLOR PREFERENCE',
+              accent: remoteAccent,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in <(RemoteFriendSeatPreference, String)>[
+                    (RemoteFriendSeatPreference.random, 'Random'),
+                    (RemoteFriendSeatPreference.white, 'White'),
+                    (RemoteFriendSeatPreference.black, 'Black'),
+                  ])
+                    buildChoiceChip(
+                      label: entry.$2,
+                      selected: _remoteFriendSeatPreference == entry.$1,
+                      onSelected: mainActionBusy
+                          ? null
+                          : (_) {
+                              setState(() {
+                                _remoteFriendSeatPreference = entry.$1;
+                              });
+                            },
+                      accent: remoteAccent,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                buildTag(
+                  'SYNCED CLOCKS',
+                  remoteAccent,
+                  icon: Icons.sync_alt_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: buildActionButton(
+                    label: 'Create Invite',
+                    icon: Icons.add_link_rounded,
+                    onPressed: mainActionBusy
+                        ? null
+                        : () => unawaited(_createRemoteFriendInvite()),
+                    accent: remoteAccent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: buildActionButton(
+                    label: 'Join Code',
+                    icon: Icons.key_rounded,
+                    onPressed: mainActionBusy
+                        ? null
+                        : () => unawaited(_joinRemoteFriendInvite()),
+                    accent: remoteAccent,
+                    filled: false,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildQuickJoinPanel() {
+      return buildCardShell(
+        accent: heroAccent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            buildSectionTitle('QUICK JOIN', heroAccent),
+            const SizedBox(height: 10),
+            Text(
+              'Paste an invite code and jump directly into your private match lobby.',
+              style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: buildActionButton(
+                label: 'Join With Code',
+                icon: Icons.login_rounded,
+                onPressed: _remoteFriendOperationInProgress
+                    ? null
+                    : () => unawaited(_joinRemoteFriendInvite()),
+                accent: heroAccent,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     Widget buildHeroPanel() {
       final useSingleColumnHeroCards = !isLandscape && media.size.width <= 430;
       final singleColumnHeroCardHeight = (media.size.height * 0.19)
           .clamp(152.0, 186.0)
           .toDouble();
+      final heroCardAspectRatio = media.size.width >= 1100
+          ? 2.95
+          : media.size.width >= 800
+          ? (isLandscape ? 2.75 : 2.45)
+          : media.size.width >= 600
+          ? (isLandscape ? 2.55 : 2.20)
+          : (isLandscape ? 2.35 : 1.75);
       final heroHeadingSize = media.size.width <= 360
           ? 23.5
           : media.size.width <= 430
@@ -17709,10 +17964,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             accent: accent,
           ),
           onTap: () {
-            if (option == _VsModeQuickOption.vsCpu) {
-              _openBotSetupFromMenu();
-              return;
-            }
             setState(() {
               _selectedVsModeQuickOption = option;
             });
@@ -17751,8 +18002,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ? 17.0
                     : 18.0;
                 final hasSubtitle =
-                  subtitle != null && subtitle.trim().isNotEmpty;
-                final imageCropRight = expandedCard ? 15.0 : 13.0;
+                    subtitle != null && subtitle.trim().isNotEmpty;
+                final rightEdgeMaskWidth = expandedCard ? 6.0 : 4.0;
                 return Stack(
                   fit: StackFit.expand,
                   children: [
@@ -17763,8 +18014,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           widthFactor: zoom,
                           heightFactor: zoom,
                           alignment: Alignment.centerRight,
-                          child: Transform.translate(
-                            offset: Offset(-imageCropRight, 0),
+                          child: SizedBox.expand(
                             child: Image.asset(
                               imageAsset,
                               fit: BoxFit.cover,
@@ -17783,6 +18033,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   ),
                                 );
                               },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: rightEdgeMaskWidth,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Colors.transparent,
+                                Color.alphaBlend(
+                                  accent.withValues(
+                                    alpha: selected ? 0.08 : 0.05,
+                                  ),
+                                  arcade.panelAlt.withValues(
+                                    alpha: selected ? 0.94 : 0.88,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -17809,8 +18086,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               (-constraints.maxWidth * 0.22) +
                               ((constraints.maxWidth * 1.05) *
                                   ((_pulseController.value +
-                                              (option.index * 0.17)) %
-                                          1.0));
+                                          (option.index * 0.17)) %
+                                      1.0));
 
                           return Stack(
                             fit: StackFit.expand,
@@ -17819,12 +18096,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(15),
                                   border: Border.all(
-                                    color: accent.withValues(alpha: borderAlpha),
+                                    color: accent.withValues(
+                                      alpha: borderAlpha,
+                                    ),
                                     width: selected ? 1.9 : 1.35,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: accent.withValues(alpha: glowAlpha),
+                                      color: accent.withValues(
+                                        alpha: glowAlpha,
+                                      ),
                                       blurRadius: selected ? 22 : 14,
                                       spreadRadius: selected ? 1.1 : 0.25,
                                     ),
@@ -17989,7 +18270,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             ? 10.2
                                             : 10.9,
                                         weight: FontWeight.w800,
-                                        letterSpacing: expandedCard ? 0.74 : 0.68,
+                                        letterSpacing: expandedCard
+                                            ? 0.74
+                                            : 0.68,
                                         height: expandedCard ? 1.06 : 1.0,
                                       ).copyWith(
                                         shadows: const [
@@ -18043,6 +18326,83 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         );
       }
 
+      Widget buildModeDetailsPanel(_VsModeQuickOption option) {
+        return switch (option) {
+          _VsModeQuickOption.crossDevice => buildCompactRemotePanel(),
+          _VsModeQuickOption.sharedScreen => buildCompactLocalPanel(),
+          _VsModeQuickOption.vsCpu => buildCompactBotPanel(),
+          _VsModeQuickOption.quickJoin => buildQuickJoinPanel(),
+        };
+      }
+
+      Widget buildInlineModeStack({
+        required _VsModeQuickOption option,
+        required String title,
+        String? subtitle,
+        required IconData icon,
+        required Color accent,
+        required String imageAsset,
+        double? forcedHeight,
+      }) {
+        final selected = _selectedVsModeQuickOption == option;
+        final card = buildModeOptionCard(
+          option: option,
+          title: title,
+          subtitle: subtitle,
+          icon: icon,
+          accent: accent,
+          imageAsset: imageAsset,
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (forcedHeight != null)
+              SizedBox(
+                width: double.infinity,
+                height: forcedHeight,
+                child: card,
+              )
+            else
+              AspectRatio(aspectRatio: heroCardAspectRatio, child: card),
+            if (selected) ...[
+              const SizedBox(height: 12),
+              buildModeDetailsPanel(option),
+            ],
+          ],
+        );
+      }
+
+      Widget buildModeColumn(
+        List<
+          ({
+            _VsModeQuickOption option,
+            String title,
+            String? subtitle,
+            IconData icon,
+            Color accent,
+            String imageAsset,
+          })
+        >
+        entries,
+      ) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (int index = 0; index < entries.length; index++) ...[
+              buildInlineModeStack(
+                option: entries[index].option,
+                title: entries[index].title,
+                subtitle: entries[index].subtitle,
+                icon: entries[index].icon,
+                accent: entries[index].accent,
+                imageAsset: entries[index].imageAsset,
+              ),
+              if (index != entries.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        );
+      }
+
       final localTimeSummary =
           selectedLocalFriendTimeControl.initialTime == null
           ? 'Untimed'
@@ -18050,41 +18410,74 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remoteTimeSummary = selectedRemoteFriendTimeControl.isUntimed
           ? 'Untimed Invite'
           : _formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl);
-      final modeCards = <Widget>[
-        buildModeOptionCard(
-          option: _VsModeQuickOption.crossDevice,
-          title: '1V1 CROSS-PLAY',
-          subtitle: remoteTimeSummary,
-          icon: Icons.wifi_tethering_rounded,
-          accent: remoteAccent,
-          imageAsset: 'assets/vs/a1.png',
-        ),
-        buildModeOptionCard(
-          option: _VsModeQuickOption.vsCpu,
-          title: '1 PLAYER VS CPU',
-          icon: Icons.smart_toy_outlined,
-          accent: arcade.cyan,
-          imageAsset: 'assets/vs/a4.png',
-        ),
-        buildModeOptionCard(
-          option: _VsModeQuickOption.sharedScreen,
-          title: '1V1 SHARED SCREEN',
-          subtitle: localTimeSummary,
-          icon: Icons.people_alt_outlined,
-          accent: arcade.amber,
-          imageAsset: 'assets/vs/a2.png',
-        ),
-        buildModeOptionCard(
-          option: _VsModeQuickOption.quickJoin,
-          title: 'QUICK JOIN CODE',
-          subtitle: _remoteFriendOperationInProgress
-              ? 'Working...'
-              : 'Paste invite code',
-          icon: Icons.key_rounded,
-          accent: heroAccent,
-          imageAsset: 'assets/vs/a3.png',
-        ),
-      ];
+      final modeCards =
+          <
+            ({
+              _VsModeQuickOption option,
+              String title,
+              String? subtitle,
+              IconData icon,
+              Color accent,
+              String imageAsset,
+            })
+          >[
+            (
+              option: _VsModeQuickOption.crossDevice,
+              title: '1V1 CROSS-PLAY',
+              subtitle: remoteTimeSummary,
+              icon: Icons.wifi_tethering_rounded,
+              accent: remoteAccent,
+              imageAsset: 'assets/vs/a1.png',
+            ),
+            (
+              option: _VsModeQuickOption.vsCpu,
+              title: '1 PLAYER VS CPU',
+              subtitle: null,
+              icon: Icons.smart_toy_outlined,
+              accent: arcade.cyan,
+              imageAsset: 'assets/vs/a4.png',
+            ),
+            (
+              option: _VsModeQuickOption.sharedScreen,
+              title: '1V1 SHARED SCREEN',
+              subtitle: localTimeSummary,
+              icon: Icons.people_alt_outlined,
+              accent: arcade.amber,
+              imageAsset: 'assets/vs/a2.png',
+            ),
+            (
+              option: _VsModeQuickOption.quickJoin,
+              title: 'QUICK JOIN CODE',
+              subtitle: _remoteFriendOperationInProgress
+                  ? 'Working...'
+                  : 'Paste invite code',
+              icon: Icons.key_rounded,
+              accent: heroAccent,
+              imageAsset: 'assets/vs/a3.png',
+            ),
+          ];
+      final leftColumnModeCards =
+          <
+            ({
+              _VsModeQuickOption option,
+              String title,
+              String? subtitle,
+              IconData icon,
+              Color accent,
+              String imageAsset,
+            })
+          >[modeCards[0], modeCards[2]];
+      final rightColumnModeCards =
+          <
+            ({
+              _VsModeQuickOption option,
+              String title,
+              String? subtitle,
+              IconData icon,
+              Color accent,
+              String imageAsset,
+            })
+          >[modeCards[1], modeCards[3]];
 
       return buildCardShell(
         accent: heroAccent,
@@ -18146,298 +18539,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               Column(
                 children: [
                   for (int index = 0; index < modeCards.length; index++) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: singleColumnHeroCardHeight,
-                      child: modeCards[index],
+                    buildInlineModeStack(
+                      option: modeCards[index].option,
+                      title: modeCards[index].title,
+                      subtitle: modeCards[index].subtitle,
+                      icon: modeCards[index].icon,
+                      accent: modeCards[index].accent,
+                      imageAsset: modeCards[index].imageAsset,
+                      forcedHeight: singleColumnHeroCardHeight,
                     ),
-                    if (index != modeCards.length - 1) const SizedBox(height: 12),
+                    if (index != modeCards.length - 1)
+                      const SizedBox(height: 12),
                   ],
                 ],
               )
             else
-              GridView.count(
-                crossAxisCount: media.size.width < 350 ? 1 : 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: media.size.width >= 1100
-                    ? 2.95
-                    : media.size.width >= 800
-                    ? (isLandscape ? 2.75 : 2.45)
-                    : media.size.width >= 600
-                    ? (isLandscape ? 2.55 : 2.20)
-                    : (isLandscape ? 2.35 : 1.75),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: modeCards,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: buildModeColumn(leftColumnModeCards)),
+                  const SizedBox(width: 10),
+                  Expanded(child: buildModeColumn(rightColumnModeCards)),
+                ],
               ),
           ],
         ),
       );
-    }
-
-    Widget buildFocusedModePanel() {
-      Widget buildCompactBotPanel() {
-        final selectedBot = _selectedBot;
-        final accent = selectedBot == null
-            ? (useMonochrome ? scheme.onSurface : arcade.cyan)
-            : _vsBotProfileAccent(selectedBot.profile, arcade);
-        return buildCardShell(
-          accent: accent,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildSectionTitle('CPU MATCH SETUP', accent),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  buildTag(
-                    'BOT ${selectedBot?.name.toUpperCase() ?? 'NOT SELECTED'}',
-                    accent,
-                    icon: Icons.smart_toy_outlined,
-                  ),
-                  buildTag(
-                    botDifficultyLabel(_selectedBotDifficulty).toUpperCase(),
-                    _botDifficultyColor(_selectedBotDifficulty),
-                    icon: Icons.bolt_rounded,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: buildActionButton(
-                  label: selectedBot == null
-                      ? 'Open Bot Selector'
-                      : 'Retune Bot Match',
-                  icon: Icons.arrow_forward_rounded,
-                  onPressed: _openBotSetupFromMenu,
-                  accent: accent,
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-
-      Widget buildCompactLocalPanel() {
-        return buildCardShell(
-          accent: arcade.amber,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildSectionTitle('SHARED SCREEN SETTINGS', arcade.amber),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (
-                    int index = 0;
-                    index < _localFriendTimeControls.length;
-                    index++
-                  )
-                    buildChoiceChip(
-                      label: _formatLocalFriendTimeControl(
-                        _localFriendTimeControls[index],
-                      ),
-                      selected: _localFriendTimeControlIndex == index,
-                      onSelected: (_) {
-                        unawaited(_setLocalFriendTimeControlIndex(index));
-                      },
-                      accent: arcade.amber,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: buildActionButton(
-                  label: 'Start Shared Screen 1V1',
-                  icon: Icons.play_arrow_rounded,
-                  onPressed: () => unawaited(_startLocalFriendMatch()),
-                  accent: arcade.amber,
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-
-      Widget buildCompactRemotePanel() {
-        final mainActionBusy = _remoteFriendOperationInProgress;
-        return buildCardShell(
-          accent: remoteAccent,
-          emphasized: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildSectionTitle('ONLINE MATCH SETTINGS', remoteAccent),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  buildTag(
-                    'INVITE ONLY',
-                    remoteAccent,
-                    icon: Icons.password_rounded,
-                  ),
-                  buildTag(
-                    'SERVER RULES',
-                    remoteAccent,
-                    icon: Icons.verified_outlined,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              buildSectionPanel(
-                title: 'TIME CONTROL',
-                accent: remoteAccent,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (
-                      int index = 0;
-                      index < _localFriendTimeControls.length;
-                      index++
-                    )
-                      buildChoiceChip(
-                        label: _formatRemoteFriendTimeControl(
-                          RemoteFriendTimeControl(
-                            initialSeconds:
-                                _localFriendTimeControls[index]
-                                    .initialTime
-                                    ?.inSeconds ??
-                                0,
-                            incrementSeconds: _localFriendTimeControls[index]
-                                .increment
-                                .inSeconds,
-                          ),
-                        ),
-                        selected: _localFriendTimeControlIndex == index,
-                        onSelected: mainActionBusy
-                            ? null
-                            : (_) {
-                                unawaited(
-                                  _setLocalFriendTimeControlIndex(index),
-                                );
-                              },
-                        accent: remoteAccent,
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              buildSectionPanel(
-                title: 'COLOR PREFERENCE',
-                accent: remoteAccent,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final entry in <(RemoteFriendSeatPreference, String)>[
-                      (RemoteFriendSeatPreference.random, 'Random'),
-                      (RemoteFriendSeatPreference.white, 'White'),
-                      (RemoteFriendSeatPreference.black, 'Black'),
-                    ])
-                      buildChoiceChip(
-                        label: entry.$2,
-                        selected: _remoteFriendSeatPreference == entry.$1,
-                        onSelected: mainActionBusy
-                            ? null
-                            : (_) {
-                                setState(() {
-                                  _remoteFriendSeatPreference = entry.$1;
-                                });
-                              },
-                        accent: remoteAccent,
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  buildTag(
-                    'SYNCED CLOCKS',
-                    remoteAccent,
-                    icon: Icons.sync_alt_rounded,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: buildActionButton(
-                      label: 'Create Invite',
-                      icon: Icons.add_link_rounded,
-                      onPressed: mainActionBusy
-                          ? null
-                          : () => unawaited(_createRemoteFriendInvite()),
-                      accent: remoteAccent,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: buildActionButton(
-                      label: 'Join Code',
-                      icon: Icons.key_rounded,
-                      onPressed: mainActionBusy
-                          ? null
-                          : () => unawaited(_joinRemoteFriendInvite()),
-                      accent: remoteAccent,
-                      filled: false,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      }
-
-      Widget buildQuickJoinPanel() {
-        return buildCardShell(
-          accent: heroAccent,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildSectionTitle('QUICK JOIN', heroAccent),
-              const SizedBox(height: 10),
-              Text(
-                'Paste an invite code and jump directly into your private match lobby.',
-                style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: buildActionButton(
-                  label: 'Join With Code',
-                  icon: Icons.login_rounded,
-                  onPressed: _remoteFriendOperationInProgress
-                      ? null
-                      : () => unawaited(_joinRemoteFriendInvite()),
-                  accent: heroAccent,
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-
-      return switch (_selectedVsModeQuickOption) {
-        _VsModeQuickOption.crossDevice => buildCompactRemotePanel(),
-        _VsModeQuickOption.sharedScreen => buildCompactLocalPanel(),
-        _VsModeQuickOption.vsCpu => buildCompactBotPanel(),
-        _VsModeQuickOption.quickJoin => buildQuickJoinPanel(),
-      };
     }
 
     // ignore: unused_element
@@ -19096,11 +19223,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             builder: (context, constraints) {
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  buildHeroPanel(),
-                                  SizedBox(height: sectionGap),
-                                  buildFocusedModePanel(),
-                                ],
+                                children: [buildHeroPanel()],
                               );
                             },
                           ),
