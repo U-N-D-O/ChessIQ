@@ -759,10 +759,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _remoteFriendMembershipsLoading = false;
   bool _remoteFriendOperationInProgress = false;
   bool _remoteFriendPollInFlight = false;
+  bool _remoteFriendPieceSelectionReady = false;
   Timer? _remoteFriendPollTimer;
   Timer? _remoteFriendClockDisplayTimer;
   String? _remoteFriendLastError;
   String? _remoteFriendOutcomeReason;
+  String? _remoteFriendPieceSelectionSessionId;
   Timer? _checkAlertTimer;
   _CheckAlert? _checkAlert;
   Timer? _squareToastTimer;
@@ -4884,6 +4886,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         DateTime.now().isBefore(deadline);
   }
 
+  String? _remoteFriendPieceSelectionSessionIdForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    if (!_remoteFriendPieceSelectionOpenForSnapshot(snapshot)) {
+      return null;
+    }
+    final deadline = snapshot.pieceSelectionDeadlineAt;
+    final playerSeat = _remoteFriendPlayerSeatForSnapshot(snapshot);
+    if (deadline == null || playerSeat == null) {
+      return null;
+    }
+    return '${snapshot.matchId}:${playerSeat.name}:${deadline.millisecondsSinceEpoch}';
+  }
+
+  void _syncRemoteFriendPieceSelectionUi(RemoteFriendMatchSnapshot snapshot) {
+    final sessionId = _remoteFriendPieceSelectionSessionIdForSnapshot(snapshot);
+    if (sessionId == null) {
+      _remoteFriendPieceSelectionReady = false;
+      _remoteFriendPieceSelectionSessionId = null;
+      return;
+    }
+    if (_remoteFriendPieceSelectionSessionId != sessionId) {
+      _remoteFriendPieceSelectionSessionId = sessionId;
+      _remoteFriendPieceSelectionReady = false;
+    }
+  }
+
   RemoteFriendInvite _remoteFriendInviteFromSnapshot(
     RemoteFriendMatchSnapshot snapshot,
   ) {
@@ -5112,6 +5141,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _remoteFriendLastError = null;
     _remoteFriendOutcomeReason = null;
     _remoteFriendOperationInProgress = false;
+    _remoteFriendPieceSelectionReady = false;
+    _remoteFriendPieceSelectionSessionId = null;
     if (clearMemberships) {
       _remoteFriendMemberships = <RemoteFriendMatchMembership>[];
     }
@@ -5381,6 +5412,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _remoteFriendSnapshot = snapshot;
     _remoteFriendOutcomeReason = snapshot.outcome?.reason;
     _remoteFriendLastError = null;
+    _syncRemoteFriendPieceSelectionUi(snapshot);
 
     final playerSeat = _remoteFriendPlayerSeat;
     if (playerSeat != null) {
@@ -6251,43 +6283,302 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool selected,
     required VoidCallback? onTap,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
     final enabled = onTap != null;
     return AnimatedOpacity(
-      opacity: enabled ? 1.0 : 0.52,
+      opacity: enabled ? 1.0 : 0.46,
       duration: const Duration(milliseconds: 150),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: 106,
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 11),
+          decoration: BoxDecoration(
+            color: selected
+                ? Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isLight ? 0.16 : 0.22),
+                    scheme.surface,
+                  )
+                : Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isLight ? 0.04 : 0.08),
+                    scheme.surface,
+                  ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected
+                  ? scheme.primary.withValues(alpha: 0.72)
+                  : scheme.outline.withValues(alpha: 0.26),
+            ),
+            boxShadow: selected
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: scheme.primary.withValues(alpha: 0.18),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? scheme.primary
+                        : scheme.outline.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    selected ? Icons.check_rounded : Icons.circle_outlined,
+                    size: selected ? 14 : 12,
+                    color: selected
+                        ? const Color(0xFF07131F)
+                        : scheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _pieceImage(
+                    isWhitePiece ? 'k_w' : 'k_b',
+                    width: 24,
+                    height: 24,
+                    theme: mode,
+                    orientForHeadToHeadPerspective: false,
+                  ),
+                  const SizedBox(width: 4),
+                  _pieceImage(
+                    isWhitePiece ? 'q_w' : 'q_b',
+                    width: 24,
+                    height: 24,
+                    theme: mode,
+                    orientForHeadToHeadPerspective: false,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _pieceThemeLabel(mode),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  height: 1.12,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                selected ? 'Selected' : 'Tap to use',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: selected
+                      ? scheme.primary
+                      : scheme.onSurface.withValues(alpha: 0.56),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _remoteFriendPieceThemePreviewCard({
+    required String title,
+    required String subtitle,
+    required PieceThemeMode theme,
+    required bool isWhitePiece,
+    required Color accent,
+  }) {
+    final themeData = Theme.of(context);
+    final scheme = themeData.colorScheme;
+    final isLight = themeData.brightness == Brightness.light;
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 150),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.08 : 0.14),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
+      ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IgnorePointer(
-            ignoring: !enabled,
-            child: ThemeSelectorTile(
-              selected: selected,
-              onTap: onTap ?? () {},
-              size: 74,
-              child: _pieceImage(
-                isWhitePiece ? 'q_w' : 'q_b',
-                width: 28,
-                height: 28,
-                theme: mode,
+          Text(
+            title,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.62),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _pieceImage(
+                isWhitePiece ? 'k_w' : 'k_b',
+                width: 26,
+                height: 26,
+                theme: theme,
                 orientForHeadToHeadPerspective: false,
               ),
+              const SizedBox(width: 6),
+              _pieceImage(
+                isWhitePiece ? 'q_w' : 'q_b',
+                width: 26,
+                height: 26,
+                theme: theme,
+                orientForHeadToHeadPerspective: false,
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: isLight ? 0.14 : 0.24),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  isWhitePiece ? 'White' : 'Black',
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _pieceThemeLabel(theme),
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: 74,
-            child: Text(
-              _pieceThemeLabel(mode),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                height: 1.1,
+        ],
+      ),
+    );
+  }
+
+  Widget _remoteFriendPieceSelectionReadyBanner({
+    required int remainingSeconds,
+    required VoidCallback? onChangeSkin,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    const readyAccent = Color(0xFF7EDC8A);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          readyAccent.withValues(alpha: isLight ? 0.12 : 0.18),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: readyAccent.withValues(alpha: 0.34)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(
+                  color: readyAccent,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  size: 18,
+                  color: Color(0xFF07131F),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ready',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Waiting ${remainingSeconds.clamp(0, 10)}s for the pairing window to end.',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.68),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (onChangeSkin != null) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                onPressed: onChangeSkin,
+                icon: const Icon(Icons.palette_outlined, size: 18),
+                label: const Text('Change skin'),
+                style: FilledButton.styleFrom(
+                  foregroundColor: scheme.onSurface,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -21533,6 +21824,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remotePieceSelectionOpen = _isRemoteFriendPieceSelectionOpen;
       final remoteSelectionRemainingSeconds =
           _remoteFriendPieceSelectionRemainingSeconds;
+      final remotePlayerTheme = remoteSeat == null
+          ? _pieceThemeMode
+          : _remoteFriendPieceThemeForSeat(remoteSeat);
+      final remoteOpponentSeat = remoteSeat == null
+          ? null
+          : (remoteSeat == RemoteFriendSeat.white
+                ? RemoteFriendSeat.black
+                : RemoteFriendSeat.white);
+      final remoteOpponentTheme = remoteOpponentSeat == null
+          ? _pieceThemeMode
+          : _remoteFriendPieceThemeForSeat(remoteOpponentSeat);
       final compactPendingInviteOverlay =
           _isRemoteFriendPendingMatch &&
           isLandscape &&
@@ -21551,9 +21853,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               : _isRemoteFriendPendingMatch
               ? 'Share code ${remoteSnapshot.inviteCode} with your friend to start the match.'
               : remotePieceSelectionOpen
-              ? remoteSeat == null
+              ? _remoteFriendPieceSelectionReady
+                    ? remoteSeat == null
+                          ? 'Ready. Your saved default skin is locked in, and the match starts in $remoteSelectionRemainingSeconds seconds.'
+                          : 'Ready. Your ${remoteSeatLabel.toLowerCase()} pieces will use ${_pieceThemeLabel(remotePlayerTheme)} while your friend keeps ${_pieceThemeLabel(remoteOpponentTheme)} on the other side. Match starts in $remoteSelectionRemainingSeconds seconds.'
+                    : remoteSeat == null
                     ? 'Choose your piece skin in $remoteSelectionRemainingSeconds seconds. If you do nothing, your current default skin will be used.'
-                    : 'You are $remoteSeatLabel. Choose the skin for your ${remoteSeatLabel.toLowerCase()} pieces in $remoteSelectionRemainingSeconds seconds. If you do nothing, your current default skin will be used.'
+                    : 'You are $remoteSeatLabel. Pick the skin for your ${remoteSeatLabel.toLowerCase()} pieces. Your friend keeps their own ${_remoteFriendSeatLabel(remoteOpponentSeat).toLowerCase()}-side skin, and the match starts in $remoteSelectionRemainingSeconds seconds.'
               : remoteSnapshot.status == RemoteFriendMatchStatus.expired
               ? 'This invite expired before the game began. Return to VS mode to create a new code.'
               : remoteSnapshot.status == RemoteFriendMatchStatus.cancelled
@@ -21645,17 +21951,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               accent: const Color(0xFFD8B640),
               primary: !_hasOutgoingRemoteDrawOffer,
             ),
-          buildRemoteActionButton(
-            label: 'Resign',
-            icon: Icons.flag_rounded,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(
-                    _runRemoteFriendAction(RemoteFriendMatchAction.resign),
-                  ),
-            accent: const Color(0xFFE45C5C),
-            primary: true,
-          ),
+          if (!remotePieceSelectionOpen)
+            buildRemoteActionButton(
+              label: 'Resign',
+              icon: Icons.flag_rounded,
+              onPressed: _remoteFriendOperationInProgress
+                  ? null
+                  : () => unawaited(
+                      _runRemoteFriendAction(RemoteFriendMatchAction.resign),
+                    ),
+              accent: const Color(0xFFE45C5C),
+              primary: true,
+            ),
         ],
         if (!compactPendingInviteOverlay)
           buildRemoteActionButton(
@@ -21688,6 +21995,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             Text(
               _isRemoteFriendPendingMatch
                   ? 'Remote Friend Invite'
+                  : remotePieceSelectionOpen
+                  ? 'Piece Skin Pairing'
                   : _isRemoteFriendActiveMatch
                   ? 'Remote Friend Match'
                   : 'Remote Friend Session',
@@ -21713,25 +22022,164 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
             if (remotePieceSelectionOpen && remoteSeat != null) ...[
               const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 12,
-                children: _availablePieceThemes
-                    .map((mode) {
-                      final selected =
-                          _remoteFriendPieceThemeForSeat(remoteSeat) == mode;
-                      return _remoteFriendPieceThemeChoiceTile(
-                        mode: mode,
-                        isWhitePiece: remoteSeat == RemoteFriendSeat.white,
-                        selected: selected,
-                        onTap: _remoteFriendOperationInProgress
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isLight ? 0.06 : 0.12),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: scheme.primary.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Pick your skin before the timer ends',
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 13.2,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: remoteAccent.withValues(
+                              alpha: isLight ? 0.14 : 0.24,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${remoteSelectionRemainingSeconds.clamp(0, 10)}s left',
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Each player brings their own piece skin into the match. What you pick here changes only your ${remoteSeatLabel.toLowerCase()} side.',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.68),
+                        fontSize: 11.8,
+                        height: 1.28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _remoteFriendPieceThemePreviewCard(
+                          title: 'Your pieces',
+                          subtitle: 'Visible on your $remoteSeatLabel side',
+                          theme: remotePlayerTheme,
+                          isWhitePiece: remoteSeat == RemoteFriendSeat.white,
+                          accent: const Color(0xFF5AAEE8),
+                        ),
+                        _remoteFriendPieceThemePreviewCard(
+                          title: 'Opponent pieces',
+                          subtitle:
+                              'Your friend keeps this skin on the other side',
+                          theme: remoteOpponentTheme,
+                          isWhitePiece:
+                              remoteOpponentSeat == RemoteFriendSeat.white,
+                          accent: const Color(0xFFD8B640),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    if (_remoteFriendPieceSelectionReady)
+                      _remoteFriendPieceSelectionReadyBanner(
+                        remainingSeconds: remoteSelectionRemainingSeconds,
+                        onChangeSkin: _remoteFriendOperationInProgress
                             ? null
-                            : () => unawaited(
-                                _selectRemoteFriendPieceTheme(mode),
-                              ),
-                      );
-                    })
-                    .toList(growable: false),
+                            : () => setState(() {
+                                _remoteFriendPieceSelectionReady = false;
+                              }),
+                      )
+                    else ...[
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 12,
+                        children: _availablePieceThemes
+                            .map((mode) {
+                              final selected =
+                                  _remoteFriendPieceThemeForSeat(remoteSeat) ==
+                                  mode;
+                              return _remoteFriendPieceThemeChoiceTile(
+                                mode: mode,
+                                isWhitePiece:
+                                    remoteSeat == RemoteFriendSeat.white,
+                                selected: selected,
+                                onTap: _remoteFriendOperationInProgress
+                                    ? null
+                                    : () => unawaited(
+                                        _selectRemoteFriendPieceTheme(mode),
+                                      ),
+                              );
+                            })
+                            .toList(growable: false),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _remoteFriendOperationInProgress
+                              ? null
+                              : () => setState(() {
+                                  _remoteFriendPieceSelectionReady = true;
+                                }),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Color.alphaBlend(
+                              const Color(
+                                0xFF7EDC8A,
+                              ).withValues(alpha: isLight ? 0.84 : 0.74),
+                              scheme.surface,
+                            ),
+                            foregroundColor: const Color(0xFF07131F),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: const BorderSide(color: Color(0xFF7EDC8A)),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.check_circle_rounded,
+                            size: 20,
+                          ),
+                          label: const Text(
+                            'Ready',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
             const SizedBox(height: 12),
@@ -24621,10 +25069,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             Text(
               avatar.name,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             Text(
@@ -25177,8 +25622,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     await _saveStoreState();
 
-    if (
-        unlockChanged ||
+    if (unlockChanged ||
         avatarChanged ||
         (unlockKey != null && unlockKey.isNotEmpty) ||
         (avatarId != null && avatarId.isNotEmpty)) {
@@ -25615,7 +26059,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 subtitle: avatarInventory.hasAvailablePaidRolls
                                     ? 'Roll a random unowned avatar from the normal, rare, epic, and legendary pools.'
                                     : 'You already own every avatar available from random rolls.',
-                                priceLabel: avatarInventory.hasAvailablePaidRolls
+                                priceLabel:
+                                    avatarInventory.hasAvailablePaidRolls
                                     ? _storefrontCoinPriceLabel(
                                         StoreOfferIds.avatarRoll,
                                         AvatarInventoryProvider.paidRollPrice,
@@ -25628,7 +26073,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 preview: _buildAvatarRollPreview(
                                   avatarInventory,
                                 ),
-                                actionLabel: avatarInventory.hasAvailablePaidRolls
+                                actionLabel:
+                                    avatarInventory.hasAvailablePaidRolls
                                     ? _storefrontActionLabel(
                                         StoreOfferIds.avatarRoll,
                                         'Roll',

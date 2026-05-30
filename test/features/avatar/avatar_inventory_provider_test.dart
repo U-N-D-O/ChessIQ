@@ -183,4 +183,7 @@ void main() {
       ),
     );
 
-    expect(secondClaim.alreadyClaimed, isTru
+    expect(secondClaim.alreadyClaimed, isTrue);
+    expect(secondClaim.grantedAvatars, isEmpty);
+  });
+}

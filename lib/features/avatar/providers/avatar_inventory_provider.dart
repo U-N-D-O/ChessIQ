@@ -7,10 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AvatarRollResult {
-  const AvatarRollResult({
-    required this.avatar,
-    required this.bucket,
-  });
+  const AvatarRollResult({required this.avatar, required this.bucket});
 
   final AvatarCatalogEntry avatar;
   final AvatarRarityBucket bucket;
@@ -61,22 +58,22 @@ class AvatarInventoryProvider extends ChangeNotifier {
   Set<String> get claimedRewardKeys =>
       Set<String>.unmodifiable(_claimedRewardKeys);
 
-  AvatarCatalogEntry? get selectedAvatar => AvatarCatalog.entryFor(
-    _selectedAvatarId,
-  );
+  AvatarCatalogEntry? get selectedAvatar =>
+      AvatarCatalog.entryFor(_selectedAvatarId);
 
-  AvatarCatalogEntry? get starterAvatar => AvatarCatalog.entryFor(
-    _starterAvatarId,
-  );
+  AvatarCatalogEntry? get starterAvatar =>
+      AvatarCatalog.entryFor(_starterAvatarId);
 
-  List<AvatarCatalogEntry> get ownedAvatars => AvatarCatalog.ownedEntriesFor(
-    _ownedAvatarIds,
-  );
+  List<AvatarCatalogEntry> get ownedAvatars =>
+      AvatarCatalog.ownedEntriesFor(_ownedAvatarIds);
 
   List<AvatarCatalogEntry> get starterPool => AvatarCatalog.starterPool;
 
   List<AvatarCatalogEntry> get availablePaidRollAvatars => AvatarCatalog.items
-      .where((avatar) => avatar.paidRollEligible && !_ownedAvatarIds.contains(avatar.id))
+      .where(
+        (avatar) =>
+            avatar.paidRollEligible && !_ownedAvatarIds.contains(avatar.id),
+      )
       .toList(growable: false);
 
   int get availablePaidRollCount => availablePaidRollAvatars.length;
@@ -140,7 +137,9 @@ class AvatarInventoryProvider extends ChangeNotifier {
     if (_starterAvatarId != null) {
       _ownedAvatarIds.add(_starterAvatarId!);
     }
-    _selectedAvatarId = _normalizeOwnedAvatarId(inventory[_selectedAvatarIdKey]);
+    _selectedAvatarId = _normalizeOwnedAvatarId(
+      inventory[_selectedAvatarIdKey],
+    );
 
     var changed = false;
     _bootstrappedStarter = false;
@@ -155,7 +154,8 @@ class AvatarInventoryProvider extends ChangeNotifier {
       }
     }
 
-    if (_selectedAvatarId == null || !_ownedAvatarIds.contains(_selectedAvatarId)) {
+    if (_selectedAvatarId == null ||
+        !_ownedAvatarIds.contains(_selectedAvatarId)) {
       _selectedAvatarId = _starterAvatarId ?? _firstOwnedAvatarId();
       changed = true;
     }
@@ -318,10 +318,7 @@ class AvatarInventoryProvider extends ChangeNotifier {
     );
   }
 
-  Set<String> _readStringSet(
-    Object? rawValue, {
-    Set<String>? validValues,
-  }) {
+  Set<String> _readStringSet(Object? rawValue, {Set<String>? validValues}) {
     final values = (rawValue as List? ?? const <dynamic>[])
         .map((item) => item.toString().trim())
         .where((item) => item.isNotEmpty)
@@ -359,7 +356,8 @@ class AvatarInventoryProvider extends ChangeNotifier {
     return pool[_random.nextInt(pool.length)];
   }
 
-  Map<AvatarRarityBucket, List<AvatarCatalogEntry>> _availablePaidRollBuckets() {
+  Map<AvatarRarityBucket, List<AvatarCatalogEntry>>
+  _availablePaidRollBuckets() {
     final buckets = <AvatarRarityBucket, List<AvatarCatalogEntry>>{};
     for (final bucket in _paidRollBuckets) {
       final available = availablePaidRollAvatarsForBucket(bucket);
