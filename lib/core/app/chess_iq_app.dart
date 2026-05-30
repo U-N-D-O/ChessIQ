@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:chessiq/core/navigation/app_routes.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
@@ -22,6 +24,7 @@ class ChessIQApp extends StatelessWidget {
           create: (_) {
             final economy = EconomyProvider()..load();
             PurchaseService.instance.attachEconomy(economy);
+            unawaited(PurchaseService.instance.initialize());
             return economy;
           },
         ),

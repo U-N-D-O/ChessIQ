@@ -22203,7 +22203,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                 remoteSeat ==
                                                 RemoteFriendSeat.white,
                                             selected: selected,
-                                            onTap: _remoteFriendOperationInProgress
+                                            onTap:
+                                                _remoteFriendOperationInProgress
                                                 ? null
                                                 : () => unawaited(
                                                     _selectRemoteFriendPieceTheme(
@@ -22218,7 +22219,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   SizedBox(
                                     width: double.infinity,
                                     child: FilledButton.icon(
-                                      onPressed: _remoteFriendOperationInProgress
+                                      onPressed:
+                                          _remoteFriendOperationInProgress
                                           ? null
                                           : () => setState(() {
                                               _remoteFriendPieceSelectionReady =
@@ -22231,14 +22233,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                           ),
                                           scheme.surface,
                                         ),
-                                        foregroundColor:
-                                            const Color(0xFF07131F),
+                                        foregroundColor: const Color(
+                                          0xFF07131F,
+                                        ),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 16,
                                           vertical: 14,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           side: const BorderSide(
                                             color: Color(0xFF7EDC8A),
                                           ),
@@ -25001,6 +25006,128 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return '${rate.toStringAsFixed(1)}%';
   }
 
+  Future<void> _openTermsOfServiceLink() async {
+    final launched = await launchUrl(chessIqTermsOfServiceUri);
+    if (launched || !mounted) {
+      return;
+    }
+    await Clipboard.setData(
+      const ClipboardData(text: chessIqTermsOfServiceUrl),
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not open the Terms of Service. The URL has been copied instead.',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarRollOddsChips(AvatarInventoryProvider avatarInventory) {
+    final scheme = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final bucket in const <AvatarRarityBucket>[
+          AvatarRarityBucket.normal,
+          AvatarRarityBucket.rare,
+          AvatarRarityBucket.epic,
+          AvatarRarityBucket.legendary,
+        ])
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                scheme.primary.withValues(alpha: 0.05),
+                scheme.surface,
+              ),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
+            ),
+            child: Text(
+              '${bucket.label} ${_avatarRollRateLabel(bucket.paidRollWeight)} · ${avatarInventory.availablePaidRollAvatarsForBucket(bucket).length} left',
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.78),
+                fontSize: 11.2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _showAvatarRollOddsDialog(
+    AvatarInventoryProvider avatarInventory,
+  ) async {
+    if (!mounted) {
+      return;
+    }
+    final scheme = Theme.of(context).colorScheme;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline_rounded, size: 20, color: scheme.primary),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Avatar Roll Odds')),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Each 200-coin roll picks one unowned avatar from the paid pool. Promo-only avatars and any avatar you already own are excluded automatically.',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.82),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildAvatarRollOddsChips(avatarInventory),
+              const SizedBox(height: 12),
+              Text(
+                'Base odds are shown above. Empty rarity buckets are skipped automatically, so the roll always resolves to an eligible avatar while any paid-roll avatars remain.',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Some avatars are unlocked only by promo code or gameplay rewards and are not part of the paid random-roll pool. Store use remains subject to the ChessIQ Terms of Service.',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(_openTermsOfServiceLink());
+            },
+            child: const Text('Terms of Service'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAvatarRollPreview(AvatarInventoryProvider avatarInventory) {
     final scheme = Theme.of(context).colorScheme;
     final selectedAvatar = avatarInventory.selectedAvatar;
@@ -25077,42 +25204,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ],
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final bucket in const <AvatarRarityBucket>[
-              AvatarRarityBucket.normal,
-              AvatarRarityBucket.rare,
-              AvatarRarityBucket.epic,
-              AvatarRarityBucket.legendary,
-            ])
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: Color.alphaBlend(
-                    scheme.primary.withValues(alpha: 0.05),
-                    scheme.surface,
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: scheme.outline.withValues(alpha: 0.24),
-                  ),
-                ),
-                child: Text(
-                  '${bucket.label} ${_avatarRollRateLabel(bucket.paidRollWeight)} · ${avatarInventory.availablePaidRollAvatarsForBucket(bucket).length} left',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.78),
-                    fontSize: 11.2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-          ],
-        ),
+        _buildAvatarRollOddsChips(avatarInventory),
         const SizedBox(height: 8),
         Text(
           'Base odds shown above. Empty rarity buckets are skipped automatically.',
@@ -25121,6 +25213,46 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             fontSize: 10.8,
             fontWeight: FontWeight.w600,
           ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            TextButton.icon(
+              onPressed: () {
+                unawaited(_openTermsOfServiceLink());
+              },
+              icon: const Icon(Icons.description_outlined, size: 16),
+              label: const Text('Terms of Service'),
+              style: TextButton.styleFrom(
+                foregroundColor: scheme.primary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+              ),
+            ),
+            Tooltip(
+              message: 'View avatar roll odds and store rules',
+              child: IconButton(
+                onPressed: () {
+                  unawaited(_showAvatarRollOddsDialog(avatarInventory));
+                },
+                style: IconButton.styleFrom(
+                  foregroundColor: scheme.primary,
+                  backgroundColor: Color.alphaBlend(
+                    scheme.primary.withValues(alpha: 0.08),
+                    scheme.surface,
+                  ),
+                  side: BorderSide(
+                    color: scheme.outline.withValues(alpha: 0.24),
+                  ),
+                ),
+                icon: const Icon(Icons.info_outline_rounded),
+              ),
+            ),
+          ],
         ),
       ],
     );
