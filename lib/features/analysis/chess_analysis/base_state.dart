@@ -21824,6 +21824,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remotePieceSelectionOpen = _isRemoteFriendPieceSelectionOpen;
       final remoteSelectionRemainingSeconds =
           _remoteFriendPieceSelectionRemainingSeconds;
+      final remoteSelectionProgress = remotePieceSelectionOpen
+          ? min(
+              1.0,
+              max(
+                0.0,
+                _remoteFriendPieceSelectionRemaining.inMilliseconds / 10000,
+              ),
+            )
+          : 0.0;
       final remotePlayerTheme = remoteSeat == null
           ? _pieceThemeMode
           : _remoteFriendPieceThemeForSeat(remoteSeat);
@@ -22050,23 +22059,41 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ),
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: remoteAccent.withValues(
-                              alpha: isLight ? 0.14 : 0.24,
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: ScaleTransition(
+                                scale: Tween<double>(
+                                  begin: 0.92,
+                                  end: 1.0,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            key: ValueKey<int>(
+                              remoteSelectionRemainingSeconds.clamp(0, 10),
                             ),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '${remoteSelectionRemainingSeconds.clamp(0, 10)}s left',
-                            style: TextStyle(
-                              color: scheme.onSurface,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w900,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: remoteAccent.withValues(
+                                alpha: isLight ? 0.14 : 0.24,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '${remoteSelectionRemainingSeconds.clamp(0, 10)}s left',
+                              style: TextStyle(
+                                color: scheme.onSurface,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                         ),
@@ -22080,6 +22107,27 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         fontSize: 11.8,
                         height: 1.28,
                         fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(end: remoteSelectionProgress),
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, _) {
+                          return LinearProgressIndicator(
+                            value: value,
+                            minHeight: 7,
+                            backgroundColor: scheme.outline.withValues(
+                              alpha: 0.16,
+                            ),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              remoteAccent,
+                            ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -22106,78 +22154,113 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ],
                     ),
                     const SizedBox(height: 14),
-                    if (_remoteFriendPieceSelectionReady)
-                      _remoteFriendPieceSelectionReadyBanner(
-                        remainingSeconds: remoteSelectionRemainingSeconds,
-                        onChangeSkin: _remoteFriendOperationInProgress
-                            ? null
-                            : () => setState(() {
-                                _remoteFriendPieceSelectionReady = false;
-                              }),
-                      )
-                    else ...[
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 12,
-                        children: _availablePieceThemes
-                            .map((mode) {
-                              final selected =
-                                  _remoteFriendPieceThemeForSeat(remoteSeat) ==
-                                  mode;
-                              return _remoteFriendPieceThemeChoiceTile(
-                                mode: mode,
-                                isWhitePiece:
-                                    remoteSeat == RemoteFriendSeat.white,
-                                selected: selected,
-                                onTap: _remoteFriendOperationInProgress
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        final slide = Tween<Offset>(
+                          begin: const Offset(0, 0.06),
+                          end: Offset.zero,
+                        ).animate(animation);
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(position: slide, child: child),
+                        );
+                      },
+                      child: _remoteFriendPieceSelectionReady
+                          ? KeyedSubtree(
+                              key: const ValueKey<String>('ready'),
+                              child: _remoteFriendPieceSelectionReadyBanner(
+                                remainingSeconds:
+                                    remoteSelectionRemainingSeconds,
+                                onChangeSkin: _remoteFriendOperationInProgress
                                     ? null
-                                    : () => unawaited(
-                                        _selectRemoteFriendPieceTheme(mode),
+                                    : () => setState(() {
+                                        _remoteFriendPieceSelectionReady =
+                                            false;
+                                      }),
+                              ),
+                            )
+                          : KeyedSubtree(
+                              key: const ValueKey<String>('picker'),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Wrap(
+                                    spacing: 10,
+                                    runSpacing: 12,
+                                    children: _availablePieceThemes
+                                        .map((mode) {
+                                          final selected =
+                                              _remoteFriendPieceThemeForSeat(
+                                                remoteSeat,
+                                              ) ==
+                                              mode;
+                                          return _remoteFriendPieceThemeChoiceTile(
+                                            mode: mode,
+                                            isWhitePiece:
+                                                remoteSeat ==
+                                                RemoteFriendSeat.white,
+                                            selected: selected,
+                                            onTap: _remoteFriendOperationInProgress
+                                                ? null
+                                                : () => unawaited(
+                                                    _selectRemoteFriendPieceTheme(
+                                                      mode,
+                                                    ),
+                                                  ),
+                                          );
+                                        })
+                                        .toList(growable: false),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      onPressed: _remoteFriendOperationInProgress
+                                          ? null
+                                          : () => setState(() {
+                                              _remoteFriendPieceSelectionReady =
+                                                  true;
+                                            }),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Color.alphaBlend(
+                                          const Color(0xFF7EDC8A).withValues(
+                                            alpha: isLight ? 0.84 : 0.74,
+                                          ),
+                                          scheme.surface,
+                                        ),
+                                        foregroundColor:
+                                            const Color(0xFF07131F),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          side: const BorderSide(
+                                            color: Color(0xFF7EDC8A),
+                                          ),
+                                        ),
                                       ),
-                              );
-                            })
-                            .toList(growable: false),
-                      ),
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _remoteFriendOperationInProgress
-                              ? null
-                              : () => setState(() {
-                                  _remoteFriendPieceSelectionReady = true;
-                                }),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Color.alphaBlend(
-                              const Color(
-                                0xFF7EDC8A,
-                              ).withValues(alpha: isLight ? 0.84 : 0.74),
-                              scheme.surface,
+                                      icon: const Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 20,
+                                      ),
+                                      label: const Text(
+                                        'Ready',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            foregroundColor: const Color(0xFF07131F),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: const BorderSide(color: Color(0xFF7EDC8A)),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.check_circle_rounded,
-                            size: 20,
-                          ),
-                          label: const Text(
-                            'Ready',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
               ),

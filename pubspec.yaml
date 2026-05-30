@@ -67,8 +67,10 @@ dependency_overrides:
     path: third_party/audioplayers_windows
 
 flutter_launcher_icons:
+  android: true
   ios: true
-  image_path_ios: assets/logo.png
+  image_path: assets/applogo_alpha.png
+  image_path_ios: assets/applogo_alpha.png
   remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
