@@ -7075,6 +7075,46 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Widget _remoteFriendSurfaceChip({
+    required String label,
+    required Color accent,
+    IconData? icon,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.10 : 0.16),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: accent),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 10.4,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.18,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _remoteFriendReactionChip({
     required _RemoteFriendReactionOption option,
     required Color accent,
@@ -7090,40 +7130,65 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       message: locked
           ? '${option.label} · unlocks after your first random avatar roll'
           : option.label,
-      child: GestureDetector(
-        onTap: onTap,
+      child: Semantics(
+        button: true,
+        enabled: onTap != null,
+        label: locked
+            ? '${option.label}, locked until your first random avatar roll'
+            : option.label,
         child: AnimatedOpacity(
           opacity: locked
-              ? 0.72
+              ? 0.76
               : enabled
               ? 1.0
-              : 0.48,
+              : 0.50,
           duration: const Duration(milliseconds: 160),
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Color.alphaBlend(
-                    accent.withValues(
-                      alpha: locked
-                          ? (isLight ? 0.05 : 0.10)
-                          : enabled
-                          ? (isLight ? 0.13 : 0.20)
-                          : (isLight ? 0.06 : 0.10),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(16),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 48,
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                        accent.withValues(
+                          alpha: locked
+                              ? (isLight ? 0.05 : 0.10)
+                              : enabled
+                              ? (isLight ? 0.13 : 0.20)
+                              : (isLight ? 0.06 : 0.10),
+                        ),
+                        scheme.surface,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: accent.withValues(alpha: locked ? 0.20 : 0.34),
+                      ),
+                      boxShadow: enabled && !locked
+                          ? <BoxShadow>[
+                              BoxShadow(
+                                color: accent.withValues(
+                                  alpha: isLight ? 0.10 : 0.16,
+                                ),
+                                blurRadius: 12,
+                                offset: const Offset(0, 5),
+                              ),
+                            ]
+                          : null,
                     ),
-                    scheme.surface,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: accent.withValues(alpha: locked ? 0.20 : 0.34),
+                    child: Text(
+                      option.emoji,
+                      style: const TextStyle(fontSize: 22),
+                    ),
                   ),
                 ),
-                child: Text(option.emoji, style: const TextStyle(fontSize: 21)),
               ),
               if (locked)
                 Positioned(
@@ -22530,6 +22595,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : remoteReactionCooldownRemaining > Duration.zero
           ? 'Ready again in ${_formatRemoteFriendReactionCooldown(remoteReactionCooldownRemaining)}'
           : 'Ready now';
+      final remoteMetaChips = <Widget>[
+        if (_isRemoteFriendPendingMatch && remoteSnapshot != null)
+          _remoteFriendSurfaceChip(
+            label: 'Code ${remoteSnapshot.inviteCode}',
+            accent: remoteLocalAccent,
+            icon: Icons.key_rounded,
+          ),
+        if (_isRemoteFriendActiveMatch && remoteSeat != null)
+          _remoteFriendSurfaceChip(
+            label: 'You | $remoteSeatLabel',
+            accent: remoteLocalAccent,
+            icon: Icons.person_rounded,
+          ),
+        if (_isRemoteFriendActiveMatch)
+          _remoteFriendSurfaceChip(
+            label: remotePieceSelectionOpen
+                ? 'Skin pairing'
+                : 'Private live sync',
+            accent: remoteOpponentAccent,
+            icon: remotePieceSelectionOpen
+                ? Icons.palette_outlined
+                : Icons.link_rounded,
+          ),
+      ];
       final showRemoteReactionTray =
           _isRemoteFriendActiveMatch &&
           !remotePieceSelectionOpen &&
@@ -22687,6 +22776,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 fontWeight: FontWeight.w600,
               ),
             ),
+            if (remoteMetaChips.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(spacing: 8, runSpacing: 8, children: remoteMetaChips),
+            ],
             if (hasRemoteError) ...[
               const SizedBox(height: 10),
               _remoteFriendInlineErrorBanner(
@@ -22819,6 +22912,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ),
                     const SizedBox(height: 10),
+                    _remoteFriendSurfaceChip(
+                      label: 'Standard set',
+                      accent: remoteLocalAccent,
+                      icon: Icons.sentiment_satisfied_alt_rounded,
+                    ),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -22834,23 +22933,83 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   )
                                 : null,
                           ),
-                        for (final option
-                            in _remoteFriendStrangeReactionOptions)
-                          _remoteFriendReactionChip(
-                            option: option,
-                            accent: strangeReactionsUnlocked
-                                ? remoteOpponentAccent
-                                : scheme.onSurface.withValues(alpha: 0.62),
-                            locked: !strangeReactionsUnlocked,
-                            onTap: !strangeReactionsUnlocked
-                                ? _showLockedRemoteFriendReactionMessage
-                                : remoteReactionReady
-                                ? () => unawaited(
-                                    _sendRemoteFriendReaction(option.emoji),
-                                  )
-                                : null,
-                          ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          remoteOpponentAccent.withValues(
+                            alpha: isLight ? 0.06 : 0.12,
+                          ),
+                          scheme.surface,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: remoteOpponentAccent.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              _remoteFriendSurfaceChip(
+                                label: strangeReactionsUnlocked
+                                    ? 'Vault set unlocked'
+                                    : 'Vault set locked',
+                                accent: strangeReactionsUnlocked
+                                    ? remoteOpponentAccent
+                                    : scheme.onSurface.withValues(alpha: 0.62),
+                                icon: strangeReactionsUnlocked
+                                    ? Icons.auto_awesome_rounded
+                                    : Icons.lock_outline_rounded,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            strangeReactionsUnlocked
+                                ? 'Your strange bonus reacts are now part of the tray.'
+                                : 'Unlock these five stranger reacts with your first random avatar roll.',
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.68),
+                              fontSize: 11.1,
+                              height: 1.28,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final option
+                                  in _remoteFriendStrangeReactionOptions)
+                                _remoteFriendReactionChip(
+                                  option: option,
+                                  accent: strangeReactionsUnlocked
+                                      ? remoteOpponentAccent
+                                      : scheme.onSurface.withValues(
+                                          alpha: 0.62,
+                                        ),
+                                  locked: !strangeReactionsUnlocked,
+                                  onTap: !strangeReactionsUnlocked
+                                      ? _showLockedRemoteFriendReactionMessage
+                                      : remoteReactionReady
+                                      ? () => unawaited(
+                                          _sendRemoteFriendReaction(
+                                            option.emoji,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -25870,36 +26029,204 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Color _avatarRollBucketAccent(
+    AvatarRarityBucket bucket,
+    ColorScheme scheme, {
+    required bool useMonochrome,
+  }) {
+    if (useMonochrome) {
+      return switch (bucket) {
+        AvatarRarityBucket.normal => scheme.onSurface.withValues(alpha: 0.72),
+        AvatarRarityBucket.rare => scheme.onSurface.withValues(alpha: 0.80),
+        AvatarRarityBucket.epic => scheme.onSurface.withValues(alpha: 0.86),
+        AvatarRarityBucket.legendary => scheme.onSurface.withValues(
+          alpha: 0.94,
+        ),
+        AvatarRarityBucket.promo => scheme.onSurface,
+      };
+    }
+
+    return switch (bucket) {
+      AvatarRarityBucket.normal => const Color(0xFF76A8E8),
+      AvatarRarityBucket.rare => const Color(0xFF6FCEA0),
+      AvatarRarityBucket.epic => const Color(0xFFCB7EEA),
+      AvatarRarityBucket.legendary => const Color(0xFFF0BC4F),
+      AvatarRarityBucket.promo => const Color(0xFFE47E5C),
+    };
+  }
+
+  Widget _buildAvatarRollStatChip({
+    required String label,
+    required String value,
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.08 : 0.14),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: accent,
+              fontSize: 9.6,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.42,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAvatarRollOddsChips(AvatarInventoryProvider avatarInventory) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final bucketEntries = [
+      for (final bucket in const <AvatarRarityBucket>[
+        AvatarRarityBucket.normal,
+        AvatarRarityBucket.rare,
+        AvatarRarityBucket.epic,
+        AvatarRarityBucket.legendary,
+      ])
+        if (avatarInventory
+            .availablePaidRollAvatarsForBucket(bucket)
+            .isNotEmpty)
+          (
+            bucket: bucket,
+            count: avatarInventory
+                .availablePaidRollAvatarsForBucket(bucket)
+                .length,
+          ),
+    ];
+
+    if (bucketEntries.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            scheme.outline.withValues(alpha: isLight ? 0.04 : 0.08),
+            scheme.surface,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: scheme.outline.withValues(alpha: 0.18)),
+        ),
+        child: Text(
+          'No paid-roll avatars remain in the vault.',
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.72),
+            fontSize: 11.4,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: [
-        for (final bucket in const <AvatarRarityBucket>[
-          AvatarRarityBucket.normal,
-          AvatarRarityBucket.rare,
-          AvatarRarityBucket.epic,
-          AvatarRarityBucket.legendary,
-        ])
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                scheme.primary.withValues(alpha: 0.05),
-                scheme.surface,
-              ),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
-            ),
-            child: Text(
-              '${bucket.label} ${_avatarRollRateLabel(bucket.paidRollWeight)} · ${avatarInventory.availablePaidRollAvatarsForBucket(bucket).length} left',
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.78),
-                fontSize: 11.2,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+        for (final entry in bucketEntries)
+          Builder(
+            builder: (context) {
+              final bucket = entry.bucket;
+              final accent = _avatarRollBucketAccent(
+                bucket,
+                scheme,
+                useMonochrome: useMonochrome,
+              );
+              return Container(
+                constraints: const BoxConstraints(minWidth: 128, maxWidth: 152),
+                padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.alphaBlend(
+                        accent.withValues(alpha: isLight ? 0.14 : 0.20),
+                        scheme.surface,
+                      ),
+                      Color.alphaBlend(
+                        accent.withValues(alpha: isLight ? 0.04 : 0.08),
+                        scheme.surface,
+                      ),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: accent.withValues(alpha: 0.24)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: isLight ? 0.14 : 0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        bucket.label.toUpperCase(),
+                        style: TextStyle(
+                          color: scheme.onSurface,
+                          fontSize: 9.4,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.42,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _avatarRollRateLabel(bucket.paidRollWeight),
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 13.8,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${entry.count} remaining',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.68),
+                        fontSize: 10.8,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
       ],
     );
@@ -25911,13 +26238,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!mounted) {
       return;
     }
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.info_outline_rounded, size: 20, color: scheme.primary),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  scheme.primary.withValues(alpha: isLight ? 0.10 : 0.18),
+                  scheme.surface,
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.info_outline_rounded,
+                size: 18,
+                color: scheme.primary,
+              ),
+            ),
             const SizedBox(width: 8),
             const Expanded(child: Text('Avatar Roll Odds')),
           ],
@@ -25927,36 +26271,81 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Each 200-coin roll picks one unowned avatar from the paid pool. Promo-only avatars and any avatar you already own are excluded automatically.',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.82),
-                  height: 1.35,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isLight ? 0.06 : 0.12),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: scheme.primary.withValues(alpha: 0.16),
+                  ),
+                ),
+                child: Text(
+                  'Each 200-coin roll picks one unowned avatar from the paid pool. Promo-only avatars and anything you already own are excluded automatically.',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.82),
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               _buildAvatarRollOddsChips(avatarInventory),
               const SizedBox(height: 12),
-              Text(
-                'Base odds are shown above. Empty rarity buckets are skipped automatically, so the roll always resolves to an eligible avatar while any paid-roll avatars remain.',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                  height: 1.35,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    scheme.outline.withValues(alpha: isLight ? 0.04 : 0.08),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: scheme.outline.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: Text(
+                  'Base odds are shown above. Empty rarity buckets disappear automatically, so the roll always resolves to an eligible avatar while any paid-roll avatars remain.',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                'Some avatars are unlocked only by promo code or gameplay rewards and are not part of the paid random-roll pool. Store use remains subject to the ChessIQ Terms of Service.',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                  height: 1.35,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    scheme.secondary.withValues(alpha: isLight ? 0.05 : 0.10),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: scheme.secondary.withValues(alpha: 0.16),
+                  ),
+                ),
+                child: Text(
+                  'Some avatars are unlocked only by promo code or gameplay rewards and are not part of the paid random-roll pool. Store use remains subject to the ChessIQ Terms of Service.',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               unawaited(_openTermsOfServiceLink());
@@ -25973,127 +26362,195 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _buildAvatarRollPreview(AvatarInventoryProvider avatarInventory) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
     final selectedAvatar = avatarInventory.selectedAvatar;
+    final vaultAccent = _avatarRollBucketAccent(
+      avatarInventory.hasAvailablePaidRolls
+          ? AvatarRarityBucket.legendary
+          : AvatarRarityBucket.normal,
+      scheme,
+      useMonochrome: useMonochrome,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (selectedAvatar != null)
-              AvatarPortrait(
-                avatar: selectedAvatar,
-                size: 72,
-                radius: 18,
-                borderColor: scheme.primary.withValues(alpha: 0.28),
-                backgroundColor: Color.alphaBlend(
-                  scheme.primary.withValues(alpha: 0.06),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(
+                  vaultAccent.withValues(alpha: isLight ? 0.12 : 0.18),
                   scheme.surface,
                 ),
-                showShadow: false,
-              )
-            else
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: Color.alphaBlend(
-                    scheme.primary.withValues(alpha: 0.06),
-                    scheme.surface,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: scheme.outline.withValues(alpha: 0.24),
-                  ),
+                Color.alphaBlend(
+                  scheme.primary.withValues(alpha: isLight ? 0.04 : 0.08),
+                  scheme.surface,
                 ),
-                child: Icon(
-                  Icons.account_circle_outlined,
-                  color: scheme.onSurface.withValues(alpha: 0.54),
-                ),
-              ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+              ],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: vaultAccent.withValues(alpha: 0.22)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    selectedAvatar?.name ?? 'No avatar selected',
-                    style: TextStyle(
-                      color: scheme.onSurface,
-                      fontWeight: FontWeight.w700,
+                  if (selectedAvatar != null)
+                    AvatarPortrait(
+                      avatar: selectedAvatar,
+                      size: 72,
+                      radius: 18,
+                      borderColor: vaultAccent.withValues(alpha: 0.34),
+                      backgroundColor: Color.alphaBlend(
+                        vaultAccent.withValues(alpha: isLight ? 0.08 : 0.14),
+                        scheme.surface,
+                      ),
+                      showShadow: false,
+                    )
+                  else
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          vaultAccent.withValues(alpha: isLight ? 0.08 : 0.14),
+                          scheme.surface,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: vaultAccent.withValues(alpha: 0.24),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.account_circle_outlined,
+                        color: scheme.onSurface.withValues(alpha: 0.54),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Owned ${avatarInventory.ownedCount}/74 · ${avatarInventory.availablePaidRollCount} rollable left',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.68),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Random roll excludes owned avatars and promo-only entries automatically.',
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.62),
-                      fontSize: 11.2,
-                      height: 1.3,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _remoteFriendSurfaceChip(
+                          label: avatarInventory.hasAvailablePaidRolls
+                              ? 'Avatar vault live'
+                              : 'Vault complete',
+                          accent: vaultAccent,
+                          icon: Icons.auto_awesome_rounded,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          selectedAvatar?.name ?? 'No avatar selected',
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 13.4,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Weighted 200-coin pull with no duplicate results and no promo-only entries.',
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.70),
+                            fontSize: 11.3,
+                            height: 1.3,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildAvatarRollStatChip(
+                    label: 'Owned',
+                    value: '${avatarInventory.ownedCount}/74',
+                    accent: scheme.primary,
+                  ),
+                  _buildAvatarRollStatChip(
+                    label: 'Rollable left',
+                    value: '${avatarInventory.availablePaidRollCount}',
+                    accent: vaultAccent,
+                  ),
+                  _buildAvatarRollStatChip(
+                    label: 'Pool rule',
+                    value: 'No duplicates',
+                    accent: scheme.onSurface.withValues(alpha: 0.72),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
-        _buildAvatarRollOddsChips(avatarInventory),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Text(
-          'Base odds shown above. Empty rarity buckets are skipped automatically.',
+          'Current pool',
           style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.56),
-            fontSize: 10.8,
-            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+            fontSize: 12.4,
+            fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 8),
+        _buildAvatarRollOddsChips(avatarInventory),
+        const SizedBox(height: 10),
+        Text(
+          'Base odds shown above. Empty rarity buckets disappear automatically, so every paid roll resolves to an eligible avatar while any remain.',
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.60),
+            fontSize: 10.9,
+            fontWeight: FontWeight.w600,
+            height: 1.28,
+          ),
+        ),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            TextButton.icon(
+            OutlinedButton.icon(
               onPressed: () {
                 unawaited(_openTermsOfServiceLink());
               },
               icon: const Icon(Icons.description_outlined, size: 16),
               label: const Text('Terms of Service'),
-              style: TextButton.styleFrom(
+              style: OutlinedButton.styleFrom(
                 foregroundColor: scheme.primary,
+                side: BorderSide(color: scheme.outline.withValues(alpha: 0.24)),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
+                  horizontal: 12,
+                  vertical: 10,
                 ),
               ),
             ),
-            Tooltip(
-              message: 'View avatar roll odds and store rules',
-              child: IconButton(
-                onPressed: () {
-                  unawaited(_showAvatarRollOddsDialog(avatarInventory));
-                },
-                style: IconButton.styleFrom(
-                  foregroundColor: scheme.primary,
-                  backgroundColor: Color.alphaBlend(
-                    scheme.primary.withValues(alpha: 0.08),
-                    scheme.surface,
-                  ),
-                  side: BorderSide(
-                    color: scheme.outline.withValues(alpha: 0.24),
-                  ),
+            FilledButton.tonalIcon(
+              onPressed: () {
+                unawaited(_showAvatarRollOddsDialog(avatarInventory));
+              },
+              icon: const Icon(Icons.info_outline_rounded, size: 18),
+              label: const Text('Odds & rules'),
+              style: FilledButton.styleFrom(
+                foregroundColor: scheme.onSurface,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
                 ),
-                icon: const Icon(Icons.info_outline_rounded),
               ),
             ),
           ],
