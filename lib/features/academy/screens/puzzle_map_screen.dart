@@ -20,6 +20,7 @@ import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
 import 'package:chessiq/features/avatar/models/avatar_catalog.dart';
 import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
 import 'package:chessiq/features/avatar/widgets/avatar_portrait.dart';
+import 'package:chessiq/shared/widgets/chess_iq_transient_message.dart';
 import 'package:chessiq/shared/widgets/theme_selector_tiles.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/foundation.dart';
@@ -5370,12 +5371,11 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
     if (launched || !mounted) return;
     await Clipboard.setData(const ClipboardData(text: chessIqPrivacyNoticeUrl));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Could not open the privacy notice. The URL has been copied instead.',
-        ),
-      ),
+    ChessIqTransientMessage.show(
+      context,
+      title: 'Privacy notice link copied',
+      message: 'Could not open the privacy notice here.',
+      icon: Icons.policy_outlined,
     );
   }
 

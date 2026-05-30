@@ -1079,25 +1079,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadVsBotSetupPrefs();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat();
-    _pulseController.addListener(_updateMenuSparks);
-    _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
-    _startIdleInterstitialTimer();
-    _menuSparkLastUpdate = DateTime.now();
-    _creditsBackdropLastUpdate = DateTime.now();
     final random = Random();
+    final now = DateTime.now();
+    _startIdleInterstitialTimer();
+    _menuSparkLastUpdate = now;
+    _creditsBackdropLastUpdate = now;
     _menuFloorSequenceSeed =
-        '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${random.nextInt(1 << 32).toRadixString(36)}';
+        '${now.microsecondsSinceEpoch.toRadixString(36)}-${random.nextInt(1 << 32).toRadixString(36)}';
     const menuDotRadiusScale = 1.15;
     _blueDotPhase = random.nextDouble() * 2 * pi;
     _yellowDotPhase = random.nextDouble() * 2 * pi;
     _blueDotSpeed = (0.28 + random.nextDouble() * 0.12) * 1.40;
     _yellowDotSpeed = (0.25 + random.nextDouble() * 0.12) * 1.40;
-    _blueDotRadius = (0.58 + random.nextDouble() * 0.12) * menuDotRadiusScale;
-    _yellowDotRadius = (0.52 + random.nextDouble() * 0.12) * menuDotRadiusScale;
+    _blueDotRadius =
+        (0.58 + random.nextDouble() * 0.12) * menuDotRadiusScale;
+    _yellowDotRadius =
+        (0.52 + random.nextDouble() * 0.12) * menuDotRadiusScale;
     _blueDotTrajectoryNoise = random.nextDouble();
     _yellowDotTrajectoryNoise = random.nextDouble();
     _blueDotShapeSeed = random.nextDouble() * 3.2;
@@ -1109,16 +1106,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _menuCenterShapeChangeTimerA = 2.4 + random.nextDouble() * 2.0;
     _menuCenterShapeChangeTimerB = 2.8 + random.nextDouble() * 1.8;
     _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
-    _menuCenterLastUpdate = DateTime.now();
-    _menuCenterLastCollision = null;
-    _menuCenterCollisionStreakCount = 0;
-    _menuDotTime = 0.0;
-    _mainMenuSceneTime = 0.0;
-    _menuFloorActors.clear();
-    _menuFloorActionIndex = 0;
-    _menuFloorActorSerial = 0;
+    _menuCenterImpact = 0.0;
+    _menuDotsPreviouslyColliding = false;
+    _blueYellowContactTime = 0.0;
     _menuFloorNextActionSceneTime = 0.0;
-    _menuFloorExitRowThreshold = 8.9;
     _blueMenuDotPosition = Offset(
       cos(_blueDotPhase) * 0.58,
       sin(_blueDotPhase) * 0.56,
@@ -1135,6 +1126,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       0.18 - random.nextDouble() * 0.32,
       0.18 - random.nextDouble() * 0.32,
     );
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+    _pulseController.addListener(_updateMenuSparks);
+    _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
+    _pulseController.repeat();
+    _menuCenterLastUpdate = now;
+    _menuCenterLastCollision = null;
+    _menuCenterCollisionStreakCount = 0;
+    _menuDotTime = 0.0;
+    _mainMenuSceneTime = 0.0;
+    _menuFloorActors.clear();
+    _menuFloorActionIndex = 0;
+    _menuFloorActorSerial = 0;
+    _menuFloorExitRowThreshold = 8.9;
     _introController =
         AnimationController(
           vsync: this,
@@ -1210,8 +1217,45 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _updateMenuSparks() {
     final now = DateTime.now();
     final last = _menuSparkLastUpdate ?? now;
-    final dt = now.difference(last).inMilliseconds / 1000.0;
+    final rawDt =
+        now.difference(last).inMicroseconds / Duration.microsecondsPerSecond;
+    final dt = rawDt.clamp(0.0, 1.0 / 28.0).toDouble();
     _menuSparkLastUpdate = now;
+
+    Offset clampMenuDotVelocity(Offset velocity) {
+      const maxDotSpeed = 0.78;
+      final speed = velocity.distance;
+      if (speed <= maxDotSpeed || speed <= 0.0001) {
+        return velocity;
+      }
+      return velocity / speed * maxDotSpeed;
+    }
+
+    void settleMenuDotAtBoundary({required bool isBlue}) {
+      final position = isBlue ? _blueMenuDotPosition : _yellowMenuDotPosition;
+      final distance = position.distance;
+      if (distance <= 0.96) {
+        return;
+      }
+
+      final normal = position / max(distance, 0.0001);
+      var velocity = isBlue ? _blueMenuDotVelocity : _yellowMenuDotVelocity;
+      final radialSpeed = velocity.dx * normal.dx + velocity.dy * normal.dy;
+      final tangentialVelocity = velocity - normal * radialSpeed;
+      velocity = tangentialVelocity * 0.84;
+      if (radialSpeed > 0.0) {
+        velocity -= normal * (radialSpeed * 1.35);
+      }
+      velocity -= normal * 0.05;
+
+      if (isBlue) {
+        _blueMenuDotPosition = normal * 0.90;
+        _blueMenuDotVelocity = clampMenuDotVelocity(velocity);
+      } else {
+        _yellowMenuDotPosition = normal * 0.90;
+        _yellowMenuDotVelocity = clampMenuDotVelocity(velocity);
+      }
+    }
 
     _menuDotTime += dt;
     if (_menuDotTime > 1e6) {
@@ -1225,9 +1269,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       _updateMenuFloorPieces();
 
-      final centerTime = _menuCenterLastUpdate == null
-          ? 0.0
-          : now.difference(_menuCenterLastUpdate!).inMilliseconds / 1000.0;
+      final centerTime = dt;
       _menuCenterLastUpdate = now;
       _menuCenterImpact = max(0.0, _menuCenterImpact - centerTime * 1.5);
       _menuCenterSpinSpeed = max(
@@ -1328,10 +1370,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
         final safeDistance = max(collisionDistance, 0.0001);
         final direction = separation / safeDistance;
-        const repulsionStrength = 14.7;
+    const repulsionStrength = 10.8;
         final impulse =
             direction * repulsionStrength +
-            Offset(-direction.dy, direction.dx) * 2.7;
+      Offset(-direction.dy, direction.dx) * 1.85;
         _blueMenuDotVelocity += impulse;
         _yellowMenuDotVelocity -= impulse;
       }
@@ -1382,24 +1424,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           yellowChaos +
           yellowRadial;
 
+        final velocityDamping = pow(0.78, dt / (1.0 / 60.0)).toDouble();
+
       _blueMenuDotVelocity =
-          (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) * 0.78;
+          clampMenuDotVelocity(
+          (_blueMenuDotVelocity + blueAcceleration * dt * 4.4) *
+            velocityDamping,
+          );
       _yellowMenuDotVelocity =
-          (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) * 0.78;
+          clampMenuDotVelocity(
+          (_yellowMenuDotVelocity + yellowAcceleration * dt * 4.4) *
+            velocityDamping,
+          );
 
       _blueMenuDotPosition += _blueMenuDotVelocity * dt;
       _yellowMenuDotPosition += _yellowMenuDotVelocity * dt;
 
-      if (_blueMenuDotPosition.distance > 0.96) {
-        _blueMenuDotPosition =
-            _blueMenuDotPosition / _blueMenuDotPosition.distance * 0.92;
-        _blueMenuDotVelocity *= 0.72;
-      }
-      if (_yellowMenuDotPosition.distance > 0.96) {
-        _yellowMenuDotPosition =
-            _yellowMenuDotPosition / _yellowMenuDotPosition.distance * 0.92;
-        _yellowMenuDotVelocity *= 0.72;
-      }
+        settleMenuDotAtBoundary(isBlue: true);
+        settleMenuDotAtBoundary(isBlue: false);
 
       _menuSparkParticles.removeWhere((particle) {
         particle.position += particle.velocity * dt;
@@ -3842,12 +3884,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (launched || !mounted) return;
       await Clipboard.setData(const ClipboardData(text: feedbackUrl));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not open the feedback page. The URL has been copied instead.',
-          ),
-        ),
+      ChessIqTransientMessage.show(
+        context,
+        title: 'Feedback link copied',
+        message: 'Could not open the feedback page here.',
+        icon: Icons.feedback_outlined,
+        accent: visuals.secondaryAccent,
       );
     }
 
@@ -3858,12 +3900,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         const ClipboardData(text: chessIqPrivacyNoticeUrl),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not open the privacy notice. The URL has been copied instead.',
-          ),
-        ),
+      ChessIqTransientMessage.show(
+        context,
+        title: 'Privacy notice link copied',
+        message: 'Could not open the privacy notice here.',
+        icon: Icons.policy_outlined,
+        accent: visuals.secondaryAccent,
       );
     }
 
@@ -3874,12 +3916,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         const ClipboardData(text: chessIqTermsOfServiceUrl),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not open the Terms of Service. The URL has been copied instead.',
-          ),
-        ),
+      ChessIqTransientMessage.show(
+        context,
+        title: 'Terms link copied',
+        message: 'Could not open the Terms of Service here.',
+        icon: Icons.gavel_rounded,
+        accent: visuals.secondaryAccent,
       );
     }
 
@@ -5150,8 +5192,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Invite code $code copied to clipboard.')),
+    ChessIqTransientMessage.show(
+      context,
+      title: 'Invite code copied',
+      message: code,
+      icon: Icons.content_copy_rounded,
+      emphasizeMessage: true,
     );
   }
 
@@ -5180,10 +5226,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open the share sheet for this invite.'),
-        ),
+      ChessIqTransientMessage.show(
+        context,
+        title: 'Share unavailable',
+        message: 'Could not open the share sheet for this invite.',
+        icon: Icons.share_rounded,
       );
     }
   }
@@ -5762,13 +5809,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return message;
   }
 
-  void _showRemoteFriendSnackBar(String message) {
+  void _showRemoteFriendNotice(String message) {
     if (!mounted || message.trim().isEmpty) {
       return;
     }
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(SnackBar(content: Text(message)));
+    ChessIqTransientMessage.show(
+      context,
+      title: 'Private match update',
+      message: message,
+      icon: Icons.groups_rounded,
+    );
   }
 
   Future<void> _createRemoteFriendInvite() async {
@@ -5898,7 +5948,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       });
       _startRemoteFriendSyncTimers();
       if (!result.success) {
-        _showRemoteFriendSnackBar(
+        _showRemoteFriendNotice(
           'The piece-skin selection window already closed. The match will continue with the current skins.',
         );
       }
@@ -5907,7 +5957,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!mounted) {
         return;
       }
-      _showRemoteFriendSnackBar(
+      _showRemoteFriendNotice(
         'Could not update your piece skin before the match started.',
       );
       await _refreshRemoteFriendMatch(silent: true);
@@ -5936,7 +5986,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       snapshot,
     );
     if (localCooldown > Duration.zero) {
-      _showRemoteFriendSnackBar(
+      _showRemoteFriendNotice(
         'Quick reacts recharge every 30 seconds. Try again in ${_formatRemoteFriendReactionCooldown(localCooldown)}.',
       );
       return;
@@ -5965,7 +6015,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
       if (!result.success) {
         _addLog('Remote reaction rejected: ${result.reason ?? 'unknown'}');
-        _showRemoteFriendSnackBar(
+        _showRemoteFriendNotice(
           _remoteFriendReactionFailureMessage(result.reason),
         );
         return;
@@ -5977,7 +6027,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!mounted) {
         return;
       }
-      _showRemoteFriendSnackBar(
+      _showRemoteFriendNotice(
         'Could not send that quick reaction. The match will refresh to the latest state.',
       );
       await _refreshRemoteFriendMatch(silent: true);
@@ -6193,7 +6243,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _addLog('Remote move rejected: ${result.reason ?? 'unknown'}');
         await _refreshRemoteFriendMatch(silent: true);
         if (mounted) {
-          _showRemoteFriendSnackBar(
+          _showRemoteFriendNotice(
             _remoteFriendMoveRejectionMessage(result.reason),
           );
         }
@@ -6527,7 +6577,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _showLockedRemoteFriendReactionMessage() {
-    _showRemoteFriendSnackBar(
+    _showRemoteFriendNotice(
       'The strange reacts unlock after your first random avatar roll.',
     );
   }
@@ -17580,33 +17630,57 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     Widget buildHeroPanel() {
+      final useSingleColumnHeroCards = !isLandscape && media.size.width <= 430;
+      final singleColumnHeroCardHeight = (media.size.height * 0.19)
+          .clamp(152.0, 186.0)
+          .toDouble();
+      final heroHeadingSize = media.size.width <= 360
+          ? 23.5
+          : media.size.width <= 430
+          ? 25.5
+          : media.size.width <= 700
+          ? 27.5
+          : 30.0;
+
       Widget buildShineHeading(String text) {
-        final headingStyle = buildDisplayStyle(color: arcade.text, size: 30);
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              begin: const Alignment(-0.9, -0.2),
-              end: const Alignment(1.0, 0.2),
-              colors: [
-                arcade.text.withValues(alpha: 0.86),
-                Colors.white.withValues(alpha: 0.98),
-                arcade.text.withValues(alpha: 0.9),
-              ],
-              stops: const [0.08, 0.46, 0.9],
-            ).createShader(bounds);
-          },
-          child: Text(
-            text,
-            style: headingStyle.copyWith(
-              color: Colors.white,
-              shadows: const [
-                Shadow(
-                  color: Color(0xB3000000),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
+        final headingStyle = buildDisplayStyle(
+          color: arcade.text,
+          size: heroHeadingSize,
+        );
+        return SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: ShaderMask(
+              blendMode: BlendMode.srcATop,
+              shaderCallback: (bounds) {
+                return LinearGradient(
+                  begin: const Alignment(-0.9, -0.2),
+                  end: const Alignment(1.0, 0.2),
+                  colors: [
+                    arcade.text.withValues(alpha: 0.86),
+                    Colors.white.withValues(alpha: 0.98),
+                    arcade.text.withValues(alpha: 0.9),
+                  ],
+                  stops: const [0.08, 0.46, 0.9],
+                ).createShader(bounds);
+              },
+              child: Text(
+                text,
+                softWrap: false,
+                maxLines: 1,
+                style: headingStyle.copyWith(
+                  color: Colors.white,
+                  shadows: const [
+                    Shadow(
+                      color: Color(0xB3000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -17615,7 +17689,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       Widget buildModeOptionCard({
         required _VsModeQuickOption option,
         required String title,
-        required String subtitle,
+        String? subtitle,
         required IconData icon,
         required Color accent,
         required String imageAsset,
@@ -17647,8 +17721,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             borderRadius: BorderRadius.circular(15),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final compactCard = constraints.maxHeight < 120;
-                final zoom = compactCard ? 1.12 : 1.08;
+                final expandedCard =
+                    useSingleColumnHeroCards ||
+                    constraints.maxWidth >= 260 ||
+                    constraints.maxHeight >= 150;
+                final compactCard =
+                    !expandedCard && constraints.maxHeight < 120;
+                final zoom = compactCard
+                    ? 1.12
+                    : expandedCard
+                    ? 1.04
+                    : 1.08;
+                final badgeTop = expandedCard ? 10.0 : 8.0;
+                final badgeRight = expandedCard ? 10.0 : 8.0;
+                final contentBottom = compactCard
+                    ? 8.0
+                    : expandedCard
+                    ? 14.0
+                    : 10.0;
+                final horizontalInset = expandedCard ? 14.0 : 10.0;
+                final iconShellSize = expandedCard
+                    ? 42.0
+                    : compactCard
+                    ? 32.0
+                    : 34.0;
+                final iconSize = expandedCard
+                    ? 20.0
+                    : compactCard
+                    ? 17.0
+                    : 18.0;
+                final hasSubtitle =
+                  subtitle != null && subtitle.trim().isNotEmpty;
+                final imageCropRight = expandedCard ? 15.0 : 13.0;
                 return Stack(
                   fit: StackFit.expand,
                   children: [
@@ -17659,26 +17763,111 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           widthFactor: zoom,
                           heightFactor: zoom,
                           alignment: Alignment.centerRight,
-                          child: Image.asset(
-                            imageAsset,
-                            fit: BoxFit.cover,
-                            alignment: Alignment.centerRight,
-                            errorBuilder: (context, error, stackTrace) {
-                              return DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      accent.withValues(alpha: 0.30),
-                                      arcade.panelAlt,
-                                    ],
+                          child: Transform.translate(
+                            offset: Offset(-imageCropRight, 0),
+                            child: Image.asset(
+                              imageAsset,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.centerRight,
+                              errorBuilder: (context, error, stackTrace) {
+                                return DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        accent.withValues(alpha: 0.30),
+                                        arcade.panelAlt,
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
                         ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: AnimatedBuilder(
+                        animation: _pulseController,
+                        builder: (context, child) {
+                          final pulse =
+                              (sin(
+                                    (_pulseController.value * pi * 2) +
+                                        (option.index * 0.95),
+                                  ) +
+                                  1) /
+                              2;
+                          final borderAlpha = selected
+                              ? 0.78
+                              : 0.34 + (pulse * 0.18);
+                          final glowAlpha = selected
+                              ? 0.24
+                              : 0.08 + (pulse * 0.10);
+                          final sweepLeft =
+                              (-constraints.maxWidth * 0.22) +
+                              ((constraints.maxWidth * 1.05) *
+                                  ((_pulseController.value +
+                                              (option.index * 0.17)) %
+                                          1.0));
+
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                    color: accent.withValues(alpha: borderAlpha),
+                                    width: selected ? 1.9 : 1.35,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: accent.withValues(alpha: glowAlpha),
+                                      blurRadius: selected ? 22 : 14,
+                                      spreadRadius: selected ? 1.1 : 0.25,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Positioned(
+                                top: 0,
+                                left: sweepLeft,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    width: constraints.maxWidth * 0.34,
+                                    height: 2.4,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(999),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.transparent,
+                                          accent.withValues(alpha: 0.0),
+                                          accent.withValues(
+                                            alpha: selected ? 0.92 : 0.72,
+                                          ),
+                                          Colors.white.withValues(
+                                            alpha: selected ? 0.52 : 0.34,
+                                          ),
+                                          accent.withValues(alpha: 0.0),
+                                          Colors.transparent,
+                                        ],
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: accent.withValues(alpha: 0.26),
+                                          blurRadius: 10,
+                                          spreadRadius: 0.5,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                     Positioned.fill(
@@ -17716,8 +17905,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ),
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: badgeTop,
+                      right: badgeRight,
                       child: AnimatedOpacity(
                         duration: const Duration(milliseconds: 180),
                         opacity: selected ? 1 : 0,
@@ -17752,15 +17941,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ),
                     Positioned(
-                      left: 10,
-                      right: 10,
-                      bottom: compactCard ? 8 : 10,
+                      left: horizontalInset,
+                      right: horizontalInset,
+                      bottom: contentBottom,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Container(
-                            width: compactCard ? 32 : 34,
-                            height: compactCard ? 32 : 34,
+                            width: iconShellSize,
+                            height: iconShellSize,
                             decoration: _vsBotArcadePanelDecoration(
                               palette: arcade,
                               accent: accent,
@@ -17777,11 +17966,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ),
                             child: Icon(
                               icon,
-                              size: compactCard ? 17 : 18,
+                              size: iconSize,
                               color: _vsBotReadableAccentColor(accent, arcade),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          SizedBox(width: expandedCard ? 12 : 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -17789,15 +17978,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               children: [
                                 Text(
                                   title,
-                                  maxLines: 1,
+                                  maxLines: expandedCard ? 2 : 1,
                                   overflow: TextOverflow.ellipsis,
                                   style:
                                       buildHudStyle(
                                         color: accent,
-                                        size: compactCard ? 10.2 : 10.9,
+                                        size: expandedCard
+                                            ? 12.8
+                                            : compactCard
+                                            ? 10.2
+                                            : 10.9,
                                         weight: FontWeight.w800,
-                                        letterSpacing: 0.68,
-                                        height: 1.0,
+                                        letterSpacing: expandedCard ? 0.74 : 0.68,
+                                        height: expandedCard ? 1.06 : 1.0,
                                       ).copyWith(
                                         shadows: const [
                                           Shadow(
@@ -17808,28 +18001,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         ],
                                       ),
                                 ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  subtitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style:
-                                      buildBodyStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.95,
+                                if (hasSubtitle) ...[
+                                  SizedBox(height: expandedCard ? 4 : 3),
+                                  Text(
+                                    subtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        buildBodyStyle(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.95,
+                                          ),
+                                          size: expandedCard
+                                              ? 12.1
+                                              : compactCard
+                                              ? 10.2
+                                              : 11.0,
+                                          weight: FontWeight.w700,
+                                        ).copyWith(
+                                          shadows: const [
+                                            Shadow(
+                                              color: Color(0xCC000000),
+                                              blurRadius: 8,
+                                              offset: Offset(0, 2),
+                                            ),
+                                          ],
                                         ),
-                                        size: compactCard ? 10.2 : 11.0,
-                                        weight: FontWeight.w700,
-                                      ).copyWith(
-                                        shadows: const [
-                                          Shadow(
-                                            color: Color(0xCC000000),
-                                            blurRadius: 8,
-                                            offset: Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -17844,7 +18043,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         );
       }
 
-      final selectedBot = _selectedBot;
       final localTimeSummary =
           selectedLocalFriendTimeControl.initialTime == null
           ? 'Untimed'
@@ -17852,6 +18050,41 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remoteTimeSummary = selectedRemoteFriendTimeControl.isUntimed
           ? 'Untimed Invite'
           : _formatRemoteFriendTimeControl(selectedRemoteFriendTimeControl);
+      final modeCards = <Widget>[
+        buildModeOptionCard(
+          option: _VsModeQuickOption.crossDevice,
+          title: '1V1 CROSS-PLAY',
+          subtitle: remoteTimeSummary,
+          icon: Icons.wifi_tethering_rounded,
+          accent: remoteAccent,
+          imageAsset: 'assets/vs/a1.png',
+        ),
+        buildModeOptionCard(
+          option: _VsModeQuickOption.vsCpu,
+          title: '1 PLAYER VS CPU',
+          icon: Icons.smart_toy_outlined,
+          accent: arcade.cyan,
+          imageAsset: 'assets/vs/a4.png',
+        ),
+        buildModeOptionCard(
+          option: _VsModeQuickOption.sharedScreen,
+          title: '1V1 SHARED SCREEN',
+          subtitle: localTimeSummary,
+          icon: Icons.people_alt_outlined,
+          accent: arcade.amber,
+          imageAsset: 'assets/vs/a2.png',
+        ),
+        buildModeOptionCard(
+          option: _VsModeQuickOption.quickJoin,
+          title: 'QUICK JOIN CODE',
+          subtitle: _remoteFriendOperationInProgress
+              ? 'Working...'
+              : 'Paste invite code',
+          icon: Icons.key_rounded,
+          accent: heroAccent,
+          imageAsset: 'assets/vs/a3.png',
+        ),
+      ];
 
       return buildCardShell(
         accent: heroAccent,
@@ -17908,64 +18141,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
             const SizedBox(height: 10),
             buildShineHeading('Choose Match Type'),
-            const SizedBox(height: 6),
-            Text(
-              'Four clear options, inspired by classic arcade mode select screens.',
-              style: buildBodyStyle(color: arcade.textMuted, size: 11.6),
-            ),
-            const SizedBox(height: 10),
-            GridView.count(
-              crossAxisCount: media.size.width < 350 ? 1 : 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: media.size.width >= 1100
-                  ? 2.95
-                  : media.size.width >= 800
-                  ? (isLandscape ? 2.75 : 2.45)
-                  : media.size.width >= 600
-                  ? (isLandscape ? 2.55 : 2.20)
-                  : (isLandscape ? 2.35 : 1.75),
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                buildModeOptionCard(
-                  option: _VsModeQuickOption.crossDevice,
-                  title: '1V1 CROSS-PLAY',
-                  subtitle: remoteTimeSummary,
-                  icon: Icons.wifi_tethering_rounded,
-                  accent: remoteAccent,
-                  imageAsset: 'assets/vs/a1.png',
-                ),
-                buildModeOptionCard(
-                  option: _VsModeQuickOption.sharedScreen,
-                  title: '1V1 SHARED SCREEN',
-                  subtitle: localTimeSummary,
-                  icon: Icons.people_alt_outlined,
-                  accent: arcade.amber,
-                  imageAsset: 'assets/vs/a2.png',
-                ),
-                buildModeOptionCard(
-                  option: _VsModeQuickOption.vsCpu,
-                  title: '1 PLAYER VS CPU',
-                  subtitle: selectedBot == null
-                      ? botDifficultyLabel(_selectedBotDifficulty)
-                      : selectedBot.name,
-                  icon: Icons.smart_toy_outlined,
-                  accent: arcade.cyan,
-                  imageAsset: 'assets/vs/a4.png',
-                ),
-                buildModeOptionCard(
-                  option: _VsModeQuickOption.quickJoin,
-                  title: 'QUICK JOIN CODE',
-                  subtitle: _remoteFriendOperationInProgress
-                      ? 'Working...'
-                      : 'Paste invite code',
-                  icon: Icons.key_rounded,
-                  accent: heroAccent,
-                  imageAsset: 'assets/vs/a3.png',
-                ),
-              ],
-            ),
+            const SizedBox(height: 12),
+            if (useSingleColumnHeroCards)
+              Column(
+                children: [
+                  for (int index = 0; index < modeCards.length; index++) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: singleColumnHeroCardHeight,
+                      child: modeCards[index],
+                    ),
+                    if (index != modeCards.length - 1) const SizedBox(height: 12),
+                  ],
+                ],
+              )
+            else
+              GridView.count(
+                crossAxisCount: media.size.width < 350 ? 1 : 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: media.size.width >= 1100
+                    ? 2.95
+                    : media.size.width >= 800
+                    ? (isLandscape ? 2.75 : 2.45)
+                    : media.size.width >= 600
+                    ? (isLandscape ? 2.55 : 2.20)
+                    : (isLandscape ? 2.35 : 1.75),
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: modeCards,
+              ),
           ],
         ),
       );
@@ -26020,12 +26225,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Could not open the Terms of Service. The URL has been copied instead.',
-        ),
-      ),
+    ChessIqTransientMessage.show(
+      context,
+      title: 'Terms link copied',
+      message: 'Could not open the Terms of Service here.',
+      icon: Icons.gavel_rounded,
     );
   }
 
@@ -29859,6 +30063,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     unawaited(_engine?.stop());
     unawaited(_sacrificeScanEngine?.stop());
     _cancelIdleInterstitialTimer();
+    _pulseController.removeListener(_updateMenuSparks);
     _pulseController.removeListener(_updateBotSetupBlueDotScrollOffset);
     _pulseController.dispose();
     _introController.dispose();

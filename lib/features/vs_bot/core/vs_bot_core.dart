@@ -4194,14 +4194,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       '${bot.name} says: "Play bold. I dare you."',
       '${bot.name} says: "I am calculating... dramatically."',
     ];
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(messages[_rng.nextInt(messages.length)]),
-          duration: const Duration(milliseconds: 1700),
-        ),
-      );
+    ChessIqTransientMessage.show(
+      context,
+      message: messages[_rng.nextInt(messages.length)],
+      icon: Icons.smart_toy_rounded,
+      duration: const Duration(milliseconds: 1700),
+    );
   }
 }

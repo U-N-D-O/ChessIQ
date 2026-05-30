@@ -36,6 +36,7 @@ import 'package:chessiq/features/vs_bot/models/bot_lines.dart';
 import 'package:chessiq/features/vs_bot/models/bot_roster.dart';
 import 'package:chessiq/features/vs_bot/models/vs_bot_models.dart';
 import 'package:chessiq/features/vs_friend/models/remote_friend_models.dart';
+import 'package:chessiq/shared/widgets/chess_iq_transient_message.dart';
 import 'package:chessiq/shared/widgets/theme_selector_tiles.dart';
 import 'package:chessiq/shared/widgets/universal_settings_sheet.dart';
 import 'package:flutter/foundation.dart';
