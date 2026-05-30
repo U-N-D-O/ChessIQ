@@ -83,6 +83,7 @@ flutter:
     - assets/arrows/
     - assets/sounds/
     - assets/bots/
+    - assets/avatars/
     - store/
     - assets/puzzles/base_puzzles.json
     - assets/ChessIQ.png

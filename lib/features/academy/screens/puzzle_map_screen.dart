@@ -17,6 +17,9 @@ import 'package:chessiq/features/academy/screens/puzzle_grid_screen.dart';
 import 'package:chessiq/features/academy/screens/puzzle_node_screen.dart';
 import 'package:chessiq/features/academy/widgets/academy_theme_settings_sheet.dart';
 import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
+import 'package:chessiq/features/avatar/models/avatar_catalog.dart';
+import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
+import 'package:chessiq/features/avatar/widgets/avatar_portrait.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +27,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chessiq/shared/widgets/theme_selector_tiles.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/country_names.dart';
@@ -5380,6 +5384,9 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
     final monochrome =
         context.read<AppThemeProvider>().isMonochrome ||
         widget.cinematicThemeEnabled;
+    final avatarInventory = context.watch<AvatarInventoryProvider>();
+    final selectedAvatar = avatarInventory.selectedAvatar;
+    final ownedAvatars = avatarInventory.ownedAvatars;
     final palette = puzzleAcademyPalette(
       context,
       monochromeOverride: monochrome,
@@ -5459,6 +5466,153 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
                   ),
                 ),
               ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Avatar',
+              style: puzzleAcademyHudStyle(
+                palette: palette,
+                size: 12.6,
+                weight: FontWeight.w800,
+                color: palette.cyan,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  palette.cyan.withValues(alpha: 0.08),
+                  Theme.of(context).colorScheme.surface,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: palette.cyan.withValues(alpha: 0.28),
+                ),
+              ),
+              child: avatarInventory.loaded && selectedAvatar != null
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AvatarPortrait(
+                              avatar: selectedAvatar,
+                              size: 92,
+                              radius: 24,
+                              borderColor: palette.cyan.withValues(
+                                alpha: 0.38,
+                              ),
+                              backgroundColor: Colors.black.withValues(
+                                alpha: monochrome ? 0.06 : 0.03,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedAvatar.name,
+                                    style: puzzleAcademyHudStyle(
+                                      palette: palette,
+                                      size: 14.2,
+                                      weight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${selectedAvatar.bucket.label} avatar',
+                                    style: puzzleAcademyHudStyle(
+                                      palette: palette,
+                                      size: 11.2,
+                                      weight: FontWeight.w700,
+                                      color: palette.cyan,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Starter avatars are pulled from the normal pool on first launch. More owned avatars will appear here as you unlock them.',
+                                    style: puzzleAcademyHudStyle(
+                                      palette: palette,
+                                      size: 11.2,
+                                      weight: FontWeight.w600,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Owned: ${ownedAvatars.length}',
+                          style: puzzleAcademyHudStyle(
+                            palette: palette,
+                            size: 11.2,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 76,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: ownedAvatars.length,
+                            separatorBuilder: (_, _) => const SizedBox(width: 10),
+                            itemBuilder: (context, index) {
+                              final avatar = ownedAvatars[index];
+                              return ThemeSelectorTile(
+                                selected: avatar.id == selectedAvatar.id,
+                                size: 72,
+                                onTap: () {
+                                  unawaited(
+                                    avatarInventory.selectAvatar(avatar.id),
+                                  );
+                                },
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.asset(
+                                    avatar.assetPath,
+                                    width: 58,
+                                    height: 58,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              palette.cyan,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Preparing your first avatar...',
+                            style: puzzleAcademyHudStyle(
+                              palette: palette,
+                              size: 11.6,
+                              weight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
             const SizedBox(height: 16),
             TextFormField(
