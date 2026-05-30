@@ -275,6 +275,34 @@ class RemoteFriendOutcome {
   }
 }
 
+class RemoteFriendReaction {
+  const RemoteFriendReaction({
+    required this.emoji,
+    required this.sentByUid,
+    required this.sentAt,
+  });
+
+  factory RemoteFriendReaction.fromMap(Map<String, dynamic> map) {
+    return RemoteFriendReaction(
+      emoji: map['emoji']?.toString().trim() ?? '',
+      sentByUid: map['sentByUid']?.toString().trim() ?? '',
+      sentAt: _dateTimeFromDynamic(map['sentAtMs'] ?? map['sentAt']),
+    );
+  }
+
+  final String emoji;
+  final String sentByUid;
+  final DateTime sentAt;
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'emoji': emoji,
+      'sentByUid': sentByUid,
+      'sentAtMs': sentAt.millisecondsSinceEpoch,
+    };
+  }
+}
+
 class RemoteFriendMatchSnapshot {
   const RemoteFriendMatchSnapshot({
     required this.matchId,
@@ -303,12 +331,16 @@ class RemoteFriendMatchSnapshot {
     this.expiresAt,
     this.pieceSelectionDeadlineAt,
     this.outcome,
+    this.reaction,
+    this.whiteLastReactionAt,
+    this.blackLastReactionAt,
   });
 
   factory RemoteFriendMatchSnapshot.fromMap(Map<String, dynamic> map) {
     final rawTimeControl = map['timeControl'];
     final rawMoves = map['moves'];
     final rawOutcome = map['outcome'];
+    final rawReaction = map['reaction'];
     final clockMap = map['clocks'] is Map
         ? (map['clocks'] as Map).cast<String, dynamic>()
         : const <String, dynamic>{};
@@ -363,6 +395,15 @@ class RemoteFriendMatchSnapshot {
       outcome: rawOutcome is Map
           ? RemoteFriendOutcome.fromMap(rawOutcome.cast<String, dynamic>())
           : null,
+      reaction: rawReaction is Map
+          ? RemoteFriendReaction.fromMap(rawReaction.cast<String, dynamic>())
+          : null,
+      whiteLastReactionAt: _nullableDateTimeFromDynamic(
+        map['whiteLastReactionAtMs'] ?? map['whiteLastReactionAt'],
+      ),
+      blackLastReactionAt: _nullableDateTimeFromDynamic(
+        map['blackLastReactionAtMs'] ?? map['blackLastReactionAt'],
+      ),
       moves: _parseRemoteFriendMoves(rawMoves),
     );
   }
@@ -392,6 +433,9 @@ class RemoteFriendMatchSnapshot {
   final DateTime? expiresAt;
   final DateTime? pieceSelectionDeadlineAt;
   final RemoteFriendOutcome? outcome;
+  final RemoteFriendReaction? reaction;
+  final DateTime? whiteLastReactionAt;
+  final DateTime? blackLastReactionAt;
   final List<RemoteFriendMoveRecord> moves;
 
   bool get hasOpponent => (guestUid ?? '').isNotEmpty;
@@ -426,6 +470,9 @@ class RemoteFriendMatchSnapshot {
       'pieceSelectionDeadlineMs':
           pieceSelectionDeadlineAt?.millisecondsSinceEpoch,
       'outcome': outcome?.toMap(),
+      'reaction': reaction?.toMap(),
+      'whiteLastReactionAtMs': whiteLastReactionAt?.millisecondsSinceEpoch,
+      'blackLastReactionAtMs': blackLastReactionAt?.millisecondsSinceEpoch,
       'moves': moves.map((move) => move.toMap()).toList(growable: false),
     };
   }

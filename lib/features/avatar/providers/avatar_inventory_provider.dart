@@ -33,6 +33,7 @@ class AvatarInventoryProvider extends ChangeNotifier {
   static const String _selectedAvatarIdKey = 'selectedAvatarId';
   static const String _starterAvatarIdKey = 'starterAvatarId';
   static const String _claimedRewardKeysKey = 'claimedRewardKeys';
+  static const String _paidRollPurchaseCountKey = 'paidRollPurchaseCount';
   static const List<AvatarRarityBucket> _paidRollBuckets = <AvatarRarityBucket>[
     AvatarRarityBucket.normal,
     AvatarRarityBucket.rare,
@@ -48,6 +49,7 @@ class AvatarInventoryProvider extends ChangeNotifier {
   Set<String> _claimedRewardKeys = <String>{};
   String? _selectedAvatarId;
   String? _starterAvatarId;
+  int _paidRollPurchaseCount = 0;
 
   bool get loaded => _loaded;
 
@@ -63,6 +65,10 @@ class AvatarInventoryProvider extends ChangeNotifier {
 
   AvatarCatalogEntry? get starterAvatar =>
       AvatarCatalog.entryFor(_starterAvatarId);
+
+  int get paidRollPurchaseCount => _paidRollPurchaseCount;
+
+  bool get hasUnlockedStrangeReactions => _paidRollPurchaseCount > 0;
 
   List<AvatarCatalogEntry> get ownedAvatars =>
       AvatarCatalog.ownedEntriesFor(_ownedAvatarIds);
@@ -134,6 +140,9 @@ class AvatarInventoryProvider extends ChangeNotifier {
     );
     _claimedRewardKeys = _readStringSet(inventory[_claimedRewardKeysKey]);
     _starterAvatarId = _normalizeStarterId(inventory[_starterAvatarIdKey]);
+    _paidRollPurchaseCount = _readNonNegativeInt(
+      inventory[_paidRollPurchaseCountKey],
+    );
     if (_starterAvatarId != null) {
       _ownedAvatarIds.add(_starterAvatarId!);
     }
@@ -248,6 +257,8 @@ class AvatarInventoryProvider extends ChangeNotifier {
       return null;
     }
 
+    _paidRollPurchaseCount += 1;
+
     await _persistAvatarInventory();
     notifyListeners();
     return AvatarRollResult(avatar: avatar, bucket: bucket);
@@ -310,6 +321,7 @@ class AvatarInventoryProvider extends ChangeNotifier {
       _selectedAvatarIdKey: _selectedAvatarId,
       _starterAvatarIdKey: _starterAvatarId,
       _claimedRewardKeysKey: claimedRewardKeys,
+      _paidRollPurchaseCountKey: _paidRollPurchaseCount,
     };
 
     await resolvedPrefs.setString(
@@ -327,6 +339,24 @@ class AvatarInventoryProvider extends ChangeNotifier {
       return values;
     }
     return values.where(validValues.contains).toSet();
+  }
+
+  int _readNonNegativeInt(Object? rawValue) {
+    if (rawValue is int) {
+      return rawValue < 0 ? 0 : rawValue;
+    }
+    if (rawValue is num) {
+      final value = rawValue.floor();
+      return value < 0 ? 0 : value;
+    }
+    if (rawValue is String) {
+      final parsed = int.tryParse(rawValue.trim());
+      if (parsed == null || parsed < 0) {
+        return 0;
+      }
+      return parsed;
+    }
+    return 0;
   }
 
   String? _normalizeStarterId(Object? rawValue) {

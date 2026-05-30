@@ -83,6 +83,7 @@ class RemoteFriendService {
   static const String _submitMoveFunction = 'submitFriendMatchMove';
   static const String _actOnMatchFunction = 'actOnFriendMatch';
   static const String _selectPieceThemeFunction = 'selectFriendMatchPieceTheme';
+  static const String _sendReactionFunction = 'sendFriendMatchReaction';
   static const List<Duration> _transientRetryBackoff = <Duration>[
     Duration.zero,
     Duration(seconds: 1),
@@ -217,6 +218,17 @@ class RemoteFriendService {
         'pieceThemeIndex': pieceThemeIndex,
       },
     );
+    return RemoteFriendMutationResult.fromResultMap(result);
+  }
+
+  Future<RemoteFriendMutationResult> sendReaction({
+    required String matchId,
+    required String emoji,
+  }) async {
+    final result = await _callFunction(_sendReactionFunction, <String, dynamic>{
+      'matchId': matchId.trim(),
+      'emoji': emoji.trim(),
+    });
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 

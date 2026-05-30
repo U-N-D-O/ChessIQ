@@ -104,6 +104,63 @@ class _CheckAlert {
   final DateTime startedAt;
 }
 
+class _RemoteFriendReactionOption {
+  const _RemoteFriendReactionOption({
+    required this.emoji,
+    required this.label,
+    this.requiresPaidRoll = false,
+  });
+
+  final String emoji;
+  final String label;
+  final bool requiresPaidRoll;
+}
+
+const List<_RemoteFriendReactionOption>
+_remoteFriendStandardReactionOptions = <_RemoteFriendReactionOption>[
+  _RemoteFriendReactionOption(emoji: '👍', label: 'Nice move'),
+  _RemoteFriendReactionOption(emoji: '👏', label: 'Clean'),
+  _RemoteFriendReactionOption(emoji: '🙌', label: 'Let\'s go'),
+  _RemoteFriendReactionOption(emoji: '🤔', label: 'Thinking'),
+  _RemoteFriendReactionOption(emoji: '😅', label: 'Close one'),
+  _RemoteFriendReactionOption(emoji: '😮', label: 'Wow'),
+  _RemoteFriendReactionOption(emoji: '😬', label: 'Tense'),
+  _RemoteFriendReactionOption(emoji: '⏳', label: 'Hurry'),
+  _RemoteFriendReactionOption(emoji: '🔥', label: 'Sharp'),
+  _RemoteFriendReactionOption(emoji: '👑', label: 'Winning'),
+  _RemoteFriendReactionOption(emoji: '🧠', label: 'Brilliant'),
+  _RemoteFriendReactionOption(emoji: '😭', label: 'Ouch'),
+];
+
+const List<_RemoteFriendReactionOption>
+_remoteFriendStrangeReactionOptions = <_RemoteFriendReactionOption>[
+  _RemoteFriendReactionOption(
+    emoji: '🛸',
+    label: 'UFO energy',
+    requiresPaidRoll: true,
+  ),
+  _RemoteFriendReactionOption(
+    emoji: '🧪',
+    label: 'Lab move',
+    requiresPaidRoll: true,
+  ),
+  _RemoteFriendReactionOption(
+    emoji: '🫠',
+    label: 'Melting',
+    requiresPaidRoll: true,
+  ),
+  _RemoteFriendReactionOption(
+    emoji: '🦆',
+    label: 'Duck mode',
+    requiresPaidRoll: true,
+  ),
+  _RemoteFriendReactionOption(
+    emoji: '🦑',
+    label: 'Squid tactics',
+    requiresPaidRoll: true,
+  ),
+];
+
 enum _VsModeQuickOption { crossDevice, sharedScreen, vsCpu, quickJoin }
 
 class _CheckedKingState {
@@ -378,6 +435,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const String _analysisLocalFriendTimeControlKey =
       'analysis_local_friend_time_control_v1';
   static const String _analysisEngineOwner = 'analysis.board';
+  static const Duration _remoteFriendReactionCooldown = Duration(seconds: 30);
+  static const Duration _remoteFriendReactionDisplayDuration = Duration(
+    seconds: 8,
+  );
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
   static const int _bookOpeningPlyLimit = 6;
@@ -760,6 +821,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _remoteFriendOperationInProgress = false;
   bool _remoteFriendPollInFlight = false;
   bool _remoteFriendPieceSelectionReady = false;
+  bool _remoteFriendReactionInFlight = false;
   Timer? _remoteFriendPollTimer;
   Timer? _remoteFriendClockDisplayTimer;
   String? _remoteFriendLastError;
@@ -5142,6 +5204,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _remoteFriendOutcomeReason = null;
     _remoteFriendOperationInProgress = false;
     _remoteFriendPieceSelectionReady = false;
+    _remoteFriendReactionInFlight = false;
     _remoteFriendPieceSelectionSessionId = null;
     if (clearMemberships) {
       _remoteFriendMemberships = <RemoteFriendMatchMembership>[];
@@ -5155,17 +5218,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
 
-    if ((_isRemoteFriendTimedMatch || _isRemoteFriendPieceSelectionOpen) &&
-        snapshot.status == RemoteFriendMatchStatus.active &&
-        snapshot.outcome == null) {
+    if (_remoteFriendNeedsDisplayTickerForSnapshot(snapshot)) {
+      final displayTickerInterval =
+          (_isRemoteFriendTimedMatch || _isRemoteFriendPieceSelectionOpen)
+          ? const Duration(milliseconds: 250)
+          : const Duration(seconds: 1);
       _remoteFriendClockDisplayTimer = Timer.periodic(
-        const Duration(milliseconds: 250),
+        displayTickerInterval,
         (timer) {
+          final currentSnapshot = _remoteFriendSnapshot;
           if (!mounted ||
               !_isRemoteFriendMatchMode ||
-              (!_isRemoteFriendTimedMatch &&
-                  !_isRemoteFriendPieceSelectionOpen) ||
-              _remoteFriendSnapshot?.status != RemoteFriendMatchStatus.active ||
+              currentSnapshot == null ||
+              !_remoteFriendNeedsDisplayTickerForSnapshot(currentSnapshot) ||
               _gameOutcome != null) {
             timer.cancel();
             if (identical(_remoteFriendClockDisplayTimer, timer)) {
@@ -5856,6 +5921,76 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  Future<void> _sendRemoteFriendReaction(String emoji) async {
+    final snapshot = _remoteFriendSnapshot;
+    if (snapshot == null ||
+        snapshot.matchId.isEmpty ||
+        snapshot.status != RemoteFriendMatchStatus.active ||
+        snapshot.outcome != null ||
+        _isRemoteFriendPieceSelectionOpen ||
+        _remoteFriendReactionInFlight ||
+        _remoteFriendOperationInProgress) {
+      return;
+    }
+
+    final localCooldown = _remoteFriendReactionCooldownRemainingForSnapshot(
+      snapshot,
+    );
+    if (localCooldown > Duration.zero) {
+      _showRemoteFriendSnackBar(
+        'Quick reacts recharge every 30 seconds. Try again in ${_formatRemoteFriendReactionCooldown(localCooldown)}.',
+      );
+      return;
+    }
+
+    setState(() {
+      _remoteFriendReactionInFlight = true;
+    });
+
+    try {
+      final result = await RemoteFriendService.instance.sendReaction(
+        matchId: snapshot.matchId,
+        emoji: emoji,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _applyRemoteFriendSnapshot(
+          invite: result.invite,
+          snapshot: result.snapshot,
+        );
+      });
+      _startRemoteFriendSyncTimers();
+
+      if (!result.success) {
+        _addLog('Remote reaction rejected: ${result.reason ?? 'unknown'}');
+        _showRemoteFriendSnackBar(
+          _remoteFriendReactionFailureMessage(result.reason),
+        );
+        return;
+      }
+
+      unawaited(_lightHaptic());
+    } catch (e) {
+      _addLog('Send remote friend reaction failed: $e');
+      if (!mounted) {
+        return;
+      }
+      _showRemoteFriendSnackBar(
+        'Could not send that quick reaction. The match will refresh to the latest state.',
+      );
+      await _refreshRemoteFriendMatch(silent: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _remoteFriendReactionInFlight = false;
+        });
+      }
+    }
+  }
+
   Future<void> _openRemoteFriendMatch(String matchId) async {
     if (_remoteFriendOperationInProgress) {
       return;
@@ -6275,6 +6410,126 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       case null:
         return 'Unknown';
     }
+  }
+
+  _RemoteFriendReactionOption? _remoteFriendReactionOptionForEmoji(
+    String emoji,
+  ) {
+    final normalizedEmoji = emoji.trim();
+    if (normalizedEmoji.isEmpty) {
+      return null;
+    }
+    for (final option in <_RemoteFriendReactionOption>[
+      ..._remoteFriendStandardReactionOptions,
+      ..._remoteFriendStrangeReactionOptions,
+    ]) {
+      if (option.emoji == normalizedEmoji) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  RemoteFriendReaction? _remoteFriendVisibleReactionForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    final reaction = snapshot.reaction;
+    if (reaction == null ||
+        reaction.emoji.trim().isEmpty ||
+        reaction.sentByUid.trim().isEmpty) {
+      return null;
+    }
+    final age = DateTime.now().difference(reaction.sentAt);
+    if (age.isNegative || age <= _remoteFriendReactionDisplayDuration) {
+      return reaction;
+    }
+    return null;
+  }
+
+  DateTime? _remoteFriendLastReactionAtForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+    RemoteFriendSeat? seat,
+  ) {
+    switch (seat) {
+      case RemoteFriendSeat.white:
+        return snapshot.whiteLastReactionAt;
+      case RemoteFriendSeat.black:
+        return snapshot.blackLastReactionAt;
+      case null:
+        return null;
+    }
+  }
+
+  Duration _remoteFriendReactionCooldownRemainingForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    final playerSeat = _remoteFriendPlayerSeatForSnapshot(snapshot);
+    final lastReactionAt = _remoteFriendLastReactionAtForSnapshot(
+      snapshot,
+      playerSeat,
+    );
+    if (lastReactionAt == null) {
+      return Duration.zero;
+    }
+    final remaining =
+        _remoteFriendReactionCooldown - DateTime.now().difference(lastReactionAt);
+    if (remaining <= Duration.zero) {
+      return Duration.zero;
+    }
+    return remaining;
+  }
+
+  bool _remoteFriendNeedsDisplayTickerForSnapshot(
+    RemoteFriendMatchSnapshot snapshot,
+  ) {
+    if (snapshot.status != RemoteFriendMatchStatus.active ||
+        snapshot.outcome != null) {
+      return false;
+    }
+    if (_isRemoteFriendTimedMatch || _isRemoteFriendPieceSelectionOpen) {
+      return true;
+    }
+    if (_remoteFriendReactionCooldownRemainingForSnapshot(snapshot) >
+        Duration.zero) {
+      return true;
+    }
+    return _remoteFriendVisibleReactionForSnapshot(snapshot) != null;
+  }
+
+  String _formatRemoteFriendReactionCooldown(Duration remaining) {
+    final seconds = max(1, (remaining.inMilliseconds / 1000).ceil());
+    return '${seconds}s';
+  }
+
+  String _remoteFriendReactionFailureMessage(String? reason) {
+    switch ((reason ?? '').trim()) {
+      case 'reaction-cooldown':
+        final snapshot = _remoteFriendSnapshot;
+        final remaining = snapshot == null
+            ? _remoteFriendReactionCooldown
+            : _remoteFriendReactionCooldownRemainingForSnapshot(snapshot);
+        final retryIn = _formatRemoteFriendReactionCooldown(
+          remaining > Duration.zero ? remaining : _remoteFriendReactionCooldown,
+        );
+        return 'Quick reacts recharge every 30 seconds. Try again in $retryIn.';
+      case 'piece-selection-pending':
+        return 'Quick reacts open after both players finish locking in their piece skins.';
+      case 'expired':
+      case 'cancelled':
+      case 'completed':
+      case 'match-unavailable':
+        return 'This remote match is no longer active.';
+      case 'not-participant':
+        return 'This device is no longer recognized as a participant in that remote match.';
+      default:
+        return 'Could not send that quick reaction right now. ChessIQ refreshed the match state.';
+    }
+  }
+
+  void _showLockedRemoteFriendReactionMessage() {
+    _showRemoteFriendSnackBar(
+      'The strange reacts unlock after your first random avatar roll.',
+    );
   }
 
   Color _remoteFriendLocalAccent(
@@ -6713,6 +6968,189 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _remoteFriendReactionBanner({
+    required String emoji,
+    required String title,
+    required String subtitle,
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.08 : 0.14),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.30)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: isLight ? 0.16 : 0.22),
+              shape: BoxShape.circle,
+            ),
+            child: Text(emoji, style: const TextStyle(fontSize: 22)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 12.6,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: 11.4,
+                    fontWeight: FontWeight.w700,
+                    height: 1.22,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _remoteFriendReactionClockBadge({
+    required String emoji,
+    required String label,
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.10 : 0.16),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.26)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 15)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.74),
+              fontSize: 9.8,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _remoteFriendReactionChip({
+    required _RemoteFriendReactionOption option,
+    required Color accent,
+    required VoidCallback? onTap,
+    bool locked = false,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    final enabled = onTap != null;
+
+    return Tooltip(
+      message: locked
+          ? '${option.label} · unlocks after your first random avatar roll'
+          : option.label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedOpacity(
+          opacity: locked ? 0.72 : enabled ? 1.0 : 0.48,
+          duration: const Duration(milliseconds: 160),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    accent.withValues(
+                      alpha: locked
+                          ? (isLight ? 0.05 : 0.10)
+                          : enabled
+                          ? (isLight ? 0.13 : 0.20)
+                          : (isLight ? 0.06 : 0.10),
+                    ),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: accent.withValues(alpha: locked ? 0.20 : 0.34),
+                  ),
+                ),
+                child: Text(
+                  option.emoji,
+                  style: const TextStyle(fontSize: 21),
+                ),
+              ),
+              if (locked)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                        scheme.surface.withValues(alpha: 0.90),
+                        scheme.surface,
+                      ),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: scheme.outline.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.lock_rounded,
+                      size: 11,
+                      color: scheme.onSurface.withValues(alpha: 0.74),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -20438,6 +20876,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final timeText = _isRemoteFriendTimedMatch
         ? _formatLocalFriendClock(_remoteFriendDisplayedClock(white: white))
         : 'UNTIMED';
+      final recentReaction = _remoteFriendVisibleReactionForSnapshot(snapshot);
+      final seatReaction = recentReaction != null &&
+          occupantUid != null &&
+          recentReaction.sentByUid == occupantUid
+        ? recentReaction
+        : null;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -20491,6 +20935,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               letterSpacing: 0.4,
             ),
           ),
+          if (seatReaction != null)
+            _remoteFriendReactionClockBadge(
+              emoji: seatReaction.emoji,
+              label: isLocalSeat ? 'You reacted' : 'Friend reacted',
+              accent: accent,
+            ),
         ],
       ),
     );
@@ -22006,6 +22456,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         scheme,
         useMonochrome: remoteUseMonochrome,
       );
+      final avatarInventory = context.watch<AvatarInventoryProvider>();
+      final strangeReactionsUnlocked =
+          avatarInventory.hasUnlockedStrangeReactions;
       final remoteErrorText = _remoteFriendLastError?.trim();
       final hasRemoteError =
           remoteErrorText != null && remoteErrorText.isNotEmpty;
@@ -22049,6 +22502,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : remotePieceSelectionOpen
           ? 'Saving your piece-skin pairing choice...'
           : 'Synchronizing the private match...';
+        final remoteVisibleReaction = remoteSnapshot == null
+          ? null
+          : _remoteFriendVisibleReactionForSnapshot(remoteSnapshot);
+        final remoteVisibleReactionOption = remoteVisibleReaction == null
+          ? null
+          : _remoteFriendReactionOptionForEmoji(remoteVisibleReaction.emoji);
+        final remoteReactionSentByLocal =
+          remoteVisibleReaction != null &&
+          remoteVisibleReaction.sentByUid == _remoteFriendLocalUid;
+        final remoteReactionAccent = remoteVisibleReaction == null
+          ? remoteAccent
+          : remoteReactionSentByLocal
+          ? remoteLocalAccent
+          : remoteOpponentAccent;
+        final remoteReactionCooldownRemaining = remoteSnapshot == null
+          ? Duration.zero
+          : _remoteFriendReactionCooldownRemainingForSnapshot(remoteSnapshot);
+        final remoteReactionReady =
+          remoteReactionCooldownRemaining == Duration.zero &&
+          !_remoteFriendReactionInFlight &&
+          !_remoteFriendOperationInProgress;
+        final remoteReactionStatusText = _remoteFriendReactionInFlight
+          ? 'Sending...'
+          : remoteReactionCooldownRemaining > Duration.zero
+          ? 'Ready again in ${_formatRemoteFriendReactionCooldown(remoteReactionCooldownRemaining)}'
+          : 'Ready now';
+        final showRemoteReactionTray =
+          _isRemoteFriendActiveMatch &&
+          !remotePieceSelectionOpen &&
+          remoteSnapshot != null &&
+          remoteSnapshot.status == RemoteFriendMatchStatus.active &&
+          remoteSnapshot.outcome == null;
       final buttons = <Widget>[
         buildRemoteActionButton(
           label: compactPendingInviteOverlay ? 'Back' : 'VS Mode',
@@ -22249,6 +22734,122 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (showRemoteReactionTray && remoteVisibleReaction != null) ...[
+              const SizedBox(height: 10),
+              _remoteFriendReactionBanner(
+                emoji: remoteVisibleReaction.emoji,
+                title:
+                    remoteReactionSentByLocal ? 'You reacted' : 'Friend reacted',
+                subtitle: remoteReactionSentByLocal
+                    ? '${remoteVisibleReactionOption?.label ?? 'Quick reaction'} sent to the other phone.'
+                    : '${remoteVisibleReactionOption?.label ?? 'Quick reaction'} just came in from your friend.',
+                accent: remoteReactionAccent,
+              ),
+            ],
+            if (showRemoteReactionTray) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    remoteLocalAccent.withValues(alpha: isLight ? 0.06 : 0.12),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: remoteLocalAccent.withValues(alpha: 0.20),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Quick reacts',
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 12.8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: remoteReactionAccent.withValues(
+                              alpha: isLight ? 0.12 : 0.20,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            remoteReactionStatusText,
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 10.6,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      strangeReactionsUnlocked
+                          ? 'Tap any emoji to send it across the private match. Every react has a 30-second cooldown.'
+                          : '12 standard reacts are ready now. The 5 strange ones unlock after your first random avatar roll.',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.70),
+                        fontSize: 11.4,
+                        height: 1.28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (
+                          final option in _remoteFriendStandardReactionOptions
+                        )
+                          _remoteFriendReactionChip(
+                            option: option,
+                            accent: remoteLocalAccent,
+                            onTap: remoteReactionReady
+                                ? () => unawaited(
+                                    _sendRemoteFriendReaction(option.emoji),
+                                  )
+                                : null,
+                          ),
+                        for (
+                          final option in _remoteFriendStrangeReactionOptions
+                        )
+                          _remoteFriendReactionChip(
+                            option: option,
+                            accent: strangeReactionsUnlocked
+                                ? remoteOpponentAccent
+                                : scheme.onSurface.withValues(alpha: 0.62),
+                            locked: !strangeReactionsUnlocked,
+                            onTap: !strangeReactionsUnlocked
+                                ? _showLockedRemoteFriendReactionMessage
+                                : remoteReactionReady
+                                ? () => unawaited(
+                                    _sendRemoteFriendReaction(option.emoji),
+                                  )
+                                : null,
+                          ),
+                      ],
                     ),
                   ],
                 ),

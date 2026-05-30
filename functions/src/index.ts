@@ -64,6 +64,8 @@ const FRIEND_MATCH_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_ACTIVE_TTL_MS = 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_TERMINAL_RETENTION_MS = 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_ABORTED_RETENTION_MS = 6 * 60 * 60 * 1000;
+const FRIEND_MATCH_REACTION_COOLDOWN_MS = 30 * 1000;
+const FRIEND_MATCH_REACTION_RETENTION_MS = 8 * 1000;
 const FRIEND_MATCH_MAX_INITIAL_SECONDS = 4 * 60 * 60;
 const FRIEND_MATCH_MAX_INCREMENT_SECONDS = 60;
 const FRIEND_MATCH_PIECE_SELECTION_WINDOW_MS = 10 * 1000;
@@ -71,6 +73,25 @@ const FRIEND_MATCH_MAX_PIECE_THEME_INDEX = 5;
 const FRIEND_MATCH_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const FRIEND_MATCH_CLEANUP_BATCH_SIZE = 200;
 const FRIEND_MATCH_CLEANUP_MAX_BATCHES_PER_RUN = 8;
+const FRIEND_MATCH_REACTION_EMOJIS = new Set<string>([
+    "👍",
+    "👏",
+    "🙌",
+    "🤔",
+    "😅",
+    "😮",
+    "😬",
+    "⏳",
+    "🔥",
+    "👑",
+    "🧠",
+    "😭",
+    "🛸",
+    "🧪",
+    "🫠",
+    "🦆",
+    "🦑",
+]);
 type EconomyRewardSpec = {
     amount: number;
     minIntervalMs?: number;
@@ -2026,6 +2047,12 @@ type FriendMatchOutcome = {
     concludedAtMs: number;
 };
 
+type FriendMatchReaction = {
+    emoji: string;
+    sentByUid: string;
+    sentAtMs: number;
+};
+
 type FriendMatchRecord = {
     matchId: string;
     inviteCode: string;
@@ -2047,6 +2074,9 @@ type FriendMatchRecord = {
     updatedAtMs: number;
     startedAtMs: number | null;
     expiresAtMs: number;
+    reaction: FriendMatchReaction | null;
+    whiteLastReactionAtMs: number | null;
+    blackLastReactionAtMs: number | null;
     drawOfferByUid: string | null;
     outcome: FriendMatchOutcome | null;
     moves: Record<string, FriendMoveRecord>;
@@ -2250,6 +2280,23 @@ function readFriendMoveInput(rawMove: unknown): FriendMoveInput {
     };
 }
 
+function readFriendReactionEmoji(rawEmoji: unknown): string {
+    if (typeof rawEmoji !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "emoji must be a string.",
+        );
+    }
+    const emoji = rawEmoji.trim();
+    if (!FRIEND_MATCH_REACTION_EMOJIS.has(emoji)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Unsupported friend reaction emoji.",
+        );
+    }
+    return emoji;
+}
+
 function readPushInstallationId(rawInstallationId: unknown): string {
     if (typeof rawInstallationId !== "string") {
         throw new functions.https.HttpsError(
@@ -2355,6 +2402,27 @@ function normalizeFriendMatchOutcome(rawValue: unknown): FriendMatchOutcome | nu
         concludedAtMs: readFriendNonNegativeInt(
             payload.concludedAtMs,
             "outcome.concludedAtMs",
+            Number.MAX_SAFE_INTEGER,
+        ),
+    };
+}
+
+function normalizeFriendMatchReaction(rawValue: unknown): FriendMatchReaction | null {
+    if (!rawValue || typeof rawValue !== "object") {
+        return null;
+    }
+    const payload = rawValue as Record<string, unknown>;
+    const emoji = (payload.emoji ?? "").toString().trim();
+    const sentByUid = (payload.sentByUid ?? "").toString().trim();
+    if (!emoji || !sentByUid || !FRIEND_MATCH_REACTION_EMOJIS.has(emoji)) {
+        return null;
+    }
+    return {
+        emoji,
+        sentByUid,
+        sentAtMs: readFriendNonNegativeInt(
+            payload.sentAtMs,
+            "reaction.sentAtMs",
             Number.MAX_SAFE_INTEGER,
         ),
     };
@@ -2501,6 +2569,21 @@ function normalizeFriendMatchRecord(
             "expiresAtMs",
             Number.MAX_SAFE_INTEGER,
         ) || (createdAtMs + FRIEND_MATCH_PENDING_TTL_MS),
+        reaction: normalizeFriendMatchReaction(payload.reaction),
+        whiteLastReactionAtMs: payload.whiteLastReactionAtMs == null
+            ? null
+            : readFriendNonNegativeInt(
+                payload.whiteLastReactionAtMs,
+                "whiteLastReactionAtMs",
+                Number.MAX_SAFE_INTEGER,
+            ),
+        blackLastReactionAtMs: payload.blackLastReactionAtMs == null
+            ? null
+            : readFriendNonNegativeInt(
+                payload.blackLastReactionAtMs,
+                "blackLastReactionAtMs",
+                Number.MAX_SAFE_INTEGER,
+            ),
         drawOfferByUid: payload.drawOfferByUid == null
             ? null
             : payload.drawOfferByUid.toString().trim() || null,
@@ -2635,9 +2718,28 @@ function createFriendMatchRecord(params: {
         updatedAtMs: params.nowMs,
         startedAtMs: null,
         expiresAtMs: params.nowMs + FRIEND_MATCH_PENDING_TTL_MS,
+        reaction: null,
+        whiteLastReactionAtMs: null,
+        blackLastReactionAtMs: null,
         drawOfferByUid: null,
         outcome: null,
         moves: {},
+    };
+}
+
+function expireFriendMatchReaction(
+    match: FriendMatchRecord,
+    nowMs: number,
+): FriendMatchRecord {
+    if (match.reaction == null) {
+        return match;
+    }
+    if (match.reaction.sentAtMs + FRIEND_MATCH_REACTION_RETENTION_MS > nowMs) {
+        return match;
+    }
+    return {
+        ...match,
+        reaction: null,
     };
 }
 
@@ -2696,6 +2798,7 @@ function concludeFriendMatch(
         status,
         updatedAtMs: params.nowMs,
         expiresAtMs: params.nowMs + retentionMs,
+        reaction: null,
         drawOfferByUid: null,
         clocks: {
             ...match.clocks,
@@ -2768,7 +2871,7 @@ function synchronizeFriendMatchForNow(
         });
     }
 
-    let synchronizedMatch = match;
+    let synchronizedMatch = expireFriendMatchReaction(match, nowMs);
     const pieceSelectionDeadlineMs = synchronizedMatch.pieceSelectionDeadlineMs;
     if (pieceSelectionDeadlineMs != null && pieceSelectionDeadlineMs <= nowMs) {
         synchronizedMatch = startFriendMatchClocksIfNeeded(
@@ -3703,6 +3806,110 @@ async function selectFriendMatchPieceThemeImpl(
     };
 }
 
+async function sendFriendMatchReactionImpl(
+    data: any,
+    context: functions.https.CallableContext,
+) {
+    const uid = requireAuthUid(context);
+    const matchId = readFriendMatchId(data?.matchId);
+    const emoji = readFriendReactionEmoji(data?.emoji);
+    const matchRef = db.ref(`friend_matches/${matchId}`);
+    let blockedReason = "match-unavailable";
+    let reactionApplied = false;
+    let responseMatch: FriendMatchRecord | null = null;
+
+    const transactionResult = await matchRef.transaction((currentValue) => {
+        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        if (existingMatch == null) {
+            blockedReason = "match-unavailable";
+            return;
+        }
+
+        const nowMs = Date.now();
+        const synchronizedMatch = synchronizeFriendMatchForNow(
+            existingMatch,
+            nowMs,
+        );
+        const playerSeat = friendMatchParticipantSeat(synchronizedMatch, uid);
+        if (playerSeat == null) {
+            blockedReason = "not-participant";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+        if (synchronizedMatch.status !== "active") {
+            blockedReason = synchronizedMatch.status;
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+        if (friendPieceSelectionOpen(synchronizedMatch, nowMs)) {
+            blockedReason = "piece-selection-pending";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        const lastReactionAtMs = playerSeat === "white"
+            ? synchronizedMatch.whiteLastReactionAtMs
+            : synchronizedMatch.blackLastReactionAtMs;
+        if (lastReactionAtMs != null &&
+            nowMs - lastReactionAtMs < FRIEND_MATCH_REACTION_COOLDOWN_MS) {
+            blockedReason = "reaction-cooldown";
+            responseMatch = synchronizedMatch;
+            return friendMatchChanged(existingMatch, synchronizedMatch)
+                ? synchronizedMatch
+                : undefined;
+        }
+
+        const nextMatch: FriendMatchRecord = {
+            ...synchronizedMatch,
+            updatedAtMs: nowMs,
+            expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+            reaction: {
+                emoji,
+                sentByUid: uid,
+                sentAtMs: nowMs,
+            },
+            whiteLastReactionAtMs: playerSeat === "white"
+                ? nowMs
+                : synchronizedMatch.whiteLastReactionAtMs,
+            blackLastReactionAtMs: playerSeat === "black"
+                ? nowMs
+                : synchronizedMatch.blackLastReactionAtMs,
+        };
+        reactionApplied = true;
+        responseMatch = nextMatch;
+        blockedReason = "";
+        return nextMatch;
+    });
+
+    const match = responseMatch ?? normalizeFriendMatchRecord(
+        transactionResult.snapshot.val(),
+        matchId,
+    );
+    if (match == null) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "That match no longer exists.",
+        );
+    }
+
+    if (transactionResult.committed) {
+        await persistFriendMatchIndexes(match);
+    }
+
+    return {
+        success: reactionApplied,
+        reason: reactionApplied ? null : blockedReason,
+        invite: buildFriendInviteRecord(match),
+        snapshot: buildFriendMatchClientPayload(match),
+    };
+}
+
 async function refreshFriendMatchStateImpl(
     data: any,
     context: functions.https.CallableContext,
@@ -3918,6 +4125,10 @@ export const registerPushDeviceToken = functions.https.onCall(
 
 export const selectFriendMatchPieceTheme = functions.https.onCall(
     async (data, context) => selectFriendMatchPieceThemeImpl(data, context),
+);
+
+export const sendFriendMatchReaction = functions.https.onCall(
+    async (data, context) => sendFriendMatchReactionImpl(data, context),
 );
 
 export const createFriendMatchInvite = functions.https.onCall(
