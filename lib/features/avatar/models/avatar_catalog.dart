@@ -83,19 +83,17 @@ class AvatarCatalog {
   ];
 
   static final Map<String, AvatarCatalogEntry> byId =
-      <String, AvatarCatalogEntry>{
-        for (final item in items) item.id: item,
-      };
+      <String, AvatarCatalogEntry>{for (final item in items) item.id: item};
 
   static final Set<String> ids = byId.keys.toSet();
 
-  static final Map<AvatarRarityBucket, List<AvatarCatalogEntry>> _itemsByBucket =
-      <AvatarRarityBucket, List<AvatarCatalogEntry>>{
-        for (final bucket in AvatarRarityBucket.values)
-          bucket: items
-              .where((item) => item.bucket == bucket)
-              .toList(growable: false),
-      };
+  static final Map<AvatarRarityBucket, List<AvatarCatalogEntry>>
+  _itemsByBucket = <AvatarRarityBucket, List<AvatarCatalogEntry>>{
+    for (final bucket in AvatarRarityBucket.values)
+      bucket: items
+          .where((item) => item.bucket == bucket)
+          .toList(growable: false),
+  };
 
   static final List<AvatarCatalogEntry> starterPool = items
       .where((item) => item.starterEligible)
@@ -147,13 +145,13 @@ AvatarCatalogEntry _entry({
 }
 
 String _displayNameFromFileName(String fileName) {
-  final withoutExtension = fileName.replaceFirst(RegExp(r'\.[^.]+4'), '');
+  final withoutExtension = fileName.replaceFirst(RegExp(r'\.[^.]+$'), '');
   return withoutExtension.replaceAll('_', ' ');
 }
 
 String _slugify(String value) {
   final normalized = value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-  return normalized.replaceAll(RegExp(r'^-+|-+4'), '');
+  return normalized.replaceAll(RegExp(r'^-+|-+$'), '');
 }
 
 const List<String> _normalFileNames = <String>[

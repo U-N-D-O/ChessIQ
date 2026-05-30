@@ -1,9 +1,42 @@
 import 'dart:math';
 
 import 'package:chessiq/features/avatar/models/avatar_catalog.dart';
+import 'package:chessiq/features/avatar/models/avatar_reward_catalog.dart';
 import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
+import 'package:chessiq/features/vs_bot/models/vs_bot_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _SequenceRandom implements Random {
+  _SequenceRandom({
+    this.doubleValues = const <double>[0],
+    this.intValues = const <int>[0],
+  });
+
+  final List<double> doubleValues;
+  final List<int> intValues;
+  int _doubleIndex = 0;
+  int _intIndex = 0;
+
+  @override
+  bool nextBool() => nextDouble() >= 0.5;
+
+  @override
+  double nextDouble() {
+    final index = _doubleIndex < doubleValues.length
+        ? _doubleIndex++
+        : doubleValues.length - 1;
+    return doubleValues[index].clamp(0.0, 0.999999999999);
+  }
+
+  @override
+  int nextInt(int max) {
+    final index = _intIndex < intValues.length
+        ? _intIndex++
+        : intValues.length - 1;
+    return intValues[index] % max;
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +67,10 @@ void main() {
       AvatarCatalog.entriesForBucket(AvatarRarityBucket.promo),
       hasLength(1),
     );
+    expect(AvatarRewardCatalog.allVsBotRewardIds, hasLength(37));
+    for (final avatarId in AvatarRewardCatalog.allVsBotRewardIds) {
+      expect(AvatarCatalog.entryFor(avatarId), isNotNull);
+    }
   });
 
   test('load bootstraps a starter avatar from the normal pool only', () async {
@@ -68,4 +105,82 @@ void main() {
     expect(reloadedProvider.selectedAvatar?.id, rareAvatar.id);
     expect(reloadedProvider.starterAvatar?.bucket, AvatarRarityBucket.normal);
   });
-}
+
+  test('paid rolls never duplicate and never grant promo avatars', () async {
+    final provider = AvatarInventoryProvider(random: Random(7));
+    await provider.load();
+
+    final seenIds = <String>{...provider.ownedAvatarIds};
+    final rollCount = provider.availablePaidRollCount;
+
+    for (var index = 0; index < rollCount; index++) {
+      final result = await provider.rollPaidAvatar();
+      expect(result, isNotNull);
+      expect(result!.avatar.promoOnly, isFalse);
+      expect(seenIds.add(result.avatar.id), isTrue);
+    }
+
+    expect(provider.availablePaidRollCount, 0);
+    expect(provider.hasAvailablePaidRolls, isFalse);
+    expect(await provider.rollPaidAvatar(), isNull);
+  });
+
+  test(
+    'paid roll weights renormalize to remaining non-empty buckets',
+    () async {
+      final provider = AvatarInventoryProvider(
+        random: _SequenceRandom(
+          doubleValues: const <double>[0.0, 0.999],
+          intValues: const <int>[0, 0],
+        ),
+      );
+      await provider.load();
+
+      for (final avatar in AvatarCatalog.items) {
+        if (!avatar.paidRollEligible ||
+            avatar.bucket == AvatarRarityBucket.legendary) {
+          continue;
+        }
+        await provider.grantAvatar(avatar.id);
+      }
+
+      final result = await provider.rollPaidAvatar();
+
+      expect(result, isNotNull);
+      expect(result!.bucket, AvatarRarityBucket.legendary);
+      expect(result.avatar.bucket, AvatarRarityBucket.legendary);
+    },
+  );
+
+  test('reward groups are idempotent and skip already-owned avatars', () async {
+    final provider = AvatarInventoryProvider(random: Random(11));
+    await provider.load();
+
+    final rewardIds = AvatarRewardCatalog.rewardIdsForVsBotTier(
+      'mochi-gearheart',
+      BotDifficulty.easy,
+    );
+    await provider.grantAvatar(rewardIds.first);
+
+    final firstClaim = await provider.claimRewardGroup(
+      rewardIds,
+      rewardKey: AvatarRewardCatalog.rewardKeyForVsBotTier(
+        'mochi-gearheart',
+        BotDifficulty.easy,
+      ),
+    );
+
+    expect(firstClaim.alreadyClaimed, isFalse);
+    expect(firstClaim.grantedAvatars.map((avatar) => avatar.id), <String>[
+      rewardIds.last,
+    ]);
+
+    final secondClaim = await provider.claimRewardGroup(
+      rewardIds,
+      rewardKey: AvatarRewardCatalog.rewardKeyForVsBotTier(
+        'mochi-gearheart',
+        BotDifficulty.easy,
+      ),
+    );
+
+    expect(secondClaim.alreadyClaimed, isTru

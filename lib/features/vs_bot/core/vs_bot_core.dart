@@ -741,6 +741,77 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     _vsBotProgressNextDifficulty = null;
   }
 
+  String? _vsBotAvatarRewardMessage(AvatarRewardClaimResult result) {
+    if (result.alreadyClaimed) {
+      return null;
+    }
+    if (result.grantedAvatars.isEmpty) {
+      return 'Avatar reward already owned.';
+    }
+
+    final names = result.grantedAvatars
+        .map((avatar) => avatar.name)
+        .toList(growable: false);
+    if (names.length == 1) {
+      return 'Avatar unlocked: ${names.first}.';
+    }
+    if (names.length == 2) {
+      return 'Avatars unlocked: ${names.first} and ${names.last}.';
+    }
+    return 'Avatars unlocked: ${names[0]}, ${names[1]}, and ${names.length - 2} more.';
+  }
+
+  Future<void> _resolveVsBotAvatarRewards(GameOutcome outcome) async {
+    final bot = _selectedBot;
+    if (!mounted || !_isBotMatchMode || bot == null) {
+      return;
+    }
+    final humanWon =
+        outcome == GameOutcome.whiteWin && _humanPlaysWhite ||
+        outcome == GameOutcome.blackWin && !_humanPlaysWhite;
+    if (!humanWon) {
+      return;
+    }
+
+    final avatarInventory = context.read<AvatarInventoryProvider>();
+    await avatarInventory.load();
+
+    final rewardIds = AvatarRewardCatalog.rewardIdsForVsBotTier(
+      bot.id,
+      _selectedBotDifficulty,
+    );
+    if (rewardIds.isEmpty) {
+      return;
+    }
+
+    final rewardResult = await avatarInventory.claimRewardGroup(
+      rewardIds,
+      rewardKey: AvatarRewardCatalog.rewardKeyForVsBotTier(
+        bot.id,
+        _selectedBotDifficulty,
+      ),
+    );
+    final rewardMessage = _vsBotAvatarRewardMessage(rewardResult);
+    if (!mounted || rewardMessage == null) {
+      return;
+    }
+
+    setState(() {
+      if (_vsBotProgressTitle == null) {
+        _vsBotProgressTitle = rewardResult.grantedAvatars.length > 1
+            ? 'Avatars unlocked'
+            : 'Avatar unlocked';
+        _vsBotProgressMessage = rewardMessage;
+        return;
+      }
+
+      final currentMessage = _vsBotProgressMessage?.trim() ?? '';
+      _vsBotProgressMessage = currentMessage.isEmpty
+          ? rewardMessage
+          : '$currentMessage $rewardMessage';
+    });
+  }
+
   @override
   String? _vsBotProgressActionLabel({
     BotCharacter? currentBot,
@@ -1419,6 +1490,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         await Future<void>.delayed(Duration.zero);
         await _performResetWithSponsoredBreak();
       }
+      return;
+    }
+
+    await _resolveVsBotAvatarRewards(outcome);
+    if (!mounted) {
       return;
     }
 

@@ -29,6 +29,11 @@
         "academy_tuition_pass": {
             "enabled": true
         },
+        "avatar_roll": {
+            "enabled": true,
+            "coinPrice": 200,
+            "badge": "No Duplicates"
+        },
         "theme_pack": {
             "enabled": true,
             "coinPrice": 900

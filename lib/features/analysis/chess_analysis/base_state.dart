@@ -24462,6 +24462,229 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _addLog('Massive 3D arrows unlocked');
   }
 
+  String _avatarRollRateLabel(double rate) {
+    final rounded = rate.roundToDouble();
+    if ((rate - rounded).abs() < 0.001) {
+      return '${rounded.toInt()}%';
+    }
+    return '${rate.toStringAsFixed(1)}%';
+  }
+
+  Widget _buildAvatarRollPreview(AvatarInventoryProvider avatarInventory) {
+    final scheme = Theme.of(context).colorScheme;
+    final selectedAvatar = avatarInventory.selectedAvatar;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (selectedAvatar != null)
+              AvatarPortrait(
+                avatar: selectedAvatar,
+                size: 72,
+                radius: 18,
+                borderColor: scheme.primary.withValues(alpha: 0.28),
+                backgroundColor: Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.06),
+                  scheme.surface,
+                ),
+                showShadow: false,
+              )
+            else
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    scheme.primary.withValues(alpha: 0.06),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: scheme.outline.withValues(alpha: 0.24),
+                  ),
+                ),
+                child: Icon(
+                  Icons.account_circle_outlined,
+                  color: scheme.onSurface.withValues(alpha: 0.54),
+                ),
+              ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    selectedAvatar?.name ?? 'No avatar selected',
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Owned ${avatarInventory.ownedCount}/74 · ${avatarInventory.availablePaidRollCount} rollable left',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.68),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Random roll excludes owned avatars and promo-only entries automatically.',
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.62),
+                      fontSize: 11.2,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final bucket in const <AvatarRarityBucket>[
+              AvatarRarityBucket.normal,
+              AvatarRarityBucket.rare,
+              AvatarRarityBucket.epic,
+              AvatarRarityBucket.legendary,
+            ])
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    scheme.primary.withValues(alpha: 0.05),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: scheme.outline.withValues(alpha: 0.24),
+                  ),
+                ),
+                child: Text(
+                  '${bucket.label} ${_avatarRollRateLabel(bucket.paidRollWeight)} · ${avatarInventory.availablePaidRollAvatarsForBucket(bucket).length} left',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.78),
+                    fontSize: 11.2,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Base odds shown above. Empty rarity buckets are skipped automatically.',
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.56),
+            fontSize: 10.8,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showAvatarRollRevealDialog(AvatarCatalogEntry avatar) async {
+    if (!mounted) {
+      return;
+    }
+    final scheme = Theme.of(context).colorScheme;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Avatar Unlocked'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AvatarPortrait(
+              avatar: avatar,
+              size: 124,
+              radius: 26,
+              borderColor: scheme.primary.withValues(alpha: 0.30),
+              backgroundColor: Color.alphaBlend(
+                scheme.primary.withValues(alpha: 0.06),
+                scheme.surface,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              avatar.name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${avatar.bucket.label} avatar added to your collection.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.70),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _purchaseAvatarRoll() async {
+    final avatarInventory = context.read<AvatarInventoryProvider>();
+    final economy = context.read<EconomyProvider>();
+    await avatarInventory.load();
+
+    if (!avatarInventory.hasAvailablePaidRolls) {
+      _addLog('All rollable avatars already owned');
+      if (mounted) {
+        await _showThemedErrorDialog(
+          title: 'Avatar Vault Complete',
+          message: 'You already own every avatar available from random rolls.',
+        );
+      }
+      return;
+    }
+
+    final price = _storefrontCoinPrice(
+      StoreOfferIds.avatarRoll,
+      AvatarInventoryProvider.paidRollPrice,
+    );
+    if (!await economy.spendCoins(price)) {
+      _addLog('Not enough coins for avatar roll');
+      return;
+    }
+
+    final result = await avatarInventory.rollPaidAvatar();
+    if (result == null) {
+      _addLog('Avatar roll failed: no rollable avatar available');
+      return;
+    }
+
+    unawaited(_playStorePurchaseSound());
+    _addLog(
+      'Avatar unlocked: ${result.avatar.name} (${result.bucket.label.toLowerCase()})',
+    );
+    await _showAvatarRollRevealDialog(result.avatar);
+  }
+
   Future<void> _performResetWithSponsoredBreak() async {
     final adService = AdService.instance;
     final shouldAttemptAd =
@@ -24634,6 +24857,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return 'Academy Tuition Pass';
     }
     return unlockKey;
+  }
+
+  String _promoAvatarLabel(String avatarId) {
+    return AvatarCatalog.entryFor(avatarId)?.name ?? avatarId;
   }
 
   bool _showStoreOffer(String offerId, {bool owned = false}) {
@@ -24917,9 +25144,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<String> _applyPromoCodeReward(PromoCodeRedemptionResult result) async {
     final fragments = <String>[];
     var unlockChanged = false;
+    var avatarChanged = false;
+    final economy = context.read<EconomyProvider>();
+    final avatarInventory = context.read<AvatarInventoryProvider>();
 
     if (result.coinAmount > 0) {
-      await context.read<EconomyProvider>().refresh();
+      await economy.refresh();
       fragments.add('+${result.coinAmount} coins');
     }
 
@@ -24934,9 +25164,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
+    final avatarId = result.avatarId;
+    if (avatarId != null && avatarId.isNotEmpty) {
+      final changed = await avatarInventory.grantAvatar(avatarId);
+      avatarChanged = avatarChanged || changed;
+      fragments.add(
+        changed
+            ? '${_promoAvatarLabel(avatarId)} unlocked'
+            : '${_promoAvatarLabel(avatarId)} already owned',
+      );
+    }
+
     await _saveStoreState();
 
-    if (unlockChanged || (unlockKey != null && unlockKey.isNotEmpty)) {
+    if (
+        unlockChanged ||
+        avatarChanged ||
+        (unlockKey != null && unlockKey.isNotEmpty) ||
+        (avatarId != null && avatarId.isNotEmpty)) {
       unawaited(_playStorePurchaseSound());
     } else if (result.coinAmount > 0) {
       unawaited(_playCoinRewardSound());
@@ -25057,6 +25302,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             final useMonochrome =
                 ctx.watch<AppThemeProvider>().isMonochrome ||
                 _isCinematicThemeEnabled;
+            final avatarInventory = ctx.watch<AvatarInventoryProvider>();
             final rewardAdRemaining = economy.remainingStoreRewardCooldown;
             final canWatchRewardAd = economy.canClaimStoreReward;
             final lockedUntilTomorrow = economy.storeRewardLockedUntilTomorrow;
@@ -25129,6 +25375,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       if (initialSection == StoreSection.themes)
                                         Text(
                                           'Themes',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: scheme.onSurface.withValues(
+                                              alpha: 0.62,
+                                            ),
+                                          ),
+                                        )
+                                      else if (initialSection ==
+                                          StoreSection.avatars)
+                                        Text(
+                                          'Avatar Shop',
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
@@ -25343,6 +25601,42 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 actionColor: const Color(0xFF7EDC8A),
                                 onTap: () async {
                                   await _buyAcademyTuitionPass();
+                                  setL(() {});
+                                },
+                              ),
+                            _storeSectionHeader(
+                              'Avatar Shop',
+                              'Weighted 200-coin rolls with no duplicate pulls',
+                            ),
+                            if (_showStoreOffer(StoreOfferIds.avatarRoll))
+                              _storeItemCard(
+                                icon: Icons.account_box_outlined,
+                                title: 'Random Avatar Roll',
+                                subtitle: avatarInventory.hasAvailablePaidRolls
+                                    ? 'Roll a random unowned avatar from the normal, rare, epic, and legendary pools.'
+                                    : 'You already own every avatar available from random rolls.',
+                                priceLabel: avatarInventory.hasAvailablePaidRolls
+                                    ? _storefrontCoinPriceLabel(
+                                        StoreOfferIds.avatarRoll,
+                                        AvatarInventoryProvider.paidRollPrice,
+                                      )
+                                    : 'Complete',
+                                enabled: avatarInventory.hasAvailablePaidRolls,
+                                badgeLabel: _storefrontBadge(
+                                  StoreOfferIds.avatarRoll,
+                                ),
+                                preview: _buildAvatarRollPreview(
+                                  avatarInventory,
+                                ),
+                                actionLabel: avatarInventory.hasAvailablePaidRolls
+                                    ? _storefrontActionLabel(
+                                        StoreOfferIds.avatarRoll,
+                                        'Roll',
+                                      )
+                                    : 'Complete',
+                                actionColor: const Color(0xFFD8B640),
+                                onTap: () async {
+                                  await _purchaseAvatarRoll();
                                   setL(() {});
                                 },
                               ),

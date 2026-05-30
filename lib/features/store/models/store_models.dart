@@ -1,4 +1,4 @@
-enum StoreSection { general, themes }
+enum StoreSection { general, themes, avatars }
 
 abstract final class StoreOfferIds {
   static const String watchAdReward = 'watch_ad_reward';
@@ -6,6 +6,7 @@ abstract final class StoreOfferIds {
   static const String coinPackL = 'coin_pack_l';
   static const String cleanPlayPass = 'clean_play_pass';
   static const String academyTuitionPass = 'academy_tuition_pass';
+  static const String avatarRoll = 'avatar_roll';
   static const String themePack = 'theme_pack';
   static const String sakuraBoard = 'sakura_board';
   static const String tropicalBoard = 'tropical_board';
@@ -27,6 +28,7 @@ abstract final class StoreOfferIds {
     coinPackL,
     cleanPlayPass,
     academyTuitionPass,
+    avatarRoll,
     themePack,
     sakuraBoard,
     tropicalBoard,

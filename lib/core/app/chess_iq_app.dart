@@ -2,9 +2,9 @@ import 'package:chessiq/core/navigation/app_routes.dart';
 import 'package:chessiq/core/providers/economy_provider.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
-import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/analysis/screens/chess_analysis_page.dart';
+import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

@@ -20,6 +20,7 @@ import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';
 import 'package:chessiq/features/avatar/models/avatar_catalog.dart';
 import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
 import 'package:chessiq/features/avatar/widgets/avatar_portrait.dart';
+import 'package:chessiq/shared/widgets/theme_selector_tiles.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +28,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:chessiq/shared/widgets/theme_selector_tiles.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/country_names.dart';
@@ -5487,9 +5487,7 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
                   Theme.of(context).colorScheme.surface,
                 ),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: palette.cyan.withValues(alpha: 0.28),
-                ),
+                border: Border.all(color: palette.cyan.withValues(alpha: 0.28)),
               ),
               child: avatarInventory.loaded && selectedAvatar != null
                   ? Column(
@@ -5502,9 +5500,7 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
                               avatar: selectedAvatar,
                               size: 92,
                               radius: 24,
-                              borderColor: palette.cyan.withValues(
-                                alpha: 0.38,
-                              ),
+                              borderColor: palette.cyan.withValues(alpha: 0.38),
                               backgroundColor: Colors.black.withValues(
                                 alpha: monochrome ? 0.06 : 0.03,
                               ),
@@ -5562,7 +5558,8 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             itemCount: ownedAvatars.length,
-                            separatorBuilder: (_, _) => const SizedBox(width: 10),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(width: 10),
                             itemBuilder: (context, index) {
                               final avatar = ownedAvatars[index];
                               return ThemeSelectorTile(

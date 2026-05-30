@@ -45,6 +45,9 @@ const PROMO_UNLOCK_KEYS = [
     "adFreeOwned",
     "academyTuitionPassOwned",
 ] as const;
+const PROMO_AVATAR_IDS = [
+    "promo-demon-hunter",
+] as const;
 const ECONOMY_DEFAULT_COINS = 120;
 const ECONOMY_MAX_COINS = 1000000;
 const ECONOMY_MIGRATION_MAX_COINS = 1000000;
@@ -183,6 +186,10 @@ function isPromoUnlockKey(value: string): value is PromoUnlockKey {
     return PROMO_UNLOCK_KEYS.includes(value as PromoUnlockKey);
 }
 
+function isPromoAvatarId(value: string): value is PromoAvatarId {
+    return PROMO_AVATAR_IDS.includes(value as PromoAvatarId);
+}
+
 function validateHandle(handle: unknown): string {
     if (typeof handle !== "string") {
         throw new functions.https.HttpsError(
@@ -252,10 +259,12 @@ type AcademyHandleModerationRecord = {
 };
 
 type PromoUnlockKey = typeof PROMO_UNLOCK_KEYS[number];
+type PromoAvatarId = typeof PROMO_AVATAR_IDS[number];
 
 type PromoReward = {
     coinAmount: number;
     unlockKey: PromoUnlockKey | null;
+    avatarId: PromoAvatarId | null;
 };
 
 type PromoClaimIdentity = {
@@ -514,7 +523,18 @@ function parseStoredPromoCode(value: unknown): StoredPromoCode {
     if (rawUnlockKey != null && unlockKey == null) {
         throw new Error("Promo code unlock reward is not allowlisted.");
     }
-    if (coinAmount <= 0 && unlockKey == null) {
+
+    const rawAvatarId = rewardRecord.avatarId;
+    const avatarId = rawAvatarId == null
+        ? null
+        : typeof rawAvatarId === "string" && isPromoAvatarId(rawAvatarId)
+            ? rawAvatarId
+            : null;
+    if (rawAvatarId != null && avatarId == null) {
+        throw new Error("Promo code avatar reward is not allowlisted.");
+    }
+
+    if (coinAmount <= 0 && unlockKey == null && avatarId == null) {
         throw new Error("Promo code reward must grant coins or one unlock.");
     }
 
@@ -597,6 +617,7 @@ function parseStoredPromoCode(value: unknown): StoredPromoCode {
         reward: {
             coinAmount,
             unlockKey,
+            avatarId,
         },
         expiresAt,
         maxUses,
@@ -1667,6 +1688,7 @@ async function redeemPromoCodeImpl(
         reward: {
             coinAmount: storedPromo.reward.coinAmount,
             unlockKey: storedPromo.reward.unlockKey,
+            avatarId: storedPromo.reward.avatarId,
         },
     };
 

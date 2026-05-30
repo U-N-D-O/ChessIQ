@@ -32,12 +32,14 @@ class PromoCodeRedemptionResult {
     required this.code,
     required this.coinAmount,
     required this.unlockKey,
+    required this.avatarId,
     required this.claimedAt,
   });
 
   final String code;
   final int coinAmount;
   final String? unlockKey;
+  final String? avatarId;
   final DateTime claimedAt;
 }
 
@@ -78,6 +80,7 @@ class PromoCodeService {
     final code = result['code']?.toString().trim() ?? normalizedCode;
     final coinAmount = (reward['coinAmount'] as num?)?.toInt() ?? 0;
     final unlockKey = reward['unlockKey']?.toString().trim();
+    final avatarId = reward['avatarId']?.toString().trim();
     final claimedAtRaw = result['claimedAt']?.toString().trim() ?? '';
     final claimedAt = DateTime.tryParse(claimedAtRaw);
     if (claimedAt == null) {
@@ -91,6 +94,7 @@ class PromoCodeService {
       code: code,
       coinAmount: coinAmount,
       unlockKey: unlockKey == null || unlockKey.isEmpty ? null : unlockKey,
+      avatarId: avatarId == null || avatarId.isEmpty ? null : avatarId,
       claimedAt: claimedAt,
     );
   }

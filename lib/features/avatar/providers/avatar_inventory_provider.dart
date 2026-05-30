@@ -6,15 +6,42 @@ import 'package:chessiq/features/avatar/models/avatar_catalog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class AvatarRollResult {
+  const AvatarRollResult({
+    required this.avatar,
+    required this.bucket,
+  });
+
+  final AvatarCatalogEntry avatar;
+  final AvatarRarityBucket bucket;
+}
+
+class AvatarRewardClaimResult {
+  const AvatarRewardClaimResult({
+    this.alreadyClaimed = false,
+    this.grantedAvatars = const <AvatarCatalogEntry>[],
+  });
+
+  final bool alreadyClaimed;
+  final List<AvatarCatalogEntry> grantedAvatars;
+}
+
 class AvatarInventoryProvider extends ChangeNotifier {
   AvatarInventoryProvider({Random? random}) : _random = random ?? Random();
 
+  static const int paidRollPrice = 200;
   static const String _storeIntegrityScope = 'economy_store';
   static const String _avatarInventoryKey = 'avatar_inventory_v1';
   static const String _ownedAvatarIdsKey = 'ownedAvatarIds';
   static const String _selectedAvatarIdKey = 'selectedAvatarId';
   static const String _starterAvatarIdKey = 'starterAvatarId';
   static const String _claimedRewardKeysKey = 'claimedRewardKeys';
+  static const List<AvatarRarityBucket> _paidRollBuckets = <AvatarRarityBucket>[
+    AvatarRarityBucket.normal,
+    AvatarRarityBucket.rare,
+    AvatarRarityBucket.epic,
+    AvatarRarityBucket.legendary,
+  ];
 
   final Random _random;
 
@@ -47,6 +74,42 @@ class AvatarInventoryProvider extends ChangeNotifier {
   );
 
   List<AvatarCatalogEntry> get starterPool => AvatarCatalog.starterPool;
+
+  List<AvatarCatalogEntry> get availablePaidRollAvatars => AvatarCatalog.items
+      .where((avatar) => avatar.paidRollEligible && !_ownedAvatarIds.contains(avatar.id))
+      .toList(growable: false);
+
+  int get availablePaidRollCount => availablePaidRollAvatars.length;
+
+  bool get hasAvailablePaidRolls => availablePaidRollCount > 0;
+
+  List<AvatarCatalogEntry> availablePaidRollAvatarsForBucket(
+    AvatarRarityBucket bucket,
+  ) {
+    if (!_paidRollBuckets.contains(bucket)) {
+      return const <AvatarCatalogEntry>[];
+    }
+    return availablePaidRollAvatars
+        .where((avatar) => avatar.bucket == bucket)
+        .toList(growable: false);
+  }
+
+  double currentPaidRollWeightForBucket(AvatarRarityBucket bucket) {
+    if (!_paidRollBuckets.contains(bucket)) {
+      return 0;
+    }
+    final availableBuckets = _availablePaidRollBuckets();
+    final totalWeight = availableBuckets.keys.fold<double>(
+      0,
+      (sum, currentBucket) => sum + currentBucket.paidRollWeight,
+    );
+    if (totalWeight <= 0) {
+      return 0;
+    }
+    return availableBuckets.keys.any((currentBucket) => currentBucket == bucket)
+        ? (bucket.paidRollWeight / totalWeight) * 100
+        : 0;
+  }
 
   int get ownedCount => _ownedAvatarIds.length;
 
@@ -159,6 +222,70 @@ class AvatarInventoryProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<AvatarRollResult?> rollPaidAvatar() async {
+    if (!_loaded) {
+      await load();
+    }
+
+    final availableBuckets = _availablePaidRollBuckets();
+    if (availableBuckets.isEmpty) {
+      return null;
+    }
+
+    final bucket = _pickWeightedBucket(availableBuckets);
+    if (bucket == null) {
+      return null;
+    }
+
+    final pool = availableBuckets[bucket];
+    if (pool == null || pool.isEmpty) {
+      return null;
+    }
+
+    final avatar = pool[_random.nextInt(pool.length)];
+    final changed = _ownedAvatarIds.add(avatar.id);
+    if (!changed) {
+      return null;
+    }
+
+    await _persistAvatarInventory();
+    notifyListeners();
+    return AvatarRollResult(avatar: avatar, bucket: bucket);
+  }
+
+  Future<AvatarRewardClaimResult> claimRewardGroup(
+    Iterable<String> avatarIds, {
+    required String rewardKey,
+  }) async {
+    if (!_loaded) {
+      await load();
+    }
+
+    final normalizedRewardKey = rewardKey.trim();
+    if (normalizedRewardKey.isEmpty) {
+      return const AvatarRewardClaimResult();
+    }
+    if (_claimedRewardKeys.contains(normalizedRewardKey)) {
+      return const AvatarRewardClaimResult(alreadyClaimed: true);
+    }
+
+    final grantedAvatars = <AvatarCatalogEntry>[];
+    _claimedRewardKeys.add(normalizedRewardKey);
+    for (final avatarId in avatarIds) {
+      final avatar = AvatarCatalog.entryFor(avatarId);
+      if (avatar == null) {
+        continue;
+      }
+      if (_ownedAvatarIds.add(avatar.id)) {
+        grantedAvatars.add(avatar);
+      }
+    }
+
+    await _persistAvatarInventory();
+    notifyListeners();
+    return AvatarRewardClaimResult(grantedAvatars: grantedAvatars);
+  }
+
   Map<String, dynamic> _readStorePayload(SharedPreferences prefs) {
     final signed = LocalIntegrityService.decodeJson(
       prefs.getString(EconomyProvider.storeStateKey),
@@ -230,6 +357,42 @@ class AvatarInventoryProvider extends ChangeNotifier {
       return null;
     }
     return pool[_random.nextInt(pool.length)];
+  }
+
+  Map<AvatarRarityBucket, List<AvatarCatalogEntry>> _availablePaidRollBuckets() {
+    final buckets = <AvatarRarityBucket, List<AvatarCatalogEntry>>{};
+    for (final bucket in _paidRollBuckets) {
+      final available = availablePaidRollAvatarsForBucket(bucket);
+      if (available.isNotEmpty) {
+        buckets[bucket] = available;
+      }
+    }
+    return buckets;
+  }
+
+  AvatarRarityBucket? _pickWeightedBucket(
+    Map<AvatarRarityBucket, List<AvatarCatalogEntry>> availableBuckets,
+  ) {
+    final totalWeight = availableBuckets.keys.fold<double>(
+      0,
+      (sum, bucket) => sum + bucket.paidRollWeight,
+    );
+    if (totalWeight <= 0) {
+      return null;
+    }
+
+    var roll = _random.nextDouble() * totalWeight;
+    for (final bucket in _paidRollBuckets) {
+      if (!availableBuckets.containsKey(bucket)) {
+        continue;
+      }
+      roll -= bucket.paidRollWeight;
+      if (roll <= 0) {
+        return bucket;
+      }
+    }
+
+    return availableBuckets.keys.lastOrNull;
   }
 
   String? _firstOwnedAvatarId() {
