@@ -6277,6 +6277,42 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  Color _remoteFriendLocalAccent(
+    ColorScheme scheme, {
+    required bool useMonochrome,
+  }) {
+    return useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.92)
+        : const Color(0xFF5AAEE8);
+  }
+
+  Color _remoteFriendOpponentAccent(
+    ColorScheme scheme, {
+    required bool useMonochrome,
+  }) {
+    return useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.78)
+        : const Color(0xFFD8B640);
+  }
+
+  Color _remoteFriendReadyAccent(
+    ColorScheme scheme, {
+    required bool useMonochrome,
+  }) {
+    return useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.88)
+        : const Color(0xFF7EDC8A);
+  }
+
+  Color _remoteFriendDangerAccent(
+    ColorScheme scheme, {
+    required bool useMonochrome,
+  }) {
+    return useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.82)
+        : const Color(0xFFE45C5C);
+  }
+
   Widget _remoteFriendPieceThemeChoiceTile({
     required PieceThemeMode mode,
     required bool isWhitePiece,
@@ -6496,11 +6532,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Widget _remoteFriendPieceSelectionReadyBanner({
     required int remainingSeconds,
     required VoidCallback? onChangeSkin,
+    required Color accent,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
-    const readyAccent = Color(0xFF7EDC8A);
+    final readyAccent = accent;
 
     return Container(
       width: double.infinity,
@@ -6521,7 +6558,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               Container(
                 width: 28,
                 height: 28,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: readyAccent,
                   shape: BoxShape.circle,
                 ),
@@ -6579,6 +6616,102 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _remoteFriendInlineErrorBanner({
+    required String message,
+    required VoidCallback onDismiss,
+    required VoidCallback onRetry,
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    final errorAccent = accent;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          errorAccent.withValues(alpha: isLight ? 0.10 : 0.16),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: errorAccent.withValues(alpha: 0.30)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: errorAccent.withValues(alpha: isLight ? 0.14 : 0.22),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.error_outline_rounded,
+                  size: 18,
+                  color: errorAccent,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Sync issue',
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 12.4,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: onDismiss,
+                tooltip: 'Dismiss',
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  foregroundColor: scheme.onSurface.withValues(alpha: 0.72),
+                ),
+                icon: const Icon(Icons.close_rounded, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.82),
+              fontSize: 11.8,
+              height: 1.32,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.sync_rounded, size: 18),
+              label: const Text('Refresh now'),
+              style: FilledButton.styleFrom(
+                foregroundColor: scheme.onSurface,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -20250,13 +20383,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ((white && _gameOutcome == GameOutcome.blackWin) ||
             (!white && _gameOutcome == GameOutcome.whiteWin));
     final accent = isWinner
-        ? const Color(0xFF58E09A)
+        ? _remoteFriendReadyAccent(scheme, useMonochrome: useMonochrome)
         : isLoser
-        ? const Color(0xFFE45C5C)
+        ? _remoteFriendDangerAccent(scheme, useMonochrome: useMonochrome)
         : isActive
         ? (isLocalSeat
-              ? (useMonochrome ? scheme.onSurface : const Color(0xFF5AAEE8))
-              : (useMonochrome ? scheme.onSurface : const Color(0xFFD8B640)))
+              ? _remoteFriendLocalAccent(
+                  scheme,
+                  useMonochrome: useMonochrome,
+                )
+              : _remoteFriendOpponentAccent(
+                  scheme,
+                  useMonochrome: useMonochrome,
+                ))
         : isLocalSeat
         ? scheme.onSurface.withValues(alpha: 0.84)
         : scheme.onSurface.withValues(alpha: 0.68);
@@ -21841,6 +21980,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : (remoteSeat == RemoteFriendSeat.white
                 ? RemoteFriendSeat.black
                 : RemoteFriendSeat.white);
+        final remoteOpponentSeatLabel = _remoteFriendSeatLabel(remoteOpponentSeat);
       final remoteOpponentTheme = remoteOpponentSeat == null
           ? _pieceThemeMode
           : _remoteFriendPieceThemeForSeat(remoteOpponentSeat);
@@ -21848,15 +21988,41 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _isRemoteFriendPendingMatch &&
           isLandscape &&
           media.size.height <= 760;
+      final remoteUseMonochrome =
+          context.watch<AppThemeProvider>().isMonochrome ||
+          _isCinematicThemeEnabled;
+      final remoteLocalAccent = _remoteFriendLocalAccent(
+        scheme,
+        useMonochrome: remoteUseMonochrome,
+      );
+      final remoteOpponentAccent = _remoteFriendOpponentAccent(
+        scheme,
+        useMonochrome: remoteUseMonochrome,
+      );
+      final remoteReadyAccent = _remoteFriendReadyAccent(
+        scheme,
+        useMonochrome: remoteUseMonochrome,
+      );
+      final remoteDangerAccent = _remoteFriendDangerAccent(
+        scheme,
+        useMonochrome: remoteUseMonochrome,
+      );
+      final remoteErrorText = _remoteFriendLastError?.trim();
+      final hasRemoteError =
+          remoteErrorText != null && remoteErrorText.isNotEmpty;
       final remoteAccent = remotePieceSelectionOpen
-          ? const Color(0xFFD8B640)
+          ? remoteOpponentAccent
           : _hasIncomingRemoteDrawOffer || _hasOutgoingRemoteDrawOffer
-          ? const Color(0xFFD8B640)
+          ? remoteOpponentAccent
           : _isHumanTurnInRemoteFriendGame
-          ? const Color(0xFF5AAEE8)
+          ? remoteLocalAccent
           : const Color(0xFF7D8CA3);
+      final remoteSelectionUrgent =
+          remotePieceSelectionOpen && remoteSelectionRemainingSeconds <= 3;
+      final remoteSelectionAccent = remoteSelectionUrgent
+          ? remoteDangerAccent
+          : remoteAccent;
       final remoteStatusText =
-          _remoteFriendLastError ??
           (remoteSnapshot == null
               ? 'Synchronizing remote friend match...'
               : _isRemoteFriendPendingMatch
@@ -21878,6 +22044,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               : _hasOutgoingRemoteDrawOffer
               ? 'Draw offer sent. The board will update when your friend responds.'
               : 'Moves and clocks are synchronized from the private match.');
+      final remoteBusyText = !_remoteFriendOperationInProgress
+              ? null
+              : _isRemoteFriendPendingMatch
+              ? 'Updating the invite for both phones...'
+              : remotePieceSelectionOpen
+              ? 'Saving your piece-skin pairing choice...'
+              : 'Synchronizing the private match...';
       final buttons = <Widget>[
         buildRemoteActionButton(
           label: compactPendingInviteOverlay ? 'Back' : 'VS Mode',
@@ -21894,7 +22067,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             onPressed: _remoteFriendOperationInProgress
                 ? null
                 : () => unawaited(_copyRemoteFriendInviteCode()),
-            accent: const Color(0xFF5AAEE8),
+            accent: remoteLocalAccent,
           ),
           if (!compactPendingInviteOverlay)
             buildRemoteActionButton(
@@ -21903,7 +22076,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               onPressed: _remoteFriendOperationInProgress
                   ? null
                   : () => unawaited(_shareRemoteFriendInviteCode()),
-              accent: const Color(0xFF5AAEE8),
+              accent: remoteLocalAccent,
             ),
           buildRemoteActionButton(
             label: compactPendingInviteOverlay ? 'Cancel Invite' : 'Cancel',
@@ -21915,7 +22088,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       RemoteFriendMatchAction.cancelPending,
                     ),
                   ),
-            accent: const Color(0xFFE45C5C),
+            accent: remoteDangerAccent,
             primary: true,
           ),
         ] else if (_isRemoteFriendActiveMatch) ...[
@@ -21930,7 +22103,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         RemoteFriendMatchAction.acceptDraw,
                       ),
                     ),
-              accent: const Color(0xFFD8B640),
+              accent: remoteOpponentAccent,
               primary: true,
             ),
           if (!remotePieceSelectionOpen && _hasIncomingRemoteDrawOffer)
@@ -21944,7 +22117,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         RemoteFriendMatchAction.declineDraw,
                       ),
                     ),
-              accent: scheme.onSurface,
+              accent: remoteDangerAccent,
             ),
           if (!remotePieceSelectionOpen && !_hasIncomingRemoteDrawOffer)
             buildRemoteActionButton(
@@ -21957,7 +22130,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   : () => unawaited(
                       _runRemoteFriendAction(RemoteFriendMatchAction.offerDraw),
                     ),
-              accent: const Color(0xFFD8B640),
+              accent: remoteOpponentAccent,
               primary: !_hasOutgoingRemoteDrawOffer,
             ),
           if (!remotePieceSelectionOpen)
@@ -21969,7 +22142,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   : () => unawaited(
                       _runRemoteFriendAction(RemoteFriendMatchAction.resign),
                     ),
-              accent: const Color(0xFFE45C5C),
+              accent: remoteDangerAccent,
               primary: true,
             ),
         ],
@@ -22029,6 +22202,62 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 fontWeight: FontWeight.w600,
               ),
             ),
+            if (hasRemoteError) ...[
+              const SizedBox(height: 10),
+              _remoteFriendInlineErrorBanner(
+                message: remoteErrorText,
+                accent: remoteDangerAccent,
+                onDismiss: () => setState(() {
+                  _remoteFriendLastError = null;
+                }),
+                onRetry: () => unawaited(_refreshRemoteFriendMatch()),
+              ),
+            ],
+            if (remoteBusyText != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    remoteAccent.withValues(alpha: isLight ? 0.08 : 0.14),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: remoteAccent.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          remoteAccent,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        remoteBusyText,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.78),
+                          fontSize: 11.8,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (remotePieceSelectionOpen && remoteSeat != null) ...[
               const SizedBox(height: 14),
               Container(
@@ -22051,9 +22280,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       children: [
                         Expanded(
                           child: Text(
-                            'Pick your skin before the timer ends',
+                            remoteSelectionUrgent
+                                ? 'Lock in your skin now'
+                                : 'Pick your skin before the timer ends',
                             style: TextStyle(
-                              color: scheme.onSurface,
+                              color: remoteSelectionUrgent
+                                  ? remoteSelectionAccent
+                                  : scheme.onSurface,
                               fontSize: 13.2,
                               fontWeight: FontWeight.w900,
                             ),
@@ -22082,7 +22315,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: remoteAccent.withValues(
+                              color: remoteSelectionAccent.withValues(
                                 alpha: isLight ? 0.14 : 0.24,
                               ),
                               borderRadius: BorderRadius.circular(999),
@@ -22109,6 +22342,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    if (remoteSelectionUrgent) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Final seconds before your skin locks in.',
+                        style: TextStyle(
+                          color: remoteSelectionAccent,
+                          fontSize: 11.8,
+                          height: 1.28,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(999),
@@ -22124,7 +22369,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               alpha: 0.16,
                             ),
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              remoteAccent,
+                              remoteSelectionAccent,
                             ),
                           );
                         },
@@ -22136,20 +22381,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       runSpacing: 10,
                       children: [
                         _remoteFriendPieceThemePreviewCard(
-                          title: 'Your pieces',
-                          subtitle: 'Visible on your $remoteSeatLabel side',
+                          title: 'You | $remoteSeatLabel',
+                          subtitle:
+                              'Skin shown on your $remoteSeatLabel side',
                           theme: remotePlayerTheme,
                           isWhitePiece: remoteSeat == RemoteFriendSeat.white,
-                          accent: const Color(0xFF5AAEE8),
+                          accent: remoteLocalAccent,
                         ),
                         _remoteFriendPieceThemePreviewCard(
-                          title: 'Opponent pieces',
+                          title: 'Friend | $remoteOpponentSeatLabel',
                           subtitle:
-                              'Your friend keeps this skin on the other side',
+                              'Your friend keeps this skin on the $remoteOpponentSeatLabel side',
                           theme: remoteOpponentTheme,
                           isWhitePiece:
                               remoteOpponentSeat == RemoteFriendSeat.white,
-                          accent: const Color(0xFFD8B640),
+                          accent: remoteOpponentAccent,
                         ),
                       ],
                     ),
@@ -22174,6 +22420,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               child: _remoteFriendPieceSelectionReadyBanner(
                                 remainingSeconds:
                                     remoteSelectionRemainingSeconds,
+                                accent: remoteReadyAccent,
                                 onChangeSkin: _remoteFriendOperationInProgress
                                     ? null
                                     : () => setState(() {
@@ -22228,7 +22475,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             }),
                                       style: FilledButton.styleFrom(
                                         backgroundColor: Color.alphaBlend(
-                                          const Color(0xFF7EDC8A).withValues(
+                                          remoteReadyAccent.withValues(
                                             alpha: isLight ? 0.84 : 0.74,
                                           ),
                                           scheme.surface,
@@ -22244,8 +22491,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                           borderRadius: BorderRadius.circular(
                                             16,
                                           ),
-                                          side: const BorderSide(
-                                            color: Color(0xFF7EDC8A),
+                                          side: BorderSide(
+                                            color: remoteReadyAccent,
                                           ),
                                         ),
                                       ),
