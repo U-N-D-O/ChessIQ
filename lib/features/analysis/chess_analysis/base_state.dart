@@ -116,50 +116,50 @@ class _RemoteFriendReactionOption {
   final bool requiresPaidRoll;
 }
 
-const List<_RemoteFriendReactionOption>
-_remoteFriendStandardReactionOptions = <_RemoteFriendReactionOption>[
-  _RemoteFriendReactionOption(emoji: '👍', label: 'Nice move'),
-  _RemoteFriendReactionOption(emoji: '👏', label: 'Clean'),
-  _RemoteFriendReactionOption(emoji: '🙌', label: 'Let\'s go'),
-  _RemoteFriendReactionOption(emoji: '🤔', label: 'Thinking'),
-  _RemoteFriendReactionOption(emoji: '😅', label: 'Close one'),
-  _RemoteFriendReactionOption(emoji: '😮', label: 'Wow'),
-  _RemoteFriendReactionOption(emoji: '😬', label: 'Tense'),
-  _RemoteFriendReactionOption(emoji: '⏳', label: 'Hurry'),
-  _RemoteFriendReactionOption(emoji: '🔥', label: 'Sharp'),
-  _RemoteFriendReactionOption(emoji: '👑', label: 'Winning'),
-  _RemoteFriendReactionOption(emoji: '🧠', label: 'Brilliant'),
-  _RemoteFriendReactionOption(emoji: '😭', label: 'Ouch'),
-];
+const List<_RemoteFriendReactionOption> _remoteFriendStandardReactionOptions =
+    <_RemoteFriendReactionOption>[
+      _RemoteFriendReactionOption(emoji: '👍', label: 'Nice move'),
+      _RemoteFriendReactionOption(emoji: '👏', label: 'Clean'),
+      _RemoteFriendReactionOption(emoji: '🙌', label: 'Let\'s go'),
+      _RemoteFriendReactionOption(emoji: '🤔', label: 'Thinking'),
+      _RemoteFriendReactionOption(emoji: '😅', label: 'Close one'),
+      _RemoteFriendReactionOption(emoji: '😮', label: 'Wow'),
+      _RemoteFriendReactionOption(emoji: '😬', label: 'Tense'),
+      _RemoteFriendReactionOption(emoji: '⏳', label: 'Hurry'),
+      _RemoteFriendReactionOption(emoji: '🔥', label: 'Sharp'),
+      _RemoteFriendReactionOption(emoji: '👑', label: 'Winning'),
+      _RemoteFriendReactionOption(emoji: '🧠', label: 'Brilliant'),
+      _RemoteFriendReactionOption(emoji: '😭', label: 'Ouch'),
+    ];
 
-const List<_RemoteFriendReactionOption>
-_remoteFriendStrangeReactionOptions = <_RemoteFriendReactionOption>[
-  _RemoteFriendReactionOption(
-    emoji: '🛸',
-    label: 'UFO energy',
-    requiresPaidRoll: true,
-  ),
-  _RemoteFriendReactionOption(
-    emoji: '🧪',
-    label: 'Lab move',
-    requiresPaidRoll: true,
-  ),
-  _RemoteFriendReactionOption(
-    emoji: '🫠',
-    label: 'Melting',
-    requiresPaidRoll: true,
-  ),
-  _RemoteFriendReactionOption(
-    emoji: '🦆',
-    label: 'Duck mode',
-    requiresPaidRoll: true,
-  ),
-  _RemoteFriendReactionOption(
-    emoji: '🦑',
-    label: 'Squid tactics',
-    requiresPaidRoll: true,
-  ),
-];
+const List<_RemoteFriendReactionOption> _remoteFriendStrangeReactionOptions =
+    <_RemoteFriendReactionOption>[
+      _RemoteFriendReactionOption(
+        emoji: '🛸',
+        label: 'UFO energy',
+        requiresPaidRoll: true,
+      ),
+      _RemoteFriendReactionOption(
+        emoji: '🧪',
+        label: 'Lab move',
+        requiresPaidRoll: true,
+      ),
+      _RemoteFriendReactionOption(
+        emoji: '🫠',
+        label: 'Melting',
+        requiresPaidRoll: true,
+      ),
+      _RemoteFriendReactionOption(
+        emoji: '🦆',
+        label: 'Duck mode',
+        requiresPaidRoll: true,
+      ),
+      _RemoteFriendReactionOption(
+        emoji: '🦑',
+        label: 'Squid tactics',
+        requiresPaidRoll: true,
+      ),
+    ];
 
 enum _VsModeQuickOption { crossDevice, sharedScreen, vsCpu, quickJoin }
 
@@ -5223,24 +5223,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           (_isRemoteFriendTimedMatch || _isRemoteFriendPieceSelectionOpen)
           ? const Duration(milliseconds: 250)
           : const Duration(seconds: 1);
-      _remoteFriendClockDisplayTimer = Timer.periodic(
-        displayTickerInterval,
-        (timer) {
-          final currentSnapshot = _remoteFriendSnapshot;
-          if (!mounted ||
-              !_isRemoteFriendMatchMode ||
-              currentSnapshot == null ||
-              !_remoteFriendNeedsDisplayTickerForSnapshot(currentSnapshot) ||
-              _gameOutcome != null) {
-            timer.cancel();
-            if (identical(_remoteFriendClockDisplayTimer, timer)) {
-              _remoteFriendClockDisplayTimer = null;
-            }
-            return;
+      _remoteFriendClockDisplayTimer = Timer.periodic(displayTickerInterval, (
+        timer,
+      ) {
+        final currentSnapshot = _remoteFriendSnapshot;
+        if (!mounted ||
+            !_isRemoteFriendMatchMode ||
+            currentSnapshot == null ||
+            !_remoteFriendNeedsDisplayTickerForSnapshot(currentSnapshot) ||
+            _gameOutcome != null) {
+          timer.cancel();
+          if (identical(_remoteFriendClockDisplayTimer, timer)) {
+            _remoteFriendClockDisplayTimer = null;
           }
-          setState(() {});
-        },
-      );
+          return;
+        }
+        setState(() {});
+      });
     }
 
     if (snapshot.status == RemoteFriendMatchStatus.pending ||
@@ -6472,7 +6471,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return Duration.zero;
     }
     final remaining =
-        _remoteFriendReactionCooldown - DateTime.now().difference(lastReactionAt);
+        _remoteFriendReactionCooldown -
+        DateTime.now().difference(lastReactionAt);
     if (remaining <= Duration.zero) {
       return Duration.zero;
     }
@@ -7093,7 +7093,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedOpacity(
-          opacity: locked ? 0.72 : enabled ? 1.0 : 0.48,
+          opacity: locked
+              ? 0.72
+              : enabled
+              ? 1.0
+              : 0.48,
           duration: const Duration(milliseconds: 160),
           child: Stack(
             clipBehavior: Clip.none,
@@ -7119,10 +7123,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     color: accent.withValues(alpha: locked ? 0.20 : 0.34),
                   ),
                 ),
-                child: Text(
-                  option.emoji,
-                  style: const TextStyle(fontSize: 21),
-                ),
+                child: Text(option.emoji, style: const TextStyle(fontSize: 21)),
               ),
               if (locked)
                 Positioned(
@@ -20876,10 +20877,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final timeText = _isRemoteFriendTimedMatch
         ? _formatLocalFriendClock(_remoteFriendDisplayedClock(white: white))
         : 'UNTIMED';
-      final recentReaction = _remoteFriendVisibleReactionForSnapshot(snapshot);
-      final seatReaction = recentReaction != null &&
-          occupantUid != null &&
-          recentReaction.sentByUid == occupantUid
+    final recentReaction = _remoteFriendVisibleReactionForSnapshot(snapshot);
+    final seatReaction =
+        recentReaction != null &&
+            occupantUid != null &&
+            recentReaction.sentByUid == occupantUid
         ? recentReaction
         : null;
 
@@ -22502,33 +22504,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : remotePieceSelectionOpen
           ? 'Saving your piece-skin pairing choice...'
           : 'Synchronizing the private match...';
-        final remoteVisibleReaction = remoteSnapshot == null
+      final remoteVisibleReaction = remoteSnapshot == null
           ? null
           : _remoteFriendVisibleReactionForSnapshot(remoteSnapshot);
-        final remoteVisibleReactionOption = remoteVisibleReaction == null
+      final remoteVisibleReactionOption = remoteVisibleReaction == null
           ? null
           : _remoteFriendReactionOptionForEmoji(remoteVisibleReaction.emoji);
-        final remoteReactionSentByLocal =
+      final remoteReactionSentByLocal =
           remoteVisibleReaction != null &&
           remoteVisibleReaction.sentByUid == _remoteFriendLocalUid;
-        final remoteReactionAccent = remoteVisibleReaction == null
+      final remoteReactionAccent = remoteVisibleReaction == null
           ? remoteAccent
           : remoteReactionSentByLocal
           ? remoteLocalAccent
           : remoteOpponentAccent;
-        final remoteReactionCooldownRemaining = remoteSnapshot == null
+      final remoteReactionCooldownRemaining = remoteSnapshot == null
           ? Duration.zero
           : _remoteFriendReactionCooldownRemainingForSnapshot(remoteSnapshot);
-        final remoteReactionReady =
+      final remoteReactionReady =
           remoteReactionCooldownRemaining == Duration.zero &&
           !_remoteFriendReactionInFlight &&
           !_remoteFriendOperationInProgress;
-        final remoteReactionStatusText = _remoteFriendReactionInFlight
+      final remoteReactionStatusText = _remoteFriendReactionInFlight
           ? 'Sending...'
           : remoteReactionCooldownRemaining > Duration.zero
           ? 'Ready again in ${_formatRemoteFriendReactionCooldown(remoteReactionCooldownRemaining)}'
           : 'Ready now';
-        final showRemoteReactionTray =
+      final showRemoteReactionTray =
           _isRemoteFriendActiveMatch &&
           !remotePieceSelectionOpen &&
           remoteSnapshot != null &&
@@ -22743,8 +22745,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               const SizedBox(height: 10),
               _remoteFriendReactionBanner(
                 emoji: remoteVisibleReaction.emoji,
-                title:
-                    remoteReactionSentByLocal ? 'You reacted' : 'Friend reacted',
+                title: remoteReactionSentByLocal
+                    ? 'You reacted'
+                    : 'Friend reacted',
                 subtitle: remoteReactionSentByLocal
                     ? '${remoteVisibleReactionOption?.label ?? 'Quick reaction'} sent to the other phone.'
                     : '${remoteVisibleReactionOption?.label ?? 'Quick reaction'} just came in from your friend.',
@@ -22820,9 +22823,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        for (
-                          final option in _remoteFriendStandardReactionOptions
-                        )
+                        for (final option
+                            in _remoteFriendStandardReactionOptions)
                           _remoteFriendReactionChip(
                             option: option,
                             accent: remoteLocalAccent,
@@ -22832,9 +22834,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   )
                                 : null,
                           ),
-                        for (
-                          final option in _remoteFriendStrangeReactionOptions
-                        )
+                        for (final option
+                            in _remoteFriendStrangeReactionOptions)
                           _remoteFriendReactionChip(
                             option: option,
                             accent: strangeReactionsUnlocked
