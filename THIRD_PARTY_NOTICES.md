@@ -93,3 +93,11 @@ The following assets are used under royalty-free or free-use licenses:
 
 Proprietary Assets (All Rights Reserved):
 - intro.mp3, main.mp3
+
+## 7. AI-Assisted Visual Media Attribution
+
+This project uses AI-assisted image-generation tools in its artwork pipeline for promotional pictures, visual concepts, and other image assets used by ChessIQ.
+
+- Credited creative tools: Google Gemini and Nano Banana
+- Attribution note: A substantial share of the project's image work was generated, iterated, or refined with assistance from these tools.
+- Usage note: These credits are provided to acknowledge the tools materially involved in the artwork process. Generated outputs remain subject to the applicable provider terms and any project-side editing, curation, or post-processing.

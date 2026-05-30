@@ -17,4 +17,4 @@ This file is a project identity and copyright record. Recipient rights are gover
 
 Third-party components, libraries, engines, fonts, and data remain the property of their respective owners and are used under their respective licenses.
 
-See `THIRD_PARTY_NOTICES.md` for attribution details and `CORRESPONDING_SOURCE.md` for release-source mapping expectations.
+See `THIRD_PARTY_NOTICES.md` for attribution details, including AI-assisted visual media credits, and `CORRESPONDING_SOURCE.md` for release-source mapping expectations.

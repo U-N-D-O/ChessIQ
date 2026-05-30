@@ -3872,6 +3872,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               color: visuals.palette.text.withValues(alpha: 0.90),
             ),
           ),
+          const SizedBox(height: 10),
+          Text(
+            'Many ChessIQ pictures and visual assets were produced or iterated with AI assistance. The project credits Google Gemini and Nano Banana as major creative tools behind that image work.',
+            style: _creditsBodyStyle(
+              visuals,
+              size: 12.0,
+              color: visuals.palette.text.withValues(alpha: 0.82),
+            ),
+          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
