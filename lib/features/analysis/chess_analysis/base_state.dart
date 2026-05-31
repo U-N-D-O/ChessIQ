@@ -432,9 +432,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'analysis_move_assessment_enabled_v1';
   static const String _analysisHeadToHeadEvalBarEnabledKey =
       'analysis_head_to_head_eval_bar_enabled_v1';
-    static const String _analysisRemoteFriendTimeControlKey =
+  static const String _analysisRemoteFriendTimeControlKey =
       'analysis_remote_friend_time_control_v1';
-    static const String _analysisRemoteFriendSeatPreferenceKey =
+  static const String _analysisRemoteFriendSeatPreferenceKey =
       'analysis_remote_friend_seat_preference_v1';
   static const String _analysisOpeningButtonModeKey =
       'analysis_opening_button_mode_v1';
@@ -17862,7 +17862,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     Widget buildCompactLocalPanel() {
-      final localTimeSummary = selectedLocalFriendTimeControl.initialTime == null
+      final localTimeSummary =
+          selectedLocalFriendTimeControl.initialTime == null
           ? 'Untimed Match'
           : _formatLocalFriendTimeControl(selectedLocalFriendTimeControl);
       return buildCardShell(
@@ -17944,8 +17945,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remoteSeatSummary = remoteSeatPreferenceLabel(
         _remoteFriendSeatPreference,
       );
-      final seatAccent = Color.lerp(remoteAccent, arcade.amber, 0.55) ??
-          arcade.amber;
+      final seatAccent =
+          Color.lerp(remoteAccent, arcade.amber, 0.55) ?? arcade.amber;
       return buildCardShell(
         accent: remoteAccent,
         emphasized: true,
