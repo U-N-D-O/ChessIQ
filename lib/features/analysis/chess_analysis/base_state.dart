@@ -603,7 +603,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   double _menuCenterShapeChangeTimerB = 1.2;
   double _menuCenterSpinSpeed = _menuCenterBaseSpinSpeed;
   double _menuCenterImpact = 0.0;
-  DateTime? _menuCenterLastUpdate;
   DateTime? _menuCenterLastCollision;
   int _menuCenterCollisionStreakCount = 0;
   static const int _boardSfxPlayerPoolSize = 4;
@@ -1148,7 +1147,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _pulseController.addListener(_updateMenuSparks);
     _pulseController.addListener(_updateBotSetupBlueDotScrollOffset);
     _pulseController.repeat();
-    _menuCenterLastUpdate = now;
     _menuCenterLastCollision = null;
     _menuCenterCollisionStreakCount = 0;
     _menuDotTime = 0.0;
@@ -1285,7 +1283,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _updateMenuFloorPieces();
 
       final centerTime = dt;
-      _menuCenterLastUpdate = now;
       _menuCenterImpact = max(0.0, _menuCenterImpact - centerTime * 1.5);
       _menuCenterSpinSpeed = max(
         _menuCenterBaseSpinSpeed,
@@ -1466,8 +1463,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             particle.position.dx.abs() > 4.0 ||
             particle.position.dy.abs() > 4.0;
       });
-    } else {
-      _menuCenterLastUpdate = now;
     }
 
     if (_creditsDialogOpen) {
@@ -18670,7 +18665,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         >
         entries, {
         bool includeDetails = false,
-      ) {
+      }) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
