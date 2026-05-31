@@ -325,6 +325,8 @@ class RemoteFriendMatchSnapshot {
     this.guestUid,
     this.whiteUid,
     this.blackUid,
+    this.whiteAvatarId,
+    this.blackAvatarId,
     this.activeClockSeat,
     this.drawOfferByUid,
     this.startedAt,
@@ -353,6 +355,8 @@ class RemoteFriendMatchSnapshot {
       guestUid: _nullableTrimmedString(map['guestUid']),
       whiteUid: _nullableTrimmedString(map['whiteUid']),
       blackUid: _nullableTrimmedString(map['blackUid']),
+      whiteAvatarId: _nullableTrimmedString(map['whiteAvatarId']),
+      blackAvatarId: _nullableTrimmedString(map['blackAvatarId']),
       fen: map['fen']?.toString().trim() ?? '',
       pgn: map['pgn']?.toString().trim() ?? '',
       nextPly: _intFromDynamic(map['nextPly']),
@@ -415,6 +419,8 @@ class RemoteFriendMatchSnapshot {
   final String? guestUid;
   final String? whiteUid;
   final String? blackUid;
+  final String? whiteAvatarId;
+  final String? blackAvatarId;
   final String fen;
   final String pgn;
   final int nextPly;
@@ -449,6 +455,8 @@ class RemoteFriendMatchSnapshot {
       'guestUid': guestUid,
       'whiteUid': whiteUid,
       'blackUid': blackUid,
+      'whiteAvatarId': whiteAvatarId,
+      'blackAvatarId': blackAvatarId,
       'fen': fen,
       'pgn': pgn,
       'nextPly': nextPly,

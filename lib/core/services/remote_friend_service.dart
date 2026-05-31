@@ -95,11 +95,13 @@ class RemoteFriendService {
     required int defaultPieceThemeIndex,
     RemoteFriendSeatPreference seatPreference =
         RemoteFriendSeatPreference.random,
+    String? hostAvatarId,
   }) async {
     final result = await _callFunction(_createInviteFunction, <String, dynamic>{
       'timeControl': timeControl.toMap(),
       'seatPreference': seatPreference.wireName,
       'defaultPieceThemeIndex': defaultPieceThemeIndex,
+      'hostAvatarId': hostAvatarId,
     });
     return RemoteFriendMutationResult.fromResultMap(result);
   }
@@ -107,10 +109,12 @@ class RemoteFriendService {
   Future<RemoteFriendMutationResult> joinInvite(
     String inviteCode, {
     required int defaultPieceThemeIndex,
+    String? guestAvatarId,
   }) async {
     final result = await _callFunction(_joinInviteFunction, <String, dynamic>{
       'inviteCode': inviteCode.trim().toUpperCase(),
       'defaultPieceThemeIndex': defaultPieceThemeIndex,
+      'guestAvatarId': guestAvatarId,
     });
     return RemoteFriendMutationResult.fromResultMap(result);
   }

@@ -628,7 +628,8 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
           .showRewardedInterstitialAd(
             placement: RewardedInterstitialPlacement.academyExamBonus,
           );
-      final rewarded = rewardedInterstitialResult.rewardEarned ||
+      final rewarded =
+          rewardedInterstitialResult.rewardEarned ||
           (!rewardedInterstitialResult.wasPresented &&
               await AdService.instance.showRewardedAd(
                 placement: RewardedPlacement.academyBonus,
@@ -1906,7 +1907,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
       return 'Exam mode runs a fixed 50-puzzle bracket. Score weights 80% accuracy and 20% speed, and leaving early submits the current run.';
     }
     if (_isDailySequence) {
-      return 'Daily mode runs today\'s sequence in order. Keep live status minimal here and use reward/status popups for secondary rules and reward handling.';
+      return 'Daily mode runs today\'s sequence in order. Complete the sequence cleanly to build your daily streak, unlock special bonuses, and earn extra rewards upon completion!';
     }
     if (widget.initialReviewMode) {
       return 'Review mode replays archived mistakes without changing progression. Use it to clean up weak spots and move back to the academy when the sequence is done.';

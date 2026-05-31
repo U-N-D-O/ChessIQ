@@ -5919,10 +5919,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
     try {
       await _ensureRemoteFriendLocalUid();
+      final avatarId =
+          context.read<AvatarInventoryProvider>().selectedAvatar?.id;
       final result = await RemoteFriendService.instance.createInvite(
         timeControl: _selectedRemoteFriendTimeControl,
         defaultPieceThemeIndex: _pieceThemeMode.index,
         seatPreference: _remoteFriendSeatPreference,
+        hostAvatarId: avatarId,
       );
       if (!mounted) {
         return;
@@ -5966,9 +5969,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
     try {
       await _ensureRemoteFriendLocalUid();
+      final avatarId =
+          context.read<AvatarInventoryProvider>().selectedAvatar?.id;
       final result = await RemoteFriendService.instance.joinInvite(
         inviteCode,
         defaultPieceThemeIndex: _pieceThemeMode.index,
+        guestAvatarId: avatarId,
       );
       if (!mounted) {
         return;
