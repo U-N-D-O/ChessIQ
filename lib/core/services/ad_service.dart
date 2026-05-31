@@ -62,6 +62,7 @@ class AdService {
   AdService._();
 
   static final AdService instance = AdService._();
+  static const bool _adsDisabled = bool.fromEnvironment('ADMOB_DISABLE');
   static const bool _forceTestAds = bool.fromEnvironment(
     'ADMOB_FORCE_TEST_ADS',
   );
@@ -192,6 +193,8 @@ class AdService {
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
+  bool get isEnabled => isSupportedPlatform && !_adsDisabled;
+
   Duration get boardResetCooldownRemaining {
     final lastShownAt = _lastBoardResetInterstitialAt;
     if (lastShownAt == null) {
@@ -221,7 +224,7 @@ class AdService {
   }
 
   Future<void> initialize() {
-    if (!isSupportedPlatform) {
+    if (!isEnabled) {
       return Future<void>.value();
     }
     return _initializationFuture ??= _initializeInternal();
@@ -254,10 +257,10 @@ class AdService {
   Future<bool> showInterstitialAd({
     required InterstitialPlacement placement,
   }) async {
-    await initialize();
-    if (!isSupportedPlatform || _showingInterstitial) {
+    if (!isEnabled || _showingInterstitial) {
       return false;
     }
+    await initialize();
 
     final adUnitId = _interstitialAdUnitIdFor(placement);
     if (adUnitId == null) {
@@ -318,13 +321,13 @@ class AdService {
   }
 
   Future<bool> showRewardedAd({required RewardedPlacement placement}) async {
-    await initialize();
-    if (!isSupportedPlatform ||
+    if (!isEnabled ||
         _showingInterstitial ||
         _showingRewarded ||
         _showingRewardedInterstitial) {
       return false;
     }
+    await initialize();
 
     final adUnitId = _rewardedAdUnitIdFor(placement);
     if (adUnitId == null) {
@@ -383,13 +386,13 @@ class AdService {
   Future<RewardedInterstitialShowResult> showRewardedInterstitialAd({
     required RewardedInterstitialPlacement placement,
   }) async {
-    await initialize();
-    if (!isSupportedPlatform ||
+    if (!isEnabled ||
         _showingInterstitial ||
         _showingRewarded ||
         _showingRewardedInterstitial) {
       return RewardedInterstitialShowResult.unavailable;
     }
+    await initialize();
 
     final adUnitId = _rewardedInterstitialAdUnitIdFor(placement);
     if (adUnitId == null) {
@@ -460,6 +463,10 @@ class AdService {
   }
 
   Future<void> _initializeInternal() async {
+    if (!isEnabled) {
+      return;
+    }
+
     try {
       await MobileAds.instance.initialize();
     } catch (error) {
@@ -632,7 +639,7 @@ class AdService {
     required String iosAdUnitId,
     required String androidAdUnitId,
   }) {
-    if (!isSupportedPlatform) {
+    if (!isEnabled) {
       return null;
     }
 
@@ -658,7 +665,7 @@ class AdService {
   }
 
   void _preloadInterstitial(String adUnitId) {
-    if (!isSupportedPlatform ||
+    if (!isEnabled ||
         _loadingInterstitialAdUnitIds.contains(adUnitId) ||
         _interstitialAds.containsKey(adUnitId)) {
       return;
@@ -685,7 +692,7 @@ class AdService {
   }
 
   void _preloadRewarded(String adUnitId) {
-    if (!isSupportedPlatform ||
+    if (!isEnabled ||
         _loadingRewardedAdUnitIds.contains(adUnitId) ||
         _rewardedAds.containsKey(adUnitId)) {
       return;
@@ -712,7 +719,7 @@ class AdService {
   }
 
   void _preloadRewardedInterstitial(String adUnitId) {
-    if (!isSupportedPlatform ||
+    if (!isEnabled ||
         _loadingRewardedInterstitialAdUnitIds.contains(adUnitId) ||
         _rewardedInterstitialAds.containsKey(adUnitId)) {
       return;

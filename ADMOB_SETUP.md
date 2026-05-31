@@ -145,6 +145,10 @@ For sideload or emulator-only release artifacts, pass
 Google's sample Android app ID (`ca-app-pub-3940256099942544~3347511713`).
 That keeps unsigned release-like builds on sample ads instead of live traffic.
 
+The iOS unsigned sideload workflow instead passes
+`--dart-define=ADMOB_DISABLE=true`, which prevents `AdService` from
+initializing AdMob or loading/showing any ads at all in that test IPA.
+
 Example `android/local.properties` entry:
 
 ```properties
