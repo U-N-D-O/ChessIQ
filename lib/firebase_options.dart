@@ -13,3 +13,10 @@ String get kFirebaseAuthApiKey {
   }
   return kFirebaseIosApiKey;
 }
+
+List<String> get kFirebaseFallbackAuthApiKeys {
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    return const <String>[kFirebaseIosApiKey];
+  }
+  return const <String>[kFirebaseAndroidApiKey];
+}

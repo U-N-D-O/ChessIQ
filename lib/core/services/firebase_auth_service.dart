@@ -17,25 +17,25 @@ class FirebaseAuthService {
 
   static final FirebaseAuthService instance = FirebaseAuthService._();
 
-  static String get _apiKey => kFirebaseAuthApiKey;
-
-  static String get _signInUrl =>
-      'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$_apiKey';
-  static String get _deleteUrl =>
-      'https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$_apiKey';
-  static String get _refreshUrl =>
-      'https://securetoken.googleapis.com/v1/token?key=$_apiKey';
+  static String _signInUrl(String apiKey) =>
+      'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey';
+  static String _deleteUrl(String apiKey) =>
+      'https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$apiKey';
+  static String _refreshUrl(String apiKey) =>
+      'https://securetoken.googleapis.com/v1/token?key=$apiKey';
 
   static const String _prefUid = 'fauth_uid';
   static const String _prefRefreshToken = 'fauth_refresh';
   static const String _prefIdToken = 'fauth_id_token';
   static const String _prefExpiryMs = 'fauth_expiry_ms';
+  static const String _prefApiKey = 'fauth_api_key';
   static const Duration _requestTimeout = Duration(seconds: 15);
 
   String? _uid;
   String? _idToken;
   String? _refreshToken;
   DateTime? _expiry;
+  String? _apiKey;
   String? _lastError;
   Future<void>? _initializationFuture;
 
@@ -57,6 +57,7 @@ class FirebaseAuthService {
     _uid = prefs.getString(_prefUid);
     _refreshToken = prefs.getString(_prefRefreshToken);
     _idToken = prefs.getString(_prefIdToken);
+    _apiKey = prefs.getString(_prefApiKey);
     final expiryMs = prefs.getInt(_prefExpiryMs);
     if (expiryMs != null) {
       _expiry = DateTime.fromMillisecondsSinceEpoch(expiryMs);
@@ -99,9 +100,12 @@ class FirebaseAuthService {
     }
 
     try {
+      final apiKey = _apiKey?.trim().isNotEmpty == true
+          ? _apiKey!.trim()
+          : kFirebaseAuthApiKey;
       final response = await http
           .post(
-            Uri.parse(_deleteUrl),
+            Uri.parse(_deleteUrl(apiKey)),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'idToken': idToken}),
           )
@@ -125,6 +129,7 @@ class FirebaseAuthService {
     _idToken = null;
     _refreshToken = null;
     _expiry = null;
+    _apiKey = null;
     _lastError = null;
 
     await Future.wait([
@@ -132,6 +137,7 @@ class FirebaseAuthService {
       prefs.remove(_prefIdToken),
       prefs.remove(_prefRefreshToken),
       prefs.remove(_prefExpiryMs),
+      prefs.remove(_prefApiKey),
     ]);
 
     await _signInAnonymously();
@@ -143,58 +149,75 @@ class FirebaseAuthService {
   }
 
   Future<void> _signInAnonymously() async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse(_signInUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'returnSecureToken': true}),
-          )
-          .timeout(_requestTimeout);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        await _persist(
-          uid: data['localId'] as String,
-          idToken: data['idToken'] as String,
-          refreshToken: data['refreshToken'] as String,
-          expiresIn: int.parse(data['expiresIn'] as String),
-        );
-      } else {
+    for (final apiKey in _candidateApiKeys()) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse(_signInUrl(apiKey)),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'returnSecureToken': true}),
+            )
+            .timeout(_requestTimeout);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          await _persist(
+            uid: data['localId'] as String,
+            idToken: data['idToken'] as String,
+            refreshToken: data['refreshToken'] as String,
+            expiresIn: int.parse(data['expiresIn'] as String),
+            apiKey: apiKey,
+          );
+          return;
+        }
+
         _lastError = _extractFirebaseError(response.body);
+        if (_isServerOrThrottleStatus(response.statusCode)) {
+          return;
+        }
+      } catch (e) {
+        _lastError = 'Anonymous sign-in failed: $e';
+        // Best-effort. App continues with unauthenticated public RTDB reads.
+        return;
       }
-    } catch (e) {
-      _lastError = 'Anonymous sign-in failed: $e';
-      // Best-effort. App continues with unauthenticated public RTDB reads.
     }
   }
 
   Future<void> _refreshIdToken() async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse(_refreshUrl),
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'grant_type=refresh_token&refresh_token=$_refreshToken',
-          )
-          .timeout(_requestTimeout);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        await _persist(
-          uid: data['user_id'] as String,
-          idToken: data['id_token'] as String,
-          refreshToken: data['refresh_token'] as String,
-          expiresIn: int.parse(data['expires_in'] as String),
-        );
-      } else {
+    for (final apiKey in _candidateApiKeys()) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse(_refreshUrl(apiKey)),
+              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+              body: 'grant_type=refresh_token&refresh_token=$_refreshToken',
+            )
+            .timeout(_requestTimeout);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          await _persist(
+            uid: data['user_id'] as String,
+            idToken: data['id_token'] as String,
+            refreshToken: data['refresh_token'] as String,
+            expiresIn: int.parse(data['expires_in'] as String),
+            apiKey: apiKey,
+          );
+          return;
+        }
+
         _lastError = _extractFirebaseError(response.body);
-        // Refresh token revoked – create a new anonymous account.
-        _refreshToken = null;
-        await _signInAnonymously();
+        if (_isServerOrThrottleStatus(response.statusCode)) {
+          return;
+        }
+      } catch (e) {
+        _lastError = 'Token refresh failed: $e';
+        // Best-effort.
+        return;
       }
-    } catch (e) {
-      _lastError = 'Token refresh failed: $e';
-      // Best-effort.
     }
+
+    // Refresh token or preferred key no longer works for this install.
+    _refreshToken = null;
+    await _signInAnonymously();
   }
 
   String _extractFirebaseError(String body) {
@@ -211,6 +234,10 @@ class FirebaseAuthService {
             if (message == 'OPERATION_NOT_ALLOWED') {
               return 'Firebase Auth error: OPERATION_NOT_ALLOWED. Anonymous sign-in is disabled in Firebase Console > Authentication > Sign-in method.';
             }
+            if (message == 'API_KEY_IOS_APP_BLOCKED' ||
+                message == 'API_KEY_ANDROID_APP_BLOCKED') {
+              return 'Firebase Auth error: $message. This usually means the current mobile API key is app-restricted for a different signed package or bundle id.';
+            }
             return 'Firebase Auth error: $message';
           }
         }
@@ -226,11 +253,13 @@ class FirebaseAuthService {
     required String idToken,
     required String refreshToken,
     required int expiresIn,
+    required String apiKey,
   }) async {
     _uid = uid;
     _idToken = idToken;
     _refreshToken = refreshToken;
     _expiry = DateTime.now().add(Duration(seconds: expiresIn));
+    _apiKey = apiKey;
     _lastError = null;
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
@@ -238,6 +267,33 @@ class FirebaseAuthService {
       prefs.setString(_prefIdToken, idToken),
       prefs.setString(_prefRefreshToken, refreshToken),
       prefs.setInt(_prefExpiryMs, _expiry!.millisecondsSinceEpoch),
+      prefs.setString(_prefApiKey, apiKey),
     ]);
+  }
+
+  List<String> _candidateApiKeys() {
+    final keys = <String>[];
+
+    void addKey(String? rawValue) {
+      final value = rawValue?.trim();
+      if (value == null || value.isEmpty || keys.contains(value)) {
+        return;
+      }
+      keys.add(value);
+    }
+
+    // Reuse the last successful key first, but keep the platform-default key
+    // ahead of the same-project fallback for normally signed installs.
+    addKey(_apiKey);
+    addKey(kFirebaseAuthApiKey);
+    for (final fallbackKey in kFirebaseFallbackAuthApiKeys) {
+      addKey(fallbackKey);
+    }
+
+    return keys;
+  }
+
+  bool _isServerOrThrottleStatus(int statusCode) {
+    return statusCode == 408 || statusCode == 429 || statusCode >= 500;
   }
 }
