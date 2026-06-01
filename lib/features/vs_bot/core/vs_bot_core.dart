@@ -1277,7 +1277,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       }
     }
   }
-
   @override
   void _clearBotGhostArrows() {
     for (final timer in _botGhostArrowTimers.values) {
@@ -1335,6 +1334,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           final continueForeground = useMonochrome
               ? scheme.surface
               : scheme.onPrimary;
+            final returnToPlayChessMenu =
+              _isLocalFriendMatchMode || _isRemoteFriendMatchMode;
           final isTimedLocalFriendFinish = _isTimedLocalFriendFinish && !isDraw;
           final isTimedRemoteFriendFinish =
               _isTimedRemoteFriendFinish && !isDraw;
@@ -1446,7 +1447,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       height: 46,
                       child: FilledButton.icon(
                         onPressed: () =>
-                            Navigator.of(dialogContext).pop('continue'),
+                            Navigator.of(dialogContext).pop(
+                              returnToPlayChessMenu ? 'menu' : 'continue',
+                            ),
                         style: FilledButton.styleFrom(
                           backgroundColor: continueBackground,
                           foregroundColor: continueForeground,
@@ -1454,8 +1457,15 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        icon: const Icon(Icons.visibility_rounded, size: 18),
-                        label: const Text('Continue'),
+                        icon: Icon(
+                          returnToPlayChessMenu
+                              ? Icons.menu_rounded
+                              : Icons.visibility_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          returnToPlayChessMenu ? 'Menu' : 'Continue',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1494,6 +1504,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       if (result == 'reset') {
         await Future<void>.delayed(Duration.zero);
         await _performResetWithSponsoredBreak();
+      } else if (result == 'menu') {
+        _openVsModeFromMenu();
       }
       return;
     }

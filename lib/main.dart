@@ -6,6 +6,7 @@ import 'package:chessiq/core/services/ad_service.dart';
 import 'package:chessiq/core/services/firebase_auth_service.dart';
 import 'package:chessiq/core/services/purchase_service.dart';
 import 'package:chessiq/core/services/push_notification_service.dart';
+import 'package:chessiq/core/services/remote_friend_invite_link_service.dart';
 import 'package:chessiq/core/services/system_audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -92,6 +93,7 @@ void _startDeferredStartupWarmups() {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   PushNotificationService.registerBackgroundHandler();
+  unawaited(RemoteFriendInviteLinkService.instance.initialize());
 
   runApp(const ChessIQApp());
 

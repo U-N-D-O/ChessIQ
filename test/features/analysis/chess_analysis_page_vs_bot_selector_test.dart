@@ -60,6 +60,53 @@ Future<void> _pumpVsBotSelector(
   await tester.pump(const Duration(milliseconds: 900));
 }
 
+Future<void> _pumpPlayChessMenu(
+  WidgetTester tester, {
+  required Size size,
+  bool monochrome = false,
+  Map<String, Object> initialPrefs = const <String, Object>{},
+  FakeViewPadding padding = FakeViewPadding.zero,
+  FakeViewPadding viewPadding = FakeViewPadding.zero,
+}) async {
+  SharedPreferences.setMockInitialValues(<String, Object>{
+    'mute_sounds_v1': true,
+    'haptics_enabled_v1': false,
+    ...initialPrefs,
+  });
+
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = size;
+  tester.view.padding = padding;
+  tester.view.viewPadding = viewPadding;
+
+  final economy = EconomyProvider();
+  await economy.refresh(notify: false);
+  final theme = AppThemeProvider();
+  if (monochrome) {
+    await theme.setThemeStyle(AppThemeStyle.monochrome);
+  }
+
+  await tester.pumpWidget(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppThemeProvider>.value(value: theme),
+        ChangeNotifierProvider<EconomyProvider>.value(value: economy),
+      ],
+      child: const MaterialApp(home: ChessAnalysisPage()),
+    ),
+  );
+
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 1400));
+
+  final playChess = find.text('PLAY CHESS');
+  expect(playChess, findsOneWidget);
+
+  await tester.tap(playChess);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 900));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -67,26 +114,52 @@ void main() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
   });
 
-  testWidgets(
-    'play chess cpu mode opens the bot selector directly',
-    (tester) async {
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('play chess uses showcase layout on compact iPhone landscape', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
 
-      await _pumpVsBotSelector(tester, size: const Size(390, 844));
+    await _pumpPlayChessMenu(tester, size: const Size(844, 390));
 
-      expect(
-        find.byKey(const ValueKey<String>('bot_setup_selector_panel')),
-        findsOneWidget,
-      );
-      expect(find.text('Open Bot Selector'), findsNothing);
-      expect(find.text('Retune Bot Match'), findsNothing);
-      expect(tester.takeException(), isNull);
+    expect(find.text('LANDSCAPE SHOWCASE'), findsOneWidget);
+    expect(find.text('MATCH SETUP'), findsOneWidget);
+    expect(find.text('1 PLAYER VS CPU'), findsOneWidget);
+    expect(find.text('1V1 SHARED SCREEN'), findsOneWidget);
+    expect(find.text('QUICK JOIN CODE'), findsOneWidget);
+    expect(
+      find.text(
+        'Select a match type to open its setup panel. Tap the same card again to close it.',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('play chess cpu mode opens the bot selector directly', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpVsBotSelector(tester, size: const Size(390, 844));
+
+    expect(
+      find.byKey(const ValueKey<String>('bot_setup_selector_panel')),
+      findsOneWidget,
+    );
+    expect(find.text('Open Bot Selector'), findsNothing);
+    expect(find.text('Retune Bot Match'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
 
   testWidgets(
     'vs bot selector keeps avatar square on compact iPhone portrait',
