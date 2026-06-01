@@ -5918,11 +5918,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _remoteFriendOperationInProgress = true;
     });
     try {
-      await _ensureRemoteFriendLocalUid();
       final avatarId = context
           .read<AvatarInventoryProvider>()
           .selectedAvatar
           ?.id;
+      await _ensureRemoteFriendLocalUid();
       final result = await RemoteFriendService.instance.createInvite(
         timeControl: _selectedRemoteFriendTimeControl,
         defaultPieceThemeIndex: _pieceThemeMode.index,
@@ -5963,18 +5963,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     final inviteCode = await _promptRemoteFriendInviteCode();
-    if (inviteCode == null) {
+    if (!mounted || inviteCode == null) {
       return;
     }
     setState(() {
       _remoteFriendOperationInProgress = true;
     });
     try {
-      await _ensureRemoteFriendLocalUid();
       final avatarId = context
           .read<AvatarInventoryProvider>()
           .selectedAvatar
           ?.id;
+      await _ensureRemoteFriendLocalUid();
       final result = await RemoteFriendService.instance.joinInvite(
         inviteCode,
         defaultPieceThemeIndex: _pieceThemeMode.index,
@@ -27534,7 +27534,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                     alpha: 0.62,
                                   ),
                                   fontSize: 12.2,
-                                  fontWeight: FontWeight.w750,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
@@ -27765,7 +27765,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           child: Text(
                             'Vault Complete! You own every rollable avatar.',
                             style: TextStyle(
-                              fontWeight: FontWeight.w750,
+                              fontWeight: FontWeight.w700,
                               fontSize: 12.2,
                             ),
                           ),
