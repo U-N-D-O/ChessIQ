@@ -56,7 +56,8 @@
         },
         "friend_matches": {
             ".indexOn": [
-                "expiresAtMs"
+                "expiresAtMs",
+                "inviteCode"
             ],
             "$matchId": {
                 ".read": "auth != null && root.child('friend_match_memberships/' + auth.uid + '/' + $matchId).exists()",

@@ -2665,6 +2665,75 @@ function buildFriendInviteRecord(match: FriendMatchRecord): FriendInviteRecord {
     };
 }
 
+async function findFriendInviteRecord(
+    inviteCode: string,
+): Promise<FriendInviteRecord | null> {
+    const inviteSnap = await db
+        .ref(`friend_match_invites/by_code/${inviteCode}`)
+        .once("value");
+    const indexedInvite = normalizeFriendInviteRecord(inviteSnap.val(), inviteCode);
+    if (indexedInvite?.matchId) {
+        return indexedInvite;
+    }
+
+    const matchingMatchesSnap = await db
+        .ref("friend_matches")
+        .orderByChild("inviteCode")
+        .equalTo(inviteCode)
+        .limitToFirst(8)
+        .once("value");
+    if (!matchingMatchesSnap.exists()) {
+        return null;
+    }
+
+    const candidates: FriendMatchRecord[] = [];
+    const rawMatches = matchingMatchesSnap.val();
+    if (!rawMatches || typeof rawMatches !== "object") {
+        return null;
+    }
+
+    for (const [matchId, rawValue] of Object.entries(
+        rawMatches as Record<string, unknown>,
+    )) {
+        try {
+            const match = normalizeFriendMatchRecord(rawValue, matchId);
+            if (match == null || match.inviteCode !== inviteCode) {
+                continue;
+            }
+            candidates.push(match);
+        } catch (_) {
+            continue;
+        }
+    }
+
+    if (candidates.length == 0) {
+        return null;
+    }
+
+    candidates.sort((left, right) => {
+        const leftOpen = left.status === "pending" || left.status === "active";
+        const rightOpen =
+            right.status === "pending" || right.status === "active";
+        if (leftOpen !== rightOpen) {
+            return leftOpen ? -1 : 1;
+        }
+        return right.updatedAtMs - left.updatedAtMs;
+    });
+
+    const fallbackMatch = candidates[0];
+    await db
+        .ref(`friend_match_invites/by_code/${inviteCode}`)
+        .set(buildFriendInviteRecord(fallbackMatch));
+    return buildFriendInviteRecord(fallbackMatch);
+}
+
+async function readFriendMatchTransactionSeed(
+    matchId: string,
+): Promise<unknown> {
+    const matchSnap = await db.ref(`friend_matches/${matchId}`).once("value");
+    return matchSnap.val();
+}
+
 function buildFriendMembershipRecord(match: FriendMatchRecord): FriendMembershipRecord {
     return {
         inviteCode: match.inviteCode,
@@ -3204,10 +3273,7 @@ async function joinFriendMatchInviteImpl(
         data?.defaultPieceThemeIndex,
         "defaultPieceThemeIndex",
     );
-    const inviteSnap = await db
-        .ref(`friend_match_invites/by_code/${inviteCode}`)
-        .once("value");
-    const inviteRecord = normalizeFriendInviteRecord(inviteSnap.val(), inviteCode);
+    const inviteRecord = await findFriendInviteRecord(inviteCode);
     if (inviteRecord == null || !inviteRecord.matchId) {
         throw new functions.https.HttpsError(
             "not-found",
@@ -3216,12 +3282,15 @@ async function joinFriendMatchInviteImpl(
     }
 
     const matchRef = db.ref(`friend_matches/${inviteRecord.matchId}`);
+    const preflightMatchValue = await readFriendMatchTransactionSeed(
+        inviteRecord.matchId,
+    );
     let blockedReason = "match-unavailable";
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
         const existingMatch = normalizeFriendMatchRecord(
-            currentValue,
+            currentValue ?? preflightMatchValue,
             inviteRecord.matchId,
         );
         if (existingMatch == null) {
@@ -3331,12 +3400,16 @@ async function submitFriendMatchMoveImpl(
     const moveUci = `${moveInput.from}${moveInput.to}${moveInput.promotion ?? ""}`;
 
     const matchRef = db.ref(`friend_matches/${matchId}`);
+    const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let blockedReason = "match-unavailable";
     let acceptedMove = false;
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
-        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        const existingMatch = normalizeFriendMatchRecord(
+            currentValue ?? preflightMatchValue,
+            matchId,
+        );
         if (existingMatch == null) {
             blockedReason = "match-unavailable";
             return;
@@ -3535,12 +3608,16 @@ async function actOnFriendMatchImpl(
     const matchId = readFriendMatchId(data?.matchId);
     const action = readFriendMatchAction(data?.action);
     const matchRef = db.ref(`friend_matches/${matchId}`);
+    const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let blockedReason = "match-unavailable";
     let actionApplied = false;
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
-        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        const existingMatch = normalizeFriendMatchRecord(
+            currentValue ?? preflightMatchValue,
+            matchId,
+        );
         if (existingMatch == null) {
             blockedReason = "match-unavailable";
             return;
@@ -3728,12 +3805,16 @@ async function selectFriendMatchPieceThemeImpl(
         "pieceThemeIndex",
     );
     const matchRef = db.ref(`friend_matches/${matchId}`);
+    const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let blockedReason = "match-unavailable";
     let selectionApplied = false;
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
-        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        const existingMatch = normalizeFriendMatchRecord(
+            currentValue ?? preflightMatchValue,
+            matchId,
+        );
         if (existingMatch == null) {
             blockedReason = "match-unavailable";
             return;
@@ -3814,12 +3895,16 @@ async function sendFriendMatchReactionImpl(
     const matchId = readFriendMatchId(data?.matchId);
     const emoji = readFriendReactionEmoji(data?.emoji);
     const matchRef = db.ref(`friend_matches/${matchId}`);
+    const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let blockedReason = "match-unavailable";
     let reactionApplied = false;
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
-        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        const existingMatch = normalizeFriendMatchRecord(
+            currentValue ?? preflightMatchValue,
+            matchId,
+        );
         if (existingMatch == null) {
             blockedReason = "match-unavailable";
             return;
@@ -3917,10 +4002,14 @@ async function refreshFriendMatchStateImpl(
     const uid = requireAuthUid(context);
     const matchId = readFriendMatchId(data?.matchId);
     const matchRef = db.ref(`friend_matches/${matchId}`);
+    const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
-        const existingMatch = normalizeFriendMatchRecord(currentValue, matchId);
+        const existingMatch = normalizeFriendMatchRecord(
+            currentValue ?? preflightMatchValue,
+            matchId,
+        );
         if (existingMatch == null) {
             return;
         }

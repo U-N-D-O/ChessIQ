@@ -163,6 +163,17 @@ class _VsBotDifficultyPalette {
   }
 }
 
+Color _vsBotBoostLightModeContrast(
+  Color color,
+  PuzzleAcademyPalette base, {
+  double amount = 0.18,
+}) {
+  if (base.monochrome || base.isDark) {
+    return color;
+  }
+  return Color.lerp(color, base.text, amount)!;
+}
+
 _VsBotArcadePalette _vsBotArcadePaletteFor(
   BuildContext context, {
   required bool monochrome,
@@ -171,19 +182,35 @@ _VsBotArcadePalette _vsBotArcadePaletteFor(
   final reducedEffects = puzzleAcademyShouldReduceEffects(context);
   final cyan = monochrome
       ? base.text.withValues(alpha: base.isDark ? 0.86 : 0.76)
-      : const Color(0xFF87E8FF);
+      : _vsBotBoostLightModeContrast(const Color(0xFF87E8FF), base);
   final amber = monochrome
       ? base.text.withValues(alpha: base.isDark ? 0.72 : 0.60)
-      : const Color(0xFFFFC857);
+      : _vsBotBoostLightModeContrast(
+          const Color(0xFFFFC857),
+          base,
+          amount: 0.14,
+        );
   final pink = monochrome
       ? base.text.withValues(alpha: base.isDark ? 0.80 : 0.68)
-      : const Color(0xFFFF8AB6);
+      : _vsBotBoostLightModeContrast(
+          const Color(0xFFFF8AB6),
+          base,
+          amount: 0.16,
+        );
   final crimson = monochrome
       ? base.text.withValues(alpha: base.isDark ? 0.76 : 0.64)
-      : const Color(0xFFFF6464);
+      : _vsBotBoostLightModeContrast(
+          const Color(0xFFFF6464),
+          base,
+          amount: 0.12,
+        );
   final victory = monochrome
       ? base.text.withValues(alpha: base.isDark ? 0.74 : 0.62)
-      : const Color(0xFF58E09A);
+      : _vsBotBoostLightModeContrast(
+          const Color(0xFF58E09A),
+          base,
+          amount: 0.14,
+        );
   final backdrop = Color.alphaBlend(
     crimson.withValues(alpha: monochrome ? 0.02 : 0.08),
     base.backdrop,
@@ -219,7 +246,9 @@ _VsBotArcadePalette _vsBotArcadePaletteFor(
     marquee: marquee,
     line: line,
     text: base.text,
-    textMuted: base.textMuted,
+    textMuted: monochrome || base.isDark
+        ? base.textMuted
+        : base.text.withValues(alpha: 0.78),
     cyan: cyan,
     amber: amber,
     pink: pink,
@@ -1333,7 +1362,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           final isTimedLocalFriendFinish = _isTimedLocalFriendFinish && !isDraw;
           final isTimedRemoteFriendFinish =
               _isTimedRemoteFriendFinish && !isDraw;
-            final resetLabel = _isLocalFriendMatchMode
+          final resetLabel = _isLocalFriendMatchMode
               ? 'Next Round'
               : 'Reset Board';
           final title = isDraw

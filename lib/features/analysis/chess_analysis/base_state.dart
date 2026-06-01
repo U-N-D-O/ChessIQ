@@ -5919,8 +5919,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
     try {
       await _ensureRemoteFriendLocalUid();
-      final avatarId =
-          context.read<AvatarInventoryProvider>().selectedAvatar?.id;
+      final avatarId = context
+          .read<AvatarInventoryProvider>()
+          .selectedAvatar
+          ?.id;
       final result = await RemoteFriendService.instance.createInvite(
         timeControl: _selectedRemoteFriendTimeControl,
         defaultPieceThemeIndex: _pieceThemeMode.index,
@@ -5969,8 +5971,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     });
     try {
       await _ensureRemoteFriendLocalUid();
-      final avatarId =
-          context.read<AvatarInventoryProvider>().selectedAvatar?.id;
+      final avatarId = context
+          .read<AvatarInventoryProvider>()
+          .selectedAvatar
+          ?.id;
       final result = await RemoteFriendService.instance.joinInvite(
         inviteCode,
         defaultPieceThemeIndex: _pieceThemeMode.index,
@@ -16734,6 +16738,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final scrollTopInset = collapsibleTopChrome
         ? ui.lerpDouble(76.0, 18.0, chromeCollapseT)!
         : 70.0;
+    final accentGlow = !arcade.monochrome && isDark;
+    final useLightModeContrastTweaks = !arcade.monochrome && !isDark;
 
     bool handleVsModeScroll(ScrollNotification notification) {
       if (!collapsibleTopChrome || notification.metrics.axis != Axis.vertical) {
@@ -17054,7 +17060,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               color: accent,
               size: 10.8,
               weight: FontWeight.w800,
-              glow: !arcade.monochrome,
+              glow: accentGlow,
               letterSpacing: 0.86,
               height: 1.0,
             ),
@@ -17825,7 +17831,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   size: 10.8,
                                   weight: FontWeight.w800,
                                   letterSpacing: 0.74,
-                                  glow: !arcade.monochrome,
+                                  glow: accentGlow,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -18163,6 +18169,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           color: arcade.text,
           size: heroHeadingSize,
         );
+        final leadingTone = arcade.text.withValues(
+          alpha: useLightModeContrastTweaks ? 0.96 : 0.86,
+        );
+        final centerTone = useLightModeContrastTweaks
+            ? (Color.lerp(arcade.text, heroAccent, 0.18) ?? arcade.text)
+                  .withValues(alpha: 0.96)
+            : Colors.white.withValues(alpha: 0.98);
+        final trailingTone = arcade.text.withValues(
+          alpha: useLightModeContrastTweaks ? 0.94 : 0.90,
+        );
         return SizedBox(
           width: double.infinity,
           child: FittedBox(
@@ -18174,11 +18190,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 return LinearGradient(
                   begin: const Alignment(-0.9, -0.2),
                   end: const Alignment(1.0, 0.2),
-                  colors: [
-                    arcade.text.withValues(alpha: 0.86),
-                    Colors.white.withValues(alpha: 0.98),
-                    arcade.text.withValues(alpha: 0.9),
-                  ],
+                  colors: [leadingTone, centerTone, trailingTone],
                   stops: const [0.08, 0.46, 0.9],
                 ).createShader(bounds);
               },
@@ -20466,14 +20478,46 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     Widget buildHeaderIdentity() {
+      final avatarInventory = context.watch<AvatarInventoryProvider>();
+      final localAvatar = avatarInventory.selectedAvatar;
+
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (!_isBotMatchMode && localAvatar != null) ...[
+            GestureDetector(
+              onTap: _showAvatarBoutiqueSheet,
+              child: Tooltip(
+                message: 'Open Avatar Boutique',
+                child: Container(
+                  margin: EdgeInsets.only(right: 10 * scale),
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: scheme.primary.withValues(alpha: 0.42),
+                      width: 1.8,
+                    ),
+                  ),
+                  child: AvatarPortrait(
+                    avatar: localAvatar,
+                    size: 38 * scale,
+                    radius: 999,
+                    borderColor: Colors.transparent,
+                    backgroundColor: Colors.transparent,
+                    showShadow: false,
+                  ),
+                ),
+              ),
+            ),
+          ],
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: _isBotMatchMode
+                    ? CrossAxisAlignment.center
+                    : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
@@ -20510,7 +20554,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 : _isRemoteFriendMatchMode
                                 ? 'REMOTE FRIEND'
                                 : 'Engine: Stockfish 18',
-                            textAlign: TextAlign.center,
+                            textAlign: _isBotMatchMode
+                                ? TextAlign.center
+                                : TextAlign.left,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -21744,6 +21790,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? recentReaction
         : null;
 
+    final avatarId = white ? snapshot.whiteAvatarId : snapshot.blackAvatarId;
+    final avatarEntry = avatarId != null
+        ? AvatarCatalog.entryFor(avatarId)
+        : null;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
@@ -21767,14 +21818,37 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: accent,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.6,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (avatarEntry != null) ...[
+                AvatarPortrait(
+                  avatar: avatarEntry,
+                  size: 22,
+                  radius: 6,
+                  borderColor: accent.withValues(alpha: 0.38),
+                  backgroundColor: Colors.transparent,
+                  showShadow: false,
+                ),
+                const SizedBox(width: 8),
+              ] else if (occupantUid != null) ...[
+                Icon(
+                  Icons.account_circle_outlined,
+                  size: 22,
+                  color: accent.withValues(alpha: 0.60),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
@@ -27373,6 +27447,338 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             },
           ),
       ],
+    );
+  }
+
+  Future<void> _showAvatarBoutiqueSheet() async {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: scheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      builder: (ctx) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final avatarInventory = sheetContext.watch<AvatarInventoryProvider>();
+          final selectedAvatar = avatarInventory.selectedAvatar;
+          final ownedAvatars = avatarInventory.ownedAvatars;
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (scrollContext, scrollController) {
+              return SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 38,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: scheme.onSurface.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              scheme.primary.withValues(
+                                alpha: isLight ? 0.08 : 0.14,
+                              ),
+                              scheme.surface,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            Icons.star_purple500_rounded,
+                            color: scheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Avatar Boutique',
+                                style: TextStyle(
+                                  color: scheme.onSurface,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Manage collections & unlock rare bespoke avatars',
+                                style: TextStyle(
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.62,
+                                  ),
+                                  fontSize: 12.2,
+                                  fontWeight: FontWeight.w750,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          style: IconButton.styleFrom(
+                            backgroundColor: scheme.outline.withValues(
+                              alpha: 0.10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Equipped Avatar',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          scheme.primary.withValues(
+                            alpha: isLight ? 0.04 : 0.08,
+                          ),
+                          scheme.surface,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: scheme.primary.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: selectedAvatar != null
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AvatarPortrait(
+                                  avatar: selectedAvatar,
+                                  size: 78,
+                                  radius: 18,
+                                  borderColor: scheme.primary.withValues(
+                                    alpha: 0.28,
+                                  ),
+                                  backgroundColor: Colors.transparent,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        selectedAvatar.name,
+                                        style: TextStyle(
+                                          color: scheme.onSurface,
+                                          fontSize: 14.8,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      _remoteFriendSurfaceChip(
+                                        label:
+                                            '${selectedAvatar.bucket.label} Avatar',
+                                        accent: _avatarRollBucketAccent(
+                                          selectedAvatar.bucket,
+                                          scheme,
+                                          useMonochrome: false,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Your selected avatar is shown publicly on leaderboards, private match lobbies, and live sync clock panels.',
+                                        style: TextStyle(
+                                          color: scheme.onSurface.withValues(
+                                            alpha: 0.64,
+                                          ),
+                                          fontSize: 11.2,
+                                          height: 1.34,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Center(
+                              child: Text(
+                                'No avatar equipped.',
+                                style: TextStyle(
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.54,
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Your Collection (${ownedAvatars.length})',
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 12.8,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          'Owned: ${((ownedAvatars.length / 74) * 100).round()}%',
+                          style: TextStyle(
+                            color: scheme.primary,
+                            fontSize: 11.8,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 86,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: ownedAvatars.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                        itemBuilder: (context, index) {
+                          final avatar = ownedAvatars[index];
+                          final isSelected = selectedAvatar?.id == avatar.id;
+                          return GestureDetector(
+                            onTap: () async {
+                              await avatarInventory.selectAvatar(avatar.id);
+                              setSheetState(() {});
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: 82,
+                              height: 82,
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? scheme.primary
+                                      : scheme.outline.withValues(alpha: 0.18),
+                                  width: isSelected ? 2.4 : 1.2,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.asset(
+                                  avatar.assetPath,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Unlock New Avatars',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildAvatarRollPreview(avatarInventory),
+                    const SizedBox(height: 12),
+                    if (avatarInventory.hasAvailablePaidRolls) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () async {
+                            await _purchaseAvatarRoll();
+                            setSheetState(() {});
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFD8B640),
+                            foregroundColor: const Color(0xFF0B0F16),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.account_box_outlined,
+                            size: 20,
+                          ),
+                          label: const Text(
+                            'Roll Random Avatar (200 Coins)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Color.alphaBlend(
+                            scheme.outline.withValues(
+                              alpha: isLight ? 0.05 : 0.10,
+                            ),
+                            scheme.surface,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Vault Complete! You own every rollable avatar.',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w750,
+                              fontSize: 12.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
