@@ -5385,72 +5385,113 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       context: context,
       builder: (dialogContext) {
         final theme = Theme.of(dialogContext);
-        return AlertDialog(
-          title: const Text('Scan Invite'),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
+        final dialogMedia = MediaQuery.of(dialogContext);
+        final compactDialog =
+            dialogMedia.size.width <= 420 || dialogMedia.size.height <= 640;
+
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: compactDialog ? 12 : 24,
+            vertical: compactDialog ? 12 : 24,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 360,
+              maxHeight: min(dialogMedia.size.height * 0.9, 620.0),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Scan Invite',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Close',
+                      ),
+                    ],
                   ),
-                  child: QrImageView(
-                    data: link.toString(),
-                    size: 220,
-                    backgroundColor: Colors.white,
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: Colors.black,
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: SizedBox(
+                        width: 220,
+                        height: 220,
+                        child: QrImageView(
+                          data: link.toString(),
+                          size: 220,
+                          backgroundColor: Colors.white,
+                          eyeStyle: const QrEyeStyle(
+                            eyeShape: QrEyeShape.square,
+                            color: Colors.black,
+                          ),
+                          dataModuleStyle: const QrDataModuleStyle(
+                            dataModuleShape: QrDataModuleShape.square,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
                     ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: Colors.black,
+                  ),
+                  const SizedBox(height: 16),
+                  SelectableText(
+                    code,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2.0,
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                SelectableText(
-                  code,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.0,
+                  const SizedBox(height: 10),
+                  Text(
+                    'Scan this on another phone to open ChessIQ and join the '
+                    'private 1v1 invite. If the app does not open automatically, '
+                    'enter code $code manually.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Scan this on another phone to open ChessIQ and join the '
-                  'private 1v1 invite. If the app does not open automatically, '
-                  'enter code $code manually.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 12),
-                SelectableText(
-                  link.toString(),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  SelectableText(
+                    link.toString(),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          unawaited(_copyRemoteFriendInviteLink(inviteCode: code));
+                        },
+                        child: const Text('Copy Link'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                unawaited(_copyRemoteFriendInviteLink(inviteCode: code));
-              },
-              child: const Text('Copy Link'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Done'),
-            ),
-          ],
         );
       },
     );
