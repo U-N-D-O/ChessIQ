@@ -51,6 +51,13 @@ Future<void> _pumpVsBotSelector(
   await tester.tap(playChess);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 900));
+
+  final vsCpuMode = find.text('1 PLAYER VS CPU').hitTestable();
+  expect(vsCpuMode, findsOneWidget);
+
+  await tester.tap(vsCpuMode);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 900));
 }
 
 void main() {
@@ -59,6 +66,27 @@ void main() {
   tearDown(() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
   });
+
+  testWidgets(
+    'play chess cpu mode opens the bot selector directly',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpVsBotSelector(tester, size: const Size(390, 844));
+
+      expect(
+        find.byKey(const ValueKey<String>('bot_setup_selector_panel')),
+        findsOneWidget,
+      );
+      expect(find.text('Open Bot Selector'), findsNothing);
+      expect(find.text('Retune Bot Match'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 
   testWidgets(
     'vs bot selector keeps avatar square on compact iPhone portrait',

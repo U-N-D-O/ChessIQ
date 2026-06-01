@@ -512,7 +512,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _secondExtraSuggestionLaunchDelay = Duration(
     milliseconds: 200,
   );
-  static const Duration _turnTagNudgeDuration = Duration(milliseconds: 620);
   static const Duration _creditsModernDwell = Duration(seconds: 45);
   static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
   static const Duration _creditsRetroDwell = Duration(seconds: 15);
@@ -536,7 +535,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   late AnimationController _buttonRippleController;
   late AnimationController _openingButtonFlashController;
   late AnimationController _storeCoinGainController;
-  late AnimationController _turnNudgeController;
   final Stopwatch _spectralMotionClock = Stopwatch()..start();
   bool _openingButtonFlashRed = false;
   Timer? _openingModeFeedbackTimer;
@@ -546,8 +544,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Offset? _storeCoinGainCenter;
   int _storeCoinGainAmount = 10;
   bool _buttonUnlocked = false;
-  bool _turnNudgeBotTagActive = false;
-  bool _turnNudgeRemoteTagActive = false;
   final AudioPlayer _introAudioPlayer = AudioPlayer();
   final AudioPlayer _menuAudioPlayer = AudioPlayer();
   final AudioPlayer _sfxAudioPlayer = AudioPlayer();
@@ -1200,17 +1196,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _turnNudgeController =
-        AnimationController(vsync: this, duration: _turnTagNudgeDuration)
-          ..addStatusListener((status) {
-            if (status != AnimationStatus.completed || !mounted) {
-              return;
-            }
-            setState(() {
-              _turnNudgeBotTagActive = false;
-              _turnNudgeRemoteTagActive = false;
-            });
-          });
     _menuMusicFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -5642,17 +5627,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final derivedPosition = _deriveBoardPositionFromFen(snapshot.fen);
     final moveHistory = _buildRemoteFriendMoveHistory(snapshot);
-    final latestRemoteMove = moveHistory.isEmpty ? null : moveHistory.last;
-    final latestRemoteMoveUci = latestRemoteMove?.uci;
-    final remoteOpponentMoveArrived =
-        previousSnapshot != null &&
-        previousSnapshot.matchId == snapshot.matchId &&
-        snapshot.nextPly > previousSnapshot.nextPly &&
-        playerSeat != null &&
-        latestRemoteMove != null &&
-        latestRemoteMoveUci != null &&
-        latestRemoteMoveUci.length >= 4 &&
-        latestRemoteMove.isWhite != (playerSeat == RemoteFriendSeat.white);
     final remoteOutcome = _remoteOutcomeToGameOutcome(snapshot.outcome?.code);
 
     _cancelGameResultReveal();
@@ -5713,17 +5687,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     } else {
       _gameOutcome = remoteOutcome;
       _gameDrawReason = _drawReasonFromRemoteOutcome(snapshot.outcome?.reason);
-    }
-
-    if (remoteOpponentMoveArrived) {
-      _showTransientGhostArrow(latestRemoteMoveUci, inSetState: true);
-      if (_isHumanTurnInRemoteFriendGame) {
-        _triggerTurnTagNudge(
-          botMode: false,
-          remoteMode: true,
-          inSetState: true,
-        );
-      }
     }
   }
 
@@ -5955,11 +5918,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _remoteFriendOperationInProgress = true;
     });
     try {
+      await _ensureRemoteFriendLocalUid();
       final avatarId = context
           .read<AvatarInventoryProvider>()
           .selectedAvatar
           ?.id;
-      await _ensureRemoteFriendLocalUid();
       final result = await RemoteFriendService.instance.createInvite(
         timeControl: _selectedRemoteFriendTimeControl,
         defaultPieceThemeIndex: _pieceThemeMode.index,
@@ -6000,18 +5963,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return;
     }
     final inviteCode = await _promptRemoteFriendInviteCode();
-    if (!mounted || inviteCode == null) {
+    if (inviteCode == null) {
       return;
     }
     setState(() {
       _remoteFriendOperationInProgress = true;
     });
     try {
+      await _ensureRemoteFriendLocalUid();
       final avatarId = context
           .read<AvatarInventoryProvider>()
           .selectedAvatar
           ?.id;
-      await _ensureRemoteFriendLocalUid();
       final result = await RemoteFriendService.instance.joinInvite(
         inviteCode,
         defaultPieceThemeIndex: _pieceThemeMode.index,
@@ -6428,85 +6391,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _checkHaptic() async {
     if (!_hapticsEnabled) return;
     await HapticFeedback.selectionClick();
-  }
-
-  void _showTransientGhostArrow(String uciMove, {bool inSetState = false}) {
-    if (uciMove.length < 4) {
-      return;
-    }
-
-    final id = _ghostArrowIdSeed++;
-    final ghost = _GhostArrow(id: id, line: EngineLine(uciMove, 0, 0, 1));
-
-    void addGhostArrow() {
-      _botGhostArrows.add(ghost);
-    }
-
-    if (inSetState) {
-      addGhostArrow();
-    } else {
-      setState(addGhostArrow);
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final idx = _botGhostArrows.indexWhere((arrow) => arrow.id == id);
-      if (idx == -1) return;
-      setState(() {
-        _botGhostArrows[idx].opacity = 0.0;
-      });
-    });
-
-    _botGhostArrowTimers[id] = Timer(const Duration(milliseconds: 3100), () {
-      if (!mounted) return;
-      _botGhostArrowTimers.remove(id);
-      setState(() {
-        _botGhostArrows.removeWhere((arrow) => arrow.id == id);
-      });
-    });
-  }
-
-  void _triggerTurnTagNudge({
-    required bool botMode,
-    required bool remoteMode,
-    bool inSetState = false,
-  }) {
-    if (!botMode && !remoteMode) {
-      return;
-    }
-
-    void activateNudge() {
-      _turnNudgeBotTagActive = botMode;
-      _turnNudgeRemoteTagActive = remoteMode;
-    }
-
-    if (inSetState) {
-      activateNudge();
-    } else if (mounted) {
-      setState(activateNudge);
-    } else {
-      activateNudge();
-    }
-
-    _turnNudgeController.forward(from: 0);
-    unawaited(_checkHaptic());
-  }
-
-  Widget _wrapTurnTagNudge({required Widget child, required bool active}) {
-    if (!active) {
-      return child;
-    }
-
-    return AnimatedBuilder(
-      animation: _turnNudgeController,
-      child: child,
-      builder: (context, child) {
-        final progress = _turnNudgeController.value;
-        final envelope = 1.0 - Curves.easeOut.transform(progress);
-        final dx = sin(progress * pi * 6) * 8.0 * envelope;
-        return Transform.translate(offset: Offset(dx, 0), child: child);
-      },
-    );
   }
 
   int get _maxDepthAllowed {
@@ -18371,7 +18255,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             borderRadius: BorderRadius.circular(15),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final expandedCard =
+                final SITNG expandedCard =
                     useSingleColumnHeroCards ||
                     constraints.maxWidth >= 260 ||
                     constraints.maxHeight >= 150;
@@ -20449,17 +20333,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return const SizedBox.shrink();
       }
 
-      return _wrapTurnTagNudge(
-        active: _turnNudgeBotTagActive,
-        child: PuzzleAcademyTag(
-          label: portraitStatusLabel,
-          accent: portraitStatusAccent,
-          compact: compact,
-          filled: _gameOutcome == null && _isHumanTurnInBotGame,
-          foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
-              ? portraitFilledTagForeground
-              : null,
-        ),
+      return PuzzleAcademyTag(
+        label: portraitStatusLabel,
+        accent: portraitStatusAccent,
+        compact: compact,
+        filled: _gameOutcome == null && _isHumanTurnInBotGame,
+        foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
+            ? portraitFilledTagForeground
+            : null,
       );
     }
 
@@ -20761,19 +20642,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _wrapTurnTagNudge(
-                active: _turnNudgeRemoteTagActive,
-                child: PuzzleAcademyTag(
-                  label: remoteStatusLabel,
-                  accent: remoteStatusAccent,
-                  compact: true,
-                  filled:
-                      _gameOutcome == null && _isHumanTurnInRemoteFriendGame,
-                  foregroundColor:
-                      _gameOutcome == null && _isHumanTurnInRemoteFriendGame
-                      ? portraitFilledTagForeground
-                      : null,
-                ),
+              PuzzleAcademyTag(
+                label: remoteStatusLabel,
+                accent: remoteStatusAccent,
+                compact: true,
+                filled: _gameOutcome == null && _isHumanTurnInRemoteFriendGame,
+                foregroundColor:
+                    _gameOutcome == null && _isHumanTurnInRemoteFriendGame
+                    ? portraitFilledTagForeground
+                    : null,
               ),
               const SizedBox(height: 4),
               Text(
@@ -23312,17 +23189,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         child: LayoutBuilder(
           builder: (context, inner) {
-            final statusTag = _wrapTurnTagNudge(
-              active: _turnNudgeBotTagActive,
-              child: PuzzleAcademyTag(
-                label: statusLabel,
-                accent: statusAccent,
-                compact: true,
-                filled: _gameOutcome == null && _isHumanTurnInBotGame,
-                foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
-                    ? filledTagForeground
-                    : null,
-              ),
+            final statusTag = PuzzleAcademyTag(
+              label: statusLabel,
+              accent: statusAccent,
+              compact: true,
+              filled: _gameOutcome == null && _isHumanTurnInBotGame,
+              foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
+                  ? filledTagForeground
+                  : null,
             );
 
             final deckContent = Column(
@@ -27660,7 +27534,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                     alpha: 0.62,
                                   ),
                                   fontSize: 12.2,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w750,
                                 ),
                               ),
                             ],
@@ -27891,7 +27765,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           child: Text(
                             'Vault Complete! You own every rollable avatar.',
                             style: TextStyle(
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w750,
                               fontSize: 12.2,
                             ),
                           ),
@@ -28598,88 +28472,84 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     StoreCampaignConfig campaign, {
     required VoidCallback onDismiss,
   }) {
-    return Builder(
-      builder: (context) {
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        final isDark = theme.brightness == Brightness.dark;
-        final subtitle = campaign.subtitle?.trim() ?? '';
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final subtitle = campaign.subtitle?.trim() ?? '';
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              const Color(0xFF5AAEE8).withValues(alpha: isDark ? 0.12 : 0.08),
-              scheme.surface,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          const Color(0xFF5AAEE8).withValues(alpha: isDark ? 0.12 : 0.08),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: const Color(0xFF5AAEE8).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
+            child: const Icon(
+              Icons.local_offer_outlined,
+              size: 16,
+              color: Color(0xFF5AAEE8),
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5AAEE8).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.local_offer_outlined,
-                  size: 16,
-                  color: Color(0xFF5AAEE8),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      campaign.title?.trim() ?? '',
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.70),
-                          fontSize: 11,
-                          height: 1.25,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              InkResponse(
-                onTap: onDismiss,
-                radius: 18,
-                child: Padding(
-                  padding: const EdgeInsets.all(2),
-                  child: Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                    color: scheme.onSurface.withValues(alpha: 0.56),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  campaign.title?.trim() ?? '',
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
                   ),
                 ),
-              ),
-            ],
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.70),
+                      fontSize: 11,
+                      height: 1.25,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
           ),
-        );
-      },
+          const SizedBox(width: 8),
+          InkResponse(
+            onTap: onDismiss,
+            radius: 18,
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: scheme.onSurface.withValues(alpha: 0.56),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -30064,34 +29934,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _storeSectionHeader(String title, String subtitle) {
-    return Builder(
-      builder: (context) {
-        final scheme = Theme.of(context).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(2, 4, 2, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.64),
-                  fontSize: 12,
-                ),
-              ),
-            ],
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 4, 2, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
+            ),
           ),
-        );
-      },
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.64),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -30100,67 +29966,58 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool lockedUntilTomorrow,
     required bool useMonochrome,
   }) {
-    return Builder(
-      builder: (context) {
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        final economy = context.read<EconomyProvider>();
-        final watchCountToday = economy.watchCountToday;
-        final currentCooldown = watchCountToday >= 3
-            ? remaining
-            : const [
-                Duration(minutes: 5),
-                Duration(minutes: 15),
-                Duration(minutes: 30),
-              ][watchCountToday.clamp(0, 2)];
-        final totalSeconds = currentCooldown.inSeconds;
-        final clampedRemainingSeconds = remaining.inSeconds.clamp(
-          0,
-          totalSeconds,
-        );
-        final progress =
-            1 - (clampedRemainingSeconds / totalSeconds.clamp(1, totalSeconds));
-        final accent = useMonochrome
-            ? scheme.onSurface.withValues(alpha: 0.78)
-            : const Color(0xFF5AAEE8);
-        final track = Color.alphaBlend(
-          accent.withValues(alpha: 0.18),
-          scheme.surface,
-        );
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final currentCooldown = context.read<EconomyProvider>().watchCountToday >= 3
+        ? remaining
+        : const [
+            Duration(minutes: 5),
+            Duration(minutes: 15),
+            Duration(minutes: 30),
+          ][context.read<EconomyProvider>().watchCountToday.clamp(0, 2)];
+    final totalSeconds = currentCooldown.inSeconds;
+    final clampedRemainingSeconds = remaining.inSeconds.clamp(0, totalSeconds);
+    final progress =
+        1 - (clampedRemainingSeconds / totalSeconds.clamp(1, totalSeconds));
+    final accent = useMonochrome
+        ? scheme.onSurface.withValues(alpha: 0.78)
+        : const Color(0xFF5AAEE8);
+    final track = Color.alphaBlend(
+      accent.withValues(alpha: 0.18),
+      scheme.surface,
+    );
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
           children: [
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.timer_outlined, size: 14, color: accent),
-                const SizedBox(width: 6),
-                Text(
-                  lockedUntilTomorrow
-                      ? 'Come back tomorrow'
-                      : 'Available in ${_storeRewardAdCountdownLabel(remaining)}',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.72),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                minHeight: 7,
-                backgroundColor: track,
-                valueColor: AlwaysStoppedAnimation<Color>(accent),
+            Icon(Icons.timer_outlined, size: 14, color: accent),
+            const SizedBox(width: 6),
+            Text(
+              lockedUntilTomorrow
+                  ? 'Come back tomorrow'
+                  : 'Available in ${_storeRewardAdCountdownLabel(remaining)}',
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.72),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
-        );
-      },
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            minHeight: 7,
+            backgroundColor: track,
+            valueColor: AlwaysStoppedAnimation<Color>(accent),
+          ),
+        ),
+      ],
     );
   }
 
@@ -30173,122 +30030,114 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Future<void> Function()? onPieceThemeUnlockTap,
     Future<void> Function(ArrowThemeMode mode)? onArrowThemeUnlockTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        final isDark = theme.brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
-              scheme.surface,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+          scheme.surface,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Theme Vault',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
             ),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 4),
+          Text(
+            'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · Arrows: ${_arrowThemeLabel(_arrowThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.64),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _storeThemeCategoryHeader('Board Themes'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: BoardThemeMode.values
+                .map(
+                  (mode) => _buildStoreBoardThemeCard(
+                    mode,
+                    setL,
+                    onLockedTap: onBoardThemeUnlockTap,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 14),
+          _storeThemeCategoryHeader('Piece Themes'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: PieceThemeMode.values
+                .map(
+                  (mode) => _buildStorePieceThemeCard(
+                    mode,
+                    setL,
+                    onLockedTap: onPieceThemeUnlockTap,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 14),
+          _storeThemeCategoryHeader('Arrow Themes'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: ArrowThemeMode.values
+                .map(
+                  (mode) => _buildStoreArrowThemeCard(
+                    mode,
+                    setL,
+                    onLockedTap: onArrowThemeUnlockTap == null
+                        ? null
+                        : () => onArrowThemeUnlockTap(mode),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 14),
+          _storeThemeCategoryHeader('UI Themes'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              Text(
-                'Theme Vault',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · Arrows: ${_arrowThemeLabel(_arrowThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.64),
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _storeThemeCategoryHeader('Board Themes'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: BoardThemeMode.values
-                    .map(
-                      (mode) => _buildStoreBoardThemeCard(
-                        mode,
-                        setL,
-                        onLockedTap: onBoardThemeUnlockTap,
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 14),
-              _storeThemeCategoryHeader('Piece Themes'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: PieceThemeMode.values
-                    .map(
-                      (mode) => _buildStorePieceThemeCard(
-                        mode,
-                        setL,
-                        onLockedTap: onPieceThemeUnlockTap,
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 14),
-              _storeThemeCategoryHeader('Arrow Themes'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: ArrowThemeMode.values
-                    .map(
-                      (mode) => _buildStoreArrowThemeCard(
-                        mode,
-                        setL,
-                        onLockedTap: onArrowThemeUnlockTap == null
-                            ? null
-                            : () => onArrowThemeUnlockTap(mode),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 14),
-              _storeThemeCategoryHeader('UI Themes'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _buildStoreUiThemeCard(AppThemeStyle.standard, setL),
-                  _buildStoreUiThemeCard(AppThemeStyle.monochrome, setL),
-                ],
-              ),
+              _buildStoreUiThemeCard(AppThemeStyle.standard, setL),
+              _buildStoreUiThemeCard(AppThemeStyle.monochrome, setL),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
   Widget _storeThemeCategoryHeader(String label) {
-    return Builder(
-      builder: (context) {
-        final scheme = Theme.of(context).colorScheme;
-        return Text(
-          label,
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.72),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        );
-      },
+    final scheme = Theme.of(context).colorScheme;
+    return Text(
+      label,
+      style: TextStyle(
+        color: scheme.onSurface.withValues(alpha: 0.72),
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 
@@ -30297,40 +30146,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Function setL, {
     Future<void> Function()? onLockedTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final unlocked = _isBoardThemeUnlocked(mode);
-        final selected = _boardThemeMode == mode;
-        return _storeThemeChoiceCard(
-          label: _boardThemeLabel(mode),
-          preview: _boardThemeSwatch(mode),
-          selected: selected,
-          locked: !unlocked,
-          actionLabel: selected
-              ? 'Selected'
-              : unlocked
-              ? 'Select'
-              : 'Unlock',
-          onTap: selected
-              ? null
-              : () async {
-                  if (!unlocked) {
-                    if (onLockedTap != null) {
-                      await onLockedTap();
-                    }
-                  } else {
-                    setState(() => _boardThemeMode = mode);
-                    _persistCurrentSettings();
-                    unawaited(
-                      context.read<AppThemeProvider>().setBoardThemeIndex(
-                        mode.index,
-                      ),
-                    );
-                  }
-                  setL(() {});
-                },
-        );
-      },
+    final unlocked = _isBoardThemeUnlocked(mode);
+    final selected = _boardThemeMode == mode;
+    return _storeThemeChoiceCard(
+      label: _boardThemeLabel(mode),
+      preview: _boardThemeSwatch(mode),
+      selected: selected,
+      locked: !unlocked,
+      actionLabel: selected
+          ? 'Selected'
+          : unlocked
+          ? 'Select'
+          : 'Unlock',
+      onTap: selected
+          ? null
+          : () async {
+              if (!unlocked) {
+                if (onLockedTap != null) {
+                  await onLockedTap();
+                }
+              } else {
+                setState(() => _boardThemeMode = mode);
+                _persistCurrentSettings();
+                unawaited(
+                  context.read<AppThemeProvider>().setBoardThemeIndex(
+                    mode.index,
+                  ),
+                );
+              }
+              setL(() {});
+            },
     );
   }
 
@@ -30339,40 +30184,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Function setL, {
     Future<void> Function()? onLockedTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final unlocked = _isPieceThemeUnlocked(mode);
-        final selected = _pieceThemeMode == mode;
-        return _storeThemeChoiceCard(
-          label: _pieceThemeLabel(mode),
-          preview: _pieceThemePreview(mode),
-          selected: selected,
-          locked: !unlocked,
-          actionLabel: selected
-              ? 'Selected'
-              : unlocked
-              ? 'Select'
-              : 'Unlock',
-          onTap: selected
-              ? null
-              : () async {
-                  if (!unlocked) {
-                    if (onLockedTap != null) {
-                      await onLockedTap();
-                    }
-                  } else {
-                    setState(() => _pieceThemeMode = mode);
-                    _persistCurrentSettings();
-                    unawaited(
-                      context.read<AppThemeProvider>().setPieceThemeIndex(
-                        mode.index,
-                      ),
-                    );
-                  }
-                  setL(() {});
-                },
-        );
-      },
+    final unlocked = _isPieceThemeUnlocked(mode);
+    final selected = _pieceThemeMode == mode;
+    return _storeThemeChoiceCard(
+      label: _pieceThemeLabel(mode),
+      preview: _pieceThemePreview(mode),
+      selected: selected,
+      locked: !unlocked,
+      actionLabel: selected
+          ? 'Selected'
+          : unlocked
+          ? 'Select'
+          : 'Unlock',
+      onTap: selected
+          ? null
+          : () async {
+              if (!unlocked) {
+                if (onLockedTap != null) {
+                  await onLockedTap();
+                }
+              } else {
+                setState(() => _pieceThemeMode = mode);
+                _persistCurrentSettings();
+                unawaited(
+                  context.read<AppThemeProvider>().setPieceThemeIndex(
+                    mode.index,
+                  ),
+                );
+              }
+              setL(() {});
+            },
     );
   }
 
@@ -30381,40 +30222,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Function setL, {
     Future<void> Function()? onLockedTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final unlocked = _isArrowThemeUnlocked(mode);
-        final selected = _arrowThemeMode == mode;
-        return _storeThemeChoiceCard(
-          label: _arrowThemeLabel(mode),
-          preview: _arrowThemePreview(mode),
-          selected: selected,
-          locked: !unlocked,
-          actionLabel: selected
-              ? 'Selected'
-              : unlocked
-              ? 'Select'
-              : 'Unlock',
-          onTap: selected
-              ? null
-              : () async {
-                  if (!unlocked) {
-                    if (onLockedTap != null) {
-                      await onLockedTap();
-                    }
-                  } else {
-                    setState(() => _arrowThemeMode = mode);
-                    _persistCurrentSettings();
-                    unawaited(
-                      context.read<AppThemeProvider>().setArrowThemeIndex(
-                        mode.index,
-                      ),
-                    );
-                  }
-                  setL(() {});
-                },
-        );
-      },
+    final unlocked = _isArrowThemeUnlocked(mode);
+    final selected = _arrowThemeMode == mode;
+    return _storeThemeChoiceCard(
+      label: _arrowThemeLabel(mode),
+      preview: _arrowThemePreview(mode),
+      selected: selected,
+      locked: !unlocked,
+      actionLabel: selected
+          ? 'Selected'
+          : unlocked
+          ? 'Select'
+          : 'Unlock',
+      onTap: selected
+          ? null
+          : () async {
+              if (!unlocked) {
+                if (onLockedTap != null) {
+                  await onLockedTap();
+                }
+              } else {
+                setState(() => _arrowThemeMode = mode);
+                _persistCurrentSettings();
+                unawaited(
+                  context.read<AppThemeProvider>().setArrowThemeIndex(
+                    mode.index,
+                  ),
+                );
+              }
+              setL(() {});
+            },
     );
   }
 
@@ -30479,89 +30316,83 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required String actionLabel,
     required Future<void> Function()? onTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        final isDark = theme.brightness == Brightness.dark;
-        final idleSurface = Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
-          scheme.surface,
-        );
-        final selectedSurface = Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.18 : 0.10),
-          scheme.surface,
-        );
-        final lockedAccent = const Color(0xFFD8B640);
-        final readyAccent = const Color(0xFF5AAEE8);
-        final selectedAccent = const Color(0xFF7EDC8A);
-        final actionAccent = selected
-            ? selectedAccent
-            : locked
-            ? lockedAccent
-            : readyAccent;
-        final actionForeground = actionAccent.computeLuminance() > 0.45
-            ? const Color(0xFF07131F)
-            : Colors.white;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final idleSurface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
+      scheme.surface,
+    );
+    final selectedSurface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.18 : 0.10),
+      scheme.surface,
+    );
+    final lockedAccent = const Color(0xFFD8B640);
+    final readyAccent = const Color(0xFF5AAEE8);
+    final selectedAccent = const Color(0xFF7EDC8A);
+    final actionAccent = selected
+        ? selectedAccent
+        : locked
+        ? lockedAccent
+        : readyAccent;
+    final actionForeground = actionAccent.computeLuminance() > 0.45
+        ? const Color(0xFF07131F)
+        : Colors.white;
 
-        return Container(
-          width: 154,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: selected ? selectedSurface : idleSurface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? scheme.primary.withValues(alpha: 0.72)
-                  : scheme.outline.withValues(alpha: 0.24),
+    return Container(
+      width: 154,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: selected ? selectedSurface : idleSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.72)
+              : scheme.outline.withValues(alpha: 0.24),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: 46, child: Center(child: preview)),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurface,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: 46, child: Center(child: preview)),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                selected
-                    ? 'Active now'
-                    : locked
-                    ? 'Locked in store'
-                    : 'Ready to equip',
-                style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.64),
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onTap == null ? null : () => onTap(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: actionAccent,
-                    foregroundColor: actionForeground,
-                    disabledBackgroundColor: scheme.outline.withValues(
-                      alpha: 0.18,
-                    ),
-                    disabledForegroundColor: scheme.onSurface.withValues(
-                      alpha: 0.38,
-                    ),
-                  ),
-                  child: Text(actionLabel),
-                ),
-              ),
-            ],
+          const SizedBox(height: 4),
+          Text(
+            selected
+                ? 'Active now'
+                : locked
+                ? 'Locked in store'
+                : 'Ready to equip',
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.64),
+              fontSize: 12,
+            ),
           ),
-        );
-      },
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onTap == null ? null : () => onTap(),
+              style: FilledButton.styleFrom(
+                backgroundColor: actionAccent,
+                foregroundColor: actionForeground,
+                disabledBackgroundColor: scheme.outline.withValues(alpha: 0.18),
+                disabledForegroundColor: scheme.onSurface.withValues(
+                  alpha: 0.38,
+                ),
+              ),
+              child: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -30571,40 +30402,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required Widget leading,
     VoidCallback? onTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final scheme = Theme.of(context).colorScheme;
+    final scheme = Theme.of(context).colorScheme;
 
-        return InkWell(
-          onTap: onTap,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.20)
+              : Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.05),
+                  scheme.surface,
+                ),
           borderRadius: BorderRadius.circular(999),
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: selected
-                  ? scheme.primary.withValues(alpha: 0.20)
-                  : Color.alphaBlend(
-                      scheme.primary.withValues(alpha: 0.05),
-                      scheme.surface,
-                    ),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: selected
-                    ? scheme.primary.withValues(alpha: 0.72)
-                    : scheme.outline.withValues(alpha: 0.24),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                leading,
-                const SizedBox(width: 7),
-                Text(label, style: TextStyle(color: scheme.onSurface)),
-              ],
-            ),
+          border: Border.all(
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.72)
+                : scheme.outline.withValues(alpha: 0.24),
           ),
-        );
-      },
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            leading,
+            const SizedBox(width: 7),
+            Text(label, style: TextStyle(color: scheme.onSurface)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -30621,155 +30448,148 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Widget? preview,
     VoidCallback? onTap,
   }) {
-    return Builder(
-      builder: (context) {
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        final isDark = theme.brightness == Brightness.dark;
-        final cardSurface = Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
-          scheme.surface,
-        );
-        final resolvedActionColor = actionColor ?? scheme.primary;
-        final actionForeground = resolvedActionColor.computeLuminance() > 0.45
-            ? const Color(0xFF07131F)
-            : Colors.white;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final cardSurface = Color.alphaBlend(
+      scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
+      scheme.surface,
+    );
+    final resolvedActionColor = actionColor ?? scheme.primary;
+    final actionForeground = resolvedActionColor.computeLuminance() > 0.45
+        ? const Color(0xFF07131F)
+        : Colors.white;
 
-        return Container(
-          key: itemKey,
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cardSurface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Color.alphaBlend(
-                    scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
-                    scheme.surface,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  icon,
-                  size: 18,
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                ),
+    return Container(
+      key: itemKey,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cardSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
+                scheme.surface,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: scheme.onSurface.withValues(alpha: 0.72),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurface,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurface,
                         ),
-                        if (badgeLabel != null && badgeLabel.trim().isNotEmpty)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF5AAEE8,
-                              ).withValues(alpha: isDark ? 0.18 : 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: const Color(
-                                  0xFF5AAEE8,
-                                ).withValues(alpha: 0.28),
-                              ),
-                            ),
-                            child: Text(
-                              badgeLabel.trim(),
-                              style: const TextStyle(
-                                color: Color(0xFF5AAEE8),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.64),
-                        fontSize: 12,
                       ),
                     ),
-                    if (preview != null) ...[
-                      const SizedBox(height: 8),
-                      preview,
-                    ],
+                    if (badgeLabel != null && badgeLabel.trim().isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFF5AAEE8,
+                          ).withValues(alpha: isDark ? 0.18 : 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: const Color(
+                              0xFF5AAEE8,
+                            ).withValues(alpha: 0.28),
+                          ),
+                        ),
+                        child: Text(
+                          badgeLabel.trim(),
+                          style: const TextStyle(
+                            color: Color(0xFF5AAEE8),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.64),
+                    fontSize: 12,
+                  ),
+                ),
+                if (preview != null) ...[const SizedBox(height: 8), preview],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                priceLabel,
+                style: TextStyle(
+                  color: isDark
+                      ? const Color(0xFFFFD166)
+                      : const Color(0xFF8A6700),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    priceLabel,
-                    style: TextStyle(
-                      color: isDark
-                          ? const Color(0xFFFFD166)
-                          : const Color(0xFF8A6700),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 30,
+                child: FilledButton(
+                  onPressed: enabled ? onTap : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: enabled
+                        ? resolvedActionColor
+                        : scheme.outline.withValues(alpha: 0.18),
+                    foregroundColor: enabled
+                        ? actionForeground
+                        : scheme.onSurface.withValues(alpha: 0.38),
+                    disabledBackgroundColor: scheme.outline.withValues(
+                      alpha: 0.18,
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    height: 30,
-                    child: FilledButton(
-                      onPressed: enabled ? onTap : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: enabled
-                            ? resolvedActionColor
-                            : scheme.outline.withValues(alpha: 0.18),
-                        foregroundColor: enabled
-                            ? actionForeground
-                            : scheme.onSurface.withValues(alpha: 0.38),
-                        disabledBackgroundColor: scheme.outline.withValues(
-                          alpha: 0.18,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                      ),
-                      child: Text(
-                        actionLabel,
-                        style: const TextStyle(fontSize: 12),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
-                ],
+                  child: Text(
+                    actionLabel,
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -31527,6 +31347,135 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       case BoardThemeMode.sakura:
         return 'Sakura';
       case BoardThemeMode.tropical:
+        return 'Tropical';
+    }
+  }
+
+  String _pieceThemeLabel(PieceThemeMode mode) {
+    switch (mode) {
+      case PieceThemeMode.classic:
+        return 'Classic';
+      case PieceThemeMode.ember:
+        return 'Ember';
+      case PieceThemeMode.frost:
+        return 'Frost';
+      case PieceThemeMode.tuttiFrutti:
+        return 'Tutti Frutti';
+      case PieceThemeMode.spectral:
+        return 'Spectral';
+      case PieceThemeMode.monochrome:
+        return 'Monochrome';
+    }
+  }
+
+  String _arrowThemeLabel(ArrowThemeMode mode) {
+    switch (mode) {
+      case ArrowThemeMode.classic:
+        return 'Classic';
+      case ArrowThemeMode.pixel:
+        return '8-Bit';
+      case ArrowThemeMode.heavy3d:
+        return '3D Mass';
+    }
+  }
+
+  Color _darkSquareColorForTheme() {
+    return AppThemeProvider.boardPaletteForIndex(
+      _boardThemeMode.index,
+    ).darkSquare;
+  }
+
+  Color _lightSquareColorForTheme() {
+    return AppThemeProvider.boardPaletteForIndex(
+      _boardThemeMode.index,
+    ).lightSquare;
+  }
+
+  @override
+  void dispose() {
+    _cancelGameResultReveal();
+    _cancelIdleInterstitialTimer();
+    _stopLocalFriendClock(clearDisplay: true);
+    _stopRemoteFriendSyncTimers();
+    _editModeHintTimer?.cancel();
+    _moveQualityOverlayTimer?.cancel();
+    _quizFeedbackOverlayTimer?.cancel();
+    _checkAlertTimer?.cancel();
+    _squareToastTimer?.cancel();
+    _cancelPendingMoveQualityGrading();
+    _cancelSacrificeScanSearches(reason: 'analysis disposed');
+    _clearBotGhostArrows();
+    unawaited(_engine?.stop());
+    unawaited(_sacrificeScanEngine?.stop());
+    _cancelIdleInterstitialTimer();
+    _pulseController.removeListener(_updateMenuSparks);
+    _pulseController.removeListener(_updateBotSetupBlueDotScrollOffset);
+    _pulseController.dispose();
+    _introController.dispose();
+    _menuRevealController.dispose();
+    _launchController.dispose();
+    _extraLaunchController.dispose();
+    _secondExtraLaunchController.dispose();
+    _buttonRippleController.dispose();
+    _menuMusicFadeController.dispose();
+    _sectionTransitionController.dispose();
+    _menuExitAnimationController.dispose();
+    _openingModeFeedbackTimer?.cancel();
+    _openingButtonFlashController.dispose();
+    _storeCoinGainController.dispose();
+    _botSetupPageController.dispose();
+    _historyScrollController.dispose();
+    _quizStudyLibraryScrollController.dispose();
+    _quizStudyLandscapeDetailScrollController.dispose();
+    _quizQuestionOptionsScrollController.dispose();
+    _introAudioPlayer.dispose();
+    _menuAudioPlayer.dispose();
+    _sfxAudioPlayer.dispose();
+    _cinematicThemeNotifier.dispose();
+    for (final player in _boardSfxPlayers) {
+      player.dispose();
+    }
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+}
+
+class _SuggestionButtonPalette {
+  const _SuggestionButtonPalette({
+    required this.useMonochrome,
+    required this.isDark,
+    required this.powerBackground,
+    required this.powerBorder,
+    required this.powerIcon,
+    required this.powerShadow,
+    required this.surfaceCore,
+    required this.surfaceBase,
+    required this.energyPrimary,
+    required this.energySecondary,
+    required this.activationGlow,
+    required this.boltColor,
+    required this.borderAccent,
+    required this.glyphShell,
+    required this.glyphBorder,
+  });
+
+  final bool useMonochrome;
+  final bool isDark;
+  final Color powerBackground;
+  final Color powerBorder;
+  final Color powerIcon;
+  final Color powerShadow;
+  final Color surfaceCore;
+  final Color surfaceBase;
+  final Color energyPrimary;
+  final Color energySecondary;
+  final Color activationGlow;
+  final Color boltColor;
+  final Color borderAccent;
+  final Color glyphShell;
+  final Color glyphBorder;
+}
+eMode.tropical:
         return 'Tropical';
     }
   }
