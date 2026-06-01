@@ -28598,84 +28598,88 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     StoreCampaignConfig campaign, {
     required VoidCallback onDismiss,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final subtitle = campaign.subtitle?.trim() ?? '';
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final subtitle = campaign.subtitle?.trim() ?? '';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          const Color(0xFF5AAEE8).withValues(alpha: isDark ? 0.12 : 0.08),
-          scheme.surface,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: const Color(0xFF5AAEE8).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              const Color(0xFF5AAEE8).withValues(alpha: isDark ? 0.12 : 0.08),
+              scheme.surface,
             ),
-            child: const Icon(
-              Icons.local_offer_outlined,
-              size: 16,
-              color: Color(0xFF5AAEE8),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFF5AAEE8).withValues(alpha: 0.22),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  campaign.title?.trim() ?? '',
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF5AAEE8).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.local_offer_outlined,
+                  size: 16,
+                  color: Color(0xFF5AAEE8),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      campaign.title?.trim() ?? '',
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: scheme.onSurface.withValues(alpha: 0.70),
+                          fontSize: 11,
+                          height: 1.25,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkResponse(
+                onTap: onDismiss,
+                radius: 18,
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: scheme.onSurface.withValues(alpha: 0.56),
                   ),
                 ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: scheme.onSurface.withValues(alpha: 0.70),
-                      fontSize: 11,
-                      height: 1.25,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkResponse(
-            onTap: onDismiss,
-            radius: 18,
-            child: Padding(
-              padding: const EdgeInsets.all(2),
-              child: Icon(
-                Icons.close_rounded,
-                size: 18,
-                color: scheme.onSurface.withValues(alpha: 0.56),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -30060,30 +30064,34 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _storeSectionHeader(String title, String subtitle) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 4, 2, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurface,
-            ),
+    return Builder(
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(2, 4, 2, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.64),
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.64),
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -30092,58 +30100,67 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required bool lockedUntilTomorrow,
     required bool useMonochrome,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final currentCooldown = context.read<EconomyProvider>().watchCountToday >= 3
-        ? remaining
-        : const [
-            Duration(minutes: 5),
-            Duration(minutes: 15),
-            Duration(minutes: 30),
-          ][context.read<EconomyProvider>().watchCountToday.clamp(0, 2)];
-    final totalSeconds = currentCooldown.inSeconds;
-    final clampedRemainingSeconds = remaining.inSeconds.clamp(0, totalSeconds);
-    final progress =
-        1 - (clampedRemainingSeconds / totalSeconds.clamp(1, totalSeconds));
-    final accent = useMonochrome
-        ? scheme.onSurface.withValues(alpha: 0.78)
-        : const Color(0xFF5AAEE8);
-    final track = Color.alphaBlend(
-      accent.withValues(alpha: 0.18),
-      scheme.surface,
-    );
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final economy = context.read<EconomyProvider>();
+        final watchCountToday = economy.watchCountToday;
+        final currentCooldown = watchCountToday >= 3
+            ? remaining
+            : const [
+                Duration(minutes: 5),
+                Duration(minutes: 15),
+                Duration(minutes: 30),
+              ][watchCountToday.clamp(0, 2)];
+        final totalSeconds = currentCooldown.inSeconds;
+        final clampedRemainingSeconds = remaining.inSeconds.clamp(
+          0,
+          totalSeconds,
+        );
+        final progress =
+            1 - (clampedRemainingSeconds / totalSeconds.clamp(1, totalSeconds));
+        final accent = useMonochrome
+            ? scheme.onSurface.withValues(alpha: 0.78)
+            : const Color(0xFF5AAEE8);
+        final track = Color.alphaBlend(
+          accent.withValues(alpha: 0.18),
+          scheme.surface,
+        );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.timer_outlined, size: 14, color: accent),
-            const SizedBox(width: 6),
-            Text(
-              lockedUntilTomorrow
-                  ? 'Come back tomorrow'
-                  : 'Available in ${_storeRewardAdCountdownLabel(remaining)}',
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.72),
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, size: 14, color: accent),
+                const SizedBox(width: 6),
+                Text(
+                  lockedUntilTomorrow
+                      ? 'Come back tomorrow'
+                      : 'Available in ${_storeRewardAdCountdownLabel(remaining)}',
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                minHeight: 7,
+                backgroundColor: track,
+                valueColor: AlwaysStoppedAnimation<Color>(accent),
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: progress.clamp(0.0, 1.0),
-            minHeight: 7,
-            backgroundColor: track,
-            valueColor: AlwaysStoppedAnimation<Color>(accent),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -30156,114 +30173,122 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Future<void> Function()? onPieceThemeUnlockTap,
     Future<void> Function(ArrowThemeMode mode)? onArrowThemeUnlockTap,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
-          scheme.surface,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Theme Vault',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurface,
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              scheme.primary.withValues(alpha: isDark ? 0.10 : 0.04),
+              scheme.surface,
             ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · Arrows: ${_arrowThemeLabel(_arrowThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.64),
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _storeThemeCategoryHeader('Board Themes'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: BoardThemeMode.values
-                .map(
-                  (mode) => _buildStoreBoardThemeCard(
-                    mode,
-                    setL,
-                    onLockedTap: onBoardThemeUnlockTap,
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 14),
-          _storeThemeCategoryHeader('Piece Themes'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: PieceThemeMode.values
-                .map(
-                  (mode) => _buildStorePieceThemeCard(
-                    mode,
-                    setL,
-                    onLockedTap: onPieceThemeUnlockTap,
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 14),
-          _storeThemeCategoryHeader('Arrow Themes'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: ArrowThemeMode.values
-                .map(
-                  (mode) => _buildStoreArrowThemeCard(
-                    mode,
-                    setL,
-                    onLockedTap: onArrowThemeUnlockTap == null
-                        ? null
-                        : () => onArrowThemeUnlockTap(mode),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 14),
-          _storeThemeCategoryHeader('UI Themes'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildStoreUiThemeCard(AppThemeStyle.standard, setL),
-              _buildStoreUiThemeCard(AppThemeStyle.monochrome, setL),
+              Text(
+                'Theme Vault',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Board: ${_boardThemeLabel(_boardThemeMode)} · Pieces: ${_pieceThemeLabel(_pieceThemeMode)} · Arrows: ${_arrowThemeLabel(_arrowThemeMode)} · UI: ${_isCinematicThemeEnabled ? 'Mono' : 'Neon'}',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.64),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _storeThemeCategoryHeader('Board Themes'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: BoardThemeMode.values
+                    .map(
+                      (mode) => _buildStoreBoardThemeCard(
+                        mode,
+                        setL,
+                        onLockedTap: onBoardThemeUnlockTap,
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 14),
+              _storeThemeCategoryHeader('Piece Themes'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: PieceThemeMode.values
+                    .map(
+                      (mode) => _buildStorePieceThemeCard(
+                        mode,
+                        setL,
+                        onLockedTap: onPieceThemeUnlockTap,
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 14),
+              _storeThemeCategoryHeader('Arrow Themes'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: ArrowThemeMode.values
+                    .map(
+                      (mode) => _buildStoreArrowThemeCard(
+                        mode,
+                        setL,
+                        onLockedTap: onArrowThemeUnlockTap == null
+                            ? null
+                            : () => onArrowThemeUnlockTap(mode),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 14),
+              _storeThemeCategoryHeader('UI Themes'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _buildStoreUiThemeCard(AppThemeStyle.standard, setL),
+                  _buildStoreUiThemeCard(AppThemeStyle.monochrome, setL),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _storeThemeCategoryHeader(String label) {
-    final scheme = Theme.of(context).colorScheme;
-    return Text(
-      label,
-      style: TextStyle(
-        color: scheme.onSurface.withValues(alpha: 0.72),
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-      ),
+    return Builder(
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        return Text(
+          label,
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.72),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+      },
     );
   }
 
@@ -30272,36 +30297,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Function setL, {
     Future<void> Function()? onLockedTap,
   }) {
-    final unlocked = _isBoardThemeUnlocked(mode);
-    final selected = _boardThemeMode == mode;
-    return _storeThemeChoiceCard(
-      label: _boardThemeLabel(mode),
-      preview: _boardThemeSwatch(mode),
-      selected: selected,
-      locked: !unlocked,
-      actionLabel: selected
-          ? 'Selected'
-          : unlocked
-          ? 'Select'
-          : 'Unlock',
-      onTap: selected
-          ? null
-          : () async {
-              if (!unlocked) {
-                if (onLockedTap != null) {
-                  await onLockedTap();
-                }
-              } else {
-                setState(() => _boardThemeMode = mode);
-                _persistCurrentSettings();
-                unawaited(
-                  context.read<AppThemeProvider>().setBoardThemeIndex(
-                    mode.index,
-                  ),
-                );
-              }
-              setL(() {});
-            },
+    return Builder(
+      builder: (context) {
+        final unlocked = _isBoardThemeUnlocked(mode);
+        final selected = _boardThemeMode == mode;
+        return _storeThemeChoiceCard(
+          label: _boardThemeLabel(mode),
+          preview: _boardThemeSwatch(mode),
+          selected: selected,
+          locked: !unlocked,
+          actionLabel: selected
+              ? 'Selected'
+              : unlocked
+              ? 'Select'
+              : 'Unlock',
+          onTap: selected
+              ? null
+              : () async {
+                  if (!unlocked) {
+                    if (onLockedTap != null) {
+                      await onLockedTap();
+                    }
+                  } else {
+                    setState(() => _boardThemeMode = mode);
+                    _persistCurrentSettings();
+                    unawaited(
+                      context.read<AppThemeProvider>().setBoardThemeIndex(
+                        mode.index,
+                      ),
+                    );
+                  }
+                  setL(() {});
+                },
+        );
+      },
     );
   }
 
@@ -30310,36 +30339,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Function setL, {
     Future<void> Function()? onLockedTap,
   }) {
-    final unlocked = _isPieceThemeUnlocked(mode);
-    final selected = _pieceThemeMode == mode;
-    return _storeThemeChoiceCard(
-      label: _pieceThemeLabel(mode),
-      preview: _pieceThemePreview(mode),
-      selected: selected,
-      locked: !unlocked,
-      actionLabel: selected
-          ? 'Selected'
-          : unlocked
-          ? 'Select'
-          : 'Unlock',
-      onTap: selected
-          ? null
-          : () async {
-              if (!unlocked) {
-                if (onLockedTap != null) {
-                  await onLockedTap();
-                }
-              } else {
-                setState(() => _pieceThemeMode = mode);
-                _persistCurrentSettings();
-                unawaited(
-                  context.read<AppThemeProvider>().setPieceThemeIndex(
-                    mode.index,
-                  ),
-                );
-              }
-              setL(() {});
-            },
+    return Builder(
+      builder: (context) {
+        final unlocked = _isPieceThemeUnlocked(mode);
+        final selected = _pieceThemeMode == mode;
+        return _storeThemeChoiceCard(
+          label: _pieceThemeLabel(mode),
+          preview: _pieceThemePreview(mode),
+          selected: selected,
+          locked: !unlocked,
+          actionLabel: selected
+              ? 'Selected'
+              : unlocked
+              ? 'Select'
+              : 'Unlock',
+          onTap: selected
+              ? null
+              : () async {
+                  if (!unlocked) {
+                    if (onLockedTap != null) {
+                      await onLockedTap();
+                    }
+                  } else {
+                    setState(() => _pieceThemeMode = mode);
+                    _persistCurrentSettings();
+                    unawaited(
+                      context.read<AppThemeProvider>().setPieceThemeIndex(
+                        mode.index,
+                      ),
+                    );
+                  }
+                  setL(() {});
+                },
+        );
+      },
     );
   }
 
@@ -30348,36 +30381,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Function setL, {
     Future<void> Function()? onLockedTap,
   }) {
-    final unlocked = _isArrowThemeUnlocked(mode);
-    final selected = _arrowThemeMode == mode;
-    return _storeThemeChoiceCard(
-      label: _arrowThemeLabel(mode),
-      preview: _arrowThemePreview(mode),
-      selected: selected,
-      locked: !unlocked,
-      actionLabel: selected
-          ? 'Selected'
-          : unlocked
-          ? 'Select'
-          : 'Unlock',
-      onTap: selected
-          ? null
-          : () async {
-              if (!unlocked) {
-                if (onLockedTap != null) {
-                  await onLockedTap();
-                }
-              } else {
-                setState(() => _arrowThemeMode = mode);
-                _persistCurrentSettings();
-                unawaited(
-                  context.read<AppThemeProvider>().setArrowThemeIndex(
-                    mode.index,
-                  ),
-                );
-              }
-              setL(() {});
-            },
+    return Builder(
+      builder: (context) {
+        final unlocked = _isArrowThemeUnlocked(mode);
+        final selected = _arrowThemeMode == mode;
+        return _storeThemeChoiceCard(
+          label: _arrowThemeLabel(mode),
+          preview: _arrowThemePreview(mode),
+          selected: selected,
+          locked: !unlocked,
+          actionLabel: selected
+              ? 'Selected'
+              : unlocked
+              ? 'Select'
+              : 'Unlock',
+          onTap: selected
+              ? null
+              : () async {
+                  if (!unlocked) {
+                    if (onLockedTap != null) {
+                      await onLockedTap();
+                    }
+                  } else {
+                    setState(() => _arrowThemeMode = mode);
+                    _persistCurrentSettings();
+                    unawaited(
+                      context.read<AppThemeProvider>().setArrowThemeIndex(
+                        mode.index,
+                      ),
+                    );
+                  }
+                  setL(() {});
+                },
+        );
+      },
     );
   }
 
@@ -30442,83 +30479,89 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required String actionLabel,
     required Future<void> Function()? onTap,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final idleSurface = Color.alphaBlend(
-      scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
-      scheme.surface,
-    );
-    final selectedSurface = Color.alphaBlend(
-      scheme.primary.withValues(alpha: isDark ? 0.18 : 0.10),
-      scheme.surface,
-    );
-    final lockedAccent = const Color(0xFFD8B640);
-    final readyAccent = const Color(0xFF5AAEE8);
-    final selectedAccent = const Color(0xFF7EDC8A);
-    final actionAccent = selected
-        ? selectedAccent
-        : locked
-        ? lockedAccent
-        : readyAccent;
-    final actionForeground = actionAccent.computeLuminance() > 0.45
-        ? const Color(0xFF07131F)
-        : Colors.white;
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final idleSurface = Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
+          scheme.surface,
+        );
+        final selectedSurface = Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.18 : 0.10),
+          scheme.surface,
+        );
+        final lockedAccent = const Color(0xFFD8B640);
+        final readyAccent = const Color(0xFF5AAEE8);
+        final selectedAccent = const Color(0xFF7EDC8A);
+        final actionAccent = selected
+            ? selectedAccent
+            : locked
+            ? lockedAccent
+            : readyAccent;
+        final actionForeground = actionAccent.computeLuminance() > 0.45
+            ? const Color(0xFF07131F)
+            : Colors.white;
 
-    return Container(
-      width: 154,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: selected ? selectedSurface : idleSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: selected
-              ? scheme.primary.withValues(alpha: 0.72)
-              : scheme.outline.withValues(alpha: 0.24),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(height: 46, child: Center(child: preview)),
-          const SizedBox(height: 10),
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurface,
+        return Container(
+          width: 154,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected ? selectedSurface : idleSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? scheme.primary.withValues(alpha: 0.72)
+                  : scheme.outline.withValues(alpha: 0.24),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            selected
-                ? 'Active now'
-                : locked
-                ? 'Locked in store'
-                : 'Ready to equip',
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.64),
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: onTap == null ? null : () => onTap(),
-              style: FilledButton.styleFrom(
-                backgroundColor: actionAccent,
-                foregroundColor: actionForeground,
-                disabledBackgroundColor: scheme.outline.withValues(alpha: 0.18),
-                disabledForegroundColor: scheme.onSurface.withValues(
-                  alpha: 0.38,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: 46, child: Center(child: preview)),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
                 ),
               ),
-              child: Text(actionLabel),
-            ),
+              const SizedBox(height: 4),
+              Text(
+                selected
+                    ? 'Active now'
+                    : locked
+                    ? 'Locked in store'
+                    : 'Ready to equip',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.64),
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: onTap == null ? null : () => onTap(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: actionAccent,
+                    foregroundColor: actionForeground,
+                    disabledBackgroundColor: scheme.outline.withValues(
+                      alpha: 0.18,
+                    ),
+                    disabledForegroundColor: scheme.onSurface.withValues(
+                      alpha: 0.38,
+                    ),
+                  ),
+                  child: Text(actionLabel),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -30528,36 +30571,40 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required Widget leading,
     VoidCallback? onTap,
   }) {
-    final scheme = Theme.of(context).colorScheme;
+    return Builder(
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Ink(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary.withValues(alpha: 0.20)
-              : Color.alphaBlend(
-                  scheme.primary.withValues(alpha: 0.05),
-                  scheme.surface,
-                ),
+        return InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected
-                ? scheme.primary.withValues(alpha: 0.72)
-                : scheme.outline.withValues(alpha: 0.24),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: selected
+                  ? scheme.primary.withValues(alpha: 0.20)
+                  : Color.alphaBlend(
+                      scheme.primary.withValues(alpha: 0.05),
+                      scheme.surface,
+                    ),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected
+                    ? scheme.primary.withValues(alpha: 0.72)
+                    : scheme.outline.withValues(alpha: 0.24),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                leading,
+                const SizedBox(width: 7),
+                Text(label, style: TextStyle(color: scheme.onSurface)),
+              ],
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            leading,
-            const SizedBox(width: 7),
-            Text(label, style: TextStyle(color: scheme.onSurface)),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -30574,148 +30621,155 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Widget? preview,
     VoidCallback? onTap,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final cardSurface = Color.alphaBlend(
-      scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
-      scheme.surface,
-    );
-    final resolvedActionColor = actionColor ?? scheme.primary;
-    final actionForeground = resolvedActionColor.computeLuminance() > 0.45
-        ? const Color(0xFF07131F)
-        : Colors.white;
+    return Builder(
+      builder: (context) {
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final cardSurface = Color.alphaBlend(
+          scheme.primary.withValues(alpha: isDark ? 0.08 : 0.03),
+          scheme.surface,
+        );
+        final resolvedActionColor = actionColor ?? scheme.primary;
+        final actionForeground = resolvedActionColor.computeLuminance() > 0.45
+            ? const Color(0xFF07131F)
+            : Colors.white;
 
-    return Container(
-      key: itemKey,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
-                scheme.surface,
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: scheme.onSurface.withValues(alpha: 0.72),
-            ),
+        return Container(
+          key: itemKey,
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: cardSurface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: scheme.outline.withValues(alpha: 0.24)),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    scheme.primary.withValues(alpha: isDark ? 0.10 : 0.05),
+                    scheme.surface,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: scheme.onSurface,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: scheme.onSurface,
+                            ),
+                          ),
                         ),
+                        if (badgeLabel != null && badgeLabel.trim().isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFF5AAEE8,
+                              ).withValues(alpha: isDark ? 0.18 : 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFF5AAEE8,
+                                ).withValues(alpha: 0.28),
+                              ),
+                            ),
+                            child: Text(
+                              badgeLabel.trim(),
+                              style: const TextStyle(
+                                color: Color(0xFF5AAEE8),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.64),
+                        fontSize: 12,
                       ),
                     ),
-                    if (badgeLabel != null && badgeLabel.trim().isNotEmpty)
-                      Container(
-                        margin: const EdgeInsets.only(left: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF5AAEE8,
-                          ).withValues(alpha: isDark ? 0.18 : 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: const Color(
-                              0xFF5AAEE8,
-                            ).withValues(alpha: 0.28),
-                          ),
-                        ),
-                        child: Text(
-                          badgeLabel.trim(),
-                          style: const TextStyle(
-                            color: Color(0xFF5AAEE8),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ),
+                    if (preview != null) ...[
+                      const SizedBox(height: 8),
+                      preview,
+                    ],
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.64),
-                    fontSize: 12,
-                  ),
-                ),
-                if (preview != null) ...[const SizedBox(height: 8), preview],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                priceLabel,
-                style: TextStyle(
-                  color: isDark
-                      ? const Color(0xFFFFD166)
-                      : const Color(0xFF8A6700),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
               ),
-              const SizedBox(height: 6),
-              SizedBox(
-                height: 30,
-                child: FilledButton(
-                  onPressed: enabled ? onTap : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: enabled
-                        ? resolvedActionColor
-                        : scheme.outline.withValues(alpha: 0.18),
-                    foregroundColor: enabled
-                        ? actionForeground
-                        : scheme.onSurface.withValues(alpha: 0.38),
-                    disabledBackgroundColor: scheme.outline.withValues(
-                      alpha: 0.18,
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    priceLabel,
+                    style: TextStyle(
+                      color: isDark
+                          ? const Color(0xFFFFD166)
+                          : const Color(0xFF8A6700),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 30,
+                    child: FilledButton(
+                      onPressed: enabled ? onTap : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: enabled
+                            ? resolvedActionColor
+                            : scheme.outline.withValues(alpha: 0.18),
+                        foregroundColor: enabled
+                            ? actionForeground
+                            : scheme.onSurface.withValues(alpha: 0.38),
+                        disabledBackgroundColor: scheme.outline.withValues(
+                          alpha: 0.18,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      child: Text(
+                        actionLabel,
+                        style: const TextStyle(fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
-                  child: Text(
-                    actionLabel,
-                    style: const TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
