@@ -1277,6 +1277,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       }
     }
   }
+
   @override
   void _clearBotGhostArrows() {
     for (final timer in _botGhostArrowTimers.values) {

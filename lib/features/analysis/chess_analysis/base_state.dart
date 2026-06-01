@@ -1200,18 +1200,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _turnNudgeController = AnimationController(
-      vsync: this,
-      duration: _turnTagNudgeDuration,
-    )..addStatusListener((status) {
-        if (status != AnimationStatus.completed || !mounted) {
-          return;
-        }
-        setState(() {
-          _turnNudgeBotTagActive = false;
-          _turnNudgeRemoteTagActive = false;
-        });
-      });
+    _turnNudgeController =
+        AnimationController(vsync: this, duration: _turnTagNudgeDuration)
+          ..addStatusListener((status) {
+            if (status != AnimationStatus.completed || !mounted) {
+              return;
+            }
+            setState(() {
+              _turnNudgeBotTagActive = false;
+              _turnNudgeRemoteTagActive = false;
+            });
+          });
     _menuMusicFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -5651,8 +5650,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         snapshot.nextPly > previousSnapshot.nextPly &&
         playerSeat != null &&
         latestRemoteMove != null &&
-      latestRemoteMoveUci != null &&
-      latestRemoteMoveUci.length >= 4 &&
+        latestRemoteMoveUci != null &&
+        latestRemoteMoveUci.length >= 4 &&
         latestRemoteMove.isWhite != (playerSeat == RemoteFriendSeat.white);
     final remoteOutcome = _remoteOutcomeToGameOutcome(snapshot.outcome?.code);
 
