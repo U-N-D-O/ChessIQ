@@ -14,8 +14,11 @@ class RemoteFriendInviteLinkService {
   static final RemoteFriendInviteLinkService instance =
       RemoteFriendInviteLinkService._();
 
-  static const String scheme = 'chessiq';
-  static const String host = 'invite';
+  static const String appScheme = 'chessiq';
+  static const String appHost = 'invite';
+  static const String hostedScheme = 'https';
+  static const String hostedHost = 'modus.qila.gl';
+  static const List<String> hostedPathSegments = <String>['ChessIQ', 'invite'];
   static const String inviteCodeParameter = 'code';
   static final RegExp _inviteCodePattern = RegExp(r'^[A-Z0-9]{6}$');
 
@@ -46,8 +49,26 @@ class RemoteFriendInviteLinkService {
     }
 
     return Uri(
-      scheme: scheme,
-      host: host,
+      scheme: hostedScheme,
+      host: hostedHost,
+      pathSegments: hostedPathSegments,
+      queryParameters: <String, String>{inviteCodeParameter: normalized},
+    );
+  }
+
+  Uri buildAppInviteUri(String inviteCode) {
+    final normalized = normalizeInviteCode(inviteCode);
+    if (normalized == null) {
+      throw ArgumentError.value(
+        inviteCode,
+        'inviteCode',
+        'Remote friend invites require a 6-character code.',
+      );
+    }
+
+    return Uri(
+      scheme: appScheme,
+      host: appHost,
       queryParameters: <String, String>{inviteCodeParameter: normalized},
     );
   }
@@ -97,10 +118,37 @@ class RemoteFriendInviteLinkService {
     if (uri == null) {
       return null;
     }
-    if (uri.scheme.toLowerCase() != scheme || uri.host.toLowerCase() != host) {
+    final normalizedScheme = uri.scheme.toLowerCase();
+    final normalizedHost = uri.host.toLowerCase();
+    final normalizedPathSegments = uri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .map((segment) => segment.toLowerCase())
+        .toList(growable: false);
+
+    final matchesCustomScheme =
+        normalizedScheme == appScheme && normalizedHost == appHost;
+    final matchesHostedInvite =
+        normalizedScheme == hostedScheme &&
+        normalizedHost == hostedHost &&
+        normalizedPathSegments.length == hostedPathSegments.length &&
+        _pathSegmentsMatch(normalizedPathSegments, hostedPathSegments);
+
+    if (!matchesCustomScheme && !matchesHostedInvite) {
       return null;
     }
     return normalizeInviteCode(uri.queryParameters[inviteCodeParameter]);
+  }
+
+  bool _pathSegmentsMatch(List<String> left, List<String> right) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (int index = 0; index < left.length; index += 1) {
+      if (left[index].toLowerCase() != right[index].toLowerCase()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _queueInviteCode(String? inviteCode) {

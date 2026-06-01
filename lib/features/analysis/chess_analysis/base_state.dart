@@ -116,6 +116,22 @@ class _RemoteFriendReactionOption {
   final bool requiresPaidRoll;
 }
 
+class _RemoteFriendActionSheetOption<T> {
+  const _RemoteFriendActionSheetOption({
+    required this.value,
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.accent,
+  });
+
+  final T value;
+  final String label;
+  final String description;
+  final IconData icon;
+  final Color accent;
+}
+
 const List<_RemoteFriendReactionOption> _remoteFriendStandardReactionOptions =
     <_RemoteFriendReactionOption>[
       _RemoteFriendReactionOption(emoji: '👍', label: 'Nice move'),
@@ -162,6 +178,10 @@ const List<_RemoteFriendReactionOption> _remoteFriendStrangeReactionOptions =
     ];
 
 enum _VsModeQuickOption { crossDevice, sharedScreen, vsCpu, quickJoin }
+
+enum _RemoteFriendInviteToolsAction { copyCode, copyLink, shareInvite, showQr }
+
+enum _RemoteFriendNavigationAction { mainMenu, playChess, analysis }
 
 class _CheckedKingState {
   const _CheckedKingState({
@@ -859,6 +879,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   AppSection _activeSection = AppSection.menu;
   GambitQuizMode _quizMode = GambitQuizMode.guessName;
+  bool _starterAvatarWelcomeQueued = false;
   bool _menuReady = false;
   bool _muteSounds = false;
   bool _hapticsEnabled = true;
@@ -5336,7 +5357,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     ChessIqTransientMessage.show(
       context,
       title: 'Invite link copied',
-      message: '$code opens directly in ChessIQ.',
+      message: '$code opens the ChessIQ invite page, then the app.',
       icon: Icons.link_rounded,
     );
   }
@@ -5355,8 +5376,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : renderBox.localToGlobal(Offset.zero) & renderBox.size;
       await Share.share(
         'Join my private ChessIQ match:\n$link\n\n'
-        'If ChessIQ does not open automatically, open VS Mode, choose '
-        'Friend on Another Phone, then enter invite code $code.',
+        'If the invite page opens first, tap Open in ChessIQ. If the app '
+        'still does not open automatically, use invite code $code in VS Mode '
+        'on the other phone.',
         subject: 'ChessIQ private match invite',
         sharePositionOrigin: shareOrigin,
       );
@@ -5458,9 +5480,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Scan this on another phone to open ChessIQ and join the '
-                    'private 1v1 invite. If the app does not open automatically, '
-                    'enter code $code manually.',
+                    'Scan this on another phone to open the ChessIQ invite '
+                    'page and hand off into the app. If the page stays open, '
+                    'tap Open in ChessIQ there or enter code $code manually.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium,
                   ),
@@ -5477,7 +5499,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       TextButton(
                         onPressed: () {
                           Navigator.of(dialogContext).pop();
-                          unawaited(_copyRemoteFriendInviteLink(inviteCode: code));
+                          unawaited(
+                            _copyRemoteFriendInviteLink(inviteCode: code),
+                          );
                         },
                         child: const Text('Copy Link'),
                       ),
@@ -5497,18 +5521,350 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  void _subscribeToRemoteFriendInviteLinks() {
-    final linkService = RemoteFriendInviteLinkService.instance;
-    _remoteFriendInviteLinkSubscription = linkService.inviteCodes.listen(
-      (inviteCode) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) {
-            return;
-          }
-          _queueIncomingRemoteFriendInviteCode(inviteCode);
-        });
+  Future<void> _showRemoteFriendInviteToolsMenu() async {
+    if (!mounted) {
+      return;
+    }
+
+    final scheme = Theme.of(context).colorScheme;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final inviteAccent = _remoteFriendLocalAccent(
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final qrAccent = _remoteFriendOpponentAccent(
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final linkAccent = useMonochrome ? scheme.onSurface : scheme.primary;
+
+    final action =
+        await _showRemoteFriendActionSheet<_RemoteFriendInviteToolsAction>(
+          title: 'Invite Tools',
+          subtitle:
+              'Keep the private invite tight: copy the code, send the hosted '
+              'link, or pop the QR for the other phone.',
+          accent: inviteAccent,
+          options:
+              <_RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>>[
+                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+                  value: _RemoteFriendInviteToolsAction.copyCode,
+                  label: 'Copy Code',
+                  description: 'Grab the six-character code for manual join.',
+                  icon: Icons.key_rounded,
+                  accent: inviteAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+                  value: _RemoteFriendInviteToolsAction.copyLink,
+                  label: 'Copy Link',
+                  description: 'Copy the HTTPS invite page URL directly.',
+                  icon: Icons.link_rounded,
+                  accent: linkAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+                  value: _RemoteFriendInviteToolsAction.shareInvite,
+                  label: 'Share Invite',
+                  description:
+                      'Open the share sheet with the invite page and code.',
+                  icon: Icons.share_rounded,
+                  accent: inviteAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+                  value: _RemoteFriendInviteToolsAction.showQr,
+                  label: 'Show QR',
+                  description:
+                      'Display a scannable HTTPS QR for the other phone.',
+                  icon: Icons.qr_code_2_rounded,
+                  accent: qrAccent,
+                ),
+              ],
+        );
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _RemoteFriendInviteToolsAction.copyCode:
+        await _copyRemoteFriendInviteCode();
+      case _RemoteFriendInviteToolsAction.copyLink:
+        await _copyRemoteFriendInviteLink();
+      case _RemoteFriendInviteToolsAction.shareInvite:
+        await _shareRemoteFriendInviteCode();
+      case _RemoteFriendInviteToolsAction.showQr:
+        await _showRemoteFriendInviteQrCode();
+    }
+  }
+
+  Future<void> _showRemoteFriendActionMenu() async {
+    if (!mounted) {
+      return;
+    }
+
+    final scheme = Theme.of(context).colorScheme;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final playAccent = _remoteFriendLocalAccent(
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final analysisAccent = _remoteFriendOpponentAccent(
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final menuAccent = useMonochrome ? scheme.onSurface : scheme.primary;
+
+    final destination =
+        await _showRemoteFriendActionSheet<_RemoteFriendNavigationAction>(
+          title: 'Where To Next?',
+          subtitle:
+              'Exit the live invite panel and jump straight to another ChessIQ '
+              'surface.',
+          accent: menuAccent,
+          options:
+              <_RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>>[
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.mainMenu,
+                  label: 'Main Menu',
+                  description: 'Return to the ChessIQ landing screen.',
+                  icon: Icons.home_rounded,
+                  accent: menuAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.playChess,
+                  label: 'Play Chess',
+                  description:
+                      'Go back to the versus hub and pick another mode.',
+                  icon: Icons.sports_esports_rounded,
+                  accent: playAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.analysis,
+                  label: 'Analysis',
+                  description: 'Keep the board and continue in analysis mode.',
+                  icon: Icons.insights_rounded,
+                  accent: analysisAccent,
+                ),
+              ],
+        );
+    if (!mounted || destination == null) {
+      return;
+    }
+
+    switch (destination) {
+      case _RemoteFriendNavigationAction.mainMenu:
+        _goToMenu();
+      case _RemoteFriendNavigationAction.playChess:
+        _openVsModeFromMenu();
+      case _RemoteFriendNavigationAction.analysis:
+        _openAnalysisFromRemoteFriendMenu();
+    }
+  }
+
+  Future<T?> _showRemoteFriendActionSheet<T>({
+    required String title,
+    required String subtitle,
+    required Color accent,
+    required List<_RemoteFriendActionSheetOption<T>> options,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+
+    return showModalBottomSheet<T>(
+      context: context,
+      backgroundColor: scheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final sheetTheme = Theme.of(sheetContext);
+        final sheetScheme = sheetTheme.colorScheme;
+        final sheetIsLight = sheetTheme.brightness == Brightness.light;
+        final headerAccent = useMonochrome ? sheetScheme.onSurface : accent;
+
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: sheetScheme.outline.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      headerAccent.withValues(
+                        alpha: sheetIsLight ? 0.08 : 0.14,
+                      ),
+                      sheetScheme.surface,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: headerAccent.withValues(
+                        alpha: sheetIsLight ? 0.20 : 0.30,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: sheetScheme.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: sheetScheme.onSurface.withValues(alpha: 0.72),
+                          fontSize: 12.4,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (int index = 0; index < options.length; index += 1) ...[
+                  Builder(
+                    builder: (itemContext) {
+                      final option = options[index];
+                      final itemAccent = useMonochrome
+                          ? sheetScheme.onSurface
+                          : option.accent;
+
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () =>
+                              Navigator.of(itemContext).pop(option.value),
+                          borderRadius: BorderRadius.circular(18),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: Color.alphaBlend(
+                                itemAccent.withValues(
+                                  alpha: sheetIsLight ? 0.06 : 0.12,
+                                ),
+                                sheetScheme.surface,
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: itemAccent.withValues(
+                                  alpha: sheetIsLight ? 0.18 : 0.28,
+                                ),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: itemAccent.withValues(
+                                        alpha: sheetIsLight ? 0.12 : 0.18,
+                                      ),
+                                      border: Border.all(
+                                        color: itemAccent.withValues(
+                                          alpha: 0.36,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      option.icon,
+                                      color: itemAccent,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          option.label,
+                                          style: TextStyle(
+                                            color: sheetScheme.onSurface,
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          option.description,
+                                          style: TextStyle(
+                                            color: sheetScheme.onSurface
+                                                .withValues(alpha: 0.68),
+                                            fontSize: 12,
+                                            height: 1.3,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: itemAccent.withValues(alpha: 0.90),
+                                    size: 24,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  if (index < options.length - 1) const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          ),
+        );
       },
     );
+  }
+
+  void _subscribeToRemoteFriendInviteLinks() {
+    final linkService = RemoteFriendInviteLinkService.instance;
+    _remoteFriendInviteLinkSubscription = linkService.inviteCodes.listen((
+      inviteCode,
+    ) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _queueIncomingRemoteFriendInviteCode(inviteCode);
+      });
+    });
 
     final pendingInviteCode = linkService.takePendingInviteCode();
     if (pendingInviteCode == null) {
@@ -13364,6 +13720,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     unawaited(_loadRemoteFriendMemberships(silent: true));
   }
 
+  void _openAnalysisFromRemoteFriendMenu() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _prepareAnalysisMatchEntry(MatchMode.analysis);
+    });
+
+    unawaited(_ensureEngineStarted());
+    _analyze();
+  }
+
   void _openBotSetupFromMenu();
 
   Future<void> _enterAnalysisBoard() async {
@@ -16587,6 +16956,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final starterWelcomeAvatar = context
+        .select<AvatarInventoryProvider, AvatarCatalogEntry?>(
+          (inventory) => inventory.starterAvatar,
+        );
+    final shouldShowStarterAvatarWelcome = context
+        .select<AvatarInventoryProvider, bool>(
+          (inventory) => inventory.loaded && inventory.bootstrappedStarter,
+        );
+    if (shouldShowStarterAvatarWelcome && starterWelcomeAvatar != null) {
+      _queueStarterAvatarWelcomeDialog(starterWelcomeAvatar);
+    }
     final isLandscape = media.orientation == Orientation.landscape;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -19010,6 +19390,90 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         );
       }
 
+      Widget buildModePanelReveal({
+        required Widget? child,
+        required Color accent,
+        required Object panelKey,
+        double topPadding = 12,
+        String label = 'MATCH SETUP',
+      }) {
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 240),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return ClipRect(
+              child: FadeTransition(
+                opacity: curved,
+                child: SizeTransition(
+                  sizeFactor: curved,
+                  axisAlignment: -1,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, -0.045),
+                      end: Offset.zero,
+                    ).animate(curved),
+                    child: child,
+                  ),
+                ),
+              ),
+            );
+          },
+          child: child == null
+              ? const SizedBox.shrink(
+                  key: ValueKey<String>('mode-panel-hidden'),
+                )
+              : Padding(
+                  key: ValueKey<Object>(panelKey),
+                  padding: EdgeInsets.only(top: topPadding),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    accent.withValues(alpha: 0.0),
+                                    accent.withValues(alpha: 0.76),
+                                    Colors.white.withValues(alpha: 0.38),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              label,
+                              style: buildHudStyle(
+                                color: accent,
+                                size: 9.8,
+                                weight: FontWeight.w800,
+                                letterSpacing: 0.68,
+                                height: 1.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      child,
+                    ],
+                  ),
+                ),
+        );
+      }
+
       Widget buildInlineModeStack({
         required _VsModeQuickOption option,
         required String title,
@@ -19040,10 +19504,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               )
             else
               AspectRatio(aspectRatio: heroCardAspectRatio, child: card),
-            if (includeDetails && selected) ...[
-              const SizedBox(height: 12),
-              buildModeDetailsPanel(option),
-            ],
+            if (includeDetails)
+              buildModePanelReveal(
+                child: selected ? buildModeDetailsPanel(option) : null,
+                accent: accent,
+                panelKey: option,
+              ),
           ],
         );
       }
@@ -19157,17 +19623,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             })
           >[modeCards[1], modeCards[3]];
       final selectedModeOption = _selectedVsModeQuickOption;
-      final selectedModePanel = selectedModeOption == null
-          ? buildModeSelectionPrompt()
+      final selectedModeDetailsPanel = selectedModeOption == null
+          ? null
           : buildModeDetailsPanel(selectedModeOption);
+      final selectedModePanel =
+          selectedModeDetailsPanel ?? buildModeSelectionPrompt();
       final showLandscapeShowcaseLayout =
           isLandscape && media.size.height <= 500;
       final showDetachedModePanel =
           !useSingleColumnHeroCards &&
           !showLandscapeShowcaseLayout &&
           (isLandscape || media.size.width >= 860);
+      final isIosLandscapeShowcase =
+          isLandscape && !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
       Widget buildLandscapeShowcaseLayout() {
+        final hasSelection = selectedModeOption != null;
         final featuredModeCard = selectedModeOption == null
             ? modeCards[0]
             : modeCards.firstWhere(
@@ -19176,57 +19647,32 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final railModeCards = modeCards
             .where((entry) => entry.option != featuredModeCard.option)
             .toList(growable: false);
-        final railGap = media.size.height <= 430 ? 8.0 : 10.0;
-        final railCardHeight = media.size.height <= 430 ? 94.0 : 104.0;
+        final compactLandscapeHeight = media.size.height <= 430;
+        final railGap = hasSelection
+            ? (compactLandscapeHeight ? 8.0 : 10.0)
+            : (compactLandscapeHeight ? 10.0 : 12.0);
+        final railCardHeight = compactLandscapeHeight
+            ? hasSelection
+                  ? (isIosLandscapeShowcase ? 88.0 : 90.0)
+                  : (isIosLandscapeShowcase ? 96.0 : 98.0)
+            : hasSelection
+            ? (isIosLandscapeShowcase ? 94.0 : 98.0)
+            : (isIosLandscapeShowcase ? 102.0 : 108.0);
         final featuredCardHeight =
             (railCardHeight * railModeCards.length) +
             (railGap * max(0, railModeCards.length - 1));
-        final hintAccent = selectedModeOption == null
-            ? heroAccent
-            : featuredModeCard.accent;
-        final hintLabel = selectedModeOption == null
-            ? 'LANDSCAPE SHOWCASE'
-            : 'SETUP OPEN';
-        final hintText = selectedModeOption == null
-            ? 'Wider cards keep the artwork readable in landscape. Tap any mode to open its setup below.'
-            : 'The selected mode stays featured while its setup stays full-width below. Tap the same card again to close it.';
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            buildInsetShell(
-              accent: hintAccent,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  buildTag(
-                    hintLabel,
-                    hintAccent,
-                    icon: Icons.view_quilt_rounded,
-                    filled: !arcade.monochrome,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      hintText,
-                      style: buildBodyStyle(
-                        color: arcade.textMuted,
-                        size: 11.2,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   flex: 13,
-                  child: SizedBox(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
                     height: featuredCardHeight,
                     child: buildModeOptionCard(
                       option: featuredModeCard.option,
@@ -19249,7 +19695,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         index < railModeCards.length;
                         index++
                       ) ...[
-                        SizedBox(
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
                           height: railCardHeight,
                           child: buildModeOptionCard(
                             option: railModeCards[index].option,
@@ -19268,8 +19716,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            selectedModePanel,
+            buildModePanelReveal(
+              child: selectedModeDetailsPanel,
+              accent: featuredModeCard.accent,
+              panelKey: selectedModeOption ?? '_hidden_landscape_mode_panel',
+              topPadding: 10,
+              label: 'MATCH SETUP',
+            ),
           ],
         );
       }
@@ -24008,36 +24461,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           (remotePieceSelectionOpen || showRemoteReactionTray);
       final buttons = <Widget>[
         buildRemoteActionButton(
-          label: 'VS Mode',
-          icon: Icons.arrow_back_rounded,
+          label: 'Menu',
+          icon: Icons.menu_rounded,
           onPressed: _remoteFriendOperationInProgress
               ? null
-              : _openVsModeFromMenu,
+              : () => unawaited(_showRemoteFriendActionMenu()),
           accent: scheme.onSurface,
         ),
         if (_isRemoteFriendPendingMatch) ...[
           buildRemoteActionButton(
-            label: compactPendingInviteLayout ? 'Copy' : 'Copy Code',
-            icon: Icons.copy_all_rounded,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(_copyRemoteFriendInviteCode()),
-            accent: remoteLocalAccent,
-          ),
-          buildRemoteActionButton(
-            label: compactPendingInviteLayout ? 'Share' : 'Share Invite',
+            label: compactPendingInviteLayout ? 'Invite' : 'Invite Tools',
             icon: Icons.share_rounded,
             onPressed: _remoteFriendOperationInProgress
                 ? null
-                : () => unawaited(_shareRemoteFriendInviteCode()),
-            accent: remoteLocalAccent,
-          ),
-          buildRemoteActionButton(
-            label: compactPendingInviteLayout ? 'QR' : 'Show QR',
-            icon: Icons.qr_code_2_rounded,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(_showRemoteFriendInviteQrCode()),
+                : () => unawaited(_showRemoteFriendInviteToolsMenu()),
             accent: remoteLocalAccent,
           ),
           buildRemoteActionButton(
@@ -27752,6 +28189,346 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       title: 'Terms link copied',
       message: 'Could not open the Terms of Service here.',
       icon: Icons.gavel_rounded,
+    );
+  }
+
+  void _queueStarterAvatarWelcomeDialog(AvatarCatalogEntry starterAvatar) {
+    if (_starterAvatarWelcomeQueued) {
+      return;
+    }
+    _starterAvatarWelcomeQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_showStarterAvatarWelcomeDialog(starterAvatar));
+    });
+  }
+
+  Future<void> _showStarterAvatarSkinInfoDialog() async {
+    if (!mounted) {
+      return;
+    }
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final normalAccent = _avatarRollBucketAccent(
+      AvatarRarityBucket.normal,
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final rareAccent = _avatarRollBucketAccent(
+      AvatarRarityBucket.rare,
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final legendaryAccent = _avatarRollBucketAccent(
+      AvatarRarityBucket.legendary,
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        titlePadding: const EdgeInsets.fromLTRB(24, 22, 16, 0),
+        contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  normalAccent.withValues(alpha: isLight ? 0.10 : 0.16),
+                  scheme.surface,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.info_outline_rounded,
+                size: 20,
+                color: normalAccent,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Avatar skins')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _remoteFriendSurfaceChip(
+              label: 'Normal skins are your starting collection',
+              accent: normalAccent,
+              icon: Icons.check_circle_outline_rounded,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Every new player gets one free Normal avatar right away.',
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.82),
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Rare, Epic, and Legendary skins unlock through rolls and rewards. Promo skins are separate special drops.',
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.70),
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _remoteFriendSurfaceChip(
+                  label: 'Rare+',
+                  accent: rareAccent,
+                  icon: Icons.auto_awesome_rounded,
+                ),
+                _remoteFriendSurfaceChip(
+                  label: 'Legendary',
+                  accent: legendaryAccent,
+                  icon: Icons.workspace_premium_rounded,
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showStarterAvatarWelcomeDialog(
+    AvatarCatalogEntry starterAvatar,
+  ) async {
+    if (!mounted) {
+      return;
+    }
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final accent = _avatarRollBucketAccent(
+      AvatarRarityBucket.normal,
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final spotlightColor = Color.alphaBlend(
+      accent.withValues(alpha: isLight ? 0.14 : 0.22),
+      scheme.surface,
+    );
+    final cardTop = Color.alphaBlend(
+      accent.withValues(alpha: isLight ? 0.12 : 0.18),
+      scheme.surface,
+    );
+    final cardBottom = Color.alphaBlend(
+      scheme.secondary.withValues(alpha: isLight ? 0.08 : 0.14),
+      scheme.surface,
+    );
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'ChessIQ welcome',
+      barrierColor: Colors.black.withValues(alpha: isLight ? 0.34 : 0.58),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [cardTop, scheme.surface, cardBottom],
+                        stops: const [0.0, 0.62, 1.0],
+                      ),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: accent.withValues(alpha: isLight ? 0.20 : 0.28),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: isLight ? 0.14 : 0.26,
+                          ),
+                          blurRadius: 34,
+                          offset: const Offset(0, 20),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            _remoteFriendSurfaceChip(
+                              label: 'Alpha welcome',
+                              accent: accent,
+                              icon: Icons.waving_hand_rounded,
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              onPressed: () {
+                                unawaited(_showStarterAvatarSkinInfoDialog());
+                              },
+                              icon: const Icon(Icons.info_outline_rounded),
+                              tooltip: 'Avatar skin info',
+                              style: IconButton.styleFrom(
+                                backgroundColor: Color.alphaBlend(
+                                  accent.withValues(
+                                    alpha: isLight ? 0.08 : 0.14,
+                                  ),
+                                  scheme.surface,
+                                ),
+                                foregroundColor: accent,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Welcome to ChessIQ',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w900,
+                            height: 1.0,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Alpha version',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 12.4,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.28,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Your free Normal avatar is ready.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.74),
+                            fontSize: 13.2,
+                            fontWeight: FontWeight.w700,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              spotlightColor,
+                              scheme.surface,
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: accent.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              AvatarPortrait(
+                                avatar: starterAvatar,
+                                size: 128,
+                                radius: 30,
+                                borderColor: accent.withValues(alpha: 0.32),
+                                backgroundColor: Colors.transparent,
+                                showShadow: false,
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                starterAvatar.name,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: scheme.onSurface,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _remoteFriendSurfaceChip(
+                                label: 'Free Normal Avatar',
+                                accent: accent,
+                                icon: Icons.redeem_rounded,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: accent,
+                              foregroundColor: const Color(0xFF09131F),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text(
+                              'Start playing',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
