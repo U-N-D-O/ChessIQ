@@ -1265,7 +1265,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         return;
       }
       _onMove(from, to, promotion: chosen.length == 5 ? chosen[4] : null);
-      _showLastBotMoveArrow(chosen);
+      _showTransientGhostArrow(chosen);
+      if (_gameOutcome == null && _isHumanTurnInBotGame) {
+        _triggerTurnTagNudge(botMode: true, remoteMode: false);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -1274,34 +1277,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       }
     }
   }
-
-  @override
-  void _showLastBotMoveArrow(String uciMove) {
-    final id = _ghostArrowIdSeed++;
-    final ghost = _GhostArrow(id: id, line: EngineLine(uciMove, 0, 0, 1));
-
-    setState(() {
-      _botGhostArrows.add(ghost);
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final idx = _botGhostArrows.indexWhere((a) => a.id == id);
-      if (idx == -1) return;
-      setState(() {
-        _botGhostArrows[idx].opacity = 0.0;
-      });
-    });
-
-    _botGhostArrowTimers[id] = Timer(const Duration(milliseconds: 3100), () {
-      if (!mounted) return;
-      _botGhostArrowTimers.remove(id);
-      setState(() {
-        _botGhostArrows.removeWhere((a) => a.id == id);
-      });
-    });
-  }
-
   @override
   void _clearBotGhostArrows() {
     for (final timer in _botGhostArrowTimers.values) {

@@ -512,6 +512,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _secondExtraSuggestionLaunchDelay = Duration(
     milliseconds: 200,
   );
+  static const Duration _turnTagNudgeDuration = Duration(milliseconds: 620);
   static const Duration _creditsModernDwell = Duration(seconds: 45);
   static const Duration _creditsGlitchWindow = Duration(milliseconds: 420);
   static const Duration _creditsRetroDwell = Duration(seconds: 15);
@@ -535,6 +536,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   late AnimationController _buttonRippleController;
   late AnimationController _openingButtonFlashController;
   late AnimationController _storeCoinGainController;
+  late AnimationController _turnNudgeController;
   final Stopwatch _spectralMotionClock = Stopwatch()..start();
   bool _openingButtonFlashRed = false;
   Timer? _openingModeFeedbackTimer;
@@ -544,6 +546,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Offset? _storeCoinGainCenter;
   int _storeCoinGainAmount = 10;
   bool _buttonUnlocked = false;
+  bool _turnNudgeBotTagActive = false;
+  bool _turnNudgeRemoteTagActive = false;
   final AudioPlayer _introAudioPlayer = AudioPlayer();
   final AudioPlayer _menuAudioPlayer = AudioPlayer();
   final AudioPlayer _sfxAudioPlayer = AudioPlayer();
@@ -1196,6 +1200,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
+    _turnNudgeController = AnimationController(
+      vsync: this,
+      duration: _turnTagNudgeDuration,
+    )..addStatusListener((status) {
+        if (status != AnimationStatus.completed || !mounted) {
+          return;
+        }
+        setState(() {
+          _turnNudgeBotTagActive = false;
+          _turnNudgeRemoteTagActive = false;
+        });
+      });
     _menuMusicFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -5627,6 +5643,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final derivedPosition = _deriveBoardPositionFromFen(snapshot.fen);
     final moveHistory = _buildRemoteFriendMoveHistory(snapshot);
+    final latestRemoteMove = moveHistory.isEmpty ? null : moveHistory.last;
+    final latestRemoteMoveUci = latestRemoteMove?.uci;
+    final remoteOpponentMoveArrived =
+        previousSnapshot != null &&
+        previousSnapshot.matchId == snapshot.matchId &&
+        snapshot.nextPly > previousSnapshot.nextPly &&
+        playerSeat != null &&
+        latestRemoteMove != null &&
+      latestRemoteMoveUci != null &&
+      latestRemoteMoveUci.length >= 4 &&
+        latestRemoteMove.isWhite != (playerSeat == RemoteFriendSeat.white);
     final remoteOutcome = _remoteOutcomeToGameOutcome(snapshot.outcome?.code);
 
     _cancelGameResultReveal();
@@ -5687,6 +5714,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     } else {
       _gameOutcome = remoteOutcome;
       _gameDrawReason = _drawReasonFromRemoteOutcome(snapshot.outcome?.reason);
+    }
+
+    if (remoteOpponentMoveArrived) {
+      _showTransientGhostArrow(latestRemoteMoveUci, inSetState: true);
+      if (_isHumanTurnInRemoteFriendGame) {
+        _triggerTurnTagNudge(
+          botMode: false,
+          remoteMode: true,
+          inSetState: true,
+        );
+      }
     }
   }
 
@@ -6391,6 +6429,85 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _checkHaptic() async {
     if (!_hapticsEnabled) return;
     await HapticFeedback.selectionClick();
+  }
+
+  void _showTransientGhostArrow(String uciMove, {bool inSetState = false}) {
+    if (uciMove.length < 4) {
+      return;
+    }
+
+    final id = _ghostArrowIdSeed++;
+    final ghost = _GhostArrow(id: id, line: EngineLine(uciMove, 0, 0, 1));
+
+    void addGhostArrow() {
+      _botGhostArrows.add(ghost);
+    }
+
+    if (inSetState) {
+      addGhostArrow();
+    } else {
+      setState(addGhostArrow);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final idx = _botGhostArrows.indexWhere((arrow) => arrow.id == id);
+      if (idx == -1) return;
+      setState(() {
+        _botGhostArrows[idx].opacity = 0.0;
+      });
+    });
+
+    _botGhostArrowTimers[id] = Timer(const Duration(milliseconds: 3100), () {
+      if (!mounted) return;
+      _botGhostArrowTimers.remove(id);
+      setState(() {
+        _botGhostArrows.removeWhere((arrow) => arrow.id == id);
+      });
+    });
+  }
+
+  void _triggerTurnTagNudge({
+    required bool botMode,
+    required bool remoteMode,
+    bool inSetState = false,
+  }) {
+    if (!botMode && !remoteMode) {
+      return;
+    }
+
+    void activateNudge() {
+      _turnNudgeBotTagActive = botMode;
+      _turnNudgeRemoteTagActive = remoteMode;
+    }
+
+    if (inSetState) {
+      activateNudge();
+    } else if (mounted) {
+      setState(activateNudge);
+    } else {
+      activateNudge();
+    }
+
+    _turnNudgeController.forward(from: 0);
+    unawaited(_checkHaptic());
+  }
+
+  Widget _wrapTurnTagNudge({required Widget child, required bool active}) {
+    if (!active) {
+      return child;
+    }
+
+    return AnimatedBuilder(
+      animation: _turnNudgeController,
+      child: child,
+      builder: (context, child) {
+        final progress = _turnNudgeController.value;
+        final envelope = 1.0 - Curves.easeOut.transform(progress);
+        final dx = sin(progress * pi * 6) * 8.0 * envelope;
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+    );
   }
 
   int get _maxDepthAllowed {
@@ -20333,14 +20450,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return const SizedBox.shrink();
       }
 
-      return PuzzleAcademyTag(
-        label: portraitStatusLabel,
-        accent: portraitStatusAccent,
-        compact: compact,
-        filled: _gameOutcome == null && _isHumanTurnInBotGame,
-        foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
-            ? portraitFilledTagForeground
-            : null,
+      return _wrapTurnTagNudge(
+        active: _turnNudgeBotTagActive,
+        child: PuzzleAcademyTag(
+          label: portraitStatusLabel,
+          accent: portraitStatusAccent,
+          compact: compact,
+          filled: _gameOutcome == null && _isHumanTurnInBotGame,
+          foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
+              ? portraitFilledTagForeground
+              : null,
+        ),
       );
     }
 
@@ -20642,15 +20762,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              PuzzleAcademyTag(
-                label: remoteStatusLabel,
-                accent: remoteStatusAccent,
-                compact: true,
-                filled: _gameOutcome == null && _isHumanTurnInRemoteFriendGame,
-                foregroundColor:
-                    _gameOutcome == null && _isHumanTurnInRemoteFriendGame
-                    ? portraitFilledTagForeground
-                    : null,
+              _wrapTurnTagNudge(
+                active: _turnNudgeRemoteTagActive,
+                child: PuzzleAcademyTag(
+                  label: remoteStatusLabel,
+                  accent: remoteStatusAccent,
+                  compact: true,
+                  filled:
+                      _gameOutcome == null && _isHumanTurnInRemoteFriendGame,
+                  foregroundColor:
+                      _gameOutcome == null && _isHumanTurnInRemoteFriendGame
+                      ? portraitFilledTagForeground
+                      : null,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -23189,14 +23313,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         child: LayoutBuilder(
           builder: (context, inner) {
-            final statusTag = PuzzleAcademyTag(
-              label: statusLabel,
-              accent: statusAccent,
-              compact: true,
-              filled: _gameOutcome == null && _isHumanTurnInBotGame,
-              foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
-                  ? filledTagForeground
-                  : null,
+            final statusTag = _wrapTurnTagNudge(
+              active: _turnNudgeBotTagActive,
+              child: PuzzleAcademyTag(
+                label: statusLabel,
+                accent: statusAccent,
+                compact: true,
+                filled: _gameOutcome == null && _isHumanTurnInBotGame,
+                foregroundColor: _gameOutcome == null && _isHumanTurnInBotGame
+                    ? filledTagForeground
+                    : null,
+              ),
             );
 
             final deckContent = Column(
@@ -31420,6 +31547,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _menuMusicFadeController.dispose();
     _sectionTransitionController.dispose();
     _menuExitAnimationController.dispose();
+    _turnNudgeController.dispose();
     _openingModeFeedbackTimer?.cancel();
     _openingButtonFlashController.dispose();
     _storeCoinGainController.dispose();

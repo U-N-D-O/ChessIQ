@@ -1377,6 +1377,19 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     return totalPly >= range.min && totalPly <= range.max;
   }
 
+  bool _lineHasGuessLineVariation(EcoLine line) {
+    const shownPly = 2;
+    const minimumVariationPly = 3;
+    return line.moveTokens.length >= shownPly + minimumVariationPly;
+  }
+
+  String? _guessLinePrefixKey(EcoLine line) {
+    if (!_lineHasGuessLineVariation(line)) {
+      return null;
+    }
+    return '${line.moveTokens[0]} ${line.moveTokens[1]}';
+  }
+
   bool _lineFullyReplayable(EcoLine line) {
     if (line.moveTokens.length < 2) return false;
     var state = _initialBoardState();
@@ -1560,15 +1573,15 @@ abstract class _QuizScreen extends _AnalysisPageShared {
 
       final grouped = <String, int>{};
       for (final line in base) {
-        if (line.moveTokens.length < 3) continue;
-        final key = '${line.moveTokens[0]} ${line.moveTokens[1]}';
+        final key = _guessLinePrefixKey(line);
+        if (key == null) continue;
         grouped[key] = (grouped[key] ?? 0) + 1;
       }
 
       final guessLinePool = List<EcoLine>.unmodifiable(
         base.where((line) {
-          if (line.moveTokens.length < 3) return false;
-          final key = '${line.moveTokens[0]} ${line.moveTokens[1]}';
+          final key = _guessLinePrefixKey(line);
+          if (key == null) return false;
           return (grouped[key] ?? 0) >= 3;
         }),
       );
@@ -4814,14 +4827,10 @@ abstract class _QuizScreen extends _AnalysisPageShared {
       if (built == null) continue;
 
       if (activeMode == GambitQuizMode.guessLine) {
-        if (candidate.moveTokens.length < 2) continue;
-        final first = candidate.moveTokens[0];
-        final second = candidate.moveTokens[1];
+        final prefixKey = _guessLinePrefixKey(candidate);
+        if (prefixKey == null) continue;
         final possibleOptions = gambits.where(
-          (entry) =>
-              entry.moveTokens.length >= 2 &&
-              entry.moveTokens[0] == first &&
-              entry.moveTokens[1] == second,
+          (entry) => _guessLinePrefixKey(entry) == prefixKey,
         );
         if (possibleOptions.length < 3) {
           continue;
@@ -4856,18 +4865,14 @@ abstract class _QuizScreen extends _AnalysisPageShared {
     _markGambitViewed(resolvedCorrect.name);
 
     final options = <EcoLine>[resolvedCorrect];
-    if (activeMode == GambitQuizMode.guessLine &&
-        resolvedCorrect.moveTokens.length >= 2) {
-      final first = resolvedCorrect.moveTokens[0];
-      final second = resolvedCorrect.moveTokens[1];
+    if (activeMode == GambitQuizMode.guessLine) {
+      final prefixKey = _guessLinePrefixKey(resolvedCorrect);
       final linePool =
           gambits
               .where(
                 (entry) =>
                     entry.name != resolvedCorrect.name &&
-                    entry.moveTokens.length >= 2 &&
-                    entry.moveTokens[0] == first &&
-                    entry.moveTokens[1] == second,
+                    _guessLinePrefixKey(entry) == prefixKey,
               )
               .toList()
             ..shuffle(random);

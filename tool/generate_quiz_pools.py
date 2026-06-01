@@ -26,6 +26,9 @@ NON_FAMILY_CHARS_RE = re.compile(r'[^a-z\-]')
 RESULT_TOKENS = {'*', '1-0', '0-1', '1/2-1/2'}
 
 QUIZ_DIFFICULTIES = ('easy', 'medium', 'hard', 'veryHard')
+GUESS_LINE_SHARED_PREFIX_PLY = 2
+GUESS_LINE_MIN_VARIATION_PLY = 3
+GUESS_LINE_MIN_TOTAL_PLY = GUESS_LINE_SHARED_PREFIX_PLY + GUESS_LINE_MIN_VARIATION_PLY
 STUDY_CATEGORIES = {
     'easy': 'basic',
     'medium': 'advanced',
@@ -161,6 +164,17 @@ def line_within_total_ply_range(line: dict[str, object], difficulty: str) -> boo
     minimum, maximum = quiz_total_ply_range(difficulty)
     total_ply = len(line['move_tokens'])
     return minimum <= total_ply <= maximum
+
+
+def line_has_guess_line_variation(line: dict[str, object]) -> bool:
+    return len(line['move_tokens']) >= GUESS_LINE_MIN_TOTAL_PLY
+
+
+def guess_line_prefix_key(line: dict[str, object]) -> str | None:
+    if not line_has_guess_line_variation(line):
+        return None
+    move_tokens = line['move_tokens']
+    return f'{move_tokens[0]} {move_tokens[1]}'
 
 
 def opening_name_annotation_key(name: str) -> str | None:
@@ -417,17 +431,16 @@ def build_pools(lines: list[dict[str, object]]) -> dict[str, list[dict[str, obje
 
         grouped: dict[str, int] = {}
         for line in base:
-            move_tokens = line['move_tokens']
-            if len(move_tokens) < 3:
+            prefix = guess_line_prefix_key(line)
+            if prefix is None:
                 continue
-            prefix = f'{move_tokens[0]} {move_tokens[1]}'
             grouped[prefix] = grouped.get(prefix, 0) + 1
 
         guess_line_pool = [
             line
             for line in base
-            if len(line['move_tokens']) >= 3
-            and grouped.get(f"{line['move_tokens'][0]} {line['move_tokens'][1]}", 0) >= 3
+            if (prefix := guess_line_prefix_key(line)) is not None
+            and grouped.get(prefix, 0) >= 3
         ]
         pools[f'1:{difficulty_index}'] = guess_line_pool
 
