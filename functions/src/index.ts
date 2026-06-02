@@ -2078,6 +2078,11 @@ type FriendMatchRecord = {
     whiteLastReactionAtMs: number | null;
     blackLastReactionAtMs: number | null;
     drawOfferByUid: string | null;
+    rematchOfferByUid: string | null;
+    rematchKeepScore: boolean;
+    seriesScoreEnabled: boolean;
+    hostSeriesScore: number;
+    guestSeriesScore: number;
     outcome: FriendMatchOutcome | null;
     moves: Record<string, FriendMoveRecord>;
 };
@@ -2120,7 +2125,10 @@ type FriendMatchAction =
     | "offerDraw"
     | "acceptDraw"
     | "declineDraw"
-    | "cancelPending";
+    | "cancelPending"
+    | "offerRematch"
+    | "acceptRematch"
+    | "declineRematch";
 
 function requireAuthUid(context: functions.https.CallableContext): string {
     if (!context.auth) {
@@ -2188,6 +2196,9 @@ function readFriendMatchAction(rawAction: unknown): FriendMatchAction {
         case "acceptDraw":
         case "declineDraw":
         case "cancelPending":
+        case "offerRematch":
+        case "acceptRematch":
+        case "declineRematch":
             return rawAction as FriendMatchAction;
         default:
             throw new functions.https.HttpsError(
@@ -2195,6 +2206,19 @@ function readFriendMatchAction(rawAction: unknown): FriendMatchAction {
                 "Unsupported friend match action.",
             );
     }
+}
+
+function readFriendBoolean(rawValue: unknown, fieldName: string): boolean {
+    if (rawValue == null) {
+        return false;
+    }
+    if (typeof rawValue === "boolean") {
+        return rawValue;
+    }
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        `${fieldName} must be a boolean.`,
+    );
 }
 
 function readFriendNonNegativeInt(
@@ -2587,6 +2611,21 @@ function normalizeFriendMatchRecord(
         drawOfferByUid: payload.drawOfferByUid == null
             ? null
             : payload.drawOfferByUid.toString().trim() || null,
+        rematchOfferByUid: payload.rematchOfferByUid == null
+            ? null
+            : payload.rematchOfferByUid.toString().trim() || null,
+        rematchKeepScore: payload.rematchKeepScore === true,
+        seriesScoreEnabled: payload.seriesScoreEnabled === true,
+        hostSeriesScore: readFriendNonNegativeInt(
+            payload.hostSeriesScore,
+            "hostSeriesScore",
+            999,
+        ),
+        guestSeriesScore: readFriendNonNegativeInt(
+            payload.guestSeriesScore,
+            "guestSeriesScore",
+            999,
+        ),
         outcome: normalizeFriendMatchOutcome(payload.outcome),
         moves,
     };
@@ -2791,6 +2830,11 @@ function createFriendMatchRecord(params: {
         whiteLastReactionAtMs: null,
         blackLastReactionAtMs: null,
         drawOfferByUid: null,
+        rematchOfferByUid: null,
+        rematchKeepScore: false,
+        seriesScoreEnabled: false,
+        hostSeriesScore: 0,
+        guestSeriesScore: 0,
         outcome: null,
         moves: {},
     };
@@ -2869,6 +2913,8 @@ function concludeFriendMatch(
         expiresAtMs: params.nowMs + retentionMs,
         reaction: null,
         drawOfferByUid: null,
+        rematchOfferByUid: null,
+        rematchKeepScore: match.seriesScoreEnabled,
         clocks: {
             ...match.clocks,
             activeSeat: null,
@@ -2880,6 +2926,70 @@ function concludeFriendMatch(
             winnerUid: params.winnerUid,
             concludedAtMs: params.nowMs,
         },
+    };
+}
+
+function friendMatchSeriesScoresAfterCompletedGame(
+    match: FriendMatchRecord,
+): { hostSeriesScore: number; guestSeriesScore: number } {
+    let hostSeriesScore = match.hostSeriesScore;
+    let guestSeriesScore = match.guestSeriesScore;
+    if (match.outcome?.winnerUid === match.hostUid) {
+        hostSeriesScore += 1;
+    } else if (
+        match.guestUid != null &&
+        match.outcome?.winnerUid === match.guestUid
+    ) {
+        guestSeriesScore += 1;
+    }
+    return {
+        hostSeriesScore,
+        guestSeriesScore,
+    };
+}
+
+function resetFriendMatchForRematch(
+    match: FriendMatchRecord,
+    nowMs: number,
+    keepScore: boolean,
+): FriendMatchRecord {
+    const chess = new Chess();
+    const initialMs = match.timeControl.initialSeconds * 1000;
+    const nextSeriesScores = keepScore
+        ? friendMatchSeriesScoresAfterCompletedGame(match)
+        : { hostSeriesScore: 0, guestSeriesScore: 0 };
+    return {
+        ...match,
+        status: "active",
+        whiteUid: match.blackUid,
+        blackUid: match.whiteUid,
+        fen: chess.fen(),
+        pgn: "",
+        nextPly: 0,
+        whiteToMove: true,
+        clocks: {
+            whiteMsRemaining: initialMs,
+            blackMsRemaining: initialMs,
+            activeSeat: match.timeControl.initialSeconds > 0 ? "white" : null,
+            lastTickStartedAtMs: match.timeControl.initialSeconds > 0 ? nowMs : null,
+        },
+        whitePieceThemeIndex: match.blackPieceThemeIndex,
+        blackPieceThemeIndex: match.whitePieceThemeIndex,
+        pieceSelectionDeadlineMs: null,
+        updatedAtMs: nowMs,
+        startedAtMs: nowMs,
+        expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
+        reaction: null,
+        whiteLastReactionAtMs: null,
+        blackLastReactionAtMs: null,
+        drawOfferByUid: null,
+        rematchOfferByUid: null,
+        rematchKeepScore: keepScore,
+        seriesScoreEnabled: keepScore,
+        hostSeriesScore: nextSeriesScores.hostSeriesScore,
+        guestSeriesScore: nextSeriesScores.guestSeriesScore,
+        outcome: null,
+        moves: {},
     };
 }
 
@@ -3607,6 +3717,7 @@ async function actOnFriendMatchImpl(
     const uid = requireAuthUid(context);
     const matchId = readFriendMatchId(data?.matchId);
     const action = readFriendMatchAction(data?.action);
+    const keepScore = readFriendBoolean(data?.keepScore, "keepScore");
     const matchRef = db.ref(`friend_matches/${matchId}`);
     const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let blockedReason = "match-unavailable";
@@ -3719,6 +3830,71 @@ async function actOnFriendMatchImpl(
                 actionApplied = true;
                 break;
             }
+            case "offerRematch": {
+                if (playerSeat == null || synchronizedMatch.outcome == null) {
+                    blockedReason = "cannot-offer-rematch";
+                    break;
+                }
+                if (synchronizedMatch.rematchOfferByUid === uid && synchronizedMatch.rematchKeepScore === keepScore) {
+                    actionApplied = true;
+                    break;
+                }
+                if (
+                    synchronizedMatch.rematchOfferByUid != null &&
+                    synchronizedMatch.rematchOfferByUid !== uid
+                ) {
+                    blockedReason = "rematch-offer-pending";
+                    break;
+                }
+                nextMatch = {
+                    ...synchronizedMatch,
+                    rematchOfferByUid: uid,
+                    rematchKeepScore: keepScore,
+                    updatedAtMs: nowMs,
+                    expiresAtMs: nowMs + FRIEND_MATCH_TERMINAL_RETENTION_MS,
+                };
+                actionApplied = true;
+                break;
+            }
+            case "acceptRematch": {
+                if (playerSeat == null || synchronizedMatch.outcome == null) {
+                    blockedReason = "cannot-accept-rematch";
+                    break;
+                }
+                if (
+                    synchronizedMatch.rematchOfferByUid == null ||
+                    synchronizedMatch.rematchOfferByUid === uid
+                ) {
+                    blockedReason = "no-rematch-offer";
+                    break;
+                }
+                nextMatch = resetFriendMatchForRematch(
+                    synchronizedMatch,
+                    nowMs,
+                    synchronizedMatch.rematchKeepScore,
+                );
+                actionApplied = true;
+                break;
+            }
+            case "declineRematch": {
+                if (playerSeat == null || synchronizedMatch.outcome == null) {
+                    blockedReason = "cannot-decline-rematch";
+                    break;
+                }
+                if (synchronizedMatch.rematchOfferByUid == null) {
+                    blockedReason = "no-rematch-offer";
+                    break;
+                }
+                nextMatch = {
+                    ...synchronizedMatch,
+                    rematchOfferByUid: null,
+                    rematchKeepScore: synchronizedMatch.seriesScoreEnabled,
+                    updatedAtMs: nowMs,
+                    expiresAtMs: nowMs + FRIEND_MATCH_TERMINAL_RETENTION_MS,
+                };
+                actionApplied = true;
+                break;
+            }
         }
 
         responseMatch = nextMatch;
@@ -3769,6 +3945,37 @@ async function actOnFriendMatchImpl(
                     type: "friend_match_draw_declined",
                     title: "Draw offer declined",
                     body: "Your friend declined the draw offer.",
+                    data: friendMatchPushData(match),
+                });
+                break;
+            case "offerRematch":
+                await sendPushToUser({
+                    uid: friendMatchOpponentUid(match, uid),
+                    type: "friend_match_rematch_offer",
+                    title: "Rematch offer in ChessIQ",
+                    body: match.rematchKeepScore
+                        ? "Your friend offered a rematch and wants to keep score."
+                        : "Your friend offered a rematch.",
+                    data: friendMatchPushData(match),
+                });
+                break;
+            case "acceptRematch":
+                await sendPushToUser({
+                    uid: friendMatchOpponentUid(match, uid),
+                    type: "friend_match_rematch_accepted",
+                    title: "Rematch started",
+                    body: match.seriesScoreEnabled
+                        ? "Colors swapped and the next scored game is ready."
+                        : "Colors swapped and the next game is ready.",
+                    data: friendMatchPushData(match),
+                });
+                break;
+            case "declineRematch":
+                await sendPushToUser({
+                    uid: friendMatchOpponentUid(match, uid),
+                    type: "friend_match_rematch_declined",
+                    title: "Rematch offer cleared",
+                    body: "The rematch offer is no longer pending.",
                     data: friendMatchPushData(match),
                 });
                 break;

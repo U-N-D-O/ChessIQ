@@ -134,16 +134,18 @@ class _RemoteFriendActionSheetOption<T> {
 
 const List<_RemoteFriendReactionOption> _remoteFriendStandardReactionOptions =
     <_RemoteFriendReactionOption>[
-      _RemoteFriendReactionOption(emoji: '🙌', label: 'Good luck'),
       _RemoteFriendReactionOption(emoji: '👍', label: 'Nice move'),
-      _RemoteFriendReactionOption(emoji: '👏', label: 'Well played'),
-      _RemoteFriendReactionOption(emoji: '🤔', label: 'I am thinking'),
-      _RemoteFriendReactionOption(emoji: '😮', label: 'Check'),
-      _RemoteFriendReactionOption(emoji: '⏳', label: 'Your move'),
-      _RemoteFriendReactionOption(emoji: '🔥', label: 'Sharp position'),
-      _RemoteFriendReactionOption(emoji: '😅', label: 'That was close'),
-      _RemoteFriendReactionOption(emoji: '🧠', label: 'Nice tactic'),
-      _RemoteFriendReactionOption(emoji: '👑', label: 'Good game'),
+      _RemoteFriendReactionOption(emoji: '👏', label: 'Clean'),
+      _RemoteFriendReactionOption(emoji: '🙌', label: 'Let\'s go'),
+      _RemoteFriendReactionOption(emoji: '🤔', label: 'Thinking'),
+      _RemoteFriendReactionOption(emoji: '😅', label: 'Close one'),
+      _RemoteFriendReactionOption(emoji: '😮', label: 'Wow'),
+      _RemoteFriendReactionOption(emoji: '😬', label: 'Tense'),
+      _RemoteFriendReactionOption(emoji: '⏳', label: 'Hurry'),
+      _RemoteFriendReactionOption(emoji: '🔥', label: 'Sharp'),
+      _RemoteFriendReactionOption(emoji: '👑', label: 'Winning'),
+      _RemoteFriendReactionOption(emoji: '🧠', label: 'Brilliant'),
+      _RemoteFriendReactionOption(emoji: '😭', label: 'Ouch'),
     ];
 
 const List<_RemoteFriendReactionOption> _remoteFriendStrangeReactionOptions =
@@ -5675,7 +5677,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     return showModalBottomSheet<T>(
       context: context,
-      isScrollControlled: true,
       backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -5685,209 +5686,166 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final sheetScheme = sheetTheme.colorScheme;
         final sheetIsLight = sheetTheme.brightness == Brightness.light;
         final headerAccent = useMonochrome ? sheetScheme.onSurface : accent;
-        final bottomPadding = MediaQuery.paddingOf(sheetContext).bottom;
-        final sheetBottomPadding = bottomPadding > 0
-            ? bottomPadding + 12
-            : 24.0;
-        final maxSheetHeight = MediaQuery.sizeOf(sheetContext).height * 0.82;
 
-        Widget buildOptionTile(
-          _RemoteFriendActionSheetOption<T> option,
-          BuildContext itemContext,
-        ) {
-          final itemAccent = useMonochrome
-              ? sheetScheme.onSurface
-              : option.accent;
-
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => Navigator.of(itemContext).pop(option.value),
-              borderRadius: BorderRadius.circular(18),
-              child: Ink(
-                decoration: BoxDecoration(
-                  color: Color.alphaBlend(
-                    itemAccent.withValues(alpha: sheetIsLight ? 0.06 : 0.12),
-                    sheetScheme.surface,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: itemAccent.withValues(
-                      alpha: sheetIsLight ? 0.18 : 0.28,
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: sheetScheme.outline.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      headerAccent.withValues(
+                        alpha: sheetIsLight ? 0.08 : 0.14,
+                      ),
+                      sheetScheme.surface,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: headerAccent.withValues(
+                        alpha: sheetIsLight ? 0.20 : 0.30,
+                      ),
+                    ),
+                  ),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: itemAccent.withValues(
-                            alpha: sheetIsLight ? 0.12 : 0.18,
-                          ),
-                          border: Border.all(
-                            color: itemAccent.withValues(alpha: 0.36),
-                          ),
-                        ),
-                        child: Icon(option.icon, color: itemAccent, size: 22),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              option.label,
-                              style: TextStyle(
-                                color: sheetScheme.onSurface,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              option.description,
-                              style: TextStyle(
-                                color: sheetScheme.onSurface.withValues(
-                                  alpha: 0.68,
-                                ),
-                                fontSize: 12,
-                                height: 1.3,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: sheetScheme.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: itemAccent.withValues(alpha: 0.90),
-                        size: 24,
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: sheetScheme.onSurface.withValues(alpha: 0.72),
+                          fontSize: 12.4,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          );
-        }
+                const SizedBox(height: 12),
+                for (int index = 0; index < options.length; index += 1) ...[
+                  Builder(
+                    builder: (itemContext) {
+                      final option = options[index];
+                      final itemAccent = useMonochrome
+                          ? sheetScheme.onSurface
+                          : option.accent;
 
-        return SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxSheetHeight),
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, sheetBottomPadding),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: sheetScheme.outline.withValues(alpha: 0.28),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Color.alphaBlend(
-                        headerAccent.withValues(
-                          alpha: sheetIsLight ? 0.08 : 0.14,
-                        ),
-                        sheetScheme.surface,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: headerAccent.withValues(
-                          alpha: sheetIsLight ? 0.20 : 0.30,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: TextStyle(
-                                  color: sheetScheme.onSurface,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () =>
+                              Navigator.of(itemContext).pop(option.value),
+                          borderRadius: BorderRadius.circular(18),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: Color.alphaBlend(
+                                itemAccent.withValues(
+                                  alpha: sheetIsLight ? 0.06 : 0.12,
+                                ),
+                                sheetScheme.surface,
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: itemAccent.withValues(
+                                  alpha: sheetIsLight ? 0.18 : 0.28,
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                subtitle,
-                                style: TextStyle(
-                                  color: sheetScheme.onSurface.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                  fontSize: 12.4,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        IconButton(
-                          onPressed: () =>
-                              Navigator.of(sheetContext).maybePop(),
-                          tooltip: 'Close',
-                          style: IconButton.styleFrom(
-                            backgroundColor: headerAccent.withValues(
-                              alpha: sheetIsLight ? 0.10 : 0.18,
                             ),
-                            foregroundColor: headerAccent,
-                            minimumSize: const Size(38, 38),
-                            padding: EdgeInsets.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: itemAccent.withValues(
+                                        alpha: sheetIsLight ? 0.12 : 0.18,
+                                      ),
+                                      border: Border.all(
+                                        color: itemAccent.withValues(
+                                          alpha: 0.36,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      option.icon,
+                                      color: itemAccent,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          option.label,
+                                          style: TextStyle(
+                                            color: sheetScheme.onSurface,
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          option.description,
+                                          style: TextStyle(
+                                            color: sheetScheme.onSurface
+                                                .withValues(alpha: 0.68),
+                                            fontSize: 12,
+                                            height: 1.3,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: itemAccent.withValues(alpha: 0.90),
+                                    size: 24,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          icon: const Icon(Icons.close_rounded, size: 19),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                  const SizedBox(height: 14),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: Text(
-                      'Choose a destination',
-                      style: TextStyle(
-                        color: sheetScheme.onSurface.withValues(alpha: 0.64),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.35,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  for (int index = 0; index < options.length; index += 1) ...[
-                    Builder(
-                      builder: (itemContext) =>
-                          buildOptionTile(options[index], itemContext),
-                    ),
-                    if (index < options.length - 1) const SizedBox(height: 10),
-                  ],
+                  if (index < options.length - 1) const SizedBox(height: 10),
                 ],
-              ),
+              ],
             ),
           ),
         );
@@ -7454,9 +7412,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required Color localAccent,
     required Color opponentAccent,
     required Color statusAccent,
-    Alignment? preferredAlignment,
-    EdgeInsets? preferredPadding,
-    bool compactPortrait = false,
   }) async {
     if (!mounted) {
       return;
@@ -7479,19 +7434,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final isLandscape = media.orientation == Orientation.landscape;
         final popupWidth = isLandscape
             ? (media.size.width * 0.28).clamp(280.0, 360.0).toDouble()
-            : min(compactPortrait ? 320.0 : 360.0, media.size.width - 24);
+            : min(360.0, media.size.width - 24);
         final popupHeight = min(
-          isLandscape
-              ? 356.0
-              : compactPortrait
-              ? 388.0
-              : 420.0,
-          media.size.height *
-              (isLandscape
-                  ? 0.58
-                  : compactPortrait
-                  ? 0.56
-                  : 0.62),
+          isLandscape ? 356.0 : 420.0,
+          media.size.height * (isLandscape ? 0.58 : 0.62),
         );
 
         VoidCallback? standardReactionTap(_RemoteFriendReactionOption option) {
@@ -7521,13 +7467,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
         return SafeArea(
           child: Align(
-            alignment:
-                preferredAlignment ??
-                (isLandscape ? Alignment.bottomRight : Alignment.bottomCenter),
+            alignment: isLandscape
+                ? Alignment.bottomRight
+                : Alignment.bottomCenter,
             child: Padding(
-              padding:
-                  preferredPadding ??
-                  EdgeInsets.fromLTRB(16, 16, 16, isLandscape ? 108 : 24),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                isLandscape ? 108 : 24,
+              ),
               child: Material(
                 color: Colors.transparent,
                 child: ConstrainedBox(
@@ -7629,8 +7578,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 ),
                               ),
                               IconButton(
-                                onPressed: () =>
-                                    Navigator.of(dialogContext).pop(),
+                                onPressed: () => Navigator.of(dialogContext).pop(),
                                 icon: const Icon(Icons.close_rounded),
                                 tooltip: 'Close quick reacts',
                                 style: IconButton.styleFrom(
@@ -7711,9 +7659,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       : 'Vault set locked',
                                   accent: strangeReactionsUnlocked
                                       ? opponentAccent
-                                      : dialogScheme.onSurface.withValues(
-                                          alpha: 0.62,
-                                        ),
+                                      : dialogScheme.onSurface
+                                          .withValues(alpha: 0.62),
                                   icon: strangeReactionsUnlocked
                                       ? Icons.auto_awesome_rounded
                                       : Icons.lock_outline_rounded,
@@ -7743,9 +7690,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         option: option,
                                         accent: strangeReactionsUnlocked
                                             ? opponentAccent
-                                            : dialogScheme.onSurface.withValues(
-                                                alpha: 0.62,
-                                              ),
+                                            : dialogScheme.onSurface
+                                                .withValues(alpha: 0.62),
                                         locked: !strangeReactionsUnlocked,
                                         onTap: strangeReactionTap(option),
                                       ),
@@ -7778,83 +7724,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
         );
       },
-    );
-  }
-
-  Future<void> _showRemoteFriendReactionPopupFromClock({
-    required bool white,
-  }) async {
-    if (!mounted) {
-      return;
-    }
-
-    final snapshot = _remoteFriendSnapshot;
-    if (snapshot == null ||
-        snapshot.status != RemoteFriendMatchStatus.active ||
-        snapshot.outcome != null ||
-        _isRemoteFriendPieceSelectionOpen) {
-      return;
-    }
-
-    final playerSeat = _remoteFriendPlayerSeatForSnapshot(snapshot);
-    if (playerSeat == null || (playerSeat == RemoteFriendSeat.white) != white) {
-      return;
-    }
-
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final media = MediaQuery.of(context);
-    final useMonochrome =
-        context.read<AppThemeProvider>().isMonochrome ||
-        _isCinematicThemeEnabled;
-    final strangeReactionsUnlocked = context
-        .read<AvatarInventoryProvider>()
-        .hasUnlockedStrangeReactions;
-    final localAccent = _remoteFriendLocalAccent(
-      scheme,
-      useMonochrome: useMonochrome,
-    );
-    final opponentAccent = _remoteFriendOpponentAccent(
-      scheme,
-      useMonochrome: useMonochrome,
-    );
-    final recentReaction = _remoteFriendVisibleReactionForSnapshot(snapshot);
-    final statusAccent = recentReaction == null
-        ? localAccent
-        : recentReaction.sentByUid == _remoteFriendLocalUid
-        ? localAccent
-        : opponentAccent;
-    final cooldownRemaining = _remoteFriendReactionCooldownRemainingForSnapshot(
-      snapshot,
-    );
-    final reactionReady =
-        cooldownRemaining == Duration.zero &&
-        !_remoteFriendReactionInFlight &&
-        !_remoteFriendOperationInProgress;
-    final reactionStatusText = _remoteFriendReactionInFlight
-        ? 'Sending...'
-        : cooldownRemaining > Duration.zero
-        ? 'Ready again in ${_formatRemoteFriendReactionCooldown(cooldownRemaining)}'
-        : 'Ready now';
-    final launchesFromLeadingClock = white == _friendClockTopShowsWhite;
-
-    await _showRemoteFriendReactionPopup(
-      strangeReactionsUnlocked: strangeReactionsUnlocked,
-      reactionReady: reactionReady,
-      reactionStatusText: reactionStatusText,
-      localAccent: localAccent,
-      opponentAccent: opponentAccent,
-      statusAccent: statusAccent,
-      preferredAlignment: launchesFromLeadingClock
-          ? Alignment.topLeft
-          : Alignment.topRight,
-      preferredPadding: EdgeInsets.fromLTRB(
-        12,
-        media.padding.top + 110,
-        12,
-        20,
-      ),
-      compactPortrait: true,
     );
   }
 
@@ -8312,42 +8181,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              accent.withValues(alpha: isLight ? 0.14 : 0.18),
-              scheme.surface,
-            ),
-            scheme.surface,
-            Color.alphaBlend(
-              accent.withValues(alpha: isLight ? 0.06 : 0.10),
-              scheme.surface,
-            ),
-          ],
-          stops: const [0.0, 0.58, 1.0],
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.08 : 0.14),
+          scheme.surface,
         ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withValues(alpha: 0.34)),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: isLight ? 0.10 : 0.18),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: 0.30)),
       ),
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 42,
+            height: 42,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: isLight ? 0.18 : 0.24),
+              color: accent.withValues(alpha: isLight ? 0.16 : 0.22),
               shape: BoxShape.circle,
-              border: Border.all(color: accent.withValues(alpha: 0.26)),
             ),
             child: Text(emoji, style: const TextStyle(fontSize: 22)),
           ),
@@ -8356,47 +8205,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontSize: 12.8,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: isLight ? 0.14 : 0.20),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        'LIVE REACT',
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontSize: 9.2,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 12.6,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.74),
-                    fontSize: 11.5,
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: 11.4,
                     fontWeight: FontWeight.w700,
-                    height: 1.24,
+                    height: 1.22,
                   ),
                 ),
               ],
@@ -8418,51 +8242,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              accent.withValues(alpha: isLight ? 0.14 : 0.20),
-              scheme.surface,
-            ),
-            Color.alphaBlend(
-              accent.withValues(alpha: isLight ? 0.08 : 0.14),
-              scheme.surface,
-            ),
-          ],
+        color: Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.10 : 0.16),
+          scheme.surface,
         ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: accent.withValues(alpha: 0.28)),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: isLight ? 0.10 : 0.14),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.26)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: isLight ? 0.18 : 0.24),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(emoji, style: const TextStyle(fontSize: 13.5)),
-          ),
+          Text(emoji, style: const TextStyle(fontSize: 15)),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.78),
-              fontSize: 9.6,
+              color: scheme.onSurface.withValues(alpha: 0.74),
+              fontSize: 9.8,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.2,
             ),
@@ -17736,27 +17534,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final isLandscape = media.orientation == Orientation.landscape;
     final isTablet = media.size.shortestSide >= 700;
     final showMenuLogo = !isLandscape || isTablet;
-    final landscapeMenuGlassAlphaFactor = isLandscape ? 0.75 : 1.0;
-    final menuCardWidth = isLandscape ? (isTablet ? 288.0 : 264.0) : 220.0;
-    final menuCardPadding = EdgeInsets.symmetric(
-      horizontal: isLandscape ? 10 : 8,
-      vertical: isLandscape ? 18 : 16,
-    );
-    final menuCompositionSize = isLandscape ? 430.0 : 360 * 1.10;
-    final menuSecondaryShapeSize = menuCompositionSize * 0.792;
-    final menuMaxWidth = isLandscape ? 560.0 : 430.0;
-    final menuMaxHeight = isLandscape ? 500.0 : 560.0;
-    final portraitMenuLiftT = !isLandscape && !isTablet
-        ? ((media.size.height - 760.0) / 180.0).clamp(0.0, 1.0)
-        : 0.0;
-    final menuCompositionAlignment = Alignment(
-      0,
-      !isLandscape
-          ? (isTablet ? -0.08 : ui.lerpDouble(-0.08, -0.30, portraitMenuLiftT)!)
-          : 0.0,
-    );
-    final logoTopGap = showMenuLogo ? (isLandscape ? 4.0 : 0.0) : 0.0;
-    final logoBottomGap = showMenuLogo ? (isLandscape ? 10.0 : 4.0) : 2.0;
 
     return AnimatedBuilder(
       animation: _pulseController,
@@ -17781,9 +17558,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           arcade.panelAlt.withValues(alpha: isMono ? 0.04 : 0.18),
           scheme.surfaceContainerHighest,
         );
-        double menuGlassAlpha(double alpha) =>
-            (alpha * landscapeMenuGlassAlphaFactor).clamp(0.0, 1.0);
-
         final monoBlueDotColor = AppThemeProvider.monochromeBlueOrbColor(
           isDark: theme.brightness == Brightness.dark,
         );
@@ -17811,30 +17585,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _yellowMenuDotPosition.dx.clamp(-1.0, 1.0),
           _yellowMenuDotPosition.dy.clamp(-1.0, 1.0),
         );
+        const menuCompositionSize = 360 * 1.10;
         final menuCardShell = Container(
-          width: menuCardWidth,
-          padding: menuCardPadding,
+          width: 220,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
           decoration: BoxDecoration(
-            color: menuWindowSurface.withValues(
-              alpha: menuGlassAlpha(isMono ? 0.10 : 0.14),
-            ),
+            color: menuWindowSurface.withValues(alpha: isMono ? 0.10 : 0.14),
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.white.withValues(
-                  alpha: menuGlassAlpha(isMono ? 0.38 : 0.44),
-                ),
-                menuWindowSurface.withValues(
-                  alpha: menuGlassAlpha(isMono ? 0.14 : 0.10),
-                ),
+                Colors.white.withValues(alpha: isMono ? 0.38 : 0.44),
+                menuWindowSurface.withValues(alpha: isMono ? 0.14 : 0.10),
               ],
             ),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.white.withValues(
-                alpha: menuGlassAlpha(isMono ? 0.50 : 0.60),
-              ),
+              color: Colors.white.withValues(alpha: isMono ? 0.50 : 0.60),
               width: 1.2,
             ),
             boxShadow: [
@@ -17954,7 +17721,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       icon: const Icon(Icons.info_outline_rounded),
                     ),
                   ),
-                  SizedBox(height: logoTopGap),
+                  SizedBox(height: showMenuLogo ? 4 : 0),
                   if (showMenuLogo)
                     Center(
                       child: GestureDetector(
@@ -17968,21 +17735,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ),
                     ),
-                  SizedBox(height: logoBottomGap),
+                  SizedBox(height: showMenuLogo ? 10 : 2),
                   Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, innerConstraints) {
-                        final availableWidth = min(
-                          innerConstraints.maxWidth,
-                          menuMaxWidth,
-                        );
-                        final availableHeight = min(
-                          innerConstraints.maxHeight,
-                          menuMaxHeight,
-                        );
-                        return Align(
-                          alignment: menuCompositionAlignment,
-                          child: SizedBox(
+                    child: Center(
+                      child: LayoutBuilder(
+                        builder: (context, innerConstraints) {
+                          final availableWidth = min(
+                            innerConstraints.maxWidth,
+                            430.0,
+                          );
+                          final availableHeight = min(
+                            innerConstraints.maxHeight,
+                            560.0,
+                          );
+                          return SizedBox(
                             width: availableWidth,
                             height: availableHeight,
                             child: FittedBox(
@@ -18008,7 +17774,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       accentColor: blueDotColor,
                                     ),
                                     _buildMenuCenterShape(
-                                      size: menuSecondaryShapeSize,
+                                      size: 285 * 1.10,
                                       strokeColor: Color.alphaBlend(
                                         arcade.amber.withValues(
                                           alpha: isMono ? 0.04 : 0.14,
@@ -18026,9 +17792,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
                   Padding(
@@ -21351,8 +21117,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   final portraitToolboxWidth = portraitBoardRect == null
                       ? null
                       : min(portraitBoardRect.width, 420.0);
-                  final portraitRemoteFriendCompactLayout =
-                      !isLandscape && _isRemoteFriendMatchMode;
 
                   return SizedBox(
                     key: _sceneKey,
@@ -21683,15 +21447,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       _buildHeader(scale),
                                       if (showRemoteFriendClockStrip)
                                         Padding(
-                                          padding: EdgeInsets.fromLTRB(
+                                          padding: const EdgeInsets.fromLTRB(
                                             0,
-                                            portraitRemoteFriendCompactLayout
-                                                ? 6
-                                                : 8,
+                                            8,
                                             0,
-                                            portraitRemoteFriendCompactLayout
-                                                ? 4
-                                                : 6,
+                                            6,
                                           ),
                                           child: _buildRemoteFriendClockStrip(
                                             isLandscape: false,
@@ -21718,9 +21478,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         child: Padding(
                                           padding: EdgeInsets.fromLTRB(
                                             8,
-                                            portraitRemoteFriendCompactLayout
-                                                ? 4
-                                                : 8,
+                                            8,
                                             8,
                                             _isBotMatchMode ? 2 : 8,
                                           ),
@@ -21771,14 +21529,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         ),
                                       if (_isAnalysisMatchMode)
                                         _buildHistoryBar(),
-                                      _buildActionArea(
-                                        compactBottom: _isRemoteFriendMatchMode
-                                            ? 12
-                                            : 20,
-                                        horizontal: _isRemoteFriendMatchMode
-                                            ? 14
-                                            : 20,
-                                      ),
+                                      _buildActionArea(),
                                     ],
                                   ),
                           ),
@@ -23374,12 +23125,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final occupantUid = white ? snapshot.whiteUid : snapshot.blackUid;
     final isLocalSeat =
         occupantUid != null && occupantUid == _remoteFriendLocalUid;
-    final canLaunchReactionPopup =
-        media.orientation == Orientation.portrait &&
-        isLocalSeat &&
-        snapshot.status == RemoteFriendMatchStatus.active &&
-        snapshot.outcome == null &&
-        !_isRemoteFriendPieceSelectionOpen;
     final isActive =
         _gameOutcome == null &&
         snapshot.status == RemoteFriendMatchStatus.active &&
@@ -23462,7 +23207,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? AvatarCatalog.entryFor(avatarId)
         : null;
 
-    final clockCard = AnimatedContainer(
+    return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       padding: EdgeInsets.symmetric(
@@ -23487,107 +23232,68 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ),
         ],
       ),
-      child: Stack(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (avatarEntry != null) ...[
-                    AvatarPortrait(
-                      avatar: avatarEntry,
-                      size: compactClockCard ? 20 : 22,
-                      radius: 6,
-                      borderColor: accent.withValues(alpha: 0.38),
-                      backgroundColor: Colors.transparent,
-                      showShadow: false,
-                    ),
-                    const SizedBox(width: 8),
-                  ] else if (occupantUid != null) ...[
-                    Icon(
-                      Icons.account_circle_outlined,
-                      size: compactClockCard ? 20 : 22,
-                      color: accent.withValues(alpha: 0.60),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: compactClockCard ? 10.0 : 10.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: compactClockCard ? 3 : 4),
-              Text(
-                timeText,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontSize: compactClockCard ? 17 : 18,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.3,
+              if (avatarEntry != null) ...[
+                AvatarPortrait(
+                  avatar: avatarEntry,
+                  size: compactClockCard ? 20 : 22,
+                  radius: 6,
+                  borderColor: accent.withValues(alpha: 0.38),
+                  backgroundColor: Colors.transparent,
+                  showShadow: false,
                 ),
-              ),
-              SizedBox(height: compactClockCard ? 1.5 : 2),
+                const SizedBox(width: 8),
+              ] else if (occupantUid != null) ...[
+                Icon(
+                  Icons.account_circle_outlined,
+                  size: compactClockCard ? 20 : 22,
+                  color: accent.withValues(alpha: 0.60),
+                ),
+                const SizedBox(width: 8),
+              ],
               Text(
-                detail,
+                label,
                 style: TextStyle(
-                  color: scheme.onSurface.withValues(alpha: 0.66),
+                  color: accent,
                   fontSize: compactClockCard ? 10.0 : 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
                 ),
               ),
-              if (seatReaction != null)
-                _remoteFriendReactionClockBadge(
-                  emoji: seatReaction.emoji,
-                  label: isLocalSeat ? 'You reacted' : 'Friend reacted',
-                  accent: accent,
-                ),
             ],
           ),
-          if (canLaunchReactionPopup)
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Color.alphaBlend(
-                    accent.withValues(alpha: isDark ? 0.20 : 0.14),
-                    scheme.surface,
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: accent.withValues(alpha: 0.22)),
-                ),
-                child: Icon(
-                  Icons.add_reaction_rounded,
-                  size: 13,
-                  color: accent,
-                ),
-              ),
+          SizedBox(height: compactClockCard ? 3 : 4),
+          Text(
+            timeText,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: compactClockCard ? 17 : 18,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.3,
+            ),
+          ),
+          SizedBox(height: compactClockCard ? 1.5 : 2),
+          Text(
+            detail,
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.66),
+              fontSize: compactClockCard ? 10.0 : 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
+          if (seatReaction != null)
+            _remoteFriendReactionClockBadge(
+              emoji: seatReaction.emoji,
+              label: isLocalSeat ? 'You reacted' : 'Friend reacted',
+              accent: accent,
             ),
         ],
-      ),
-    );
-
-    if (!canLaunchReactionPopup) {
-      return clockCard;
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(compactClockCard ? 18 : 16),
-        onTap: () =>
-            unawaited(_showRemoteFriendReactionPopupFromClock(white: white)),
-        child: clockCard,
       ),
     );
   }
@@ -24844,142 +24550,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
-    Widget buildRemoteTalkButton({
-      required String statusText,
-      required bool ready,
-      required Color accent,
-      required List<_RemoteFriendReactionOption> options,
-    }) {
-      final buttonEnabled = !_remoteFriendOperationInProgress;
-      final background = Color.alphaBlend(
-        accent.withValues(alpha: isLight ? 0.10 : 0.16),
-        scheme.surface,
-      );
-
-      return AnimatedOpacity(
-        opacity: buttonEnabled ? 1.0 : 0.48,
-        duration: const Duration(milliseconds: 150),
-        child: PopupMenuButton<_RemoteFriendReactionOption>(
-          enabled: buttonEnabled,
-          tooltip: 'Talk',
-          padding: EdgeInsets.zero,
-          position: PopupMenuPosition.under,
-          color: Color.alphaBlend(
-            accent.withValues(alpha: isLight ? 0.10 : 0.18),
-            scheme.surfaceContainerHigh,
-          ),
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.black.withValues(alpha: isLight ? 0.16 : 0.30),
-          onSelected: (option) =>
-              unawaited(_sendRemoteFriendReaction(option.emoji)),
-          itemBuilder: (context) =>
-              <PopupMenuEntry<_RemoteFriendReactionOption>>[
-                PopupMenuItem<_RemoteFriendReactionOption>(
-                  enabled: false,
-                  height: 54,
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Talk',
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontSize: 13.4,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        ready
-                            ? 'Choose one of 10 preset chess phrases.'
-                            : statusText,
-                        style: TextStyle(
-                          color: scheme.onSurface.withValues(alpha: 0.70),
-                          fontSize: 11.2,
-                          height: 1.24,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(height: 6),
-                for (final option in options)
-                  PopupMenuItem<_RemoteFriendReactionOption>(
-                    value: option,
-                    enabled: ready,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            option.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.onSurface,
-                              fontSize: 12.8,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          option.emoji,
-                          style: const TextStyle(fontSize: 18),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(
-              horizontal: compactRemoteActionPanel ? 12 : 14,
-              vertical: compactRemoteActionPanel ? 10 : 12,
-            ),
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: accent.withValues(alpha: 0.42)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.chat_bubble_outline_rounded,
-                  size: 18,
-                  color: accent,
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    'Talk',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: compactRemoteActionPanel ? 13.2 : 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.arrow_drop_down_rounded,
-                  size: 20,
-                  color: accent.withValues(alpha: 0.86),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     if (_isBotMatchMode) {
       final useMonochrome =
           context.watch<AppThemeProvider>().isMonochrome ||
@@ -25352,11 +24922,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           remoteSnapshot != null &&
           remoteSnapshot.status == RemoteFriendMatchStatus.active &&
           remoteSnapshot.outcome == null;
-      final compactPortraitRemoteMatchControls =
-          compactRemoteActionPanel &&
-          !isLandscape &&
-          _isRemoteFriendActiveMatch &&
-          !remotePieceSelectionOpen;
       final shouldScrollRemoteActionBody =
           isLandscape && media.size.height <= 420 && remotePieceSelectionOpen;
       final buttons = <Widget>[
@@ -25454,183 +25019,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           accent: remoteAccent,
         ),
       ];
-      final compactButtons = <Widget>[
-        buildRemoteActionButton(
-          label: 'Menu',
-          icon: Icons.menu_rounded,
-          onPressed: _remoteFriendOperationInProgress
-              ? null
-              : () => unawaited(_showRemoteFriendActionMenu()),
-          accent: scheme.onSurface,
-        ),
-        if (showRemoteReactionTray)
-          buildRemoteTalkButton(
-            statusText: remoteReactionStatusText,
-            ready: remoteReactionReady,
-            accent: remoteReadyAccent,
-            options: _remoteFriendStandardReactionOptions,
-          ),
-        if (!remotePieceSelectionOpen && _hasIncomingRemoteDrawOffer)
-          buildRemoteActionButton(
-            label: 'Accept',
-            icon: Icons.handshake_outlined,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(
-                    _runRemoteFriendAction(RemoteFriendMatchAction.acceptDraw),
-                  ),
-            accent: remoteOpponentAccent,
-            primary: true,
-          ),
-        if (!remotePieceSelectionOpen && _hasIncomingRemoteDrawOffer)
-          buildRemoteActionButton(
-            label: 'Decline',
-            icon: Icons.close_rounded,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(
-                    _runRemoteFriendAction(RemoteFriendMatchAction.declineDraw),
-                  ),
-            accent: remoteDangerAccent,
-          ),
-        if (!remotePieceSelectionOpen && !_hasIncomingRemoteDrawOffer)
-          buildRemoteActionButton(
-            label: _hasOutgoingRemoteDrawOffer ? 'Draw Sent' : 'Draw',
-            icon: Icons.handshake_outlined,
-            onPressed:
-                _remoteFriendOperationInProgress || _hasOutgoingRemoteDrawOffer
-                ? null
-                : () => unawaited(
-                    _runRemoteFriendAction(RemoteFriendMatchAction.offerDraw),
-                  ),
-            accent: remoteOpponentAccent,
-            primary: !_hasOutgoingRemoteDrawOffer,
-          ),
-        if (!remotePieceSelectionOpen && !_hasIncomingRemoteDrawOffer)
-          buildRemoteActionButton(
-            label: 'Resign',
-            icon: Icons.flag_rounded,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(
-                    _runRemoteFriendAction(RemoteFriendMatchAction.resign),
-                  ),
-            accent: remoteDangerAccent,
-            primary: true,
-          ),
-        buildRemoteActionButton(
-          label: 'Sync',
-          icon: Icons.sync_rounded,
-          onPressed: _remoteFriendOperationInProgress
-              ? null
-              : () => unawaited(_refreshRemoteFriendMatch()),
-          accent: remoteAccent,
-        ),
-      ];
-
-      if (compactPortraitRemoteMatchControls) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: min(compactBottom, 12.0),
-            left: horizontal,
-            right: horizontal,
-          ),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                remoteAccent.withValues(alpha: isLight ? 0.06 : 0.12),
-                scheme.surface,
-              ),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: remoteAccent.withValues(alpha: 0.22)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (hasRemoteError)
-                  _remoteFriendInlineErrorBanner(
-                    message: remoteErrorText,
-                    accent: remoteDangerAccent,
-                    onDismiss: () => setState(() {
-                      _remoteFriendLastError = null;
-                    }),
-                    onRetry: () => unawaited(_refreshRemoteFriendMatch()),
-                  ),
-                if (remoteBusyText != null) ...[
-                  if (hasRemoteError) const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Color.alphaBlend(
-                        remoteAccent.withValues(alpha: isLight ? 0.08 : 0.14),
-                        scheme.surface,
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: remoteAccent.withValues(alpha: 0.22),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.0,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              remoteAccent,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            remoteBusyText,
-                            style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.78),
-                              fontSize: 11.4,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                if (hasRemoteError || remoteBusyText != null)
-                  const SizedBox(height: 8),
-                LayoutBuilder(
-                  builder: (context, actionConstraints) {
-                    const buttonSpacing = 8.0;
-                    final buttonColumnCount = actionConstraints.maxWidth >= 330
-                        ? 3
-                        : 2;
-                    final buttonWidth =
-                        (actionConstraints.maxWidth -
-                            buttonSpacing * (buttonColumnCount - 1)) /
-                        buttonColumnCount;
-
-                    return Wrap(
-                      spacing: buttonSpacing,
-                      runSpacing: buttonSpacing,
-                      children: [
-                        for (final button in compactButtons)
-                          SizedBox(width: buttonWidth, child: button),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      }
 
       final remoteActionCard = Container(
         width: double.infinity,

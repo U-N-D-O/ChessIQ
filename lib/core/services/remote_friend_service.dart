@@ -203,11 +203,16 @@ class RemoteFriendService {
   Future<RemoteFriendMutationResult> actOnMatch({
     required String matchId,
     required RemoteFriendMatchAction action,
+    bool? keepScore,
   }) async {
-    final result = await _callFunction(_actOnMatchFunction, <String, dynamic>{
+    final data = <String, dynamic>{
       'matchId': matchId.trim(),
       'action': action.wireName,
-    });
+    };
+    if (keepScore != null) {
+      data['keepScore'] = keepScore;
+    }
+    final result = await _callFunction(_actOnMatchFunction, data);
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 

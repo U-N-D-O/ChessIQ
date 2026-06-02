@@ -77,6 +77,9 @@ enum RemoteFriendMatchAction {
   acceptDraw,
   declineDraw,
   cancelPending,
+  offerRematch,
+  acceptRematch,
+  declineRematch,
 }
 
 extension RemoteFriendMatchActionWire on RemoteFriendMatchAction {
@@ -92,6 +95,12 @@ extension RemoteFriendMatchActionWire on RemoteFriendMatchAction {
         return 'declineDraw';
       case RemoteFriendMatchAction.cancelPending:
         return 'cancelPending';
+      case RemoteFriendMatchAction.offerRematch:
+        return 'offerRematch';
+      case RemoteFriendMatchAction.acceptRematch:
+        return 'acceptRematch';
+      case RemoteFriendMatchAction.declineRematch:
+        return 'declineRematch';
     }
   }
 }
@@ -332,10 +341,15 @@ class RemoteFriendMatchSnapshot {
     this.startedAt,
     this.expiresAt,
     this.pieceSelectionDeadlineAt,
+    this.rematchOfferByUid,
     this.outcome,
     this.reaction,
     this.whiteLastReactionAt,
     this.blackLastReactionAt,
+    required this.seriesScoreEnabled,
+    required this.hostSeriesScore,
+    required this.guestSeriesScore,
+    required this.rematchKeepScore,
   });
 
   factory RemoteFriendMatchSnapshot.fromMap(Map<String, dynamic> map) {
@@ -385,6 +399,17 @@ class RemoteFriendMatchSnapshot {
             map['activeClockSeat']?.toString(),
       ),
       drawOfferByUid: _nullableTrimmedString(map['drawOfferByUid']),
+      seriesScoreEnabled: _boolFromDynamic(
+        map['seriesScoreEnabled'],
+        fallback: false,
+      ),
+      hostSeriesScore: _intFromDynamic(map['hostSeriesScore']),
+      guestSeriesScore: _intFromDynamic(map['guestSeriesScore']),
+      rematchOfferByUid: _nullableTrimmedString(map['rematchOfferByUid']),
+      rematchKeepScore: _boolFromDynamic(
+        map['rematchKeepScore'],
+        fallback: false,
+      ),
       createdAt: _dateTimeFromDynamic(map['createdAtMs'] ?? map['createdAt']),
       updatedAt: _dateTimeFromDynamic(map['updatedAtMs'] ?? map['updatedAt']),
       startedAt: _nullableDateTimeFromDynamic(
@@ -433,6 +458,11 @@ class RemoteFriendMatchSnapshot {
   final DateTime? lastTickStartedAt;
   final RemoteFriendSeat? activeClockSeat;
   final String? drawOfferByUid;
+  final bool seriesScoreEnabled;
+  final int hostSeriesScore;
+  final int guestSeriesScore;
+  final String? rematchOfferByUid;
+  final bool rematchKeepScore;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? startedAt;
@@ -471,6 +501,11 @@ class RemoteFriendMatchSnapshot {
         'activeSeat': activeClockSeat?.wireName,
       },
       'drawOfferByUid': drawOfferByUid,
+      'seriesScoreEnabled': seriesScoreEnabled,
+      'hostSeriesScore': hostSeriesScore,
+      'guestSeriesScore': guestSeriesScore,
+      'rematchOfferByUid': rematchOfferByUid,
+      'rematchKeepScore': rematchKeepScore,
       'createdAtMs': createdAt.millisecondsSinceEpoch,
       'updatedAtMs': updatedAt.millisecondsSinceEpoch,
       'startedAtMs': startedAt?.millisecondsSinceEpoch,

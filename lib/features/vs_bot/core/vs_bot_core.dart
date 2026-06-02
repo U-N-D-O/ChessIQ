@@ -1277,6 +1277,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       }
     }
   }
+
   @override
   void _clearBotGhostArrows() {
     for (final timer in _botGhostArrowTimers.values) {
@@ -1284,6 +1285,354 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     }
     _botGhostArrowTimers.clear();
     _botGhostArrows.clear();
+  }
+
+  Future<void> _showHeadToHeadResultDialog(GameOutcome outcome) async {
+    var keepScore = _isRemoteFriendMatchMode
+        ? (_hasIncomingRemoteRematchOffer || _hasOutgoingRemoteRematchOffer
+              ? _remoteFriendRematchKeepsScore
+              : (_remoteFriendSnapshot?.seriesScoreEnabled ?? false))
+        : _localFriendSeriesScoreEnabled;
+
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final scheme = theme.colorScheme;
+        final isLight = theme.brightness == Brightness.light;
+        final useMonochrome =
+            dialogContext.watch<AppThemeProvider>().isMonochrome ||
+            _isCinematicThemeEnabled;
+        final isDraw = outcome == GameOutcome.draw;
+        final isTimedFinish =
+            _isTimedLocalFriendFinish || _isTimedRemoteFriendFinish;
+        final hasIncomingRematchOffer =
+            _isRemoteFriendMatchMode && _hasIncomingRemoteRematchOffer;
+        final hasOutgoingRematchOffer =
+            _isRemoteFriendMatchMode && _hasOutgoingRemoteRematchOffer;
+        final allowKeepScoreToggle =
+            !_isRemoteFriendMatchMode ||
+            (!hasIncomingRematchOffer && !hasOutgoingRematchOffer);
+        final title = hasIncomingRematchOffer || hasOutgoingRematchOffer
+            ? _endMatchCardTitle(outcome)
+            : _isRemoteFriendMatchMode
+            ? _remoteFriendOutcomeTitle(outcome)
+            : isDraw
+            ? _drawOutcomePersistentTitle(_gameDrawReason)
+            : _isTimedLocalFriendFinish
+            ? _localFriendTimeoutTitle(outcome)
+            : 'CHECKMATE';
+        final icon = hasIncomingRematchOffer
+            ? Icons.swap_horiz_rounded
+            : hasOutgoingRematchOffer
+            ? Icons.hourglass_top_rounded
+            : isDraw
+            ? Icons.balance_rounded
+            : isTimedFinish
+            ? Icons.flag_rounded
+            : Icons.crisis_alert_rounded;
+        final rawAccent = hasIncomingRematchOffer
+            ? const Color(0xFF58E09A)
+            : hasOutgoingRematchOffer
+            ? const Color(0xFF5AAEE8)
+            : isDraw
+            ? const Color(0xFFD1A22E)
+            : const Color(0xFFE45C5C);
+        final accent = useMonochrome
+            ? Color.lerp(rawAccent, scheme.onSurface, isLight ? 0.12 : 0.06)!
+            : rawAccent;
+        final panelBase = scheme.surface;
+        final panelTint = Color.alphaBlend(
+          (useMonochrome ? scheme.onSurface : scheme.primary).withValues(
+            alpha: isLight ? 0.045 : 0.10,
+          ),
+          panelBase,
+        );
+        final panelEnd = Color.alphaBlend(
+          accent.withValues(alpha: isLight ? 0.05 : 0.08),
+          panelBase,
+        );
+
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Widget buildActionButton({
+              required String label,
+              required IconData iconData,
+              required String resultValue,
+              VoidCallback? onPressed,
+              bool emphasized = false,
+              bool active = false,
+              bool enabled = true,
+            }) {
+              final borderRadius = BorderRadius.circular(16);
+              final sideColor = accent.withValues(
+                alpha: emphasized ? 0.44 : (active ? 0.42 : 0.28),
+              );
+              final backgroundColor = emphasized
+                  ? (useMonochrome ? scheme.onSurface : accent)
+                  : active
+                  ? Color.alphaBlend(
+                      accent.withValues(alpha: isLight ? 0.20 : 0.22),
+                      panelBase,
+                    )
+                  : Color.alphaBlend(
+                      accent.withValues(alpha: isLight ? 0.08 : 0.10),
+                      panelBase,
+                    );
+              final foregroundColor = emphasized
+                  ? (useMonochrome ? scheme.surface : const Color(0xFF0B0F16))
+                  : scheme.onSurface;
+
+              return SizedBox(
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: !enabled
+                      ? null
+                      : (onPressed ??
+                            () => Navigator.of(dialogContext).pop(resultValue)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: backgroundColor,
+                    foregroundColor: foregroundColor,
+                    disabledBackgroundColor: backgroundColor.withValues(
+                      alpha: 0.72,
+                    ),
+                    disabledForegroundColor: foregroundColor.withValues(
+                      alpha: 0.56,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: borderRadius,
+                      side: BorderSide(color: sideColor),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                  ),
+                  icon: Icon(iconData, size: 18),
+                  label: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoColumn = constraints.maxWidth >= 380;
+                  final buttonWidth = twoColumn
+                      ? (constraints.maxWidth - 12) / 2
+                      : constraints.maxWidth;
+                  final keepScoreLabel = keepScore
+                      ? 'Keep Score On'
+                      : 'Keep Score Off';
+                  final rematchLabel = _isLocalFriendMatchMode
+                      ? 'Rematch'
+                      : hasIncomingRematchOffer
+                      ? 'Accept Rematch'
+                      : hasOutgoingRematchOffer
+                      ? 'Cancel Offer'
+                      : 'Offer Rematch';
+                  final rematchAction = _isLocalFriendMatchMode
+                      ? 'local-rematch'
+                      : hasIncomingRematchOffer
+                      ? 'remote-accept-rematch'
+                      : hasOutgoingRematchOffer
+                      ? 'remote-decline-rematch'
+                      : 'remote-offer-rematch';
+                  final actionTiles = <Widget>[
+                    SizedBox(
+                      width: buttonWidth,
+                      child: buildActionButton(
+                        label: rematchLabel,
+                        iconData: Icons.replay_rounded,
+                        resultValue: rematchAction,
+                        emphasized: true,
+                      ),
+                    ),
+                    SizedBox(
+                      width: buttonWidth,
+                      child: !allowKeepScoreToggle
+                          ? buildActionButton(
+                              label: keepScore ? 'Score On' : 'Score Off',
+                              iconData: keepScore
+                                  ? Icons.scoreboard_rounded
+                                  : Icons.scoreboard_outlined,
+                              resultValue: 'board',
+                              active: keepScore,
+                              enabled: false,
+                            )
+                          : buildActionButton(
+                              label: keepScoreLabel,
+                              iconData: keepScore
+                                  ? Icons.scoreboard_rounded
+                                  : Icons.scoreboard_outlined,
+                              resultValue: 'board',
+                              onPressed: () {
+                                setDialogState(() {
+                                  keepScore = !keepScore;
+                                });
+                              },
+                              active: keepScore,
+                            ),
+                    ),
+                    if (hasIncomingRematchOffer)
+                      SizedBox(
+                        width: buttonWidth,
+                        child: buildActionButton(
+                          label: 'Decline Offer',
+                          iconData: Icons.close_rounded,
+                          resultValue: 'remote-decline-rematch',
+                        ),
+                      ),
+                    SizedBox(
+                      width: buttonWidth,
+                      child: buildActionButton(
+                        label: 'Return to Board',
+                        iconData: Icons.visibility_rounded,
+                        resultValue: 'board',
+                      ),
+                    ),
+                    SizedBox(
+                      width: buttonWidth,
+                      child: buildActionButton(
+                        label: 'Play Chess Menu',
+                        iconData: Icons.sports_esports_rounded,
+                        resultValue: 'vs-menu',
+                      ),
+                    ),
+                    SizedBox(
+                      width: buttonWidth,
+                      child: buildActionButton(
+                        label: 'Main Menu',
+                        iconData: Icons.home_rounded,
+                        resultValue: 'main-menu',
+                      ),
+                    ),
+                  ];
+
+                  return SingleChildScrollView(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 460),
+                      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [panelTint, panelBase, panelEnd],
+                          stops: const [0.0, 0.58, 1.0],
+                        ),
+                        border: Border.all(
+                          color: scheme.outline.withValues(
+                            alpha: isLight ? 0.24 : 0.34,
+                          ),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: accent.withValues(
+                              alpha: isLight ? 0.12 : 0.18,
+                            ),
+                            blurRadius: 30,
+                            spreadRadius: 1.0,
+                          ),
+                          BoxShadow(
+                            color: scheme.shadow.withValues(
+                              alpha: isLight ? 0.14 : 0.32,
+                            ),
+                            blurRadius: 34,
+                            offset: const Offset(0, 14),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 68,
+                            height: 68,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  accent.withValues(alpha: 0.35),
+                                  accent.withValues(alpha: 0.08),
+                                ],
+                              ),
+                              border: Border.all(
+                                color: accent.withValues(alpha: 0.45),
+                              ),
+                            ),
+                            child: Icon(icon, color: accent, size: 31),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: actionTiles,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    _gameResultDialogVisible = false;
+    if (!mounted) {
+      return;
+    }
+
+    switch (result) {
+      case 'board':
+      case null:
+        return;
+      case 'vs-menu':
+        _openVsModeFromMenu();
+        return;
+      case 'main-menu':
+        _goToMenu();
+        return;
+      case 'local-rematch':
+        await _startLocalFriendRematch(keepScore: keepScore);
+        return;
+      case 'remote-offer-rematch':
+        await _runRemoteFriendAction(
+          RemoteFriendMatchAction.offerRematch,
+          keepScore: keepScore,
+        );
+        return;
+      case 'remote-accept-rematch':
+        await _runRemoteFriendAction(RemoteFriendMatchAction.acceptRematch);
+        return;
+      case 'remote-decline-rematch':
+        await _runRemoteFriendAction(RemoteFriendMatchAction.declineRematch);
+        return;
+    }
   }
 
   @override
@@ -1296,6 +1645,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     }
 
     if (!_isBotMatchMode) {
+      if (_isLocalFriendMatchMode || _isRemoteFriendMatchMode) {
+        await _showHeadToHeadResultDialog(outcome);
+        return;
+      }
+
       final result = await showDialog<String>(
         context: context,
         barrierDismissible: false,
@@ -1334,7 +1688,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           final continueForeground = useMonochrome
               ? scheme.surface
               : scheme.onPrimary;
-            final returnToPlayChessMenu =
+          final returnToPlayChessMenu =
               _isLocalFriendMatchMode || _isRemoteFriendMatchMode;
           final isTimedLocalFriendFinish = _isTimedLocalFriendFinish && !isDraw;
           final isTimedRemoteFriendFinish =
@@ -1446,10 +1800,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       width: double.infinity,
                       height: 46,
                       child: FilledButton.icon(
-                        onPressed: () =>
-                            Navigator.of(dialogContext).pop(
-                              returnToPlayChessMenu ? 'menu' : 'continue',
-                            ),
+                        onPressed: () => Navigator.of(
+                          dialogContext,
+                        ).pop(returnToPlayChessMenu ? 'menu' : 'continue'),
                         style: FilledButton.styleFrom(
                           backgroundColor: continueBackground,
                           foregroundColor: continueForeground,
