@@ -179,7 +179,12 @@ const List<_RemoteFriendReactionOption> _remoteFriendStrangeReactionOptions =
 
 enum _VsModeQuickOption { crossDevice, sharedScreen, vsCpu, quickJoin }
 
-enum _RemoteFriendInviteToolsAction { copyCode, copyLink, shareInvite, showQr }
+enum _RemoteFriendInviteToolsAction {
+  copyCode,
+  copyLink,
+  shareInvite,
+  showQr,
+}
 
 enum _RemoteFriendNavigationAction { mainMenu, playChess, analysis }
 
@@ -5540,47 +5545,47 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     final linkAccent = useMonochrome ? scheme.onSurface : scheme.primary;
 
-    final action =
-        await _showRemoteFriendActionSheet<_RemoteFriendInviteToolsAction>(
-          title: 'Invite Tools',
-          subtitle:
-              'Keep the private invite tight: copy the code, send the hosted '
-              'link, or pop the QR for the other phone.',
+    final action = await _showRemoteFriendActionSheet<
+      _RemoteFriendInviteToolsAction
+    >(
+      title: 'Invite Tools',
+      subtitle:
+          'Keep the private invite tight: copy the code, send the hosted '
+          'link, or pop the QR for the other phone.',
+      accent: inviteAccent,
+      options: <_RemoteFriendActionSheetOption<
+        _RemoteFriendInviteToolsAction
+      >>[
+        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+          value: _RemoteFriendInviteToolsAction.copyCode,
+          label: 'Copy Code',
+          description: 'Grab the six-character code for manual join.',
+          icon: Icons.key_rounded,
           accent: inviteAccent,
-          options:
-              <_RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>>[
-                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-                  value: _RemoteFriendInviteToolsAction.copyCode,
-                  label: 'Copy Code',
-                  description: 'Grab the six-character code for manual join.',
-                  icon: Icons.key_rounded,
-                  accent: inviteAccent,
-                ),
-                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-                  value: _RemoteFriendInviteToolsAction.copyLink,
-                  label: 'Copy Link',
-                  description: 'Copy the HTTPS invite page URL directly.',
-                  icon: Icons.link_rounded,
-                  accent: linkAccent,
-                ),
-                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-                  value: _RemoteFriendInviteToolsAction.shareInvite,
-                  label: 'Share Invite',
-                  description:
-                      'Open the share sheet with the invite page and code.',
-                  icon: Icons.share_rounded,
-                  accent: inviteAccent,
-                ),
-                _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-                  value: _RemoteFriendInviteToolsAction.showQr,
-                  label: 'Show QR',
-                  description:
-                      'Display a scannable HTTPS QR for the other phone.',
-                  icon: Icons.qr_code_2_rounded,
-                  accent: qrAccent,
-                ),
-              ],
-        );
+        ),
+        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+          value: _RemoteFriendInviteToolsAction.copyLink,
+          label: 'Copy Link',
+          description: 'Copy the HTTPS invite page URL directly.',
+          icon: Icons.link_rounded,
+          accent: linkAccent,
+        ),
+        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+          value: _RemoteFriendInviteToolsAction.shareInvite,
+          label: 'Share Invite',
+          description: 'Open the share sheet with the invite page and code.',
+          icon: Icons.share_rounded,
+          accent: inviteAccent,
+        ),
+        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+          value: _RemoteFriendInviteToolsAction.showQr,
+          label: 'Show QR',
+          description: 'Display a scannable HTTPS QR for the other phone.',
+          icon: Icons.qr_code_2_rounded,
+          accent: qrAccent,
+        ),
+      ],
+    );
     if (!mounted || action == null) {
       return;
     }
@@ -5616,39 +5621,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     final menuAccent = useMonochrome ? scheme.onSurface : scheme.primary;
 
-    final destination =
-        await _showRemoteFriendActionSheet<_RemoteFriendNavigationAction>(
-          title: 'Where To Next?',
-          subtitle:
-              'Exit the live invite panel and jump straight to another ChessIQ '
-              'surface.',
+    final destination = await _showRemoteFriendActionSheet<
+      _RemoteFriendNavigationAction
+    >(
+      title: 'Where To Next?',
+      subtitle:
+          'Exit the live invite panel and jump straight to another ChessIQ '
+          'surface.',
+      accent: menuAccent,
+      options: <_RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>>[
+        _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+          value: _RemoteFriendNavigationAction.mainMenu,
+          label: 'Main Menu',
+          description: 'Return to the ChessIQ landing screen.',
+          icon: Icons.home_rounded,
           accent: menuAccent,
-          options:
-              <_RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>>[
-                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
-                  value: _RemoteFriendNavigationAction.mainMenu,
-                  label: 'Main Menu',
-                  description: 'Return to the ChessIQ landing screen.',
-                  icon: Icons.home_rounded,
-                  accent: menuAccent,
-                ),
-                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
-                  value: _RemoteFriendNavigationAction.playChess,
-                  label: 'Play Chess',
-                  description:
-                      'Go back to the versus hub and pick another mode.',
-                  icon: Icons.sports_esports_rounded,
-                  accent: playAccent,
-                ),
-                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
-                  value: _RemoteFriendNavigationAction.analysis,
-                  label: 'Analysis',
-                  description: 'Keep the board and continue in analysis mode.',
-                  icon: Icons.insights_rounded,
-                  accent: analysisAccent,
-                ),
-              ],
-        );
+        ),
+        _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+          value: _RemoteFriendNavigationAction.playChess,
+          label: 'Play Chess',
+          description: 'Go back to the versus hub and pick another mode.',
+          icon: Icons.sports_esports_rounded,
+          accent: playAccent,
+        ),
+        _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+          value: _RemoteFriendNavigationAction.analysis,
+          label: 'Analysis',
+          description: 'Keep the board and continue in analysis mode.',
+          icon: Icons.insights_rounded,
+          accent: analysisAccent,
+        ),
+      ],
+    );
     if (!mounted || destination == null) {
       return;
     }
@@ -6460,6 +6464,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           RemoteFriendMatchAction.offerDraw => 'offer a draw',
           RemoteFriendMatchAction.acceptDraw => 'accept the draw',
           RemoteFriendMatchAction.declineDraw => 'decline the draw',
+          RemoteFriendMatchAction.offerRematch => 'offer a rematch',
+          RemoteFriendMatchAction.acceptRematch => 'accept the rematch',
+          RemoteFriendMatchAction.declineRematch => 'decline the rematch',
         };
         return (
           title: 'Action Unavailable',
@@ -7405,328 +7412,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Future<void> _showRemoteFriendReactionPopup({
-    required bool strangeReactionsUnlocked,
-    required bool reactionReady,
-    required String reactionStatusText,
-    required Color localAccent,
-    required Color opponentAccent,
-    required Color statusAccent,
-  }) async {
-    if (!mounted) {
-      return;
-    }
-
-    final theme = Theme.of(context);
-    final isLight = theme.brightness == Brightness.light;
-
-    await showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Quick reacts',
-      barrierColor: Colors.black.withValues(alpha: isLight ? 0.10 : 0.24),
-      transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        final dialogTheme = Theme.of(dialogContext);
-        final dialogScheme = dialogTheme.colorScheme;
-        final dialogIsLight = dialogTheme.brightness == Brightness.light;
-        final media = MediaQuery.of(dialogContext);
-        final isLandscape = media.orientation == Orientation.landscape;
-        final popupWidth = isLandscape
-            ? (media.size.width * 0.28).clamp(280.0, 360.0).toDouble()
-            : min(360.0, media.size.width - 24);
-        final popupHeight = min(
-          isLandscape ? 356.0 : 420.0,
-          media.size.height * (isLandscape ? 0.58 : 0.62),
-        );
-
-        VoidCallback? standardReactionTap(_RemoteFriendReactionOption option) {
-          if (!reactionReady) {
-            return null;
-          }
-
-          return () {
-            Navigator.of(dialogContext).pop();
-            unawaited(_sendRemoteFriendReaction(option.emoji));
-          };
-        }
-
-        VoidCallback? strangeReactionTap(_RemoteFriendReactionOption option) {
-          if (!strangeReactionsUnlocked) {
-            return _showLockedRemoteFriendReactionMessage;
-          }
-          if (!reactionReady) {
-            return null;
-          }
-
-          return () {
-            Navigator.of(dialogContext).pop();
-            unawaited(_sendRemoteFriendReaction(option.emoji));
-          };
-        }
-
-        return SafeArea(
-          child: Align(
-            alignment: isLandscape
-                ? Alignment.bottomRight
-                : Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                isLandscape ? 108 : 24,
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: popupWidth,
-                    maxHeight: popupHeight,
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color.alphaBlend(
-                            localAccent.withValues(
-                              alpha: dialogIsLight ? 0.12 : 0.18,
-                            ),
-                            dialogScheme.surface,
-                          ),
-                          dialogScheme.surface,
-                          Color.alphaBlend(
-                            opponentAccent.withValues(
-                              alpha: dialogIsLight ? 0.08 : 0.14,
-                            ),
-                            dialogScheme.surface,
-                          ),
-                        ],
-                        stops: const [0.0, 0.58, 1.0],
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: statusAccent.withValues(
-                          alpha: dialogIsLight ? 0.22 : 0.32,
-                        ),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: dialogIsLight ? 0.14 : 0.28,
-                          ),
-                          blurRadius: 28,
-                          offset: const Offset(0, 18),
-                        ),
-                      ],
-                    ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Color.alphaBlend(
-                                    localAccent.withValues(
-                                      alpha: dialogIsLight ? 0.12 : 0.20,
-                                    ),
-                                    dialogScheme.surface,
-                                  ),
-                                  border: Border.all(
-                                    color: localAccent.withValues(alpha: 0.28),
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.sentiment_satisfied_alt_rounded,
-                                  color: localAccent,
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Quick reacts',
-                                      style: TextStyle(
-                                        color: dialogScheme.onSurface,
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Messenger-style emoji popup for live 1v1.',
-                                      style: TextStyle(
-                                        color: dialogScheme.onSurface
-                                            .withValues(alpha: 0.68),
-                                        fontSize: 11.6,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () => Navigator.of(dialogContext).pop(),
-                                icon: const Icon(Icons.close_rounded),
-                                tooltip: 'Close quick reacts',
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Color.alphaBlend(
-                                    dialogScheme.onSurface.withValues(
-                                      alpha: dialogIsLight ? 0.06 : 0.10,
-                                    ),
-                                    dialogScheme.surface,
-                                  ),
-                                  foregroundColor: dialogScheme.onSurface,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _remoteFriendSurfaceChip(
-                                label: reactionStatusText,
-                                accent: statusAccent,
-                                icon: Icons.bolt_rounded,
-                              ),
-                              _remoteFriendSurfaceChip(
-                                label: reactionReady
-                                    ? 'Tap to send'
-                                    : 'Cooldown active',
-                                accent: localAccent,
-                                icon: reactionReady
-                                    ? Icons.touch_app_rounded
-                                    : Icons.hourglass_bottom_rounded,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _remoteFriendSurfaceChip(
-                            label: 'Standard set',
-                            accent: localAccent,
-                            icon: Icons.sentiment_satisfied_alt_rounded,
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final option
-                                  in _remoteFriendStandardReactionOptions)
-                                _remoteFriendReactionChip(
-                                  option: option,
-                                  accent: localAccent,
-                                  onTap: standardReactionTap(option),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Color.alphaBlend(
-                                opponentAccent.withValues(
-                                  alpha: dialogIsLight ? 0.06 : 0.12,
-                                ),
-                                dialogScheme.surface,
-                              ),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: opponentAccent.withValues(alpha: 0.18),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _remoteFriendSurfaceChip(
-                                  label: strangeReactionsUnlocked
-                                      ? 'Vault set unlocked'
-                                      : 'Vault set locked',
-                                  accent: strangeReactionsUnlocked
-                                      ? opponentAccent
-                                      : dialogScheme.onSurface
-                                          .withValues(alpha: 0.62),
-                                  icon: strangeReactionsUnlocked
-                                      ? Icons.auto_awesome_rounded
-                                      : Icons.lock_outline_rounded,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  strangeReactionsUnlocked
-                                      ? 'Your strange bonus reacts are ready in the same popup.'
-                                      : 'Unlock these five strange reacts after your first random avatar roll.',
-                                  style: TextStyle(
-                                    color: dialogScheme.onSurface.withValues(
-                                      alpha: 0.68,
-                                    ),
-                                    fontSize: 11.2,
-                                    height: 1.28,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    for (final option
-                                        in _remoteFriendStrangeReactionOptions)
-                                      _remoteFriendReactionChip(
-                                        option: option,
-                                        accent: strangeReactionsUnlocked
-                                            ? opponentAccent
-                                            : dialogScheme.onSurface
-                                                .withValues(alpha: 0.62),
-                                        locked: !strangeReactionsUnlocked,
-                                        onTap: strangeReactionTap(option),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
   Color _remoteFriendLocalAccent(
     ColorScheme scheme, {
     required bool useMonochrome,
@@ -8409,143 +8094,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ),
                   ),
                 ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRemoteFriendReactionLauncher({
-    required String statusText,
-    required Color accent,
-    required Color statusAccent,
-    required bool strangeReactionsUnlocked,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isLight = theme.brightness == Brightness.light;
-    final media = MediaQuery.of(context);
-    final compactLauncher =
-        media.orientation == Orientation.landscape || media.size.width <= 430;
-    final preview = strangeReactionsUnlocked ? '👍 😮 🧠 🛸' : '👍 😮 🔥';
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          width: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            compactLauncher ? 12 : 14,
-            compactLauncher ? 10 : 12,
-            compactLauncher ? 12 : 14,
-            compactLauncher ? 10 : 12,
-          ),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              accent.withValues(alpha: isLight ? 0.06 : 0.12),
-              scheme.surface,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: accent.withValues(alpha: 0.20)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: compactLauncher ? 34 : 38,
-                    height: compactLauncher ? 34 : 38,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color.alphaBlend(
-                        accent.withValues(alpha: isLight ? 0.12 : 0.18),
-                        scheme.surface,
-                      ),
-                      border: Border.all(color: accent.withValues(alpha: 0.28)),
-                    ),
-                    child: Icon(
-                      Icons.sentiment_satisfied_alt_rounded,
-                      color: accent,
-                      size: compactLauncher ? 18 : 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Quick reacts',
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: compactLauncher ? 12.8 : 13.4,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  Flexible(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Color.alphaBlend(
-                            statusAccent.withValues(
-                              alpha: isLight ? 0.12 : 0.20,
-                            ),
-                            scheme.surface,
-                          ),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          statusText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: scheme.onSurface,
-                            fontSize: compactLauncher ? 10.0 : 10.4,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      compactLauncher
-                          ? 'Tap to open the reaction popup.'
-                          : 'Tap to open the reaction popup and send an emoji without leaving the board.',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.68),
-                        fontSize: compactLauncher ? 11.2 : 11.6,
-                        height: 1.24,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    preview,
-                    style: TextStyle(fontSize: compactLauncher ? 17 : 18),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: accent.withValues(alpha: 0.84),
-                    size: 20,
-                  ),
-                ],
-              ),
             ],
           ),
         ),
@@ -17415,12 +16963,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final starterWelcomeAvatar = context
-        .select<AvatarInventoryProvider, AvatarCatalogEntry?>(
-          (inventory) => inventory.starterAvatar,
-        );
-    final shouldShowStarterAvatarWelcome = context
-        .select<AvatarInventoryProvider, bool>(
+    final starterWelcomeAvatar = context.select<
+      AvatarInventoryProvider,
+      AvatarCatalogEntry?
+    >((inventory) => inventory.starterAvatar);
+    final shouldShowStarterAvatarWelcome =
+        context.select<AvatarInventoryProvider, bool>(
           (inventory) => inventory.loaded && inventory.bootstrappedStarter,
         );
     if (shouldShowStarterAvatarWelcome && starterWelcomeAvatar != null) {
@@ -17735,9 +17283,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ),
                     ),
-                  SizedBox(height: showMenuLogo ? 10 : 2),
+                  SizedBox(height: showMenuLogo ? 6 : 2),
                   Expanded(
-                    child: Center(
+                    child: Align(
+                      alignment: Alignment.topCenter,
                       child: LayoutBuilder(
                         builder: (context, innerConstraints) {
                           final availableWidth = min(
@@ -23115,9 +22664,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final media = MediaQuery.of(context);
-    final compactClockCard =
-        media.orientation == Orientation.landscape || media.size.width <= 430;
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
@@ -23210,24 +22756,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
-      padding: EdgeInsets.symmetric(
-        horizontal: compactClockCard ? 12 : 14,
-        vertical: compactClockCard ? 8 : 10,
-      ),
-      constraints: BoxConstraints(minWidth: compactClockCard ? 144 : 152),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      constraints: const BoxConstraints(minWidth: 152),
       decoration: BoxDecoration(
         color: Color.alphaBlend(
           accent.withValues(alpha: isDark ? 0.16 : 0.10),
           scheme.surface,
         ),
-        borderRadius: BorderRadius.circular(compactClockCard ? 18 : 16),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withValues(alpha: 0.46), width: 1.4),
         boxShadow: [
           BoxShadow(
             color: accent.withValues(alpha: isActive ? 0.20 : 0.10),
-            blurRadius: isActive
-                ? (compactClockCard ? 16 : 18)
-                : (compactClockCard ? 10 : 12),
+            blurRadius: isActive ? 18 : 12,
             offset: const Offset(0, 6),
           ),
         ],
@@ -23241,7 +22782,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               if (avatarEntry != null) ...[
                 AvatarPortrait(
                   avatar: avatarEntry,
-                  size: compactClockCard ? 20 : 22,
+                  size: 22,
                   radius: 6,
                   borderColor: accent.withValues(alpha: 0.38),
                   backgroundColor: Colors.transparent,
@@ -23251,7 +22792,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ] else if (occupantUid != null) ...[
                 Icon(
                   Icons.account_circle_outlined,
-                  size: compactClockCard ? 20 : 22,
+                  size: 22,
                   color: accent.withValues(alpha: 0.60),
                 ),
                 const SizedBox(width: 8),
@@ -23260,29 +22801,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 label,
                 style: TextStyle(
                   color: accent,
-                  fontSize: compactClockCard ? 10.0 : 10.5,
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.6,
                 ),
               ),
             ],
           ),
-          SizedBox(height: compactClockCard ? 3 : 4),
+          const SizedBox(height: 4),
           Text(
             timeText,
             style: TextStyle(
               color: scheme.onSurface,
-              fontSize: compactClockCard ? 17 : 18,
+              fontSize: 18,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.3,
             ),
           ),
-          SizedBox(height: compactClockCard ? 1.5 : 2),
+          const SizedBox(height: 2),
           Text(
             detail,
             style: TextStyle(
               color: scheme.onSurface.withValues(alpha: 0.66),
-              fontSize: compactClockCard ? 10.0 : 10.5,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.4,
             ),
@@ -24923,7 +24464,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           remoteSnapshot.status == RemoteFriendMatchStatus.active &&
           remoteSnapshot.outcome == null;
       final shouldScrollRemoteActionBody =
-          isLandscape && media.size.height <= 420 && remotePieceSelectionOpen;
+          isLandscape &&
+          media.size.height <= 420 &&
+          (remotePieceSelectionOpen || showRemoteReactionTray);
       final buttons = <Widget>[
         buildRemoteActionButton(
           label: 'Menu',
@@ -25140,20 +24683,169 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ],
             if (showRemoteReactionTray) ...[
               const SizedBox(height: 12),
-              _buildRemoteFriendReactionLauncher(
-                statusText: remoteReactionStatusText,
-                accent: remoteLocalAccent,
-                statusAccent: remoteReactionAccent,
-                strangeReactionsUnlocked: strangeReactionsUnlocked,
-                onTap: () => unawaited(
-                  _showRemoteFriendReactionPopup(
-                    strangeReactionsUnlocked: strangeReactionsUnlocked,
-                    reactionReady: remoteReactionReady,
-                    reactionStatusText: remoteReactionStatusText,
-                    localAccent: remoteLocalAccent,
-                    opponentAccent: remoteOpponentAccent,
-                    statusAccent: remoteReactionAccent,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    remoteLocalAccent.withValues(alpha: isLight ? 0.06 : 0.12),
+                    scheme.surface,
                   ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: remoteLocalAccent.withValues(alpha: 0.20),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Quick reacts',
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 12.8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: remoteReactionAccent.withValues(
+                              alpha: isLight ? 0.12 : 0.20,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            remoteReactionStatusText,
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 10.6,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      strangeReactionsUnlocked
+                          ? 'Tap any emoji to send it across the private match. Every react has a 30-second cooldown.'
+                          : '12 standard reacts are ready now. The 5 strange ones unlock after your first random avatar roll.',
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.70),
+                        fontSize: 11.4,
+                        height: 1.28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _remoteFriendSurfaceChip(
+                      label: 'Standard set',
+                      accent: remoteLocalAccent,
+                      icon: Icons.sentiment_satisfied_alt_rounded,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option
+                            in _remoteFriendStandardReactionOptions)
+                          _remoteFriendReactionChip(
+                            option: option,
+                            accent: remoteLocalAccent,
+                            onTap: remoteReactionReady
+                                ? () => unawaited(
+                                    _sendRemoteFriendReaction(option.emoji),
+                                  )
+                                : null,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          remoteOpponentAccent.withValues(
+                            alpha: isLight ? 0.06 : 0.12,
+                          ),
+                          scheme.surface,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: remoteOpponentAccent.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              _remoteFriendSurfaceChip(
+                                label: strangeReactionsUnlocked
+                                    ? 'Vault set unlocked'
+                                    : 'Vault set locked',
+                                accent: strangeReactionsUnlocked
+                                    ? remoteOpponentAccent
+                                    : scheme.onSurface.withValues(alpha: 0.62),
+                                icon: strangeReactionsUnlocked
+                                    ? Icons.auto_awesome_rounded
+                                    : Icons.lock_outline_rounded,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            strangeReactionsUnlocked
+                                ? 'Your strange bonus reacts are now part of the tray.'
+                                : 'Unlock these five stranger reacts with your first random avatar roll.',
+                            style: TextStyle(
+                              color: scheme.onSurface.withValues(alpha: 0.68),
+                              fontSize: 11.1,
+                              height: 1.28,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final option
+                                  in _remoteFriendStrangeReactionOptions)
+                                _remoteFriendReactionChip(
+                                  option: option,
+                                  accent: strangeReactionsUnlocked
+                                      ? remoteOpponentAccent
+                                      : scheme.onSurface.withValues(
+                                          alpha: 0.62,
+                                        ),
+                                  locked: !strangeReactionsUnlocked,
+                                  onTap: !strangeReactionsUnlocked
+                                      ? _showLockedRemoteFriendReactionMessage
+                                      : remoteReactionReady
+                                      ? () => unawaited(
+                                          _sendRemoteFriendReaction(
+                                            option.emoji,
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

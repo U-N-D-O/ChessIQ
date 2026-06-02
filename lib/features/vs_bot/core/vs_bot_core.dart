@@ -1287,6 +1287,33 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     _botGhostArrows.clear();
   }
 
+  bool get _hasIncomingRemoteRematchOffer {
+    final offerByUid = _remoteFriendSnapshot?.rematchOfferByUid;
+    return offerByUid != null && offerByUid.isNotEmpty &&
+        offerByUid != (_remoteFriendLocalUid ?? '');
+  }
+
+  bool get _hasOutgoingRemoteRematchOffer {
+    final offerByUid = _remoteFriendSnapshot?.rematchOfferByUid;
+    return offerByUid != null && offerByUid.isNotEmpty &&
+        offerByUid == (_remoteFriendLocalUid ?? '');
+  }
+
+  bool get _remoteFriendRematchKeepsScore {
+    return _remoteFriendSnapshot?.rematchKeepScore ?? false;
+  }
+
+  bool get _localFriendSeriesScoreEnabled {
+    return false;
+  }
+
+  Future<void> _startLocalFriendRematch({required bool keepScore}) async {
+    if (!keepScore) {
+      _resetLocalFriendSeries();
+    }
+    await _startLocalFriendMatch();
+  }
+
   Future<void> _showHeadToHeadResultDialog(GameOutcome outcome) async {
     var keepScore = _isRemoteFriendMatchMode
         ? (_hasIncomingRemoteRematchOffer || _hasOutgoingRemoteRematchOffer
@@ -1623,7 +1650,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       case 'remote-offer-rematch':
         await _runRemoteFriendAction(
           RemoteFriendMatchAction.offerRematch,
-          keepScore: keepScore,
         );
         return;
       case 'remote-accept-rematch':
