@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.Base64
 
 plugins {
     id("com.android.application")
@@ -30,13 +31,41 @@ fun resolveLocalValue(envName: String, propertyName: String): String? {
         ?: localProperties.getProperty(propertyName)
 }
 
+fun decodeDartDefines(rawValue: String?): Map<String, String> {
+    if (rawValue.isNullOrBlank()) {
+        return emptyMap()
+    }
+
+    return rawValue.split(',')
+        .filter { it.isNotBlank() }
+        .mapNotNull { encodedEntry ->
+            val decodedEntry = String(Base64.getUrlDecoder().decode(encodedEntry))
+            val separatorIndex = decodedEntry.indexOf('=')
+            if (separatorIndex <= 0) {
+                null
+            } else {
+                decodedEntry.substring(0, separatorIndex) to
+                    decodedEntry.substring(separatorIndex + 1)
+            }
+        }
+        .toMap()
+}
+
+fun resolveAdmobValue(envName: String, dartDefines: Map<String, String>): String? {
+    return providers.environmentVariable(envName).orNull
+        ?: dartDefines[envName]?.takeIf { it.isNotBlank() }
+}
+
 val releaseStoreFile = resolveSigningValue("ANDROID_KEYSTORE_PATH", "storeFile")
     ?: resolveSigningValue("ANDROID_KEYSTORE_FILE", "storeFile")
 val releaseStorePassword = resolveSigningValue("ANDROID_KEYSTORE_PASSWORD", "storePassword")
 val releaseKeyAlias = resolveSigningValue("ANDROID_KEY_ALIAS", "keyAlias")
 val releaseKeyPassword = resolveSigningValue("ANDROID_KEY_PASSWORD", "keyPassword")
 val defaultDebugAdmobAppId = "ca-app-pub-3940256099942544~3347511713"
-val admobAndroidAppId = resolveLocalValue("ADMOB_ANDROID_APP_ID", "admobAndroidAppId")
+val dartDefines = decodeDartDefines(providers.gradleProperty("dart-defines").orNull)
+val admobAndroidAppId = resolveAdmobValue("ADMOB_ANDROID_APP_ID", dartDefines)
+val forceTestAds = resolveAdmobValue("ADMOB_FORCE_TEST_ADS", dartDefines)
+    ?.equals("true", ignoreCase = true) == true
 val isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.contains("release", ignoreCase = true) ||
         taskName.contains("bundle", ignoreCase = true)
@@ -48,8 +77,8 @@ val hasReleaseSigning = listOf(
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
 
-check(!isReleaseBuildRequested || !admobAndroidAppId.isNullOrBlank()) {
-    "Missing Android AdMob app ID. Set ADMOB_ANDROID_APP_ID or admobAndroidAppId in android/local.properties before Android release builds."
+check(!isReleaseBuildRequested || forceTestAds || !admobAndroidAppId.isNullOrBlank()) {
+    "Missing Android AdMob app ID. Set ADMOB_ANDROID_APP_ID with --dart-define or environment variables before Android release builds, or set ADMOB_FORCE_TEST_ADS=true for sample ads."
 }
 
 android {

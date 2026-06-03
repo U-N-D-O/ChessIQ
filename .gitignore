@@ -53,6 +53,7 @@ android/app/src/main/jniLibs/*/libstockfish.so
 # Provide these locally or inject via CI secrets – do NOT commit them.
 ios/Runner/GoogleService-Info.plist
 android/app/google-services.json
+secrets.json
 
 # Firebase Functions generated artifacts
 functions/node_modules/

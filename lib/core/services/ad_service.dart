@@ -75,100 +75,125 @@ class AdService {
       'ca-app-pub-3940256099942544/6978759866';
   static const String _iosDefaultInterstitialAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_INTERSTITIAL_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-8366041710010578/4392988454',
+    defaultValue: _testInterstitialAdUnitId,
   );
   static const String _iosBoardResetInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID',
-        defaultValue: 'ca-app-pub-8366041710010578/4392988454',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _iosVsBotInterstitialAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_INTERSTITIAL_VS_BOT_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-8366041710010578/5329949968',
+    defaultValue: _testInterstitialAdUnitId,
   );
   static const String _iosAcademyBreakInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_INTERSTITIAL_ACADEMY_BREAK_AD_UNIT_ID',
-        defaultValue: 'ca-app-pub-8366041710010578/2781019694',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _iosAcademyReturnInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_INTERSTITIAL_ACADEMY_RETURN_AD_UNIT_ID',
-        defaultValue: 'ca-app-pub-8366041710010578/9294457153',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _iosQuizMilestoneInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
-        defaultValue: 'ca-app-pub-8366041710010578/3746617002',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _iosDefaultRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_REWARDED_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-8366041710010578/4229336921',
+    defaultValue: _testRewardedAdUnitId,
   );
   static const String _iosStoreRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_REWARDED_STORE_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-8366041710010578/4229336921',
+    defaultValue: _testRewardedAdUnitId,
   );
   static const String _iosAcademyRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_IOS_REWARDED_ACADEMY_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-8366041710010578/6532562448',
+    defaultValue: _testRewardedAdUnitId,
   );
   static const String _iosDefaultRewardedInterstitialAdUnitId =
-      String.fromEnvironment('ADMOB_IOS_REWARDED_INTERSTITIAL_AD_UNIT_ID');
+      String.fromEnvironment(
+        'ADMOB_IOS_REWARDED_INTERSTITIAL_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
+      );
   static const String _iosQuizMilestoneRewardedInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_REWARDED_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
       );
   static const String _iosAcademyExamBonusRewardedInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_REWARDED_INTERSTITIAL_ACADEMY_EXAM_BONUS_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
       );
   static const String _iosDailyChallengeRewardedInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_IOS_REWARDED_INTERSTITIAL_DAILY_CHALLENGE_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
       );
   static const String _androidDefaultInterstitialAdUnitId =
-      String.fromEnvironment('ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID');
+      String.fromEnvironment(
+        'ADMOB_ANDROID_INTERSTITIAL_AD_UNIT_ID',
+        defaultValue: _testInterstitialAdUnitId,
+      );
   static const String _androidBoardResetInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_ANDROID_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _androidVsBotInterstitialAdUnitId =
-      String.fromEnvironment('ADMOB_ANDROID_INTERSTITIAL_VS_BOT_AD_UNIT_ID');
+      String.fromEnvironment(
+        'ADMOB_ANDROID_INTERSTITIAL_VS_BOT_AD_UNIT_ID',
+        defaultValue: _testInterstitialAdUnitId,
+      );
   static const String _androidAcademyBreakInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_ANDROID_INTERSTITIAL_ACADEMY_BREAK_AD_UNIT_ID',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _androidAcademyReturnInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_ANDROID_INTERSTITIAL_ACADEMY_RETURN_AD_UNIT_ID',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _androidQuizMilestoneInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_ANDROID_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+        defaultValue: _testInterstitialAdUnitId,
       );
   static const String _androidDefaultRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_ANDROID_REWARDED_AD_UNIT_ID',
+    defaultValue: _testRewardedAdUnitId,
   );
   static const String _androidStoreRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_ANDROID_REWARDED_STORE_AD_UNIT_ID',
+    defaultValue: _testRewardedAdUnitId,
   );
   static const String _androidAcademyRewardedAdUnitId = String.fromEnvironment(
     'ADMOB_ANDROID_REWARDED_ACADEMY_AD_UNIT_ID',
+    defaultValue: _testRewardedAdUnitId,
   );
   static const String _androidDefaultRewardedInterstitialAdUnitId =
-      String.fromEnvironment('ADMOB_ANDROID_REWARDED_INTERSTITIAL_AD_UNIT_ID');
+      String.fromEnvironment(
+        'ADMOB_ANDROID_REWARDED_INTERSTITIAL_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
+      );
   static const String _androidQuizMilestoneRewardedInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_ANDROID_REWARDED_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
       );
   static const String _androidAcademyExamBonusRewardedInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_ANDROID_REWARDED_INTERSTITIAL_ACADEMY_EXAM_BONUS_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
       );
   static const String _androidDailyChallengeRewardedInterstitialAdUnitId =
       String.fromEnvironment(
         'ADMOB_ANDROID_REWARDED_INTERSTITIAL_DAILY_CHALLENGE_AD_UNIT_ID',
+        defaultValue: _testRewardedInterstitialAdUnitId,
       );
   static const Duration _boardResetCooldown = Duration(seconds: 90);
   static const Duration _interstitialRepeatGrace = Duration(seconds: 10);
