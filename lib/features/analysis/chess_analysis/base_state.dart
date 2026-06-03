@@ -885,6 +885,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _remoteFriendLocalUid;
   RemoteFriendInvite? _remoteFriendInvite;
   RemoteFriendMatchSnapshot? _remoteFriendSnapshot;
+  RemoteFriendMatchSnapshot? _remoteFriendOptimisticSnapshot;
   final ValueNotifier<RemoteFriendMatchStatus?> _remoteFriendStatusNotifier =
       ValueNotifier<RemoteFriendMatchStatus?>(null);
   List<RemoteFriendMatchMembership> _remoteFriendMemberships =
@@ -5107,7 +5108,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   int _remoteFriendDisplayedClockMs({required bool white}) {
-    final snapshot = _remoteFriendSnapshot;
+    final snapshot = _remoteFriendOptimisticSnapshot ?? _remoteFriendSnapshot;
     if (snapshot == null) {
       return 0;
     }
@@ -5144,6 +5145,46 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Duration _remoteFriendDisplayedClock({required bool white}) {
     return Duration(milliseconds: _remoteFriendDisplayedClockMs(white: white));
+  }
+
+  void _setOptimisticRemoteFriendSnapshotForMove({
+    required RemoteFriendMatchSnapshot snapshot,
+    required bool movedByWhite,
+  }) {
+    if (snapshot.timeControl.isUntimed ||
+        snapshot.status != RemoteFriendMatchStatus.active ||
+        snapshot.outcome != null) {
+      _remoteFriendOptimisticSnapshot = null;
+      return;
+    }
+
+    final currentWhiteMs = _remoteFriendDisplayedClockMsForSnapshot(
+      snapshot,
+      white: true,
+    );
+    final currentBlackMs = _remoteFriendDisplayedClockMsForSnapshot(
+      snapshot,
+      white: false,
+    );
+    final activeSeat = movedByWhite
+        ? RemoteFriendSeat.black
+        : RemoteFriendSeat.white;
+
+    final optimisticMap = Map<String, dynamic>.from(snapshot.toMap());
+    final clocks = Map<String, dynamic>.from(
+      optimisticMap['clocks'] as Map<String, dynamic>? ?? <String, dynamic>{},
+    );
+    clocks['whiteMsRemaining'] = currentWhiteMs;
+    clocks['blackMsRemaining'] = currentBlackMs;
+    clocks['activeSeat'] = activeSeat.wireName;
+    clocks['lastTickStartedAtMs'] = DateTime.now().millisecondsSinceEpoch;
+    optimisticMap['clocks'] = clocks;
+    optimisticMap['whiteToMove'] = !snapshot.whiteToMove;
+    optimisticMap['nextPly'] = snapshot.nextPly + 1;
+
+    _remoteFriendOptimisticSnapshot = RemoteFriendMatchSnapshot.fromMap(
+      optimisticMap,
+    );
   }
 
   RemoteFriendSeat? _remoteFriendPlayerSeatForSnapshot(
@@ -6681,6 +6722,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _stopRemoteFriendSyncTimers();
     _remoteFriendInvite = null;
     _remoteFriendSnapshot = null;
+    _remoteFriendOptimisticSnapshot = null;
     _remoteFriendStatusNotifier.value = null;
     _remoteFriendLastError = null;
     _remoteFriendOutcomeReason = null;
@@ -6956,6 +6998,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _remoteFriendInvite = invite;
     _remoteFriendSnapshot = snapshot;
+    _remoteFriendOptimisticSnapshot = null;
     _remoteFriendStatusNotifier.value = snapshot.status;
     _remoteFriendOutcomeReason = snapshot.outcome?.reason;
     _remoteFriendLastError = null;
@@ -7756,11 +7799,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     String from,
     String to, {
     String? promotion,
+    bool ignoreTurnGuard = false,
+    bool movedByWhite = false,
   }) async {
     final snapshot = _remoteFriendSnapshot;
     if (snapshot == null ||
         snapshot.matchId.isEmpty ||
-        !_isHumanTurnInRemoteFriendGame ||
+        (!ignoreTurnGuard && !_isHumanTurnInRemoteFriendGame) ||
         _remoteFriendOperationInProgress) {
       return;
     }
@@ -7772,6 +7817,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     setState(() {
       _remoteFriendOperationInProgress = true;
+      if (ignoreTurnGuard) {
+        _setOptimisticRemoteFriendSnapshotForMove(
+          snapshot: snapshot,
+          movedByWhite: movedByWhite,
+        );
+      }
     });
 
     try {
@@ -7825,6 +7876,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (mounted) {
         setState(() {
           _remoteFriendOperationInProgress = false;
+          _remoteFriendOptimisticSnapshot = null;
         });
       }
     }
@@ -14314,7 +14366,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     if (_isRemoteFriendMatchMode && !_isAnalysisEditModeActive) {
-      await _submitRemoteFriendMove(from, to, promotion: promotion);
+      final moverIsWhite = _isWhiteTurn;
+      _onMove(from, to, promotion: promotion);
+      await _submitRemoteFriendMove(
+        from,
+        to,
+        promotion: promotion,
+        ignoreTurnGuard: true,
+        movedByWhite: moverIsWhite,
+      );
       return;
     }
 
@@ -21651,6 +21711,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                               final usesExpandedSidePanel =
                                                   _isAnalysisMatchMode ||
                                                   usesRemoteFriendSidePanel;
+                                              final pendingRemoteFriendLandscapePanel =
+                                                  usesRemoteFriendSidePanel &&
+                                                  _isRemoteFriendPendingMatch;
                                               final baseSideWidth =
                                                   usesRemoteFriendSidePanel
                                                   ? compactRemoteFriendSidePanel
@@ -21809,124 +21872,155 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                                     : hasLandscapeTitle
                                                                     ? 54.0
                                                                     : 30.0;
+                                                                final sidePanelBody = Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  children: [
+                                                                    if (showRemoteFriendClockStrip)
+                                                                      Padding(
+                                                                        padding: const EdgeInsets.only(
+                                                                          bottom:
+                                                                              12,
+                                                                        ),
+                                                                        child: _buildRemoteFriendClockStrip(
+                                                                          isLandscape:
+                                                                              true,
+                                                                        ),
+                                                                      )
+                                                                    else if (_showsFriendClockPanels)
+                                                                      Padding(
+                                                                        padding: const EdgeInsets.only(
+                                                                          bottom:
+                                                                              12,
+                                                                        ),
+                                                                        child: Column(
+                                                                          children: [
+                                                                            _buildFriendClockPanel(
+                                                                              white: _friendClockTopShowsWhite,
+                                                                              isLandscape: true,
+                                                                            ),
+                                                                            const SizedBox(
+                                                                              height: 10,
+                                                                            ),
+                                                                            _buildFriendClockPanel(
+                                                                              white: _friendClockBottomShowsWhite,
+                                                                              isLandscape: true,
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                      ),
+                                                                    if (!(_isRemoteFriendMatchMode &&
+                                                                        _isRemoteFriendPendingMatch))
+                                                                      Padding(
+                                                                        padding: const EdgeInsets.only(
+                                                                          bottom:
+                                                                              10,
+                                                                        ),
+                                                                        child: Align(
+                                                                          alignment:
+                                                                              Alignment.center,
+                                                                          child: _buildEditModeDepthCluster(
+                                                                            scale,
+                                                                            scheme,
+                                                                            includeEvalCounter:
+                                                                                true,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    if (_isAnalysisMatchMode &&
+                                                                        _selectedGambit !=
+                                                                            null)
+                                                                      Align(
+                                                                        alignment:
+                                                                            Alignment.center,
+                                                                        child: Padding(
+                                                                          padding: const EdgeInsets.only(
+                                                                            bottom:
+                                                                                6,
+                                                                          ),
+                                                                          child: Text(
+                                                                            _selectedGambit!.name,
+                                                                            style: TextStyle(
+                                                                              fontSize: 13,
+                                                                              fontWeight: FontWeight.w700,
+                                                                              color: useMonochrome
+                                                                                  ? scheme.onSurface.withValues(
+                                                                                      alpha: 0.86,
+                                                                                    )
+                                                                                  : const Color(
+                                                                                      0xFFD8B640,
+                                                                                    ),
+                                                                            ),
+                                                                            maxLines:
+                                                                                2,
+                                                                            overflow:
+                                                                                TextOverflow.ellipsis,
+                                                                          ),
+                                                                        ),
+                                                                      )
+                                                                    else if (_isAnalysisMatchMode &&
+                                                                        _currentOpening
+                                                                            .isNotEmpty)
+                                                                      Align(
+                                                                        alignment:
+                                                                            Alignment.center,
+                                                                        child: Padding(
+                                                                          padding: const EdgeInsets.only(
+                                                                            bottom:
+                                                                                6,
+                                                                          ),
+                                                                          child: _buildOpeningLabel(
+                                                                            scale,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    if (_isAnalysisMatchMode)
+                                                                      _buildSuggestedMovesList(
+                                                                        height:
+                                                                            suggestionsHeight,
+                                                                        padding: const EdgeInsets.symmetric(
+                                                                          horizontal:
+                                                                              0,
+                                                                          vertical:
+                                                                              8,
+                                                                        ),
+                                                                      ),
+                                                                    if (_isAnalysisMatchMode)
+                                                                      _buildHistoryBar(
+                                                                        height:
+                                                                            historyHeight,
+                                                                        margin: const EdgeInsets.symmetric(
+                                                                          vertical:
+                                                                              6,
+                                                                        ),
+                                                                      ),
+                                                                    pendingRemoteFriendLandscapePanel
+                                                                        ? const SizedBox(
+                                                                            height:
+                                                                                12,
+                                                                          )
+                                                                        : const Spacer(),
+                                                                    _buildActionArea(
+                                                                      compactBottom:
+                                                                          8,
+                                                                      horizontal:
+                                                                          0,
+                                                                    ),
+                                                                  ],
+                                                                );
                                                                 return Stack(
                                                                   clipBehavior:
                                                                       Clip.none,
                                                                   children: [
                                                                     SizedBox.expand(
-                                                                      child: Column(
-                                                                        crossAxisAlignment:
-                                                                            CrossAxisAlignment.start,
-                                                                        children: [
-                                                                          if (showRemoteFriendClockStrip)
-                                                                            Padding(
-                                                                              padding: const EdgeInsets.only(
-                                                                                bottom: 12,
-                                                                              ),
-                                                                              child: _buildRemoteFriendClockStrip(
-                                                                                isLandscape: true,
-                                                                              ),
+                                                                      child:
+                                                                          pendingRemoteFriendLandscapePanel
+                                                                          ? SingleChildScrollView(
+                                                                              primary: false,
+                                                                              child: sidePanelBody,
                                                                             )
-                                                                          else if (_showsFriendClockPanels)
-                                                                            Padding(
-                                                                              padding: const EdgeInsets.only(
-                                                                                bottom: 12,
-                                                                              ),
-                                                                              child: Column(
-                                                                                children: [
-                                                                                  _buildFriendClockPanel(
-                                                                                    white: _friendClockTopShowsWhite,
-                                                                                    isLandscape: true,
-                                                                                  ),
-                                                                                  const SizedBox(
-                                                                                    height: 10,
-                                                                                  ),
-                                                                                  _buildFriendClockPanel(
-                                                                                    white: _friendClockBottomShowsWhite,
-                                                                                    isLandscape: true,
-                                                                                  ),
-                                                                                ],
-                                                                              ),
-                                                                            ),
-                                                                          if (!(_isRemoteFriendMatchMode &&
-                                                                              _isRemoteFriendPendingMatch))
-                                                                            Padding(
-                                                                              padding: const EdgeInsets.only(
-                                                                                bottom: 10,
-                                                                              ),
-                                                                              child: Align(
-                                                                                alignment: Alignment.center,
-                                                                                child: _buildEditModeDepthCluster(
-                                                                                  scale,
-                                                                                  scheme,
-                                                                                  includeEvalCounter: true,
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                          if (_isAnalysisMatchMode &&
-                                                                              _selectedGambit !=
-                                                                                  null)
-                                                                            Align(
-                                                                              alignment: Alignment.center,
-                                                                              child: Padding(
-                                                                                padding: const EdgeInsets.only(
-                                                                                  bottom: 6,
-                                                                                ),
-                                                                                child: Text(
-                                                                                  _selectedGambit!.name,
-                                                                                  style: TextStyle(
-                                                                                    fontSize: 13,
-                                                                                    fontWeight: FontWeight.w700,
-                                                                                    color: useMonochrome
-                                                                                        ? scheme.onSurface.withValues(
-                                                                                            alpha: 0.86,
-                                                                                          )
-                                                                                        : const Color(
-                                                                                            0xFFD8B640,
-                                                                                          ),
-                                                                                  ),
-                                                                                  maxLines: 2,
-                                                                                  overflow: TextOverflow.ellipsis,
-                                                                                ),
-                                                                              ),
-                                                                            )
-                                                                          else if (_isAnalysisMatchMode &&
-                                                                              _currentOpening.isNotEmpty)
-                                                                            Align(
-                                                                              alignment: Alignment.center,
-                                                                              child: Padding(
-                                                                                padding: const EdgeInsets.only(
-                                                                                  bottom: 6,
-                                                                                ),
-                                                                                child: _buildOpeningLabel(
-                                                                                  scale,
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                          if (_isAnalysisMatchMode)
-                                                                            _buildSuggestedMovesList(
-                                                                              height: suggestionsHeight,
-                                                                              padding: const EdgeInsets.symmetric(
-                                                                                horizontal: 0,
-                                                                                vertical: 8,
-                                                                              ),
-                                                                            ),
-                                                                          if (_isAnalysisMatchMode)
-                                                                            _buildHistoryBar(
-                                                                              height: historyHeight,
-                                                                              margin: const EdgeInsets.symmetric(
-                                                                                vertical: 6,
-                                                                              ),
-                                                                            ),
-                                                                          const Spacer(),
-                                                                          _buildActionArea(
-                                                                            compactBottom:
-                                                                                8,
-                                                                            horizontal:
-                                                                                0,
-                                                                          ),
-                                                                        ],
-                                                                      ),
+                                                                          : sidePanelBody,
                                                                     ),
                                                                     if (_isAnalysisEditModeActive)
                                                                       Align(
@@ -23541,15 +23635,24 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     final spacing = isLandscape ? 10.0 : 12.0;
+    final compact =
+        isLandscape &&
+        (_remoteFriendSnapshot?.status == RemoteFriendMatchStatus.pending);
 
     if (isLandscape) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _buildRemoteFriendClockCard(white: _friendClockTopShowsWhite),
+          _buildRemoteFriendClockCard(
+            white: _friendClockTopShowsWhite,
+            compact: compact,
+          ),
           SizedBox(height: spacing),
-          _buildRemoteFriendClockCard(white: _friendClockBottomShowsWhite),
+          _buildRemoteFriendClockCard(
+            white: _friendClockBottomShowsWhite,
+            compact: compact,
+          ),
         ],
       );
     }
@@ -23979,7 +24082,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return strength.clamp(0.0, 0.42);
   }
 
-  Widget _buildRemoteFriendClockCard({required bool white}) {
+  Widget _buildRemoteFriendClockCard({
+    required bool white,
+    bool compact = false,
+  }) {
     final snapshot = _remoteFriendSnapshot;
     if (snapshot == null) {
       return const SizedBox.shrink();
@@ -24133,8 +24239,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          constraints: const BoxConstraints(minWidth: 152, minHeight: 94),
+          padding: EdgeInsets.fromLTRB(
+            compact ? 12 : 14,
+            compact ? 10 : 12,
+            compact ? 12 : 14,
+            compact ? 10 : 12,
+          ),
+          constraints: BoxConstraints(
+            minWidth: 152,
+            minHeight: compact ? 80 : 94,
+          ),
           decoration: BoxDecoration(
             color: Color.alphaBlend(
               accent.withValues(alpha: isDark ? 0.16 : 0.10),
