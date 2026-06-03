@@ -136,6 +136,29 @@ RemoteFriendOutcomeCode? remoteFriendOutcomeCodeFromWire(String? value) {
   return null;
 }
 
+enum RemoteFriendReactionKind { emoji, phrase }
+
+extension RemoteFriendReactionKindWire on RemoteFriendReactionKind {
+  String get wireName {
+    switch (this) {
+      case RemoteFriendReactionKind.emoji:
+        return 'emoji';
+      case RemoteFriendReactionKind.phrase:
+        return 'phrase';
+    }
+  }
+}
+
+RemoteFriendReactionKind remoteFriendReactionKindFromWire(String? value) {
+  switch ((value ?? '').trim().toLowerCase()) {
+    case 'phrase':
+      return RemoteFriendReactionKind.phrase;
+    case 'emoji':
+    default:
+      return RemoteFriendReactionKind.emoji;
+  }
+}
+
 class RemoteFriendTimeControl {
   const RemoteFriendTimeControl({
     required this.initialSeconds,
@@ -286,25 +309,63 @@ class RemoteFriendOutcome {
 
 class RemoteFriendReaction {
   const RemoteFriendReaction({
-    required this.emoji,
+    required this.kind,
+    required this.code,
+    required this.label,
     required this.sentByUid,
     required this.sentAt,
+    this.emoji,
   });
 
   factory RemoteFriendReaction.fromMap(Map<String, dynamic> map) {
+    final emoji = _nullableTrimmedString(map['emoji']);
+    final code =
+        _nullableTrimmedString(map['code']) ??
+        _nullableTrimmedString(map['phraseId']) ??
+        emoji ??
+        '';
+    final rawKind = _nullableTrimmedString(map['kind']);
+    final inferredKind = rawKind == null || rawKind.isEmpty
+        ? ((emoji ?? '').isNotEmpty
+              ? RemoteFriendReactionKind.emoji
+              : RemoteFriendReactionKind.phrase)
+        : remoteFriendReactionKindFromWire(rawKind);
+
     return RemoteFriendReaction(
-      emoji: map['emoji']?.toString().trim() ?? '',
+      kind: inferredKind,
+      code: code,
+      label:
+          _nullableTrimmedString(map['label']) ??
+          _nullableTrimmedString(map['text']) ??
+          '',
+      emoji: emoji,
       sentByUid: map['sentByUid']?.toString().trim() ?? '',
       sentAt: _dateTimeFromDynamic(map['sentAtMs'] ?? map['sentAt']),
     );
   }
 
-  final String emoji;
+  final RemoteFriendReactionKind kind;
+  final String code;
+  final String label;
+  final String? emoji;
   final String sentByUid;
   final DateTime sentAt;
 
+  bool get isPhrase => kind == RemoteFriendReactionKind.phrase;
+
+  String get displayLabel {
+    final normalizedLabel = label.trim();
+    if (normalizedLabel.isNotEmpty) {
+      return normalizedLabel;
+    }
+    return (emoji ?? '').trim();
+  }
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'kind': kind.wireName,
+      'code': code,
+      'label': label,
       'emoji': emoji,
       'sentByUid': sentByUid,
       'sentAtMs': sentAt.millisecondsSinceEpoch,

@@ -116,6 +116,13 @@ class _RemoteFriendReactionOption {
   final bool requiresPaidRoll;
 }
 
+class _RemoteFriendPhraseOption {
+  const _RemoteFriendPhraseOption({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
 class _RemoteFriendActionSheetOption<T> {
   const _RemoteFriendActionSheetOption({
     required this.value,
@@ -177,16 +184,30 @@ const List<_RemoteFriendReactionOption> _remoteFriendStrangeReactionOptions =
       ),
     ];
 
+const List<_RemoteFriendPhraseOption>
+_remoteFriendPhraseOptions = <_RemoteFriendPhraseOption>[
+  _RemoteFriendPhraseOption(id: 'good_luck', label: 'Good luck'),
+  _RemoteFriendPhraseOption(id: 'your_move', label: 'Your move'),
+  _RemoteFriendPhraseOption(id: 'nice_move', label: 'Nice move'),
+  _RemoteFriendPhraseOption(id: 'well_played', label: 'Well played'),
+  _RemoteFriendPhraseOption(id: 'good_game', label: 'Good game'),
+  _RemoteFriendPhraseOption(id: 'thinking', label: 'Thinking'),
+  _RemoteFriendPhraseOption(id: 'time_trouble', label: 'Time trouble'),
+  _RemoteFriendPhraseOption(id: 'watch_the_clock', label: 'Watch the clock'),
+  _RemoteFriendPhraseOption(id: 'sharp_position', label: 'Sharp position'),
+  _RemoteFriendPhraseOption(id: 'interesting_idea', label: 'Interesting idea'),
+  _RemoteFriendPhraseOption(id: 'i_missed_that', label: 'I missed that'),
+  _RemoteFriendPhraseOption(id: 'nice_tactic', label: 'Nice tactic'),
+  _RemoteFriendPhraseOption(id: 'solid_defense', label: 'Solid defense'),
+  _RemoteFriendPhraseOption(id: 'want_rematch', label: 'Want a rematch?'),
+  _RemoteFriendPhraseOption(id: 'lets_play_fast', label: 'Let\'s play fast'),
+];
+
 enum _VsModeQuickOption { crossDevice, sharedScreen, vsCpu, quickJoin }
 
-enum _RemoteFriendInviteToolsAction {
-  copyCode,
-  copyLink,
-  shareInvite,
-  showQr,
-}
+enum _RemoteFriendInviteToolsAction { copyCode, copyLink, shareInvite, showQr }
 
-enum _RemoteFriendNavigationAction { mainMenu, playChess, analysis }
+enum _RemoteFriendNavigationAction { mainMenu, playChess, analysis, store }
 
 class _CheckedKingState {
   const _CheckedKingState({
@@ -461,6 +482,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'analysis_remote_friend_time_control_v1';
   static const String _analysisRemoteFriendSeatPreferenceKey =
       'analysis_remote_friend_seat_preference_v1';
+    static const String _analysisRemoteFriendKeepScoreDefaultKey =
+      'analysis_remote_friend_keep_score_default_v1';
   static const String _analysisOpeningButtonModeKey =
       'analysis_opening_button_mode_v1';
   static const String _analysisLocalFriendTimeControlKey =
@@ -473,7 +496,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         OpeningMode.sacrificeGlow,
       ];
   static const String _analysisEngineOwner = 'analysis.board';
-  static const Duration _remoteFriendReactionCooldown = Duration(seconds: 30);
+  static const Duration _remoteFriendReactionCooldown = Duration(seconds: 60);
   static const Duration _remoteFriendReactionDisplayDuration = Duration(
     seconds: 8,
   );
@@ -651,6 +674,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   final GlobalKey _storeButtonKey = GlobalKey();
   final GlobalKey _evalBarHorizontalKey = GlobalKey();
   final GlobalKey _evalBarVerticalKey = GlobalKey();
+  final GlobalKey _remoteFriendWhiteClockAvatarKey = GlobalKey();
+  final GlobalKey _remoteFriendBlackClockAvatarKey = GlobalKey();
 
   int _currentDepth = 0;
   double _currentEval = 0.0;
@@ -860,12 +885,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _remoteFriendLocalUid;
   RemoteFriendInvite? _remoteFriendInvite;
   RemoteFriendMatchSnapshot? _remoteFriendSnapshot;
+    final ValueNotifier<RemoteFriendMatchStatus?> _remoteFriendStatusNotifier =
+      ValueNotifier<RemoteFriendMatchStatus?>(null);
   List<RemoteFriendMatchMembership> _remoteFriendMemberships =
       <RemoteFriendMatchMembership>[];
   bool _remoteFriendMembershipsLoading = false;
   bool _remoteFriendOperationInProgress = false;
   bool _remoteFriendPollInFlight = false;
   bool _remoteFriendPieceSelectionReady = false;
+  bool _remoteFriendKeepScoreDefault = false;
   bool _remoteFriendReactionInFlight = false;
   Timer? _remoteFriendPollTimer;
   Timer? _remoteFriendClockDisplayTimer;
@@ -884,7 +912,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   AppSection _activeSection = AppSection.menu;
   GambitQuizMode _quizMode = GambitQuizMode.guessName;
-  bool _starterAvatarWelcomeQueued = false;
   bool _menuReady = false;
   bool _muteSounds = false;
   bool _hapticsEnabled = true;
@@ -4324,6 +4351,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  Future<void> _playVersusIntroSound() async {
+    if (_muteSounds) return;
+    try {
+      await _introAudioPlayer.stop();
+      await _introAudioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _introAudioPlayer.play(
+        AssetSource('sounds/vs.mp3'),
+        mode: PlayerMode.mediaPlayer,
+        volume: 1.0,
+      );
+    } catch (e) {
+      debugPrint('Versus intro sound failed: $e');
+      _addLog('Versus intro sound failed: $e');
+    }
+  }
+
   Future<void> _playMenuMusic() async {
     if (_muteSounds || _menuMusicPlaying) return;
     try {
@@ -4531,6 +4574,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedRemoteFriendSeatPreference = prefs.getInt(
         _analysisRemoteFriendSeatPreferenceKey,
       );
+      final savedRemoteFriendKeepScoreDefault = prefs.getBool(
+        _analysisRemoteFriendKeepScoreDefaultKey,
+      );
       final savedOpeningButtonMode = prefs.getInt(
         _analysisOpeningButtonModeKey,
       );
@@ -4572,6 +4618,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               RemoteFriendSeatPreference.values.length) {
         _remoteFriendSeatPreference =
             RemoteFriendSeatPreference.values[savedRemoteFriendSeatPreference];
+      }
+      if (savedRemoteFriendKeepScoreDefault != null) {
+        _remoteFriendKeepScoreDefault = savedRemoteFriendKeepScoreDefault;
       }
       if (savedOpeningButtonMode != null &&
           savedOpeningButtonMode >= 0 &&
@@ -5416,108 +5465,122 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final compactDialog =
             dialogMedia.size.width <= 420 || dialogMedia.size.height <= 640;
 
-        return Dialog(
-          insetPadding: EdgeInsets.symmetric(
-            horizontal: compactDialog ? 12 : 24,
-            vertical: compactDialog ? 12 : 24,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: 360,
-              maxHeight: min(dialogMedia.size.height * 0.9, 620.0),
+        return ValueListenableBuilder<RemoteFriendMatchStatus?>(
+          valueListenable: _remoteFriendStatusNotifier,
+          builder: (context, status, child) {
+            if (status != RemoteFriendMatchStatus.pending) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final route = ModalRoute.of(dialogContext);
+                if (route?.isCurrent ?? false) {
+                  Navigator.of(dialogContext).pop();
+                }
+              });
+            }
+            return child!;
+          },
+          child: Dialog(
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: compactDialog ? 12 : 24,
+              vertical: compactDialog ? 12 : 24,
             ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Scan Invite',
-                          style: theme.textTheme.titleLarge,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                        tooltip: 'Close',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SizedBox(
-                        width: 220,
-                        height: 220,
-                        child: QrImageView(
-                          data: link.toString(),
-                          size: 220,
-                          backgroundColor: Colors.white,
-                          eyeStyle: const QrEyeStyle(
-                            eyeShape: QrEyeShape.square,
-                            color: Colors.black,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 360,
+                maxHeight: min(dialogMedia.size.height * 0.9, 620.0),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Scan Invite',
+                            style: theme.textTheme.titleLarge,
                           ),
-                          dataModuleStyle: const QrDataModuleStyle(
-                            dataModuleShape: QrDataModuleShape.square,
-                            color: Colors.black,
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          tooltip: 'Close',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: SizedBox(
+                          width: 220,
+                          height: 220,
+                          child: QrImageView(
+                            data: link.toString(),
+                            size: 220,
+                            backgroundColor: Colors.white,
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.square,
+                              color: Colors.black,
+                            ),
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.square,
+                              color: Colors.black,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  SelectableText(
-                    code,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2.0,
+                    const SizedBox(height: 16),
+                    SelectableText(
+                      code,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.0,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Scan this on another phone to open the ChessIQ invite '
-                    'page and hand off into the app. If the page stays open, '
-                    'tap Open in ChessIQ there or enter code $code manually.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  SelectableText(
-                    link.toString(),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop();
-                          unawaited(
-                            _copyRemoteFriendInviteLink(inviteCode: code),
-                          );
-                        },
-                        child: const Text('Copy Link'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        child: const Text('Done'),
-                      ),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    Text(
+                      'Scan this on another phone to open the ChessIQ invite '
+                      'page and hand off into the app. If the page stays open, '
+                      'tap Open in ChessIQ there or enter code $code manually.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      link.toString(),
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _copyRemoteFriendInviteLink(inviteCode: code),
+                            );
+                          },
+                          child: const Text('Copy Link'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Done'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -5544,47 +5607,279 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       useMonochrome: useMonochrome,
     );
     final linkAccent = useMonochrome ? scheme.onSurface : scheme.primary;
+    final options =
+        <_RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>>[
+          _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+            value: _RemoteFriendInviteToolsAction.showQr,
+            label: 'Show QR',
+            description: 'Open a large scan view for the other phone.',
+            icon: Icons.qr_code_2_rounded,
+            accent: qrAccent,
+          ),
+          _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+            value: _RemoteFriendInviteToolsAction.copyCode,
+            label: 'Copy Code',
+            description: 'Copy the six-character join code.',
+            icon: Icons.key_rounded,
+            accent: inviteAccent,
+          ),
+          _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+            value: _RemoteFriendInviteToolsAction.copyLink,
+            label: 'Copy Link',
+            description: 'Copy the invite page URL.',
+            icon: Icons.link_rounded,
+            accent: linkAccent,
+          ),
+          _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
+            value: _RemoteFriendInviteToolsAction.shareInvite,
+            label: 'Share Invite',
+            description: 'Open the share sheet with the link and code.',
+            icon: Icons.share_rounded,
+            accent: inviteAccent,
+          ),
+        ];
 
-    final action = await _showRemoteFriendActionSheet<
-      _RemoteFriendInviteToolsAction
-    >(
-      title: 'Invite Tools',
-      subtitle:
-          'Keep the private invite tight: copy the code, send the hosted '
-          'link, or pop the QR for the other phone.',
-      accent: inviteAccent,
-      options: <_RemoteFriendActionSheetOption<
-        _RemoteFriendInviteToolsAction
-      >>[
-        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-          value: _RemoteFriendInviteToolsAction.copyCode,
-          label: 'Copy Code',
-          description: 'Grab the six-character code for manual join.',
-          icon: Icons.key_rounded,
-          accent: inviteAccent,
-        ),
-        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-          value: _RemoteFriendInviteToolsAction.copyLink,
-          label: 'Copy Link',
-          description: 'Copy the HTTPS invite page URL directly.',
-          icon: Icons.link_rounded,
-          accent: linkAccent,
-        ),
-        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-          value: _RemoteFriendInviteToolsAction.shareInvite,
-          label: 'Share Invite',
-          description: 'Open the share sheet with the invite page and code.',
-          icon: Icons.share_rounded,
-          accent: inviteAccent,
-        ),
-        _RemoteFriendActionSheetOption<_RemoteFriendInviteToolsAction>(
-          value: _RemoteFriendInviteToolsAction.showQr,
-          label: 'Show QR',
-          description: 'Display a scannable HTTPS QR for the other phone.',
-          icon: Icons.qr_code_2_rounded,
-          accent: qrAccent,
-        ),
-      ],
+    final action = await showDialog<_RemoteFriendInviteToolsAction>(
+      context: context,
+      builder: (dialogContext) {
+        final dialogTheme = Theme.of(dialogContext);
+        final dialogScheme = dialogTheme.colorScheme;
+        final dialogIsLight = dialogTheme.brightness == Brightness.light;
+        final dialogMedia = MediaQuery.of(dialogContext);
+        final compactDialog =
+            dialogMedia.size.width <= 420 || dialogMedia.size.height <= 700;
+        final dialogWidth = min(
+          compactDialog ? dialogMedia.size.width - 24 : 520.0,
+          520.0,
+        );
+        final columnCount = dialogWidth >= 430 ? 2 : 1;
+        final spacing = compactDialog ? 10.0 : 12.0;
+        final tileWidth =
+            (dialogWidth - 40 - spacing * (columnCount - 1)) / columnCount;
+        final panelColor = Color.alphaBlend(
+          dialogScheme.surfaceContainerHighest.withValues(
+            alpha: dialogIsLight ? 0.42 : 0.24,
+          ),
+          dialogScheme.surface,
+        );
+
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: compactDialog ? 12 : 24,
+            vertical: compactDialog ? 12 : 24,
+          ),
+          backgroundColor: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: dialogWidth,
+              maxHeight: min(dialogMedia.size.height * 0.9, 560.0),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: panelColor,
+                borderRadius: BorderRadius.circular(compactDialog ? 24 : 28),
+                border: Border.all(
+                  color: dialogScheme.outline.withValues(
+                    alpha: dialogIsLight ? 0.20 : 0.34,
+                  ),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: dialogIsLight ? 0.14 : 0.28,
+                    ),
+                    blurRadius: 26,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
+              ),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  compactDialog ? 16 : 20,
+                  compactDialog ? 16 : 20,
+                  compactDialog ? 16 : 20,
+                  compactDialog ? 14 : 18,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: inviteAccent.withValues(
+                                    alpha: dialogIsLight ? 0.10 : 0.16,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  'Remote invite',
+                                  style: TextStyle(
+                                    color: inviteAccent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Invite Tools',
+                                style: TextStyle(
+                                  color: dialogScheme.onSurface,
+                                  fontSize: compactDialog ? 22 : 24,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          tooltip: 'Close',
+                          style: IconButton.styleFrom(
+                            backgroundColor: dialogScheme.surface.withValues(
+                              alpha: dialogIsLight ? 0.72 : 0.44,
+                            ),
+                          ),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: dialogScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: [
+                        for (int index = 0; index < options.length; index += 1)
+                          Builder(
+                            builder: (itemContext) {
+                              final option = options[index];
+                              final itemAccent = useMonochrome
+                                  ? dialogScheme.onSurface
+                                  : option.accent;
+                              final emphasize =
+                                  option.value ==
+                                  _RemoteFriendInviteToolsAction.showQr;
+
+                              return SizedBox(
+                                width: tileWidth,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => Navigator.of(
+                                      itemContext,
+                                    ).pop(option.value),
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Ink(
+                                      decoration: BoxDecoration(
+                                        color: Color.alphaBlend(
+                                          itemAccent.withValues(
+                                            alpha: emphasize
+                                                ? (dialogIsLight ? 0.12 : 0.18)
+                                                : (dialogIsLight ? 0.05 : 0.10),
+                                          ),
+                                          dialogScheme.surface,
+                                        ),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: itemAccent.withValues(
+                                            alpha: emphasize
+                                                ? (dialogIsLight ? 0.34 : 0.42)
+                                                : (dialogIsLight ? 0.16 : 0.24),
+                                          ),
+                                        ),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(14),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 42,
+                                              height: 42,
+                                              decoration: BoxDecoration(
+                                                color: itemAccent.withValues(
+                                                  alpha: dialogIsLight
+                                                      ? 0.12
+                                                      : 0.18,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                              ),
+                                              child: Icon(
+                                                option.icon,
+                                                color: itemAccent,
+                                                size: 22,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    option.label,
+                                                    style: TextStyle(
+                                                      color: dialogScheme
+                                                          .onSurface,
+                                                      fontSize: 14.5,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    option.description,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: dialogScheme
+                                                          .onSurface
+                                                          .withValues(
+                                                            alpha: 0.66,
+                                                          ),
+                                                      fontSize: 11.6,
+                                                      height: 1.25,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
     if (!mounted || action == null) {
       return;
@@ -5621,38 +5916,44 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     final menuAccent = useMonochrome ? scheme.onSurface : scheme.primary;
 
-    final destination = await _showRemoteFriendActionSheet<
-      _RemoteFriendNavigationAction
-    >(
-      title: 'Where To Next?',
-      subtitle:
-          'Exit the live invite panel and jump straight to another ChessIQ '
-          'surface.',
-      accent: menuAccent,
-      options: <_RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>>[
-        _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
-          value: _RemoteFriendNavigationAction.mainMenu,
-          label: 'Main Menu',
-          description: 'Return to the ChessIQ landing screen.',
-          icon: Icons.home_rounded,
+    final destination =
+        await _showRemoteFriendActionSheet<_RemoteFriendNavigationAction>(
+          title: 'Menu',
+          subtitle: '',
           accent: menuAccent,
-        ),
-        _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
-          value: _RemoteFriendNavigationAction.playChess,
-          label: 'Play Chess',
-          description: 'Go back to the versus hub and pick another mode.',
-          icon: Icons.sports_esports_rounded,
-          accent: playAccent,
-        ),
-        _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
-          value: _RemoteFriendNavigationAction.analysis,
-          label: 'Analysis',
-          description: 'Keep the board and continue in analysis mode.',
-          icon: Icons.insights_rounded,
-          accent: analysisAccent,
-        ),
-      ],
-    );
+          options:
+              <_RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>>[
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.mainMenu,
+                  label: 'Main Menu',
+                  description: 'Return to the ChessIQ landing screen.',
+                  icon: Icons.home_rounded,
+                  accent: menuAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.playChess,
+                  label: 'Play Chess',
+                  description:
+                      'Go back to the versus hub and pick another mode.',
+                  icon: Icons.sports_esports_rounded,
+                  accent: playAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.analysis,
+                  label: 'Analysis',
+                  description: 'Keep the board and continue in analysis mode.',
+                  icon: Icons.insights_rounded,
+                  accent: analysisAccent,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.store,
+                  label: 'Store',
+                  description: 'Open the ChessIQ store.',
+                  icon: Icons.storefront_outlined,
+                  accent: scheme.tertiary,
+                ),
+              ],
+        );
     if (!mounted || destination == null) {
       return;
     }
@@ -5664,6 +5965,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _openVsModeFromMenu();
       case _RemoteFriendNavigationAction.analysis:
         _openAnalysisFromRemoteFriendMenu();
+      case _RemoteFriendNavigationAction.store:
+        unawaited(_openStore(initialSection: StoreSection.general));
     }
   }
 
@@ -5673,185 +5976,635 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required Color accent,
     required List<_RemoteFriendActionSheetOption<T>> options,
   }) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final useMonochrome =
         context.read<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
 
-    return showModalBottomSheet<T>(
+    return showDialog<T>(
       context: context,
-      backgroundColor: scheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        final sheetTheme = Theme.of(sheetContext);
-        final sheetScheme = sheetTheme.colorScheme;
-        final sheetIsLight = sheetTheme.brightness == Brightness.light;
-        final headerAccent = useMonochrome ? sheetScheme.onSurface : accent;
+      builder: (dialogContext) {
+        final dialogTheme = Theme.of(dialogContext);
+        final dialogScheme = dialogTheme.colorScheme;
+        final dialogIsLight = dialogTheme.brightness == Brightness.light;
+        final dialogMedia = MediaQuery.of(dialogContext);
+        final compactDialog =
+            dialogMedia.size.width <= 420 || dialogMedia.size.height <= 700;
+        final dialogWidth = min(
+          compactDialog ? dialogMedia.size.width - 24 : 460.0,
+          460.0,
+        );
+        final spacing = compactDialog ? 10.0 : 12.0;
+        final columnCount = dialogWidth >= 400 ? 2 : 1;
+        final tileWidth =
+            (dialogWidth - 40 - spacing * (columnCount - 1)) / columnCount;
 
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: sheetScheme.outline.withValues(alpha: 0.28),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: compactDialog ? 12 : 24,
+            vertical: compactDialog ? 12 : 24,
+          ),
+          backgroundColor: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: dialogWidth,
+              maxHeight: min(dialogMedia.size.height * 0.84, 420.0),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  dialogScheme.surfaceContainerHighest.withValues(
+                    alpha: dialogIsLight ? 0.42 : 0.24,
+                  ),
+                  dialogScheme.surface,
+                ),
+                borderRadius: BorderRadius.circular(compactDialog ? 24 : 28),
+                border: Border.all(
+                  color: dialogScheme.outline.withValues(
+                    alpha: dialogIsLight ? 0.20 : 0.34,
                   ),
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Color.alphaBlend(
-                      headerAccent.withValues(
-                        alpha: sheetIsLight ? 0.08 : 0.14,
-                      ),
-                      sheetScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: dialogIsLight ? 0.14 : 0.28,
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: headerAccent.withValues(
-                        alpha: sheetIsLight ? 0.20 : 0.30,
-                      ),
-                    ),
+                    blurRadius: 26,
+                    offset: const Offset(0, 14),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          color: sheetScheme.onSurface,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  compactDialog ? 16 : 20,
+                  compactDialog ? 16 : 20,
+                  compactDialog ? 16 : 20,
+                  compactDialog ? 14 : 18,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              color: dialogScheme.onSurface,
+                              fontSize: compactDialog ? 22 : 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
-                      ),
+                        IconButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          tooltip: 'Close',
+                          style: IconButton.styleFrom(
+                            backgroundColor: dialogScheme.surface.withValues(
+                              alpha: dialogIsLight ? 0.72 : 0.44,
+                            ),
+                          ),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: dialogScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (subtitle.trim().isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(
                         subtitle,
                         style: TextStyle(
-                          color: sheetScheme.onSurface.withValues(alpha: 0.72),
-                          fontSize: 12.4,
-                          height: 1.35,
+                          color: dialogScheme.onSurface.withValues(alpha: 0.66),
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (int index = 0; index < options.length; index += 1) ...[
-                  Builder(
-                    builder: (itemContext) {
-                      final option = options[index];
-                      final itemAccent = useMonochrome
-                          ? sheetScheme.onSurface
-                          : option.accent;
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: [
+                        for (final option in options)
+                          Builder(
+                            builder: (itemContext) {
+                              final itemAccent = useMonochrome
+                                  ? dialogScheme.onSurface
+                                  : option.accent;
 
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () =>
-                              Navigator.of(itemContext).pop(option.value),
-                          borderRadius: BorderRadius.circular(18),
-                          child: Ink(
-                            decoration: BoxDecoration(
-                              color: Color.alphaBlend(
-                                itemAccent.withValues(
-                                  alpha: sheetIsLight ? 0.06 : 0.12,
-                                ),
-                                sheetScheme.surface,
-                              ),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: itemAccent.withValues(
-                                  alpha: sheetIsLight ? 0.18 : 0.28,
-                                ),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 44,
-                                    height: 44,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: itemAccent.withValues(
-                                        alpha: sheetIsLight ? 0.12 : 0.18,
-                                      ),
-                                      border: Border.all(
-                                        color: itemAccent.withValues(
-                                          alpha: 0.36,
+                              return SizedBox(
+                                width: tileWidth,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => Navigator.of(itemContext).pop(
+                                      option.value,
+                                    ),
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Ink(
+                                      decoration: BoxDecoration(
+                                        color: Color.alphaBlend(
+                                          itemAccent.withValues(
+                                            alpha: dialogIsLight ? 0.06 : 0.12,
+                                          ),
+                                          dialogScheme.surface,
                                         ),
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      option.icon,
-                                      color: itemAccent,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          option.label,
-                                          style: TextStyle(
-                                            color: sheetScheme.onSurface,
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w800,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: itemAccent.withValues(
+                                            alpha: dialogIsLight ? 0.18 : 0.28,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          option.description,
-                                          style: TextStyle(
-                                            color: sheetScheme.onSurface
-                                                .withValues(alpha: 0.68),
-                                            fontSize: 12,
-                                            height: 1.3,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(14),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 42,
+                                              height: 42,
+                                              decoration: BoxDecoration(
+                                                color: itemAccent.withValues(
+                                                  alpha: dialogIsLight
+                                                      ? 0.12
+                                                      : 0.18,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                              ),
+                                              child: Icon(
+                                                option.icon,
+                                                color: itemAccent,
+                                                size: 21,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    option.label,
+                                                    style: TextStyle(
+                                                      color: dialogScheme
+                                                          .onSurface,
+                                                      fontSize: 14.5,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    option.description,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: dialogScheme
+                                                          .onSurface
+                                                          .withValues(
+                                                            alpha: 0.66,
+                                                          ),
+                                                      fontSize: 11.6,
+                                                      height: 1.24,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: itemAccent.withValues(alpha: 0.90),
-                                    size: 24,
-                                  ),
-                                ],
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showRemoteFriendReactionSheet({
+    required Color standardAccent,
+    required Color strangeAccent,
+    required Color statusAccent,
+    required bool strangeReactionsUnlocked,
+    required bool remoteReactionReady,
+    required String remoteReactionStatusText,
+  }) async {
+    final useMonochrome =
+        context.read<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    var showEmojiPanel = false;
+    final emojiOptions = <_RemoteFriendReactionOption>[
+      ..._remoteFriendStandardReactionOptions,
+      ..._remoteFriendStrangeReactionOptions,
+    ];
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final dialogTheme = Theme.of(dialogContext);
+            final dialogScheme = dialogTheme.colorScheme;
+            final dialogIsLight = dialogTheme.brightness == Brightness.light;
+            final dialogMedia = MediaQuery.of(dialogContext);
+            final compactDialog =
+                dialogMedia.size.width <= 420 || dialogMedia.size.height <= 700;
+            final dialogWidth = min(
+              compactDialog ? dialogMedia.size.width - 24 : 540.0,
+              540.0,
+            );
+            final resolvedStandardAccent = useMonochrome
+                ? dialogScheme.onSurface
+                : standardAccent;
+            final resolvedStrangeAccent = useMonochrome
+                ? dialogScheme.onSurface
+                : strangeAccent;
+            final resolvedStatusAccent = useMonochrome
+                ? dialogScheme.onSurface
+                : statusAccent;
+            final gridSpacing = compactDialog ? 8.0 : 10.0;
+            final phraseColumns = dialogWidth >= 500 ? 4 : 3;
+            final emojiColumns = dialogWidth >= 500
+                ? 6
+                : dialogWidth >= 420
+                ? 5
+                : 4;
+
+            VoidCallback? reactionTap(_RemoteFriendReactionOption option) {
+              if (option.requiresPaidRoll && !strangeReactionsUnlocked) {
+                return _showLockedRemoteFriendReactionMessage;
+              }
+              if (!remoteReactionReady) {
+                return null;
+              }
+              return () {
+                Navigator.of(dialogContext).pop();
+                unawaited(_sendRemoteFriendReaction(emoji: option.emoji));
+              };
+            }
+
+            VoidCallback? phraseTap(_RemoteFriendPhraseOption option) {
+              if (!remoteReactionReady) {
+                return null;
+              }
+              return () {
+                Navigator.of(dialogContext).pop();
+                unawaited(_sendRemoteFriendReaction(phraseId: option.id));
+              };
+            }
+
+            Widget buildModeButton({
+              required bool selected,
+              required String label,
+              required IconData icon,
+              required VoidCallback onTap,
+            }) {
+              final accent = selected
+                  ? resolvedStatusAccent
+                  : dialogScheme.onSurface;
+              return Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Ink(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          accent.withValues(
+                            alpha: selected
+                                ? (dialogIsLight ? 0.14 : 0.22)
+                                : (dialogIsLight ? 0.04 : 0.08),
+                          ),
+                          dialogScheme.surface,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: accent.withValues(
+                            alpha: selected
+                                ? (dialogIsLight ? 0.30 : 0.40)
+                                : (dialogIsLight ? 0.14 : 0.20),
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(icon, color: accent, size: 18),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              label,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: accent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        ],
+                      ),
+                    ),
                   ),
-                  if (index < options.length - 1) const SizedBox(height: 10),
-                ],
-              ],
-            ),
-          ),
+                ),
+              );
+            }
+
+            Widget buildPhraseTile(_RemoteFriendPhraseOption option) {
+              final onTap = phraseTap(option);
+              final enabled = onTap != null;
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                        resolvedStandardAccent.withValues(
+                          alpha: enabled
+                              ? (dialogIsLight ? 0.07 : 0.12)
+                              : (dialogIsLight ? 0.03 : 0.05),
+                        ),
+                        dialogScheme.surface,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: resolvedStandardAccent.withValues(
+                          alpha: enabled
+                              ? (dialogIsLight ? 0.20 : 0.28)
+                              : 0.12,
+                        ),
+                      ),
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          option.label,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: enabled
+                                ? dialogScheme.onSurface
+                                : dialogScheme.onSurface.withValues(alpha: 0.42),
+                            fontSize: 12.4,
+                            height: 1.18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            Widget buildEmojiTile(_RemoteFriendReactionOption option) {
+              final locked =
+                  option.requiresPaidRoll && !strangeReactionsUnlocked;
+              final onTap = reactionTap(option);
+              final enabled = onTap != null;
+              final tileAccent = option.requiresPaidRoll
+                  ? resolvedStrangeAccent
+                  : resolvedStandardAccent;
+
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                        tileAccent.withValues(
+                          alpha: enabled
+                              ? (dialogIsLight ? 0.08 : 0.14)
+                              : (dialogIsLight ? 0.03 : 0.05),
+                        ),
+                        dialogScheme.surface,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: tileAccent.withValues(
+                          alpha: enabled
+                              ? (dialogIsLight ? 0.20 : 0.30)
+                              : 0.12,
+                        ),
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Text(
+                            option.emoji,
+                            style: TextStyle(
+                              fontSize: compactDialog ? 26 : 28,
+                              color: locked
+                                  ? dialogScheme.onSurface.withValues(alpha: 0.46)
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        if (locked)
+                          Positioned(
+                            right: 8,
+                            top: 8,
+                            child: Icon(
+                              Icons.lock_rounded,
+                              size: 14,
+                              color: dialogScheme.onSurface.withValues(
+                                alpha: 0.56,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return Dialog(
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: compactDialog ? 12 : 24,
+                vertical: compactDialog ? 12 : 24,
+              ),
+              backgroundColor: Colors.transparent,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: dialogWidth,
+                  maxHeight: min(
+                    dialogMedia.size.height * 0.88,
+                    showEmojiPanel ? 500.0 : 520.0,
+                  ),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      dialogScheme.surfaceContainerHighest.withValues(
+                        alpha: dialogIsLight ? 0.42 : 0.24,
+                      ),
+                      dialogScheme.surface,
+                    ),
+                    borderRadius: BorderRadius.circular(
+                      compactDialog ? 24 : 28,
+                    ),
+                    border: Border.all(
+                      color: dialogScheme.outline.withValues(
+                        alpha: dialogIsLight ? 0.20 : 0.34,
+                      ),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: dialogIsLight ? 0.14 : 0.28,
+                        ),
+                        blurRadius: 26,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compactDialog ? 16 : 20,
+                      compactDialog ? 16 : 20,
+                      compactDialog ? 16 : 20,
+                      compactDialog ? 14 : 18,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Quick signals',
+                                style: TextStyle(
+                                  color: dialogScheme.onSurface,
+                                  fontSize: compactDialog ? 22 : 24,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: resolvedStatusAccent.withValues(
+                                  alpha: dialogIsLight ? 0.12 : 0.20,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                remoteReactionStatusText,
+                                style: TextStyle(
+                                  color: dialogScheme.onSurface,
+                                  fontSize: 10.8,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            IconButton(
+                              onPressed: () => Navigator.of(dialogContext).pop(),
+                              tooltip: 'Close',
+                              style: IconButton.styleFrom(
+                                backgroundColor: dialogScheme.surface.withValues(
+                                  alpha: dialogIsLight ? 0.72 : 0.44,
+                                ),
+                              ),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: dialogScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            buildModeButton(
+                              selected: !showEmojiPanel,
+                              label: 'Common lines',
+                              icon: Icons.chat_bubble_outline_rounded,
+                              onTap: () => setDialogState(() {
+                                showEmojiPanel = false;
+                              }),
+                            ),
+                            const SizedBox(width: 10),
+                            buildModeButton(
+                              selected: showEmojiPanel,
+                              label: 'Emoji',
+                              icon: Icons.sentiment_satisfied_alt_rounded,
+                              onTap: () => setDialogState(() {
+                                showEmojiPanel = true;
+                              }),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: showEmojiPanel
+                              ? emojiOptions.length
+                              : _remoteFriendPhraseOptions.length,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: showEmojiPanel
+                                ? emojiColumns
+                                : phraseColumns,
+                            mainAxisSpacing: gridSpacing,
+                            crossAxisSpacing: gridSpacing,
+                            childAspectRatio: showEmojiPanel
+                                ? 1.04
+                                : (phraseColumns >= 4 ? 2.8 : 2.45),
+                          ),
+                          itemBuilder: (context, index) {
+                            if (showEmojiPanel) {
+                              return buildEmojiTile(emojiOptions[index]);
+                            }
+                            return buildPhraseTile(
+                              _remoteFriendPhraseOptions[index],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -5925,6 +6678,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _stopRemoteFriendSyncTimers();
     _remoteFriendInvite = null;
     _remoteFriendSnapshot = null;
+    _remoteFriendStatusNotifier.value = null;
     _remoteFriendLastError = null;
     _remoteFriendOutcomeReason = null;
     _remoteFriendOperationInProgress = false;
@@ -6199,9 +6953,46 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _remoteFriendInvite = invite;
     _remoteFriendSnapshot = snapshot;
+    _remoteFriendStatusNotifier.value = snapshot.status;
     _remoteFriendOutcomeReason = snapshot.outcome?.reason;
     _remoteFriendLastError = null;
     _syncRemoteFriendPieceSelectionUi(snapshot);
+
+    final remoteMatchJustStarted =
+        previousSnapshot != null &&
+        previousSnapshot.matchId == snapshot.matchId &&
+        previousSnapshot.status == RemoteFriendMatchStatus.pending &&
+        snapshot.status == RemoteFriendMatchStatus.active;
+    if (remoteMatchJustStarted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_isRemoteFriendMatchMode) {
+          return;
+        }
+        if (_remoteFriendSnapshot?.matchId != snapshot.matchId ||
+            _remoteFriendSnapshot?.status != RemoteFriendMatchStatus.active) {
+          return;
+        }
+
+        unawaited(_lightHaptic());
+        setState(() {
+          _introCompleted = false;
+          _buttonUnlocked = false;
+        });
+        _introController.forward(from: 0);
+        unawaited(_playVersusIntroSound());
+        Future<void>.delayed(const Duration(milliseconds: 3000), () async {
+          if (!mounted || !_isRemoteFriendMatchMode) {
+            return;
+          }
+          if (_remoteFriendSnapshot?.matchId != snapshot.matchId) {
+            return;
+          }
+          setState(() {
+            _buttonUnlocked = true;
+          });
+        });
+      });
+    }
 
     final playerSeat = _remoteFriendPlayerSeat;
     if (playerSeat != null) {
@@ -6710,15 +7501,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
-  Future<void> _sendRemoteFriendReaction(String emoji) async {
+  Future<void> _sendRemoteFriendReaction({
+    String? emoji,
+    String? phraseId,
+  }) async {
     final snapshot = _remoteFriendSnapshot;
+    final normalizedEmoji = emoji?.trim() ?? '';
+    final normalizedPhraseId = phraseId?.trim() ?? '';
     if (snapshot == null ||
         snapshot.matchId.isEmpty ||
         snapshot.status != RemoteFriendMatchStatus.active ||
         snapshot.outcome != null ||
         _isRemoteFriendPieceSelectionOpen ||
         _remoteFriendReactionInFlight ||
-        _remoteFriendOperationInProgress) {
+        _remoteFriendOperationInProgress ||
+        (normalizedEmoji.isEmpty && normalizedPhraseId.isEmpty) ||
+        (normalizedEmoji.isNotEmpty && normalizedPhraseId.isNotEmpty)) {
       return;
     }
 
@@ -6727,7 +7525,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     if (localCooldown > Duration.zero) {
       _showRemoteFriendNotice(
-        'Quick reacts recharge every 30 seconds. Try again in ${_formatRemoteFriendReactionCooldown(localCooldown)}.',
+        'Quick signals recharge every minute. Try again in ${_formatRemoteFriendReactionCooldown(localCooldown)}.',
       );
       return;
     }
@@ -6739,7 +7537,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     try {
       final result = await RemoteFriendService.instance.sendReaction(
         matchId: snapshot.matchId,
-        emoji: emoji,
+        emoji: normalizedEmoji.isEmpty ? null : normalizedEmoji,
+        phraseId: normalizedPhraseId.isEmpty ? null : normalizedPhraseId,
       );
       if (!mounted) {
         return;
@@ -6768,7 +7567,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         return;
       }
       _showRemoteFriendNotice(
-        'Could not send that quick reaction. The match will refresh to the latest state.',
+        'Could not send that quick signal. The match will refresh to the latest state.',
       );
       await _refreshRemoteFriendMatch(silent: true);
     } finally {
@@ -6877,7 +7676,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
-  Future<void> _runRemoteFriendAction(RemoteFriendMatchAction action) async {
+  Future<void> _runRemoteFriendAction(
+    RemoteFriendMatchAction action, {
+    bool? keepScore,
+  }) async {
     final matchId = _remoteFriendSnapshot?.matchId;
     if (matchId == null ||
         matchId.isEmpty ||
@@ -6893,6 +7695,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final result = await RemoteFriendService.instance.actOnMatch(
         matchId: matchId,
         action: action,
+        keepScore: keepScore,
       );
       if (!mounted) {
         return;
@@ -7292,9 +8095,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   _RemoteFriendReactionOption? _remoteFriendReactionOptionForEmoji(
-    String emoji,
+    String? emoji,
   ) {
-    final normalizedEmoji = emoji.trim();
+    final normalizedEmoji = (emoji ?? '').trim();
     if (normalizedEmoji.isEmpty) {
       return null;
     }
@@ -7309,13 +8112,48 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return null;
   }
 
+  _RemoteFriendPhraseOption? _remoteFriendPhraseOptionForId(String? id) {
+    final normalizedId = (id ?? '').trim();
+    if (normalizedId.isEmpty) {
+      return null;
+    }
+    for (final option in _remoteFriendPhraseOptions) {
+      if (option.id == normalizedId) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  String _remoteFriendSignalLabel(RemoteFriendReaction reaction) {
+    if (reaction.isPhrase) {
+      return _remoteFriendPhraseOptionForId(reaction.code)?.label ??
+          reaction.displayLabel;
+    }
+    return _remoteFriendReactionOptionForEmoji(reaction.emoji)?.label ??
+        reaction.displayLabel;
+  }
+
+  String _remoteFriendSignalGlyph(RemoteFriendReaction reaction) {
+    if (!reaction.isPhrase) {
+      final emoji = reaction.emoji?.trim() ?? '';
+      if (emoji.isNotEmpty) {
+        return emoji;
+      }
+    }
+    return '💬';
+  }
+
   RemoteFriendReaction? _remoteFriendVisibleReactionForSnapshot(
     RemoteFriendMatchSnapshot snapshot,
   ) {
     final reaction = snapshot.reaction;
-    if (reaction == null ||
-        reaction.emoji.trim().isEmpty ||
-        reaction.sentByUid.trim().isEmpty) {
+    final hasContent = reaction == null
+        ? false
+        : reaction.isPhrase
+        ? reaction.displayLabel.trim().isNotEmpty
+        : (reaction.emoji?.trim().isNotEmpty ?? false);
+    if (reaction == null || !hasContent || reaction.sentByUid.trim().isEmpty) {
       return null;
     }
     final age = DateTime.now().difference(reaction.sentAt);
@@ -7391,9 +8229,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         final retryIn = _formatRemoteFriendReactionCooldown(
           remaining > Duration.zero ? remaining : _remoteFriendReactionCooldown,
         );
-        return 'Quick reacts recharge every 30 seconds. Try again in $retryIn.';
+        return 'Quick signals recharge every minute. Try again in $retryIn.';
       case 'piece-selection-pending':
-        return 'Quick reacts open after both players finish locking in their piece skins.';
+        return 'Quick signals open after both players finish locking in their piece skins.';
       case 'expired':
       case 'cancelled':
       case 'completed':
@@ -7402,7 +8240,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       case 'not-participant':
         return 'This device is no longer recognized as a participant in that remote match.';
       default:
-        return 'Could not send that quick reaction right now. ChessIQ refreshed the match state.';
+        return 'Could not send that quick signal right now. ChessIQ refreshed the match state.';
     }
   }
 
@@ -7583,8 +8421,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final isLight = themeData.brightness == Brightness.light;
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 150),
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minWidth: 132),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Color.alphaBlend(
           accent.withValues(alpha: isLight ? 0.08 : 0.14),
@@ -7609,26 +8447,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             subtitle,
             style: TextStyle(
               color: scheme.onSurface.withValues(alpha: 0.62),
-              fontSize: 11,
+              fontSize: 10.4,
               fontWeight: FontWeight.w600,
               height: 1.2,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(
             children: [
               _pieceImage(
                 isWhitePiece ? 'k_w' : 'k_b',
-                width: 26,
-                height: 26,
+                width: 24,
+                height: 24,
                 theme: theme,
                 orientForHeadToHeadPerspective: false,
               ),
               const SizedBox(width: 6),
               _pieceImage(
                 isWhitePiece ? 'q_w' : 'q_b',
-                width: 26,
-                height: 26,
+                width: 24,
+                height: 24,
                 theme: theme,
                 orientForHeadToHeadPerspective: false,
               ),
@@ -7718,7 +8556,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Waiting ${remainingSeconds.clamp(0, 10)}s for the pairing window to end.',
+                      'Locked in • ${remainingSeconds.clamp(0, 10)}s',
                       style: TextStyle(
                         color: scheme.onSurface.withValues(alpha: 0.68),
                         fontSize: 11.5,
@@ -7753,6 +8591,85 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           ],
         ],
       ),
+    );
+  }
+
+  Future<void> _showRemoteFriendPieceSelectionInfoDialog({
+    required String remoteSeatLabel,
+    required String remoteOpponentSeatLabel,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        final scheme = theme.colorScheme;
+        final dialogMedia = MediaQuery.of(dialogContext);
+        final compactDialog =
+            dialogMedia.size.width <= 420 || dialogMedia.size.height <= 640;
+
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: compactDialog ? 12 : 24,
+            vertical: compactDialog ? 12 : 24,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Skin pairing',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Pick the skin for your $remoteSeatLabel pieces.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your friend keeps their $remoteOpponentSeatLabel-side skin.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'If you do nothing, ChessIQ uses your saved default.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurface.withValues(alpha: 0.72),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text('Done'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -7917,17 +8834,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Widget _remoteFriendReactionClockBadge({
-    required String emoji,
+    required String leading,
     required String label,
     required Color accent,
+    bool isPhrase = false,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
 
     return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: Color.alphaBlend(
           accent.withValues(alpha: isLight ? 0.10 : 0.16),
@@ -7939,15 +8856,23 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 15)),
+          if (isPhrase)
+            Icon(Icons.chat_bubble_outline_rounded, size: 13, color: accent)
+          else
+            Text(leading, style: const TextStyle(fontSize: 15)),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.74),
-              fontSize: 9.8,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.2,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 108),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.74),
+                fontSize: 9.8,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
             ),
           ),
         ],
@@ -9149,6 +10074,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     await prefs.setBool(
       _analysisHeadToHeadEvalBarEnabledKey,
       _headToHeadEvalBarEnabled,
+    );
+    await prefs.setBool(
+      _analysisRemoteFriendKeepScoreDefaultKey,
+      _remoteFriendKeepScoreDefault,
     );
     await prefs.setInt(
       _analysisOpeningButtonModeKey,
@@ -15518,6 +16447,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return obj;
   }
 
+  Offset? _remoteFriendClockAvatarCenterInScene({required bool white}) {
+    final avatarContext =
+        (white
+                ? _remoteFriendWhiteClockAvatarKey
+                : _remoteFriendBlackClockAvatarKey)
+            .currentContext;
+    final sceneContext = _sceneKey.currentContext;
+    if (avatarContext == null || sceneContext == null) {
+      return null;
+    }
+
+    final avatarBox = _renderBoxFromContext(avatarContext);
+    final sceneBox = _renderBoxFromContext(sceneContext);
+    if (avatarBox == null || sceneBox == null) {
+      return null;
+    }
+
+    return sceneBox.globalToLocal(
+      avatarBox.localToGlobal(avatarBox.size.center(Offset.zero)),
+    );
+  }
+
   Rect? _boardRectInScene() {
     final boardContext = _boardKey.currentContext;
     final sceneContext = _sceneKey.currentContext;
@@ -16956,24 +17907,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String _menuLogoAsset(BuildContext context) {
     return Theme.of(context).brightness == Brightness.light
         ? 'assets/logo2.png'
-        : 'assets/alpha.png';
+        : 'assets/logo.png';
   }
 
   // --- UI Sections ---
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final starterWelcomeAvatar = context.select<
-      AvatarInventoryProvider,
-      AvatarCatalogEntry?
-    >((inventory) => inventory.starterAvatar);
-    final shouldShowStarterAvatarWelcome =
-        context.select<AvatarInventoryProvider, bool>(
-          (inventory) => inventory.loaded && inventory.bootstrappedStarter,
-        );
-    if (shouldShowStarterAvatarWelcome && starterWelcomeAvatar != null) {
-      _queueStarterAvatarWelcomeDialog(starterWelcomeAvatar);
-    }
     final isLandscape = media.orientation == Orientation.landscape;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -17283,10 +18223,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ),
                     ),
-                  SizedBox(height: showMenuLogo ? 6 : 2),
+                  SizedBox(height: showMenuLogo ? 10 : 2),
                   Expanded(
-                    child: Align(
-                      alignment: Alignment.topCenter,
+                    child: Center(
                       child: LayoutBuilder(
                         builder: (context, innerConstraints) {
                           final availableWidth = min(
@@ -20658,6 +21597,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   final double scale = (width / 430.0).clamp(0.8, 1.4);
                   final showRemoteFriendClockStrip =
                       _isRemoteFriendMatchMode && _showsFriendClockPanels;
+                  final usesCompactRemoteFriendLiveLayout =
+                      _isRemoteFriendMatchMode &&
+                      _gameOutcome == null &&
+                      !_isRemoteFriendPendingMatch &&
+                      !_isRemoteFriendPieceSelectionOpen;
                   const double portraitToolboxGap = 12.0;
                   final portraitBoardRect =
                       !isLandscape && _isAnalysisEditModeActive
@@ -20692,13 +21636,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                             builder: (context, inner) {
                                               final usesRemoteFriendSidePanel =
                                                   _isRemoteFriendMatchMode;
+                                              final compactRemoteFriendSidePanel =
+                                                  _isRemoteFriendMatchMode &&
+                                                  _gameOutcome == null &&
+                                                  !_isRemoteFriendPieceSelectionOpen &&
+                                                  !_isRemoteFriendPendingMatch;
+                                              final landscapeSideGap =
+                                                usesRemoteFriendSidePanel
+                                                ? 8.0
+                                                : 12.0;
                                               final usesExpandedSidePanel =
                                                   _isAnalysisMatchMode ||
                                                   usesRemoteFriendSidePanel;
                                               final sideWidth =
                                                   usesRemoteFriendSidePanel
-                                                  ? (inner.maxWidth * 0.40)
-                                                        .clamp(320.0, 420.0)
+                                                  ? compactRemoteFriendSidePanel
+                                                  ? (inner.maxWidth *
+                                                        0.23)
+                                                              .clamp(
+                                                      196.0,
+                                                      244.0,
+                                                              )
+                                                        : (inner.maxWidth *
+                                                                  0.40)
+                                                              .clamp(
+                                                                320.0,
+                                                                420.0,
+                                                              )
                                                   : (inner.maxWidth *
                                                             (usesExpandedSidePanel
                                                                 ? 0.34
@@ -20714,7 +21678,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                               const double evalBarW = 22.0;
                                               final boardSectionWidth = max(
                                                 0.0,
-                                                inner.maxWidth - sideWidth - 12,
+                                                inner.maxWidth -
+                                                    sideWidth -
+                                                    landscapeSideGap,
                                               );
                                               final boardSize = max(
                                                 0.0,
@@ -20794,7 +21760,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                           },
                                                         ),
                                                       ),
-                                                      const SizedBox(width: 12),
+                                                      SizedBox(
+                                                        width: landscapeSideGap,
+                                                      ),
                                                       SizedBox(
                                                         width: sideWidth,
                                                         child: LayoutBuilder(
@@ -21026,9 +21994,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       Expanded(
                                         child: Padding(
                                           padding: EdgeInsets.fromLTRB(
+                                            usesCompactRemoteFriendLiveLayout
+                                                ? 0
+                                                : 8,
                                             8,
-                                            8,
-                                            8,
+                                            usesCompactRemoteFriendLiveLayout
+                                                ? 0
+                                                : 8,
                                             _isBotMatchMode ? 2 : 8,
                                           ),
                                           child: LayoutBuilder(
@@ -22557,8 +23529,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final spacing = isLandscape ? 10.0 : 12.0;
 
+    if (isLandscape) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildRemoteFriendClockCard(white: _friendClockTopShowsWhite),
+          SizedBox(height: spacing),
+          _buildRemoteFriendClockCard(white: _friendClockBottomShowsWhite),
+        ],
+      );
+    }
+
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isLandscape ? 0 : 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
           Expanded(
@@ -22667,6 +23650,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
+    final localAccent = _remoteFriendLocalAccent(
+      scheme,
+      useMonochrome: useMonochrome,
+    );
+    final opponentAccent = _remoteFriendOpponentAccent(
+      scheme,
+      useMonochrome: useMonochrome,
+    );
     final seat = white ? RemoteFriendSeat.white : RemoteFriendSeat.black;
     final occupantUid = white ? snapshot.whiteUid : snapshot.blackUid;
     final isLocalSeat =
@@ -22684,26 +23675,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _gameOutcome != null &&
         ((white && _gameOutcome == GameOutcome.blackWin) ||
             (!white && _gameOutcome == GameOutcome.whiteWin));
+    final baseSeatAccent = occupantUid == null
+      ? scheme.onSurface.withValues(alpha: 0.58)
+      : isLocalSeat
+      ? localAccent
+      : opponentAccent;
     final accent = isWinner
         ? _remoteFriendReadyAccent(scheme, useMonochrome: useMonochrome)
         : isLoser
         ? _remoteFriendDangerAccent(scheme, useMonochrome: useMonochrome)
         : isActive
-        ? (isLocalSeat
-              ? _remoteFriendLocalAccent(scheme, useMonochrome: useMonochrome)
-              : _remoteFriendOpponentAccent(
-                  scheme,
-                  useMonochrome: useMonochrome,
-                ))
-        : isLocalSeat
-        ? scheme.onSurface.withValues(alpha: 0.84)
-        : scheme.onSurface.withValues(alpha: 0.68);
+      ? baseSeatAccent
+      : (Color.lerp(
+          baseSeatAccent,
+          scheme.onSurface,
+          occupantUid == null
+            ? 0.18
+            : isLocalSeat
+            ? 0.12
+            : 0.20,
+        ) ??
+        baseSeatAccent);
     final roleLabel = occupantUid == null
         ? 'OPEN'
         : isLocalSeat
         ? 'YOU'
         : 'FRIEND';
-    final label = '$roleLabel | ${white ? 'WHITE' : 'BLACK'}';
+    final seatLabel = white ? 'WHITE' : 'BLACK';
     final detail = snapshot.status == RemoteFriendMatchStatus.pending
         ? (occupantUid == null
               ? 'OPEN SEAT'
@@ -22748,94 +23746,160 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ? recentReaction
         : null;
 
+    final avatarInventory = context.watch<AvatarInventoryProvider>();
     final avatarId = white ? snapshot.whiteAvatarId : snapshot.blackAvatarId;
     final avatarEntry = avatarId != null
-        ? AvatarCatalog.entryFor(avatarId)
-        : null;
+      ? AvatarCatalog.entryFor(avatarId)
+      : isLocalSeat
+      ? avatarInventory.selectedAvatar
+      : null;
+    final avatarKey = white
+        ? _remoteFriendWhiteClockAvatarKey
+        : _remoteFriendBlackClockAvatarKey;
+    final avatarWidget = KeyedSubtree(
+      key: avatarKey,
+      child: avatarEntry != null
+          ? AvatarPortrait(
+              avatar: avatarEntry,
+              size: 28,
+              radius: 10,
+              borderColor: accent.withValues(alpha: 0.38),
+              backgroundColor: Colors.transparent,
+              showShadow: false,
+            )
+          : Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: accent.withValues(alpha: 0.10),
+                border: Border.all(color: accent.withValues(alpha: 0.22)),
+              ),
+              child: Icon(
+                occupantUid == null
+                    ? Icons.person_add_alt_1_rounded
+                    : Icons.account_circle_outlined,
+                size: 19,
+                color: accent.withValues(alpha: 0.74),
+              ),
+            ),
+    );
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      constraints: const BoxConstraints(minWidth: 152),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          accent.withValues(alpha: isDark ? 0.16 : 0.10),
-          scheme.surface,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withValues(alpha: 0.46), width: 1.4),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withValues(alpha: isActive ? 0.20 : 0.10),
-            blurRadius: isActive ? 18 : 12,
-            offset: const Offset(0, 6),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          constraints: const BoxConstraints(minWidth: 152, minHeight: 94),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              accent.withValues(alpha: isDark ? 0.16 : 0.10),
+              scheme.surface,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: accent.withValues(alpha: isActive ? 0.58 : 0.40),
+              width: isLocalSeat ? 1.6 : 1.4,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: isActive ? 0.20 : 0.10),
+                blurRadius: isActive ? 18 : 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (avatarEntry != null) ...[
-                AvatarPortrait(
-                  avatar: avatarEntry,
-                  size: 22,
-                  radius: 6,
-                  borderColor: accent.withValues(alpha: 0.38),
-                  backgroundColor: Colors.transparent,
-                  showShadow: false,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  avatarWidget,
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      roleLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 11.4,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: isDark ? 0.18 : 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.28),
+                      ),
+                    ),
+                    child: Text(
+                      seatLabel,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 9.6,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  timeText,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
                 ),
-                const SizedBox(width: 8),
-              ] else if (occupantUid != null) ...[
-                Icon(
-                  Icons.account_circle_outlined,
-                  size: 22,
-                  color: accent.withValues(alpha: 0.60),
-                ),
-                const SizedBox(width: 8),
-              ],
+              ),
+              const SizedBox(height: 2),
               Text(
-                label,
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: accent,
-                  fontSize: 10.5,
+                  color: scheme.onSurface.withValues(alpha: 0.66),
+                  fontSize: 10.6,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
+                  letterSpacing: 0.34,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            timeText,
-            style: TextStyle(
-              color: scheme.onSurface,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            detail,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.66),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-            ),
-          ),
-          if (seatReaction != null)
-            _remoteFriendReactionClockBadge(
-              emoji: seatReaction.emoji,
-              label: isLocalSeat ? 'You reacted' : 'Friend reacted',
+        ),
+        if (seatReaction != null)
+          Positioned(
+            top: -10,
+            right: 12,
+            child: _remoteFriendReactionClockBadge(
+              leading: _remoteFriendSignalGlyph(seatReaction),
+              label: _remoteFriendSignalLabel(seatReaction),
               accent: accent,
+              isPhrase: seatReaction.isPhrase,
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -24081,8 +25145,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           icon: Icon(icon, size: 18),
           label: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: compactRemoteActionPanel ? 13.2 : 14,
+              fontSize: compactRemoteActionPanel ? 12.6 : 13.6,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.2,
             ),
@@ -24384,13 +25451,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : _isRemoteFriendPendingMatch
           ? 'Share code ${remoteSnapshot.inviteCode} with your friend to start the match.'
           : remotePieceSelectionOpen
-          ? _remoteFriendPieceSelectionReady
-                ? remoteSeat == null
-                      ? 'Ready. Your saved default skin is locked in, and the match starts in $remoteSelectionRemainingSeconds seconds.'
-                      : 'Ready. Your ${remoteSeatLabel.toLowerCase()} pieces will use ${_pieceThemeLabel(remotePlayerTheme)} while your friend keeps ${_pieceThemeLabel(remoteOpponentTheme)} on the other side. Match starts in $remoteSelectionRemainingSeconds seconds.'
-                : remoteSeat == null
-                ? 'Choose your piece skin in $remoteSelectionRemainingSeconds seconds. If you do nothing, your current default skin will be used.'
-                : 'You are $remoteSeatLabel. Pick the skin for your ${remoteSeatLabel.toLowerCase()} pieces. Your friend keeps their own ${_remoteFriendSeatLabel(remoteOpponentSeat).toLowerCase()}-side skin, and the match starts in $remoteSelectionRemainingSeconds seconds.'
+          ? ''
           : remoteSnapshot.status == RemoteFriendMatchStatus.expired
           ? 'This invite expired before the game began. Return to VS mode to create a new code.'
           : remoteSnapshot.status == RemoteFriendMatchStatus.cancelled
@@ -24405,14 +25466,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : _isRemoteFriendPendingMatch
           ? 'Updating the invite for both phones...'
           : remotePieceSelectionOpen
-          ? 'Saving your piece-skin pairing choice...'
+          ? 'Saving skin...'
           : 'Synchronizing the private match...';
       final remoteVisibleReaction = remoteSnapshot == null
           ? null
           : _remoteFriendVisibleReactionForSnapshot(remoteSnapshot);
-      final remoteVisibleReactionOption = remoteVisibleReaction == null
+      final remoteVisibleReactionLabel = remoteVisibleReaction == null
           ? null
-          : _remoteFriendReactionOptionForEmoji(remoteVisibleReaction.emoji);
+          : _remoteFriendSignalLabel(remoteVisibleReaction);
       final remoteReactionSentByLocal =
           remoteVisibleReaction != null &&
           remoteVisibleReaction.sentByUid == _remoteFriendLocalUid;
@@ -24463,10 +25524,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           remoteSnapshot != null &&
           remoteSnapshot.status == RemoteFriendMatchStatus.active &&
           remoteSnapshot.outcome == null;
+      final useCompactRemoteLiveDock =
+          _isRemoteFriendActiveMatch && !remotePieceSelectionOpen;
       final shouldScrollRemoteActionBody =
           isLandscape &&
           media.size.height <= 420 &&
-          (remotePieceSelectionOpen || showRemoteReactionTray);
+          showRemoteReactionTray &&
+          !useCompactRemoteLiveDock;
       final buttons = <Widget>[
         buildRemoteActionButton(
           label: 'Menu',
@@ -24554,14 +25618,176 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
         ],
         buildRemoteActionButton(
-          label: 'Refresh',
-          icon: Icons.sync_rounded,
+          label: _isRemoteFriendPendingMatch ? 'Settings' : 'Refresh',
+          icon: _isRemoteFriendPendingMatch
+              ? Icons.tune_rounded
+              : Icons.sync_rounded,
           onPressed: _remoteFriendOperationInProgress
               ? null
+              : _isRemoteFriendPendingMatch
+              ? () => unawaited(_openSettings(fromAnalysisMode: false))
               : () => unawaited(_refreshRemoteFriendMatch()),
-          accent: remoteAccent,
+          accent: _isRemoteFriendPendingMatch
+              ? scheme.onSurface
+              : remoteAccent,
         ),
       ];
+
+      if (useCompactRemoteLiveDock) {
+        final compactTalkLabel = _remoteFriendReactionInFlight
+            ? 'Sending'
+            : remoteReactionReady
+            ? 'Say'
+            : _formatRemoteFriendReactionCooldown(
+                remoteReactionCooldownRemaining,
+              );
+
+        final compactButtons = <Widget>[
+          buildRemoteActionButton(
+            label: 'Menu',
+            icon: Icons.menu_rounded,
+            onPressed: _remoteFriendOperationInProgress
+                ? null
+                : () => unawaited(_showRemoteFriendActionMenu()),
+            accent: scheme.onSurface,
+          ),
+          buildRemoteActionButton(
+            label: compactTalkLabel,
+            icon: Icons.chat_bubble_outline_rounded,
+            onPressed: _remoteFriendOperationInProgress
+                ? null
+                : () => unawaited(
+                    _showRemoteFriendReactionSheet(
+                      standardAccent: remoteLocalAccent,
+                      strangeAccent: remoteOpponentAccent,
+                      statusAccent: remoteReactionAccent,
+                      strangeReactionsUnlocked: strangeReactionsUnlocked,
+                      remoteReactionReady: remoteReactionReady,
+                      remoteReactionStatusText: remoteReactionStatusText,
+                    ),
+                  ),
+            accent: remoteReactionAccent,
+            primary: remoteReactionReady,
+          ),
+          if (_hasIncomingRemoteDrawOffer)
+            buildRemoteActionButton(
+              label: 'Accept Draw',
+              icon: Icons.handshake_outlined,
+              onPressed: _remoteFriendOperationInProgress
+                  ? null
+                  : () => unawaited(
+                      _runRemoteFriendAction(
+                        RemoteFriendMatchAction.acceptDraw,
+                      ),
+                    ),
+              accent: remoteOpponentAccent,
+              primary: true,
+            ),
+          if (_hasIncomingRemoteDrawOffer)
+            buildRemoteActionButton(
+              label: 'Decline',
+              icon: Icons.close_rounded,
+              onPressed: _remoteFriendOperationInProgress
+                  ? null
+                  : () => unawaited(
+                      _runRemoteFriendAction(
+                        RemoteFriendMatchAction.declineDraw,
+                      ),
+                    ),
+              accent: remoteDangerAccent,
+            ),
+          if (!_hasIncomingRemoteDrawOffer)
+            buildRemoteActionButton(
+              label: _hasOutgoingRemoteDrawOffer ? 'Draw Sent' : 'Offer Draw',
+              icon: Icons.handshake_outlined,
+              onPressed:
+                  _remoteFriendOperationInProgress ||
+                      _hasOutgoingRemoteDrawOffer
+                  ? null
+                  : () => unawaited(
+                      _runRemoteFriendAction(RemoteFriendMatchAction.offerDraw),
+                    ),
+              accent: remoteOpponentAccent,
+              primary: !_hasOutgoingRemoteDrawOffer,
+            ),
+          buildRemoteActionButton(
+            label: 'Resign',
+            icon: Icons.flag_rounded,
+            onPressed: _remoteFriendOperationInProgress
+                ? null
+                : () => unawaited(
+                    _runRemoteFriendAction(RemoteFriendMatchAction.resign),
+                  ),
+            accent: remoteDangerAccent,
+          ),
+          buildRemoteActionButton(
+            label: 'Refresh',
+            icon: Icons.sync_rounded,
+            onPressed: _remoteFriendOperationInProgress
+                ? null
+                : () => unawaited(_refreshRemoteFriendMatch()),
+            accent: remoteAccent,
+          ),
+        ];
+
+        final compactDock = Container(
+          key: _actionAreaKey,
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            compactRemoteActionPanel ? 10 : 12,
+            compactRemoteActionPanel ? 10 : 12,
+            compactRemoteActionPanel ? 10 : 12,
+            compactRemoteActionPanel ? 10 : 12,
+          ),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              scheme.surface.withValues(alpha: isLight ? 0.92 : 0.84),
+              remoteAccent.withValues(alpha: isLight ? 0.12 : 0.18),
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: remoteAccent.withValues(alpha: isLight ? 0.24 : 0.34),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isLight ? 0.08 : 0.22),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: LayoutBuilder(
+            builder: (context, actionConstraints) {
+              final buttonSpacing = compactRemoteActionPanel ? 8.0 : 10.0;
+              final buttonColumnCount = actionConstraints.maxWidth >= 340
+                  ? 3
+                  : 2;
+              final buttonWidth =
+                  (actionConstraints.maxWidth -
+                      buttonSpacing * (buttonColumnCount - 1)) /
+                  buttonColumnCount;
+
+              return Wrap(
+                spacing: buttonSpacing,
+                runSpacing: buttonSpacing,
+                children: [
+                  for (final button in compactButtons)
+                    SizedBox(width: buttonWidth, child: button),
+                ],
+              );
+            },
+          ),
+        );
+
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: compactBottom,
+            left: horizontal,
+            right: horizontal,
+          ),
+          child: compactDock,
+        );
+      }
 
       final remoteActionCard = Container(
         width: double.infinity,
@@ -24594,22 +25820,25 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              remoteStatusText,
-              maxLines: compactRemoteActionPanel && _isRemoteFriendPendingMatch
-                  ? 2
-                  : null,
-              overflow: compactRemoteActionPanel && _isRemoteFriendPendingMatch
-                  ? TextOverflow.ellipsis
-                  : TextOverflow.visible,
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.72),
-                fontSize: compactRemoteActionPanel ? 11.8 : 12.5,
-                height: 1.32,
-                fontWeight: FontWeight.w600,
+            if (remoteStatusText.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                remoteStatusText,
+                maxLines: compactRemoteActionPanel && _isRemoteFriendPendingMatch
+                    ? 2
+                    : null,
+                overflow:
+                    compactRemoteActionPanel && _isRemoteFriendPendingMatch
+                    ? TextOverflow.ellipsis
+                    : TextOverflow.visible,
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                  fontSize: compactRemoteActionPanel ? 11.8 : 12.5,
+                  height: 1.32,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+            ],
             if (remoteMetaChips.isNotEmpty) ...[
               const SizedBox(height: 10),
               Wrap(spacing: 8, runSpacing: 8, children: remoteMetaChips),
@@ -24671,13 +25900,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             if (showRemoteReactionTray && remoteVisibleReaction != null) ...[
               const SizedBox(height: 10),
               _remoteFriendReactionBanner(
-                emoji: remoteVisibleReaction.emoji,
-                title: remoteReactionSentByLocal
-                    ? 'You reacted'
-                    : 'Friend reacted',
+                emoji: _remoteFriendSignalGlyph(remoteVisibleReaction),
+                title: remoteReactionSentByLocal ? 'You sent' : 'Friend sent',
                 subtitle: remoteReactionSentByLocal
-                    ? '${remoteVisibleReactionOption?.label ?? 'Quick reaction'} sent to the other phone.'
-                    : '${remoteVisibleReactionOption?.label ?? 'Quick reaction'} just came in from your friend.',
+                    ? '${remoteVisibleReactionLabel ?? 'Signal'} sent to the other phone.'
+                    : '${remoteVisibleReactionLabel ?? 'Signal'} came in from your friend.',
                 accent: remoteReactionAccent,
               ),
             ],
@@ -24701,149 +25928,83 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   children: [
                     Row(
                       children: [
+                        _remoteFriendReactionChip(
+                          option: _RemoteFriendReactionOption(
+                            emoji: remoteVisibleReaction?.emoji ?? '🙂',
+                            label: 'Open quick reacts',
+                          ),
+                          accent: remoteReactionAccent,
+                          onTap: () => unawaited(
+                            _showRemoteFriendReactionSheet(
+                              standardAccent: remoteLocalAccent,
+                              strangeAccent: remoteOpponentAccent,
+                              statusAccent: remoteReactionAccent,
+                              strangeReactionsUnlocked:
+                                  strangeReactionsUnlocked,
+                              remoteReactionReady: remoteReactionReady,
+                              remoteReactionStatusText:
+                                  remoteReactionStatusText,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            'Quick reacts',
-                            style: TextStyle(
-                              color: scheme.onSurface,
-                              fontSize: 12.8,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: remoteReactionAccent.withValues(
-                              alpha: isLight ? 0.12 : 0.20,
-                            ),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            remoteReactionStatusText,
-                            style: TextStyle(
-                              color: scheme.onSurface,
-                              fontSize: 10.6,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      strangeReactionsUnlocked
-                          ? 'Tap any emoji to send it across the private match. Every react has a 30-second cooldown.'
-                          : '12 standard reacts are ready now. The 5 strange ones unlock after your first random avatar roll.',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.70),
-                        fontSize: 11.4,
-                        height: 1.28,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _remoteFriendSurfaceChip(
-                      label: 'Standard set',
-                      accent: remoteLocalAccent,
-                      icon: Icons.sentiment_satisfied_alt_rounded,
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final option
-                            in _remoteFriendStandardReactionOptions)
-                          _remoteFriendReactionChip(
-                            option: option,
-                            accent: remoteLocalAccent,
-                            onTap: remoteReactionReady
-                                ? () => unawaited(
-                                    _sendRemoteFriendReaction(option.emoji),
-                                  )
-                                : null,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Color.alphaBlend(
-                          remoteOpponentAccent.withValues(
-                            alpha: isLight ? 0.06 : 0.12,
-                          ),
-                          scheme.surface,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: remoteOpponentAccent.withValues(alpha: 0.16),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _remoteFriendSurfaceChip(
-                                label: strangeReactionsUnlocked
-                                    ? 'Vault set unlocked'
-                                    : 'Vault set locked',
-                                accent: strangeReactionsUnlocked
-                                    ? remoteOpponentAccent
-                                    : scheme.onSurface.withValues(alpha: 0.62),
-                                icon: strangeReactionsUnlocked
-                                    ? Icons.auto_awesome_rounded
-                                    : Icons.lock_outline_rounded,
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    'Quick reacts',
+                                    style: TextStyle(
+                                      color: scheme.onSurface,
+                                      fontSize: 12.8,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: remoteReactionAccent.withValues(
+                                        alpha: isLight ? 0.12 : 0.20,
+                                      ),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      remoteReactionStatusText,
+                                      style: TextStyle(
+                                        color: scheme.onSurface,
+                                        fontSize: 10.6,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                strangeReactionsUnlocked
+                                    ? 'Tap the emoji to open the popup and send any match react.'
+                                    : 'Tap the emoji to open the popup. Standard reacts are ready now; the vault set unlocks after your first random avatar roll.',
+                                style: TextStyle(
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.70,
+                                  ),
+                                  fontSize: 11.4,
+                                  height: 1.28,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            strangeReactionsUnlocked
-                                ? 'Your strange bonus reacts are now part of the tray.'
-                                : 'Unlock these five stranger reacts with your first random avatar roll.',
-                            style: TextStyle(
-                              color: scheme.onSurface.withValues(alpha: 0.68),
-                              fontSize: 11.1,
-                              height: 1.28,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final option
-                                  in _remoteFriendStrangeReactionOptions)
-                                _remoteFriendReactionChip(
-                                  option: option,
-                                  accent: strangeReactionsUnlocked
-                                      ? remoteOpponentAccent
-                                      : scheme.onSurface.withValues(
-                                          alpha: 0.62,
-                                        ),
-                                  locked: !strangeReactionsUnlocked,
-                                  onTap: !strangeReactionsUnlocked
-                                      ? _showLockedRemoteFriendReactionMessage
-                                      : remoteReactionReady
-                                      ? () => unawaited(
-                                          _sendRemoteFriendReaction(
-                                            option.emoji,
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -24853,7 +26014,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Color.alphaBlend(
                     scheme.primary.withValues(alpha: isLight ? 0.06 : 0.12),
@@ -24872,8 +26033,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         Expanded(
                           child: Text(
                             remoteSelectionUrgent
-                                ? 'Lock in your skin now'
-                                : 'Pick your skin before the timer ends',
+                                ? 'Choose skin now'
+                                : 'Choose your skin',
                             style: TextStyle(
                               color: remoteSelectionUrgent
                                   ? remoteSelectionAccent
@@ -24882,6 +26043,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                               fontWeight: FontWeight.w900,
                             ),
                           ),
+                        ),
+                        IconButton(
+                          onPressed: () => unawaited(
+                            _showRemoteFriendPieceSelectionInfoDialog(
+                              remoteSeatLabel: remoteSeatLabel,
+                              remoteOpponentSeatLabel:
+                                  remoteOpponentSeatLabel,
+                            ),
+                          ),
+                          icon: const Icon(Icons.info_outline_rounded),
+                          iconSize: 18,
+                          tooltip: 'Skin pairing info',
+                          visualDensity: VisualDensity.compact,
                         ),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 220),
@@ -24923,28 +26097,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Each player brings their own piece skin into the match. What you pick here changes only your ${remoteSeatLabel.toLowerCase()} side.',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.68),
-                        fontSize: 11.8,
-                        height: 1.28,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (remoteSelectionUrgent) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Final seconds before your skin locks in.',
-                        style: TextStyle(
-                          color: remoteSelectionAccent,
-                          fontSize: 11.8,
-                          height: 1.28,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 10),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(999),
@@ -24966,22 +26118,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         },
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         _remoteFriendPieceThemePreviewCard(
                           title: 'You | $remoteSeatLabel',
-                          subtitle: 'Skin shown on your $remoteSeatLabel side',
+                          subtitle: 'Your side',
                           theme: remotePlayerTheme,
                           isWhitePiece: remoteSeat == RemoteFriendSeat.white,
                           accent: remoteLocalAccent,
                         ),
                         _remoteFriendPieceThemePreviewCard(
                           title: 'Friend | $remoteOpponentSeatLabel',
-                          subtitle:
-                              'Your friend keeps this skin on the $remoteOpponentSeatLabel side',
+                          subtitle: 'Their side',
                           theme: remoteOpponentTheme,
                           isWhitePiece:
                               remoteOpponentSeat == RemoteFriendSeat.white,
@@ -24989,7 +26140,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 10),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 260),
                       switchInCurve: Curves.easeOutCubic,
@@ -25075,7 +26226,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         ),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 16,
-                                          vertical: 14,
+                                          vertical: 12,
                                         ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
@@ -27480,6 +28631,38 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           );
         }
 
+        if (_isRemoteFriendMatchMode) {
+          sections.add(
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+              decoration: BoxDecoration(
+                color: sectionColor,
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _remoteFriendKeepScoreDefault,
+                title: const Text('Keep score on rematch'),
+                subtitle: const Text(
+                  'Carry the 1V1 cross-play score into the next game. Off stays the default.',
+                ),
+                onChanged: (enabled) {
+                  if (enabled == _remoteFriendKeepScoreDefault) {
+                    return;
+                  }
+                  markChanged();
+                  setState(() {
+                    _remoteFriendKeepScoreDefault = enabled;
+                  });
+                  setSheetState(() {});
+                  _persistCurrentSettings();
+                },
+              ),
+            ),
+          );
+        }
+
         final hasAllThemes =
             _availableBoardThemes.length >= BoardThemeMode.values.length &&
             _availablePieceThemes.length >= PieceThemeMode.values.length &&
@@ -28197,346 +29380,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       title: 'Terms link copied',
       message: 'Could not open the Terms of Service here.',
       icon: Icons.gavel_rounded,
-    );
-  }
-
-  void _queueStarterAvatarWelcomeDialog(AvatarCatalogEntry starterAvatar) {
-    if (_starterAvatarWelcomeQueued) {
-      return;
-    }
-    _starterAvatarWelcomeQueued = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      unawaited(_showStarterAvatarWelcomeDialog(starterAvatar));
-    });
-  }
-
-  Future<void> _showStarterAvatarSkinInfoDialog() async {
-    if (!mounted) {
-      return;
-    }
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isLight = theme.brightness == Brightness.light;
-    final useMonochrome =
-        context.read<AppThemeProvider>().isMonochrome ||
-        _isCinematicThemeEnabled;
-    final normalAccent = _avatarRollBucketAccent(
-      AvatarRarityBucket.normal,
-      scheme,
-      useMonochrome: useMonochrome,
-    );
-    final rareAccent = _avatarRollBucketAccent(
-      AvatarRarityBucket.rare,
-      scheme,
-      useMonochrome: useMonochrome,
-    );
-    final legendaryAccent = _avatarRollBucketAccent(
-      AvatarRarityBucket.legendary,
-      scheme,
-      useMonochrome: useMonochrome,
-    );
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        titlePadding: const EdgeInsets.fromLTRB(24, 22, 16, 0),
-        contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Color.alphaBlend(
-                  normalAccent.withValues(alpha: isLight ? 0.10 : 0.16),
-                  scheme.surface,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.info_outline_rounded,
-                size: 20,
-                color: normalAccent,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(child: Text('Avatar skins')),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _remoteFriendSurfaceChip(
-              label: 'Normal skins are your starting collection',
-              accent: normalAccent,
-              icon: Icons.check_circle_outline_rounded,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Every new player gets one free Normal avatar right away.',
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.82),
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Rare, Epic, and Legendary skins unlock through rolls and rewards. Promo skins are separate special drops.',
-              style: TextStyle(
-                color: scheme.onSurface.withValues(alpha: 0.70),
-                fontWeight: FontWeight.w600,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _remoteFriendSurfaceChip(
-                  label: 'Rare+',
-                  accent: rareAccent,
-                  icon: Icons.auto_awesome_rounded,
-                ),
-                _remoteFriendSurfaceChip(
-                  label: 'Legendary',
-                  accent: legendaryAccent,
-                  icon: Icons.workspace_premium_rounded,
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showStarterAvatarWelcomeDialog(
-    AvatarCatalogEntry starterAvatar,
-  ) async {
-    if (!mounted) {
-      return;
-    }
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final isLight = theme.brightness == Brightness.light;
-    final useMonochrome =
-        context.read<AppThemeProvider>().isMonochrome ||
-        _isCinematicThemeEnabled;
-    final accent = _avatarRollBucketAccent(
-      AvatarRarityBucket.normal,
-      scheme,
-      useMonochrome: useMonochrome,
-    );
-    final spotlightColor = Color.alphaBlend(
-      accent.withValues(alpha: isLight ? 0.14 : 0.22),
-      scheme.surface,
-    );
-    final cardTop = Color.alphaBlend(
-      accent.withValues(alpha: isLight ? 0.12 : 0.18),
-      scheme.surface,
-    );
-    final cardBottom = Color.alphaBlend(
-      scheme.secondary.withValues(alpha: isLight ? 0.08 : 0.14),
-      scheme.surface,
-    );
-
-    await showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'ChessIQ welcome',
-      barrierColor: Colors.black.withValues(alpha: isLight ? 0.34 : 0.58),
-      transitionDuration: const Duration(milliseconds: 280),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [cardTop, scheme.surface, cardBottom],
-                        stops: const [0.0, 0.62, 1.0],
-                      ),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: accent.withValues(alpha: isLight ? 0.20 : 0.28),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: isLight ? 0.14 : 0.26,
-                          ),
-                          blurRadius: 34,
-                          offset: const Offset(0, 20),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            _remoteFriendSurfaceChip(
-                              label: 'Alpha welcome',
-                              accent: accent,
-                              icon: Icons.waving_hand_rounded,
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              onPressed: () {
-                                unawaited(_showStarterAvatarSkinInfoDialog());
-                              },
-                              icon: const Icon(Icons.info_outline_rounded),
-                              tooltip: 'Avatar skin info',
-                              style: IconButton.styleFrom(
-                                backgroundColor: Color.alphaBlend(
-                                  accent.withValues(
-                                    alpha: isLight ? 0.08 : 0.14,
-                                  ),
-                                  scheme.surface,
-                                ),
-                                foregroundColor: accent,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Welcome to ChessIQ',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            color: scheme.onSurface,
-                            fontWeight: FontWeight.w900,
-                            height: 1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Alpha version',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 12.4,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.28,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Your free Normal avatar is ready.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.74),
-                            fontSize: 13.2,
-                            fontWeight: FontWeight.w700,
-                            height: 1.3,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-                          decoration: BoxDecoration(
-                            color: Color.alphaBlend(
-                              spotlightColor,
-                              scheme.surface,
-                            ),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: accent.withValues(alpha: 0.18),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              AvatarPortrait(
-                                avatar: starterAvatar,
-                                size: 128,
-                                radius: 30,
-                                borderColor: accent.withValues(alpha: 0.32),
-                                backgroundColor: Colors.transparent,
-                                showShadow: false,
-                              ),
-                              const SizedBox(height: 14),
-                              Text(
-                                starterAvatar.name,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: scheme.onSurface,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              _remoteFriendSurfaceChip(
-                                label: 'Free Normal Avatar',
-                                accent: accent,
-                                icon: Icons.redeem_rounded,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: accent,
-                              foregroundColor: const Color(0xFF09131F),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text(
-                              'Start playing',
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
     );
   }
 
@@ -32727,6 +33570,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _menuAudioPlayer.dispose();
     _sfxAudioPlayer.dispose();
     _cinematicThemeNotifier.dispose();
+    _remoteFriendStatusNotifier.dispose();
     for (final player in _boardSfxPlayers) {
       player.dispose();
     }

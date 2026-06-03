@@ -1289,13 +1289,15 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
 
   bool get _hasIncomingRemoteRematchOffer {
     final offerByUid = _remoteFriendSnapshot?.rematchOfferByUid;
-    return offerByUid != null && offerByUid.isNotEmpty &&
+    return offerByUid != null &&
+        offerByUid.isNotEmpty &&
         offerByUid != (_remoteFriendLocalUid ?? '');
   }
 
   bool get _hasOutgoingRemoteRematchOffer {
     final offerByUid = _remoteFriendSnapshot?.rematchOfferByUid;
-    return offerByUid != null && offerByUid.isNotEmpty &&
+    return offerByUid != null &&
+        offerByUid.isNotEmpty &&
         offerByUid == (_remoteFriendLocalUid ?? '');
   }
 
@@ -1318,7 +1320,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     var keepScore = _isRemoteFriendMatchMode
         ? (_hasIncomingRemoteRematchOffer || _hasOutgoingRemoteRematchOffer
               ? _remoteFriendRematchKeepsScore
-              : (_remoteFriendSnapshot?.seriesScoreEnabled ?? false))
+        : _remoteFriendKeepScoreDefault)
         : _localFriendSeriesScoreEnabled;
 
     final result = await showDialog<String>(
@@ -1338,9 +1340,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             _isRemoteFriendMatchMode && _hasIncomingRemoteRematchOffer;
         final hasOutgoingRematchOffer =
             _isRemoteFriendMatchMode && _hasOutgoingRemoteRematchOffer;
-        final allowKeepScoreToggle =
-            !_isRemoteFriendMatchMode ||
-            (!hasIncomingRematchOffer && !hasOutgoingRematchOffer);
         final title = hasIncomingRematchOffer || hasOutgoingRematchOffer
             ? _endMatchCardTitle(outcome)
             : _isRemoteFriendMatchMode
@@ -1458,9 +1457,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   final buttonWidth = twoColumn
                       ? (constraints.maxWidth - 12) / 2
                       : constraints.maxWidth;
-                  final keepScoreLabel = keepScore
-                      ? 'Keep Score On'
-                      : 'Keep Score Off';
                   final rematchLabel = _isLocalFriendMatchMode
                       ? 'Rematch'
                       : hasIncomingRematchOffer
@@ -1485,32 +1481,6 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                         emphasized: true,
                       ),
                     ),
-                    SizedBox(
-                      width: buttonWidth,
-                      child: !allowKeepScoreToggle
-                          ? buildActionButton(
-                              label: keepScore ? 'Score On' : 'Score Off',
-                              iconData: keepScore
-                                  ? Icons.scoreboard_rounded
-                                  : Icons.scoreboard_outlined,
-                              resultValue: 'board',
-                              active: keepScore,
-                              enabled: false,
-                            )
-                          : buildActionButton(
-                              label: keepScoreLabel,
-                              iconData: keepScore
-                                  ? Icons.scoreboard_rounded
-                                  : Icons.scoreboard_outlined,
-                              resultValue: 'board',
-                              onPressed: () {
-                                setDialogState(() {
-                                  keepScore = !keepScore;
-                                });
-                              },
-                              active: keepScore,
-                            ),
-                    ),
                     if (hasIncomingRematchOffer)
                       SizedBox(
                         width: buttonWidth,
@@ -1523,17 +1493,17 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                     SizedBox(
                       width: buttonWidth,
                       child: buildActionButton(
-                        label: 'Return to Board',
-                        iconData: Icons.visibility_rounded,
-                        resultValue: 'board',
+                        label: 'Play Chess Menu',
+                        iconData: Icons.sports_esports_rounded,
+                        resultValue: 'vs-menu',
                       ),
                     ),
                     SizedBox(
                       width: buttonWidth,
                       child: buildActionButton(
-                        label: 'Play Chess Menu',
-                        iconData: Icons.sports_esports_rounded,
-                        resultValue: 'vs-menu',
+                        label: 'Return to Board',
+                        iconData: Icons.visibility_rounded,
+                        resultValue: 'board',
                       ),
                     ),
                     SizedBox(
@@ -1650,6 +1620,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
       case 'remote-offer-rematch':
         await _runRemoteFriendAction(
           RemoteFriendMatchAction.offerRematch,
+          keepScore: keepScore,
         );
         return;
       case 'remote-accept-rematch':

@@ -88,7 +88,7 @@ abstract class _VsBotState extends _StoreState {
     if (_isBotMatchMode) {
       return _buildVsBotIntroOverlay(scene, scale);
     }
-    if (_isHeadToHeadPerspective) {
+    if (_isHeadToHeadPerspective || _isRemoteFriendMatchMode) {
       return _buildHeadToHeadIntroOverlay(scene, scale);
     }
     return super._buildSceneIntroOverlay(scene, scale);
@@ -171,6 +171,65 @@ abstract class _VsBotState extends _StoreState {
                     Icons.smart_toy_outlined,
                     color: difficultyAccent,
                     size: size * 0.42,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeadToHeadIntroAvatar({
+    required String? avatarId,
+    required Color accent,
+    required double size,
+  }) {
+    final avatarEntry = avatarId == null ? null : AvatarCatalog.entryFor(avatarId);
+    final useMonochrome =
+        context.watch<AppThemeProvider>().isMonochrome ||
+        _isCinematicThemeEnabled;
+    final arcade = _vsBotArcadePaletteFor(context, monochrome: useMonochrome);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: accent.withValues(alpha: 0.88),
+          width: max(1.6, size * 0.045),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: arcade.monochrome ? 0.16 : 0.24),
+            blurRadius: max(8.0, size * 0.18),
+            spreadRadius: max(1.0, size * 0.03),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.26),
+            blurRadius: max(8.0, size * 0.18),
+            offset: Offset(0, max(3.0, size * 0.06)),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(max(3.0, size * 0.055)),
+        child: ClipOval(
+          child: avatarEntry != null
+              ? AvatarPortrait(
+                  avatar: avatarEntry,
+                  size: size,
+                  radius: 999,
+                  borderColor: Colors.transparent,
+                  backgroundColor: Colors.transparent,
+                  showShadow: false,
+                )
+              : Container(
+                  color: arcade.shell,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.account_circle_outlined,
+                    color: accent,
+                    size: size * 0.46,
                   ),
                 ),
         ),
@@ -688,6 +747,89 @@ abstract class _VsBotState extends _StoreState {
         final rightBadgeRotation = ui.lerpDouble(0.46, 0.06, badgeSettleT)!;
         final badgeOpacity = ((t - 0.12) / 0.10).clamp(0.0, 1.0) * fade;
         final badgeScale = 0.82 + (0.12 * badgeSettleT) + (impactFlash * 0.08);
+        final remoteSnapshot = _remoteFriendSnapshot;
+        final remoteSeat = _remoteFriendPlayerSeat;
+        final showRemoteAvatarIntro =
+          _isRemoteFriendMatchMode &&
+          remoteSnapshot != null &&
+          remoteSeat != null;
+        final localIsWhite = remoteSeat == RemoteFriendSeat.white;
+        final localAvatarId = !showRemoteAvatarIntro
+          ? null
+          : (localIsWhite
+              ? remoteSnapshot.whiteAvatarId
+              : remoteSnapshot.blackAvatarId);
+        final opponentAvatarId = !showRemoteAvatarIntro
+          ? null
+          : (localIsWhite
+              ? remoteSnapshot.blackAvatarId
+              : remoteSnapshot.whiteAvatarId);
+        final localAvatarTarget = !showRemoteAvatarIntro
+          ? null
+          : _remoteFriendClockAvatarCenterInScene(white: localIsWhite);
+        final opponentAvatarTarget = !showRemoteAvatarIntro
+          ? null
+          : _remoteFriendClockAvatarCenterInScene(white: !localIsWhite);
+        final localUsesLeftTrack = !showRemoteAvatarIntro
+          ? true
+          : (localAvatarTarget?.dx ?? leftBadgeTarget.dx) <=
+              (opponentAvatarTarget?.dx ?? rightBadgeTarget.dx);
+        final localStageTarget = localUsesLeftTrack
+          ? leftBadgeTarget
+          : rightBadgeTarget;
+        final opponentStageTarget = localUsesLeftTrack
+          ? rightBadgeTarget
+          : leftBadgeTarget;
+        final localStageCenter = localUsesLeftTrack
+          ? leftBadgeCenter
+          : rightBadgeCenter;
+        final opponentStageCenter = localUsesLeftTrack
+          ? rightBadgeCenter
+          : leftBadgeCenter;
+        final localStageRotation = localUsesLeftTrack
+          ? leftBadgeRotation
+          : rightBadgeRotation;
+        final opponentStageRotation = localUsesLeftTrack
+          ? rightBadgeRotation
+          : leftBadgeRotation;
+        final avatarTravelT = Curves.easeInOutCubic.transform(
+          ((t - 0.46) / 0.26).clamp(0.0, 1.0),
+        );
+        final avatarTravelLift =
+          sin(pi * avatarTravelT) * (compactScene ? 20.0 : 28.0) * scale;
+        final localAvatarCenter = !showRemoteAvatarIntro
+          ? null
+          : (t < 0.46
+              ? localStageCenter
+              : Offset.lerp(
+                localStageTarget,
+                localAvatarTarget ?? localStageTarget,
+                avatarTravelT,
+              )!.translate(0, -avatarTravelLift));
+        final opponentAvatarCenter = !showRemoteAvatarIntro
+          ? null
+          : (t < 0.46
+              ? opponentStageCenter
+              : Offset.lerp(
+                opponentStageTarget,
+                opponentAvatarTarget ?? opponentStageTarget,
+                avatarTravelT,
+              )!.translate(0, -avatarTravelLift));
+        final localAvatarSize = !showRemoteAvatarIntro
+          ? badgeSize
+          : ui.lerpDouble(badgeSize, 24 * scale, avatarTravelT)!;
+        final opponentAvatarSize = !showRemoteAvatarIntro
+          ? badgeSize
+          : ui.lerpDouble(badgeSize, 24 * scale, avatarTravelT)!;
+        final localAvatarRotation = !showRemoteAvatarIntro
+          ? leftBadgeRotation
+          : ui.lerpDouble(localStageRotation, 0.0, avatarTravelT)!;
+        final opponentAvatarRotation = !showRemoteAvatarIntro
+          ? rightBadgeRotation
+          : ui.lerpDouble(opponentStageRotation, 0.0, avatarTravelT)!;
+        final avatarScale = !showRemoteAvatarIntro
+          ? badgeScale
+          : ui.lerpDouble(badgeScale, 1.0, avatarTravelT)!;
 
         Widget buildGlyph(String glyph, Offset offset, double rotation) {
           final glyphLeft = center.dx + offset.dx - (glyphSize * 0.28);
@@ -864,6 +1006,34 @@ abstract class _VsBotState extends _StoreState {
           );
         }
 
+        Widget buildAvatarBadge({
+          required Offset badgeCenter,
+          required Color accent,
+          required double rotation,
+          required double size,
+          required double scaleValue,
+          required String? avatarId,
+        }) {
+          return Positioned(
+            left: badgeCenter.dx - (size / 2),
+            top: badgeCenter.dy - (size / 2),
+            child: Opacity(
+              opacity: badgeOpacity,
+              child: Transform.rotate(
+                angle: rotation,
+                child: Transform.scale(
+                  scale: scaleValue,
+                  child: _buildHeadToHeadIntroAvatar(
+                    avatarId: avatarId,
+                    accent: accent,
+                    size: size,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
         return IgnorePointer(
           child: Opacity(
             opacity: fade,
@@ -899,6 +1069,8 @@ abstract class _VsBotState extends _StoreState {
                           child: Text(
                             _isLocalFriendMatchMode
                                 ? 'VS FRIEND'
+                                : _isRemoteFriendMatchMode
+                                ? 'REMOTE FRIEND'
                                 : 'HEAD TO HEAD',
                             textAlign: TextAlign.center,
                             style: puzzleAcademyIdentityStyle(
@@ -1031,6 +1203,8 @@ abstract class _VsBotState extends _StoreState {
                           child: Text(
                             _isLocalFriendMatchMode
                                 ? 'VS // FRIEND'
+                                : _isRemoteFriendMatchMode
+                                ? 'LIVE // CROSS-PLAY'
                                 : 'ANALYSIS // HEAD-TO-HEAD',
                             textAlign: TextAlign.center,
                             style: puzzleAcademyIdentityStyle(
@@ -1046,16 +1220,37 @@ abstract class _VsBotState extends _StoreState {
                   ),
                   buildGlyph('V', vOffset, vRotation),
                   buildGlyph('S', sOffset, sRotation),
-                  buildWingBadge(
-                    badgeCenter: leftBadgeCenter,
-                    accent: leftAccent,
-                    rotation: leftBadgeRotation,
-                  ),
-                  buildWingBadge(
-                    badgeCenter: rightBadgeCenter,
-                    accent: rightAccent,
-                    rotation: rightBadgeRotation,
-                  ),
+                  if (showRemoteAvatarIntro &&
+                      localAvatarCenter != null &&
+                      opponentAvatarCenter != null) ...[
+                    buildAvatarBadge(
+                      badgeCenter: localAvatarCenter,
+                      accent: leftAccent,
+                      rotation: localAvatarRotation,
+                      size: localAvatarSize,
+                      scaleValue: avatarScale,
+                      avatarId: localAvatarId,
+                    ),
+                    buildAvatarBadge(
+                      badgeCenter: opponentAvatarCenter,
+                      accent: rightAccent,
+                      rotation: opponentAvatarRotation,
+                      size: opponentAvatarSize,
+                      scaleValue: avatarScale,
+                      avatarId: opponentAvatarId,
+                    ),
+                  ] else ...[
+                    buildWingBadge(
+                      badgeCenter: leftBadgeCenter,
+                      accent: leftAccent,
+                      rotation: leftBadgeRotation,
+                    ),
+                    buildWingBadge(
+                      badgeCenter: rightBadgeCenter,
+                      accent: rightAccent,
+                      rotation: rightBadgeRotation,
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -64,7 +64,7 @@ const FRIEND_MATCH_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_ACTIVE_TTL_MS = 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_TERMINAL_RETENTION_MS = 24 * 60 * 60 * 1000;
 const FRIEND_MATCH_ABORTED_RETENTION_MS = 6 * 60 * 60 * 1000;
-const FRIEND_MATCH_REACTION_COOLDOWN_MS = 30 * 1000;
+const FRIEND_MATCH_REACTION_COOLDOWN_MS = 60 * 1000;
 const FRIEND_MATCH_REACTION_RETENTION_MS = 8 * 1000;
 const FRIEND_MATCH_MAX_INITIAL_SECONDS = 4 * 60 * 60;
 const FRIEND_MATCH_MAX_INCREMENT_SECONDS = 60;
@@ -73,24 +73,44 @@ const FRIEND_MATCH_MAX_PIECE_THEME_INDEX = 5;
 const FRIEND_MATCH_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const FRIEND_MATCH_CLEANUP_BATCH_SIZE = 200;
 const FRIEND_MATCH_CLEANUP_MAX_BATCHES_PER_RUN = 8;
+const FRIEND_MATCH_REACTION_EMOJI_LABELS = new Map<string, string>([
+    ["👍", "Nice move"],
+    ["👏", "Clean"],
+    ["🙌", "Let's go"],
+    ["🤔", "Thinking"],
+    ["😅", "Close one"],
+    ["😮", "Wow"],
+    ["😬", "Tense"],
+    ["⏳", "Hurry"],
+    ["🔥", "Sharp"],
+    ["👑", "Winning"],
+    ["🧠", "Brilliant"],
+    ["😭", "Ouch"],
+    ["🛸", "UFO energy"],
+    ["🧪", "Lab move"],
+    ["🫠", "Melting"],
+    ["🦆", "Duck mode"],
+    ["🦑", "Squid tactics"],
+]);
 const FRIEND_MATCH_REACTION_EMOJIS = new Set<string>([
-    "👍",
-    "👏",
-    "🙌",
-    "🤔",
-    "😅",
-    "😮",
-    "😬",
-    "⏳",
-    "🔥",
-    "👑",
-    "🧠",
-    "😭",
-    "🛸",
-    "🧪",
-    "🫠",
-    "🦆",
-    "🦑",
+    ...FRIEND_MATCH_REACTION_EMOJI_LABELS.keys(),
+]);
+const FRIEND_MATCH_SIGNAL_PHRASES = new Map<string, string>([
+    ["good_luck", "Good luck"],
+    ["your_move", "Your move"],
+    ["nice_move", "Nice move"],
+    ["well_played", "Well played"],
+    ["good_game", "Good game"],
+    ["thinking", "Thinking"],
+    ["time_trouble", "Time trouble"],
+    ["watch_the_clock", "Watch the clock"],
+    ["sharp_position", "Sharp position"],
+    ["interesting_idea", "Interesting idea"],
+    ["i_missed_that", "I missed that"],
+    ["nice_tactic", "Nice tactic"],
+    ["solid_defense", "Solid defense"],
+    ["want_rematch", "Want a rematch?"],
+    ["lets_play_fast", "Let's play fast"],
 ]);
 type EconomyRewardSpec = {
     amount: number;
@@ -2047,10 +2067,22 @@ type FriendMatchOutcome = {
     concludedAtMs: number;
 };
 
+type FriendMatchReactionKind = "emoji" | "phrase";
+
 type FriendMatchReaction = {
-    emoji: string;
+    kind: FriendMatchReactionKind;
+    code: string;
+    emoji: string | null;
+    label: string;
     sentByUid: string;
     sentAtMs: number;
+};
+
+type FriendMatchReactionInput = {
+    kind: FriendMatchReactionKind;
+    code: string;
+    emoji: string | null;
+    label: string;
 };
 
 type FriendMatchRecord = {
@@ -2321,6 +2353,53 @@ function readFriendReactionEmoji(rawEmoji: unknown): string {
     return emoji;
 }
 
+function readFriendReactionPhraseId(rawPhraseId: unknown): string {
+    if (typeof rawPhraseId !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "phraseId must be a string.",
+        );
+    }
+    const phraseId = rawPhraseId.trim();
+    if (!FRIEND_MATCH_SIGNAL_PHRASES.has(phraseId)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Unsupported friend match phrase.",
+        );
+    }
+    return phraseId;
+}
+
+function readFriendReactionInput(data: any): FriendMatchReactionInput {
+    const rawEmoji = typeof data?.emoji === "string" ? data.emoji.trim() : "";
+    const rawPhraseId = typeof data?.phraseId === "string"
+        ? data.phraseId.trim()
+        : "";
+    if ((rawEmoji && rawPhraseId) || (!rawEmoji && !rawPhraseId)) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Provide exactly one of emoji or phraseId.",
+        );
+    }
+    if (rawEmoji) {
+        const emoji = readFriendReactionEmoji(rawEmoji);
+        return {
+            kind: "emoji",
+            code: emoji,
+            emoji,
+            label: FRIEND_MATCH_REACTION_EMOJI_LABELS.get(emoji) ?? emoji,
+        };
+    }
+
+    const phraseId = readFriendReactionPhraseId(rawPhraseId);
+    return {
+        kind: "phrase",
+        code: phraseId,
+        emoji: null,
+        label: FRIEND_MATCH_SIGNAL_PHRASES.get(phraseId) ?? phraseId,
+    };
+}
+
 function readPushInstallationId(rawInstallationId: unknown): string {
     if (typeof rawInstallationId !== "string") {
         throw new functions.https.HttpsError(
@@ -2436,13 +2515,41 @@ function normalizeFriendMatchReaction(rawValue: unknown): FriendMatchReaction | 
         return null;
     }
     const payload = rawValue as Record<string, unknown>;
-    const emoji = (payload.emoji ?? "").toString().trim();
     const sentByUid = (payload.sentByUid ?? "").toString().trim();
-    if (!emoji || !sentByUid || !FRIEND_MATCH_REACTION_EMOJIS.has(emoji)) {
+    if (!sentByUid) {
+        return null;
+    }
+    const emoji = payload.emoji == null
+        ? null
+        : payload.emoji.toString().trim() || null;
+    const code = (payload.code ?? payload.phraseId ?? "").toString().trim();
+    const kindRaw = (payload.kind ?? "").toString().trim().toLowerCase();
+    if (kindRaw === "phrase" || (!emoji && code && FRIEND_MATCH_SIGNAL_PHRASES.has(code))) {
+        const phraseCode = code || (payload.phraseId ?? "").toString().trim();
+        if (!phraseCode || !FRIEND_MATCH_SIGNAL_PHRASES.has(phraseCode)) {
+            return null;
+        }
+        return {
+            kind: "phrase",
+            code: phraseCode,
+            emoji: null,
+            label: FRIEND_MATCH_SIGNAL_PHRASES.get(phraseCode) ?? phraseCode,
+            sentByUid,
+            sentAtMs: readFriendNonNegativeInt(
+                payload.sentAtMs,
+                "reaction.sentAtMs",
+                Number.MAX_SAFE_INTEGER,
+            ),
+        };
+    }
+    if (!emoji || !FRIEND_MATCH_REACTION_EMOJIS.has(emoji)) {
         return null;
     }
     return {
+        kind: "emoji",
+        code: code || emoji,
         emoji,
+        label: FRIEND_MATCH_REACTION_EMOJI_LABELS.get(emoji) ?? emoji,
         sentByUid,
         sentAtMs: readFriendNonNegativeInt(
             payload.sentAtMs,
@@ -4100,7 +4207,7 @@ async function sendFriendMatchReactionImpl(
 ) {
     const uid = requireAuthUid(context);
     const matchId = readFriendMatchId(data?.matchId);
-    const emoji = readFriendReactionEmoji(data?.emoji);
+    const signal = readFriendReactionInput(data);
     const matchRef = db.ref(`friend_matches/${matchId}`);
     const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let blockedReason = "match-unavailable";
@@ -4162,7 +4269,10 @@ async function sendFriendMatchReactionImpl(
             updatedAtMs: nowMs,
             expiresAtMs: nowMs + FRIEND_MATCH_ACTIVE_TTL_MS,
             reaction: {
-                emoji,
+                kind: signal.kind,
+                code: signal.code,
+                emoji: signal.emoji,
+                label: signal.label,
                 sentByUid: uid,
                 sentAtMs: nowMs,
             },

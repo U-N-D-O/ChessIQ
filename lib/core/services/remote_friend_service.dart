@@ -232,12 +232,27 @@ class RemoteFriendService {
 
   Future<RemoteFriendMutationResult> sendReaction({
     required String matchId,
-    required String emoji,
+    String? emoji,
+    String? phraseId,
   }) async {
-    final result = await _callFunction(_sendReactionFunction, <String, dynamic>{
-      'matchId': matchId.trim(),
-      'emoji': emoji.trim(),
-    });
+    final normalizedEmoji = emoji?.trim() ?? '';
+    final normalizedPhraseId = phraseId?.trim() ?? '';
+    if ((normalizedEmoji.isEmpty && normalizedPhraseId.isEmpty) ||
+        (normalizedEmoji.isNotEmpty && normalizedPhraseId.isNotEmpty)) {
+      throw StateError(
+        'Remote friend signals require exactly one of emoji or phraseId.',
+      );
+    }
+
+    final data = <String, dynamic>{'matchId': matchId.trim()};
+    if (normalizedEmoji.isNotEmpty) {
+      data['emoji'] = normalizedEmoji;
+    }
+    if (normalizedPhraseId.isNotEmpty) {
+      data['phraseId'] = normalizedPhraseId;
+    }
+
+    final result = await _callFunction(_sendReactionFunction, data);
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 
