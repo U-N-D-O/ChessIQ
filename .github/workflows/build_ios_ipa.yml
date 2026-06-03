@@ -56,6 +56,8 @@ on:
         required: false
       FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST_BASE64:
         required: true
+      ADMOB_SECRETS_JSON_BASE64:
+        required: true
 
 jobs:
   build-ios-signed-ipa:
@@ -166,6 +168,17 @@ jobs:
       - name: Prepare Stockfish iOS entrypoint source
         run: ./tool/prepare_stockfish_ios_entrypoint.sh Stockfish/src/main.cpp Stockfish/src/main_stockfish.cpp
 
+      - name: Install AdMob secrets.json
+        env:
+          ADMOB_SECRETS_JSON_BASE64: ${{ secrets.ADMOB_SECRETS_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          : "${ADMOB_SECRETS_JSON_BASE64:?Missing secret ADMOB_SECRETS_JSON_BASE64}"
+
+          echo "$ADMOB_SECRETS_JSON_BASE64" | base64 --decode > secrets.json
+          python3 -c "import json; data=json.load(open('secrets.json', encoding='utf-8')); required=['ADMOB_IOS_APP_ID','ADMOB_IOS_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID']; missing=[key for key in required if key not in data]; (_ for _ in ()).throw(SystemExit('Missing AdMob secrets keys: ' + ', '.join(missing))) if missing else None"
+
       - name: Build Stockfish objects (iOS device arm64)
         working-directory: Stockfish/src
         run: |
@@ -236,7 +249,7 @@ jobs:
           BUILD_NUMBER_INPUT: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
-          cmd=(flutter build ios --release --config-only)
+          cmd=(flutter build ios --release --config-only --dart-define-from-file=secrets.json)
           if [ -n "${BUILD_NAME_INPUT:-}" ]; then
             cmd+=(--build-name "$BUILD_NAME_INPUT")
           fi

@@ -54,6 +54,7 @@ android/app/src/main/jniLibs/*/libstockfish.so
 ios/Runner/GoogleService-Info.plist
 android/app/google-services.json
 secrets.json
+.private/
 
 # Firebase Functions generated artifacts
 functions/node_modules/

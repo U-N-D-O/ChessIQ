@@ -39,8 +39,8 @@ The UCI protocol is identical to the desktop version — all analysis logic in `
 
 ## Build Signed IPA via GitHub
 
-1. Add the required Apple signing secrets described in
-    [APPLE_APP_STORE_RELEASE.md](../APPLE_APP_STORE_RELEASE.md)
+1. Add the required Apple signing, Firebase, and AdMob GitHub secrets for the
+   signed iOS release workflow
 2. Go to GitHub **Actions** → **Build iOS App Store Signed IPA**
 3. Run it with the exact release tag you want to ship
 4. Wait for completion, then download artifact **ChessIQ-ios-app-store-signed-ipa**
@@ -70,5 +70,4 @@ Notes:
 
 ## App Store Release (Signed)
 
-Use the signed GitHub workflow and release process described in
-[APPLE_APP_STORE_RELEASE.md](../APPLE_APP_STORE_RELEASE.md).
+Use the signed GitHub workflow and the maintainer's local-only release notes.

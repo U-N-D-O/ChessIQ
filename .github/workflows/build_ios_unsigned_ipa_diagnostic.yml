@@ -111,7 +111,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          flutter build ios --release --no-codesign --config-only
+          flutter build ios --release --no-codesign --config-only \
+            --dart-define=ADMOB_DISABLE=true
 
           xcodebuild \
             -workspace ios/Runner.xcworkspace \

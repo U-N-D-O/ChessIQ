@@ -134,11 +134,11 @@ Android also requires an AdMob app ID in the manifest, not just ad unit IDs.
 The Android project now reads the app ID from either:
 
 - environment variable `ADMOB_ANDROID_APP_ID`
-- `android/local.properties` key `admobAndroidAppId`
+- Flutter `--dart-define` / `--dart-define-from-file`
 
 Debug builds fall back to Google's sample Android AdMob app ID.
 Android release builds are guarded and should not proceed without a real
-Android AdMob app ID.
+Android AdMob app ID unless test ads are explicitly forced.
 
 For sideload or emulator-only release artifacts, pass
 `--dart-define=ADMOB_FORCE_TEST_ADS=true` and set `ADMOB_ANDROID_APP_ID` to
@@ -149,11 +149,24 @@ The iOS unsigned sideload workflow instead passes
 `--dart-define=ADMOB_DISABLE=true`, which prevents `AdService` from
 initializing AdMob or loading/showing any ads at all in that test IPA.
 
-Example `android/local.properties` entry:
+## Local And CI Secret Flow
 
-```properties
-admobAndroidAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+For local development, keep your AdMob values in the root `secrets.json` file
+and launch Flutter with:
+
+```text
+--dart-define-from-file=secrets.json
 ```
+
+VS Code launch configs in `.vscode/launch.json` already do this.
+
+For signed GitHub release workflows, store the same JSON file contents in the
+repository secret `ADMOB_SECRETS_JSON_BASE64` as a base64-encoded blob. The
+signed Android AAB and signed iOS IPA workflows decode that secret into a local
+`secrets.json` and pass it through `--dart-define-from-file=secrets.json`.
+
+The unsigned iOS sideload workflows intentionally disable AdMob with
+`ADMOB_DISABLE=true` so test IPAs do not initialize ads at all.
 
 ## AdMob Console Setup
 

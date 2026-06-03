@@ -74,11 +74,6 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
     for relative_path in config["required_documents"]:
         _expect(errors, (REPO_ROOT / relative_path).exists(), f"Required document missing: {relative_path}")
 
-    _expect(errors, (REPO_ROOT / "IOS_ONE_CLICK_RELEASE_SETUP.md").exists(), "IOS_ONE_CLICK_RELEASE_SETUP.md is missing")
-    _expect(errors, (REPO_ROOT / "ANDROID_ONE_CLICK_RELEASE_SETUP.md").exists(), "ANDROID_ONE_CLICK_RELEASE_SETUP.md is missing")
-    _expect(errors, (REPO_ROOT / "APPLE_SIGNING_ASSETS_GUIDE.md").exists(), "APPLE_SIGNING_ASSETS_GUIDE.md is missing")
-    _expect(errors, (REPO_ROOT / "GOOGLE_PLAY_RELEASE.md").exists(), "GOOGLE_PLAY_RELEASE.md is missing")
-
     license_text = _read_text("LICENSE")
     _expect(errors, "GNU GENERAL PUBLIC LICENSE" in license_text, "LICENSE must contain the GNU GPL text")
     _expect(errors, "Version 3, 29 June 2007" in license_text, "LICENSE must contain GPLv3 version text")
@@ -106,13 +101,8 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
     _check_contains(
         errors,
         "APPLE_APP_STORE_RELEASE.md",
-        "Build iOS Signed IPA",
-        "APPLE_DISTRIBUTION_CERTIFICATE_BASE64",
-        "tool/setup_ios_release_secrets.ps1",
-        "tool/start_ios_app_store_release.ps1",
-        "tool/release_guard.py --expected-tag",
-        privacy_url,
-        "The public repo tag for the release is available",
+        "local-only",
+        ".private/release",
     )
     _check_contains(
         errors,
@@ -120,46 +110,38 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         "LICENSE",
         "PRIVACY.md",
         "CORRESPONDING_SOURCE.md",
-        "APPLE_APP_STORE_RELEASE.md",
-        "ANDROID_ONE_CLICK_RELEASE_SETUP.md",
-        "GOOGLE_PLAY_RELEASE.md",
-        "IOS_ONE_CLICK_RELEASE_SETUP.md",
-        "APPLE_SIGNING_ASSETS_GUIDE.md",
+        "ADMOB_SETUP.md",
+        "local ignored folder",
     )
     _check_contains(
         errors,
         "ANDROID_ONE_CLICK_RELEASE_SETUP.md",
-        "tool/setup_android_release_secrets.ps1",
-        "tool/start_android_play_release.ps1",
-        "ANDROID_KEYSTORE_BASE64",
-        "ANDROID_KEY_ALIAS",
+        "local-only",
+        ".private/release",
     )
     _check_contains(
         errors,
         "GOOGLE_PLAY_RELEASE.md",
-        "Build Android Signed AAB",
-        "ANDROID_KEYSTORE_BASE64",
-        "tool/setup_android_release_secrets.ps1",
-        "tool/start_android_play_release.ps1",
-        "tool/release_guard.py --expected-tag",
-        android_application_id,
-        privacy_url,
+        "local-only",
+        ".private/release",
     )
     _check_contains(
         errors,
         "IOS_ONE_CLICK_RELEASE_SETUP.md",
-        "tool/setup_ios_release_secrets.ps1",
-        "tool/start_ios_app_store_release.ps1",
-        "APP_STORE_CONNECT_API_KEY_ID",
-        "APPLE_SIGNING_ASSETS_GUIDE.md",
+        "local-only",
+        ".private/release",
     )
     _check_contains(
         errors,
         "APPLE_SIGNING_ASSETS_GUIDE.md",
-        "com.qila.chessiq",
-        "tool/setup_ios_release_secrets.ps1",
-        "tool/start_ios_app_store_release.ps1",
-        "App Store Connect API",
+        "local-only",
+        ".private/release",
+    )
+    _check_contains(
+        errors,
+        "APPLE_PRE_SUBMISSION_CHECKLIST.md",
+        "local-only",
+        ".private/release",
     )
 
     pubspec = _read_text("pubspec.yaml")
@@ -252,6 +234,8 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         "CODE_SIGN_STYLE=Manual",
         "Apple Distribution",
         "refs/tags/${{ inputs.release_tag }}",
+        "ADMOB_SECRETS_JSON_BASE64",
+        "--dart-define-from-file=secrets.json",
     )
     _check_contains(
         errors,
@@ -263,34 +247,8 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         "keytool -list",
         "refs/tags/${{ inputs.release_tag }}",
         "flutter build appbundle --release",
-    )
-    _check_contains(
-        errors,
-        "tool/setup_ios_release_secrets.ps1",
-        "gh secret set",
-        "APPLE_DISTRIBUTION_CERTIFICATE_BASE64",
-        "APP_STORE_CONNECT_API_KEY_ID",
-    )
-    _check_contains(
-        errors,
-        "tool/setup_android_release_secrets.ps1",
-        "gh secret set",
-        "ANDROID_KEYSTORE_BASE64",
-        "ANDROID_KEY_ALIAS",
-    )
-    _check_contains(
-        errors,
-        "tool/start_android_play_release.ps1",
-        "'workflow', 'run', 'build_android_aab.yml'",
-        "build_android_aab.yml",
-        "release_tag",
-    )
-    _check_contains(
-        errors,
-        "tool/start_ios_app_store_release.ps1",
-        "'workflow', 'run', 'build_ios_ipa.yml'",
-        "build_ios_ipa.yml",
-        "upload_to_app_store",
+        "ADMOB_SECRETS_JSON_BASE64",
+        "--dart-define-from-file=secrets.json",
     )
 
     if expected_tag:

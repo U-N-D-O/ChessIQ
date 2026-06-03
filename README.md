@@ -88,13 +88,12 @@ If you plan to make a substantial change, start by reviewing the architecture an
 
 - Architecture overview: `ARCHITECTURE.md`
 - AdMob setup: `ADMOB_SETUP.md`
-- Android release setup: `ANDROID_ONE_CLICK_RELEASE_SETUP.md`
-- Google Play release flow: `GOOGLE_PLAY_RELEASE.md`
-- iOS release setup: `IOS_ONE_CLICK_RELEASE_SETUP.md`
-- Apple signing assets: `APPLE_SIGNING_ASSETS_GUIDE.md`
-- App Store release flow: `APPLE_APP_STORE_RELEASE.md`
 - Deployment notes: `DEPLOYMENT_SUMMARY.md`
 - Corresponding source note: `CORRESPONDING_SOURCE.md`
+
+Operational release runbooks and local helper scripts are intentionally kept
+out of the public repo. Maintainer-only notes and automation wrappers live in a
+local ignored folder on maintainer machines.
 
 ## License And Attribution
 
