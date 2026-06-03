@@ -8,6 +8,7 @@ class AvatarPortrait extends StatelessWidget {
     this.size = 88,
     this.radius = 22,
     this.borderColor,
+    this.borderWidth = 1.8,
     this.backgroundColor,
     this.showShadow = true,
   });
@@ -16,6 +17,7 @@ class AvatarPortrait extends StatelessWidget {
   final double size;
   final double radius;
   final Color? borderColor;
+  final double borderWidth;
   final Color? backgroundColor;
   final bool showShadow;
 
@@ -25,7 +27,11 @@ class AvatarPortrait extends StatelessWidget {
     final resolvedBorderColor =
         borderColor ?? scheme.primary.withValues(alpha: 0.24);
     final resolvedBackgroundColor =
-        backgroundColor ?? Color.alphaBlend(scheme.primary.withValues(alpha: 0.05), scheme.surface);
+        backgroundColor ??
+        Color.alphaBlend(
+          scheme.primary.withValues(alpha: 0.05),
+          scheme.surface,
+        );
 
     return Container(
       width: size,
@@ -33,7 +39,7 @@ class AvatarPortrait extends StatelessWidget {
       decoration: BoxDecoration(
         color: resolvedBackgroundColor,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: resolvedBorderColor),
+        border: Border.all(color: resolvedBorderColor, width: borderWidth),
         boxShadow: showShadow
             ? <BoxShadow>[
                 BoxShadow(

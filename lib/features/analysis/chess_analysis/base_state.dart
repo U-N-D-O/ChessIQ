@@ -24200,6 +24200,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : isLocalSeat
         ? avatarInventory.selectedAvatar
         : null;
+    final avatarBorderColor = avatarEntry != null
+        ? _avatarRollBucketAccent(
+            avatarEntry.bucket,
+            scheme,
+            useMonochrome: useMonochrome,
+          )
+        : accent.withValues(alpha: 0.38);
     final avatarKey = white
         ? _remoteFriendWhiteClockAvatarKey
         : _remoteFriendBlackClockAvatarKey;
@@ -24210,7 +24217,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               avatar: avatarEntry,
               size: 28,
               radius: 10,
-              borderColor: accent.withValues(alpha: 0.38),
+              borderColor: avatarBorderColor,
+              borderWidth: 2.2,
               backgroundColor: Colors.transparent,
               showShadow: false,
             )
@@ -24220,7 +24228,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
                 color: accent.withValues(alpha: 0.10),
-                border: Border.all(color: accent.withValues(alpha: 0.22)),
+                border: Border.all(
+                  color: avatarBorderColor.withValues(alpha: 0.38),
+                ),
               ),
               child: Icon(
                 occupantUid == null
@@ -26060,18 +26070,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               primary: true,
             ),
         ],
-        buildRemoteActionButton(
-          label: _isRemoteFriendPendingMatch ? 'Settings' : 'Refresh',
-          icon: _isRemoteFriendPendingMatch
-              ? Icons.tune_rounded
-              : Icons.sync_rounded,
-          onPressed: _remoteFriendOperationInProgress
-              ? null
-              : _isRemoteFriendPendingMatch
-              ? () => unawaited(_openSettings(fromAnalysisMode: false))
-              : () => unawaited(_refreshRemoteFriendMatch()),
-          accent: _isRemoteFriendPendingMatch ? scheme.onSurface : remoteAccent,
-        ),
+        if (_isRemoteFriendPendingMatch)
+          buildRemoteActionButton(
+            label: 'Settings',
+            icon: Icons.tune_rounded,
+            onPressed: _remoteFriendOperationInProgress
+                ? null
+                : () => unawaited(_openSettings(fromAnalysisMode: false)),
+            accent: scheme.onSurface,
+          ),
       ];
 
       if (useCompactRemoteLiveDock) {
@@ -26160,14 +26167,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     _runRemoteFriendAction(RemoteFriendMatchAction.resign),
                   ),
             accent: remoteDangerAccent,
-          ),
-          buildRemoteActionButton(
-            label: 'Refresh',
-            icon: Icons.sync_rounded,
-            onPressed: _remoteFriendOperationInProgress
-                ? null
-                : () => unawaited(_refreshRemoteFriendMatch()),
-            accent: remoteAccent,
           ),
         ];
 
