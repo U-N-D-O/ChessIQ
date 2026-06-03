@@ -23641,8 +23641,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     final remoteAccent = remoteOpponentAccent;
     final remoteSelectionUrgent =
-        _remoteFriendPieceSelectionRemainingSeconds <=
-        const Duration(seconds: 3);
+        _remoteFriendPieceSelectionRemainingSeconds <= 3;
     final remoteSelectionAccent = remoteSelectionUrgent
         ? remoteDangerAccent
         : remoteAccent;
@@ -23652,9 +23651,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     final remoteSeatLabel = _remoteFriendSeatLabel(remoteSeat);
     final remoteOpponentSeatLabel = _remoteFriendSeatLabel(remoteOpponentSeat);
-    final remoteSelectionRemainingSeconds =
-        _remoteFriendPieceSelectionRemainingSeconds.inSeconds.clamp(0, 10)
-            as int;
+    final int remoteSelectionRemainingSeconds = max(
+      0,
+      min(_remoteFriendPieceSelectionRemainingSeconds, 10),
+    );
     final remoteSelectionProgress = min(
       1.0,
       max(0.0, _remoteFriendPieceSelectionRemaining.inMilliseconds / 10000),
@@ -23665,7 +23665,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         behavior: HitTestBehavior.opaque,
         onTap: () {},
         child: Container(
-          color: Colors.black.withOpacity(0.30),
+          color: Colors.black.withValues(alpha: 0.30),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Center(
             child: ConstrainedBox(
@@ -25732,9 +25732,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
             )
           : 0.0;
-      final remotePlayerTheme = remoteSeat == null
-          ? _pieceThemeMode
-          : _remoteFriendPieceThemeForSeat(remoteSeat);
       final remoteOpponentSeat = remoteSeat == null
           ? null
           : (remoteSeat == RemoteFriendSeat.white
@@ -25743,9 +25740,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final remoteOpponentSeatLabel = _remoteFriendSeatLabel(
         remoteOpponentSeat,
       );
-      final remoteOpponentTheme = remoteOpponentSeat == null
-          ? _pieceThemeMode
-          : _remoteFriendPieceThemeForSeat(remoteOpponentSeat);
       final compactPendingInviteLayout =
           _isRemoteFriendPendingMatch && compactRemoteActionPanel;
       final remoteUseMonochrome =
@@ -25756,10 +25750,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         useMonochrome: remoteUseMonochrome,
       );
       final remoteOpponentAccent = _remoteFriendOpponentAccent(
-        scheme,
-        useMonochrome: remoteUseMonochrome,
-      );
-      final remoteReadyAccent = _remoteFriendReadyAccent(
         scheme,
         useMonochrome: remoteUseMonochrome,
       );
