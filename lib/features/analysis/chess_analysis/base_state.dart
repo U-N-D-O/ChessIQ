@@ -482,7 +482,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'analysis_remote_friend_time_control_v1';
   static const String _analysisRemoteFriendSeatPreferenceKey =
       'analysis_remote_friend_seat_preference_v1';
-    static const String _analysisRemoteFriendKeepScoreDefaultKey =
+  static const String _analysisRemoteFriendKeepScoreDefaultKey =
       'analysis_remote_friend_keep_score_default_v1';
   static const String _analysisOpeningButtonModeKey =
       'analysis_opening_button_mode_v1';
@@ -885,7 +885,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _remoteFriendLocalUid;
   RemoteFriendInvite? _remoteFriendInvite;
   RemoteFriendMatchSnapshot? _remoteFriendSnapshot;
-    final ValueNotifier<RemoteFriendMatchStatus?> _remoteFriendStatusNotifier =
+  final ValueNotifier<RemoteFriendMatchStatus?> _remoteFriendStatusNotifier =
       ValueNotifier<RemoteFriendMatchStatus?>(null);
   List<RemoteFriendMatchMembership> _remoteFriendMemberships =
       <RemoteFriendMatchMembership>[];
@@ -6099,9 +6099,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 child: Material(
                                   color: Colors.transparent,
                                   child: InkWell(
-                                    onTap: () => Navigator.of(itemContext).pop(
-                                      option.value,
-                                    ),
+                                    onTap: () => Navigator.of(
+                                      itemContext,
+                                    ).pop(option.value),
                                     borderRadius: BorderRadius.circular(20),
                                     child: Ink(
                                       decoration: BoxDecoration(
@@ -6353,9 +6353,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: resolvedStandardAccent.withValues(
-                          alpha: enabled
-                              ? (dialogIsLight ? 0.20 : 0.28)
-                              : 0.12,
+                          alpha: enabled ? (dialogIsLight ? 0.20 : 0.28) : 0.12,
                         ),
                       ),
                     ),
@@ -6373,7 +6371,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           style: TextStyle(
                             color: enabled
                                 ? dialogScheme.onSurface
-                                : dialogScheme.onSurface.withValues(alpha: 0.42),
+                                : dialogScheme.onSurface.withValues(
+                                    alpha: 0.42,
+                                  ),
                             fontSize: 12.4,
                             height: 1.18,
                             fontWeight: FontWeight.w700,
@@ -6413,9 +6413,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: tileAccent.withValues(
-                          alpha: enabled
-                              ? (dialogIsLight ? 0.20 : 0.30)
-                              : 0.12,
+                          alpha: enabled ? (dialogIsLight ? 0.20 : 0.30) : 0.12,
                         ),
                       ),
                     ),
@@ -6427,7 +6425,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             style: TextStyle(
                               fontSize: compactDialog ? 26 : 28,
                               color: locked
-                                  ? dialogScheme.onSurface.withValues(alpha: 0.46)
+                                  ? dialogScheme.onSurface.withValues(
+                                      alpha: 0.46,
+                                    )
                                   : null,
                             ),
                           ),
@@ -6536,12 +6536,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             ),
                             const SizedBox(width: 10),
                             IconButton(
-                              onPressed: () => Navigator.of(dialogContext).pop(),
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
                               tooltip: 'Close',
                               style: IconButton.styleFrom(
-                                backgroundColor: dialogScheme.surface.withValues(
-                                  alpha: dialogIsLight ? 0.72 : 0.44,
-                                ),
+                                backgroundColor: dialogScheme.surface
+                                    .withValues(
+                                      alpha: dialogIsLight ? 0.72 : 0.44,
+                                    ),
                               ),
                               icon: Icon(
                                 Icons.close_rounded,
@@ -6579,16 +6581,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           itemCount: showEmojiPanel
                               ? emojiOptions.length
                               : _remoteFriendPhraseOptions.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: showEmojiPanel
-                                ? emojiColumns
-                                : phraseColumns,
-                            mainAxisSpacing: gridSpacing,
-                            crossAxisSpacing: gridSpacing,
-                            childAspectRatio: showEmojiPanel
-                                ? 1.04
-                                : (phraseColumns >= 4 ? 2.8 : 2.45),
-                          ),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: showEmojiPanel
+                                    ? emojiColumns
+                                    : phraseColumns,
+                                mainAxisSpacing: gridSpacing,
+                                crossAxisSpacing: gridSpacing,
+                                childAspectRatio: showEmojiPanel
+                                    ? 1.04
+                                    : (phraseColumns >= 4 ? 2.8 : 2.45),
+                              ),
                           itemBuilder: (context, index) {
                             if (showEmojiPanel) {
                               return buildEmojiTile(emojiOptions[index]);
@@ -21642,20 +21645,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                   !_isRemoteFriendPieceSelectionOpen &&
                                                   !_isRemoteFriendPendingMatch;
                                               final landscapeSideGap =
-                                                usesRemoteFriendSidePanel
-                                                ? 8.0
-                                                : 12.0;
+                                                  usesRemoteFriendSidePanel
+                                                  ? 8.0
+                                                  : 12.0;
                                               final usesExpandedSidePanel =
                                                   _isAnalysisMatchMode ||
                                                   usesRemoteFriendSidePanel;
                                               final sideWidth =
                                                   usesRemoteFriendSidePanel
                                                   ? compactRemoteFriendSidePanel
-                                                  ? (inner.maxWidth *
-                                                        0.23)
+                                                        ? (inner.maxWidth *
+                                                                  0.23)
                                                               .clamp(
-                                                      196.0,
-                                                      244.0,
+                                                                196.0,
+                                                                244.0,
                                                               )
                                                         : (inner.maxWidth *
                                                                   0.40)
@@ -23676,26 +23679,26 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         ((white && _gameOutcome == GameOutcome.blackWin) ||
             (!white && _gameOutcome == GameOutcome.whiteWin));
     final baseSeatAccent = occupantUid == null
-      ? scheme.onSurface.withValues(alpha: 0.58)
-      : isLocalSeat
-      ? localAccent
-      : opponentAccent;
+        ? scheme.onSurface.withValues(alpha: 0.58)
+        : isLocalSeat
+        ? localAccent
+        : opponentAccent;
     final accent = isWinner
         ? _remoteFriendReadyAccent(scheme, useMonochrome: useMonochrome)
         : isLoser
         ? _remoteFriendDangerAccent(scheme, useMonochrome: useMonochrome)
         : isActive
-      ? baseSeatAccent
-      : (Color.lerp(
-          baseSeatAccent,
-          scheme.onSurface,
-          occupantUid == null
-            ? 0.18
-            : isLocalSeat
-            ? 0.12
-            : 0.20,
-        ) ??
-        baseSeatAccent);
+        ? baseSeatAccent
+        : (Color.lerp(
+                baseSeatAccent,
+                scheme.onSurface,
+                occupantUid == null
+                    ? 0.18
+                    : isLocalSeat
+                    ? 0.12
+                    : 0.20,
+              ) ??
+              baseSeatAccent);
     final roleLabel = occupantUid == null
         ? 'OPEN'
         : isLocalSeat
@@ -23749,10 +23752,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     final avatarInventory = context.watch<AvatarInventoryProvider>();
     final avatarId = white ? snapshot.whiteAvatarId : snapshot.blackAvatarId;
     final avatarEntry = avatarId != null
-      ? AvatarCatalog.entryFor(avatarId)
-      : isLocalSeat
-      ? avatarInventory.selectedAvatar
-      : null;
+        ? AvatarCatalog.entryFor(avatarId)
+        : isLocalSeat
+        ? avatarInventory.selectedAvatar
+        : null;
     final avatarKey = white
         ? _remoteFriendWhiteClockAvatarKey
         : _remoteFriendBlackClockAvatarKey;
@@ -23843,9 +23846,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: isDark ? 0.18 : 0.12),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: accent.withValues(alpha: 0.28),
-                      ),
+                      border: Border.all(color: accent.withValues(alpha: 0.28)),
                     ),
                     child: Text(
                       seatLabel,
@@ -25627,9 +25628,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               : _isRemoteFriendPendingMatch
               ? () => unawaited(_openSettings(fromAnalysisMode: false))
               : () => unawaited(_refreshRemoteFriendMatch()),
-          accent: _isRemoteFriendPendingMatch
-              ? scheme.onSurface
-              : remoteAccent,
+          accent: _isRemoteFriendPendingMatch ? scheme.onSurface : remoteAccent,
         ),
       ];
 
@@ -25824,7 +25823,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               const SizedBox(height: 6),
               Text(
                 remoteStatusText,
-                maxLines: compactRemoteActionPanel && _isRemoteFriendPendingMatch
+                maxLines:
+                    compactRemoteActionPanel && _isRemoteFriendPendingMatch
                     ? 2
                     : null,
                 overflow:
@@ -26048,8 +26048,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           onPressed: () => unawaited(
                             _showRemoteFriendPieceSelectionInfoDialog(
                               remoteSeatLabel: remoteSeatLabel,
-                              remoteOpponentSeatLabel:
-                                  remoteOpponentSeatLabel,
+                              remoteOpponentSeatLabel: remoteOpponentSeatLabel,
                             ),
                           ),
                           icon: const Icon(Icons.info_outline_rounded),

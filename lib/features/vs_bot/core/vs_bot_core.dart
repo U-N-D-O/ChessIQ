@@ -1320,7 +1320,7 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     var keepScore = _isRemoteFriendMatchMode
         ? (_hasIncomingRemoteRematchOffer || _hasOutgoingRemoteRematchOffer
               ? _remoteFriendRematchKeepsScore
-        : _remoteFriendKeepScoreDefault)
+              : _remoteFriendKeepScoreDefault)
         : _localFriendSeriesScoreEnabled;
 
     final result = await showDialog<String>(

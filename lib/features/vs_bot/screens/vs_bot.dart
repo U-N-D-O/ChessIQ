@@ -183,7 +183,9 @@ abstract class _VsBotState extends _StoreState {
     required Color accent,
     required double size,
   }) {
-    final avatarEntry = avatarId == null ? null : AvatarCatalog.entryFor(avatarId);
+    final avatarEntry = avatarId == null
+        ? null
+        : AvatarCatalog.entryFor(avatarId);
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
         _isCinematicThemeEnabled;
@@ -750,86 +752,86 @@ abstract class _VsBotState extends _StoreState {
         final remoteSnapshot = _remoteFriendSnapshot;
         final remoteSeat = _remoteFriendPlayerSeat;
         final showRemoteAvatarIntro =
-          _isRemoteFriendMatchMode &&
-          remoteSnapshot != null &&
-          remoteSeat != null;
+            _isRemoteFriendMatchMode &&
+            remoteSnapshot != null &&
+            remoteSeat != null;
         final localIsWhite = remoteSeat == RemoteFriendSeat.white;
         final localAvatarId = !showRemoteAvatarIntro
-          ? null
-          : (localIsWhite
-              ? remoteSnapshot.whiteAvatarId
-              : remoteSnapshot.blackAvatarId);
+            ? null
+            : (localIsWhite
+                  ? remoteSnapshot.whiteAvatarId
+                  : remoteSnapshot.blackAvatarId);
         final opponentAvatarId = !showRemoteAvatarIntro
-          ? null
-          : (localIsWhite
-              ? remoteSnapshot.blackAvatarId
-              : remoteSnapshot.whiteAvatarId);
+            ? null
+            : (localIsWhite
+                  ? remoteSnapshot.blackAvatarId
+                  : remoteSnapshot.whiteAvatarId);
         final localAvatarTarget = !showRemoteAvatarIntro
-          ? null
-          : _remoteFriendClockAvatarCenterInScene(white: localIsWhite);
+            ? null
+            : _remoteFriendClockAvatarCenterInScene(white: localIsWhite);
         final opponentAvatarTarget = !showRemoteAvatarIntro
-          ? null
-          : _remoteFriendClockAvatarCenterInScene(white: !localIsWhite);
+            ? null
+            : _remoteFriendClockAvatarCenterInScene(white: !localIsWhite);
         final localUsesLeftTrack = !showRemoteAvatarIntro
-          ? true
-          : (localAvatarTarget?.dx ?? leftBadgeTarget.dx) <=
-              (opponentAvatarTarget?.dx ?? rightBadgeTarget.dx);
+            ? true
+            : (localAvatarTarget?.dx ?? leftBadgeTarget.dx) <=
+                  (opponentAvatarTarget?.dx ?? rightBadgeTarget.dx);
         final localStageTarget = localUsesLeftTrack
-          ? leftBadgeTarget
-          : rightBadgeTarget;
+            ? leftBadgeTarget
+            : rightBadgeTarget;
         final opponentStageTarget = localUsesLeftTrack
-          ? rightBadgeTarget
-          : leftBadgeTarget;
+            ? rightBadgeTarget
+            : leftBadgeTarget;
         final localStageCenter = localUsesLeftTrack
-          ? leftBadgeCenter
-          : rightBadgeCenter;
+            ? leftBadgeCenter
+            : rightBadgeCenter;
         final opponentStageCenter = localUsesLeftTrack
-          ? rightBadgeCenter
-          : leftBadgeCenter;
+            ? rightBadgeCenter
+            : leftBadgeCenter;
         final localStageRotation = localUsesLeftTrack
-          ? leftBadgeRotation
-          : rightBadgeRotation;
+            ? leftBadgeRotation
+            : rightBadgeRotation;
         final opponentStageRotation = localUsesLeftTrack
-          ? rightBadgeRotation
-          : leftBadgeRotation;
+            ? rightBadgeRotation
+            : leftBadgeRotation;
         final avatarTravelT = Curves.easeInOutCubic.transform(
           ((t - 0.46) / 0.26).clamp(0.0, 1.0),
         );
         final avatarTravelLift =
-          sin(pi * avatarTravelT) * (compactScene ? 20.0 : 28.0) * scale;
+            sin(pi * avatarTravelT) * (compactScene ? 20.0 : 28.0) * scale;
         final localAvatarCenter = !showRemoteAvatarIntro
-          ? null
-          : (t < 0.46
-              ? localStageCenter
-              : Offset.lerp(
-                localStageTarget,
-                localAvatarTarget ?? localStageTarget,
-                avatarTravelT,
-              )!.translate(0, -avatarTravelLift));
+            ? null
+            : (t < 0.46
+                  ? localStageCenter
+                  : Offset.lerp(
+                      localStageTarget,
+                      localAvatarTarget ?? localStageTarget,
+                      avatarTravelT,
+                    )!.translate(0, -avatarTravelLift));
         final opponentAvatarCenter = !showRemoteAvatarIntro
-          ? null
-          : (t < 0.46
-              ? opponentStageCenter
-              : Offset.lerp(
-                opponentStageTarget,
-                opponentAvatarTarget ?? opponentStageTarget,
-                avatarTravelT,
-              )!.translate(0, -avatarTravelLift));
+            ? null
+            : (t < 0.46
+                  ? opponentStageCenter
+                  : Offset.lerp(
+                      opponentStageTarget,
+                      opponentAvatarTarget ?? opponentStageTarget,
+                      avatarTravelT,
+                    )!.translate(0, -avatarTravelLift));
         final localAvatarSize = !showRemoteAvatarIntro
-          ? badgeSize
-          : ui.lerpDouble(badgeSize, 24 * scale, avatarTravelT)!;
+            ? badgeSize
+            : ui.lerpDouble(badgeSize, 24 * scale, avatarTravelT)!;
         final opponentAvatarSize = !showRemoteAvatarIntro
-          ? badgeSize
-          : ui.lerpDouble(badgeSize, 24 * scale, avatarTravelT)!;
+            ? badgeSize
+            : ui.lerpDouble(badgeSize, 24 * scale, avatarTravelT)!;
         final localAvatarRotation = !showRemoteAvatarIntro
-          ? leftBadgeRotation
-          : ui.lerpDouble(localStageRotation, 0.0, avatarTravelT)!;
+            ? leftBadgeRotation
+            : ui.lerpDouble(localStageRotation, 0.0, avatarTravelT)!;
         final opponentAvatarRotation = !showRemoteAvatarIntro
-          ? rightBadgeRotation
-          : ui.lerpDouble(opponentStageRotation, 0.0, avatarTravelT)!;
+            ? rightBadgeRotation
+            : ui.lerpDouble(opponentStageRotation, 0.0, avatarTravelT)!;
         final avatarScale = !showRemoteAvatarIntro
-          ? badgeScale
-          : ui.lerpDouble(badgeScale, 1.0, avatarTravelT)!;
+            ? badgeScale
+            : ui.lerpDouble(badgeScale, 1.0, avatarTravelT)!;
 
         Widget buildGlyph(String glyph, Offset offset, double rotation) {
           final glyphLeft = center.dx + offset.dx - (glyphSize * 0.28);
