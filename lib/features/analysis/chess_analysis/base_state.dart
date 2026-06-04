@@ -6175,65 +6175,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         ),
                                       ),
                                       child: Padding(
-                                        padding: const EdgeInsets.all(14),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 42,
-                                              height: 42,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 10,
+                                        ),
+                                        child: Center(
+                                          child: Semantics(
+                                            label: option.label,
+                                            button: true,
+                                            child: Container(
+                                              width: 64,
+                                              height: 64,
                                               decoration: BoxDecoration(
                                                 color: itemAccent.withValues(
                                                   alpha: dialogIsLight
-                                                      ? 0.12
-                                                      : 0.18,
+                                                      ? 0.14
+                                                      : 0.20,
                                                 ),
                                                 borderRadius:
-                                                    BorderRadius.circular(14),
+                                                    BorderRadius.circular(18),
                                               ),
                                               child: Icon(
                                                 option.icon,
                                                 color: itemAccent,
-                                                size: 21,
+                                                size: 28,
                                               ),
                                             ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    option.label,
-                                                    style: TextStyle(
-                                                      color: dialogScheme
-                                                          .onSurface,
-                                                      fontSize: 14.5,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 3),
-                                                  Text(
-                                                    option.description,
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: dialogScheme
-                                                          .onSurface
-                                                          .withValues(
-                                                            alpha: 0.66,
-                                                          ),
-                                                      fontSize: 11.6,
-                                                      height: 1.24,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                     ),
