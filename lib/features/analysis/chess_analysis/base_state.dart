@@ -26199,7 +26199,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           child: LayoutBuilder(
             builder: (context, actionConstraints) {
               final buttonSpacing = compactRemoteActionPanel ? 8.0 : 10.0;
-              final buttonColumnCount = actionConstraints.maxWidth >= 340
+              final buttonColumnCount =
+                  !isLandscape && compactButtons.length >= 4
+                  ? 2
+                  : actionConstraints.maxWidth >= 520
                   ? 3
                   : 2;
               final buttonWidth =
@@ -26566,7 +26569,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             LayoutBuilder(
               builder: (context, actionConstraints) {
                 final buttonSpacing = compactRemoteActionPanel ? 8.0 : 10.0;
-                final buttonColumnCount = actionConstraints.maxWidth >= 520
+                final buttonColumnCount = !isLandscape && buttons.length >= 4
+                    ? 2
+                    : actionConstraints.maxWidth >= 520
                     ? 3
                     : 2;
                 final buttonWidth =
