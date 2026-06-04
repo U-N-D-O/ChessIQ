@@ -21786,7 +21786,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                                     landscapeSideGap,
                                               );
                                               final landscapeBoardLead =
-                                                  usesExpandedSidePanel
+                                                  _isBotMatchMode ||
+                                                      usesExpandedSidePanel
                                                   ? 0.0
                                                   : min(
                                                       boardSlack,
