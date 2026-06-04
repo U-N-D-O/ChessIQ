@@ -207,7 +207,13 @@ enum _VsModeQuickOption { crossDevice, sharedScreen, vsCpu, quickJoin }
 
 enum _RemoteFriendInviteToolsAction { copyCode, copyLink, shareInvite, showQr }
 
-enum _RemoteFriendNavigationAction { mainMenu, playChess, analysis, store }
+enum _RemoteFriendNavigationAction {
+  mainMenu,
+  settings,
+  playChess,
+  analysis,
+  store,
+}
 
 class _CheckedKingState {
   const _CheckedKingState({
@@ -5972,6 +5978,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                   accent: menuAccent,
                 ),
                 _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
+                  value: _RemoteFriendNavigationAction.settings,
+                  label: 'Settings',
+                  description: 'Change board and UI appearance for this match.',
+                  icon: Icons.settings_outlined,
+                  accent: scheme.secondary,
+                ),
+                _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
                   value: _RemoteFriendNavigationAction.playChess,
                   label: 'Play Chess',
                   description:
@@ -6002,6 +6015,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     switch (destination) {
       case _RemoteFriendNavigationAction.mainMenu:
         _goToMenu();
+      case _RemoteFriendNavigationAction.settings:
+        _openSettings(fromAnalysisMode: false, remoteAppearanceOnly: true);
       case _RemoteFriendNavigationAction.playChess:
         _openVsModeFromMenu();
       case _RemoteFriendNavigationAction.analysis:
@@ -28760,6 +28775,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _openSettings({
     bool isAcademyMode = false,
     bool fromAnalysisMode = false,
+    bool remoteAppearanceOnly = false,
   }) async {
     final themeProvider = context.read<AppThemeProvider>();
     final isBoardAnalysisPage =
@@ -28786,14 +28802,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       onThemeStyleChanged: (style) async {
         await _setCinematicThemeEnabled(style == AppThemeStyle.monochrome);
       },
-      soundEnabled: !_muteSounds,
-      hapticsEnabled: _hapticsEnabled,
-      onSoundEnabledChanged: (enabled) async {
-        await _setMute(!enabled);
-      },
-      onHapticsEnabledChanged: (enabled) async {
-        await _setHapticsEnabled(enabled);
-      },
+      soundEnabled: remoteAppearanceOnly ? null : !_muteSounds,
+      hapticsEnabled: remoteAppearanceOnly ? null : _hapticsEnabled,
+      onSoundEnabledChanged: remoteAppearanceOnly
+          ? null
+          : (enabled) async {
+              await _setMute(!enabled);
+            },
+      onHapticsEnabledChanged: remoteAppearanceOnly
+          ? null
+          : (enabled) async {
+              await _setHapticsEnabled(enabled);
+            },
       boardThemeSelectorBuilder: (setSheetState, markChanged) {
         return Wrap(
           spacing: 10,
@@ -28806,32 +28826,42 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               .toList(),
         );
       },
-      pieceThemeSelectorBuilder: (setSheetState, markChanged) {
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          alignment: WrapAlignment.center,
-          children: _availablePieceThemes
-              .map(
-                (mode) => _pieceThemeOption(mode, setSheetState, markChanged),
-              )
-              .toList(),
-        );
-      },
-      arrowThemeSelectorBuilder: (setSheetState, markChanged) {
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          alignment: WrapAlignment.center,
-          children: _availableArrowThemes
-              .map(
-                (mode) => _arrowThemeOption(mode, setSheetState, markChanged),
-              )
-              .toList(growable: false),
-        );
-      },
-      showBoardPerspectiveSection: showBoardPerspectiveSection,
-      boardPerspectiveSectionBuilder: showBoardPerspectiveSection
+      pieceThemeSelectorBuilder: remoteAppearanceOnly
+          ? null
+          : (setSheetState, markChanged) {
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
+                children: _availablePieceThemes
+                    .map(
+                      (mode) =>
+                          _pieceThemeOption(mode, setSheetState, markChanged),
+                    )
+                    .toList(),
+              );
+            },
+      arrowThemeSelectorBuilder: remoteAppearanceOnly
+          ? null
+          : (setSheetState, markChanged) {
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
+                children: _availableArrowThemes
+                    .map(
+                      (mode) =>
+                          _arrowThemeOption(mode, setSheetState, markChanged),
+                    )
+                    .toList(growable: false),
+              );
+            },
+      showBoardPerspectiveSection: remoteAppearanceOnly
+          ? false
+          : showBoardPerspectiveSection,
+      boardPerspectiveSectionBuilder: remoteAppearanceOnly
+          ? null
+          : showBoardPerspectiveSection
           ? (setSheetState, markChanged) {
               final theme = Theme.of(context);
               return Column(
@@ -28873,514 +28903,555 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               );
             }
           : null,
-      showEngineControlsSection: showEngineControlsSection,
+      showEngineControlsSection: remoteAppearanceOnly
+          ? false
+          : showEngineControlsSection,
       engineDepth: _engineDepth,
       maxEngineDepth: _maxDepthAllowed,
       engineDepthLabelBuilder: _engineDepthSettingLabel,
       suggestedMoves: _multiPvCount,
       maxSuggestedMoves: _maxSuggestionsAllowed,
-      onEngineDepthChanged: (value) {
-        final changed = value != _engineDepth;
-        setState(() => _engineDepth = value);
-        if (changed) {
-          _clearPositionAnalysisCache();
-        }
-        _analyze();
-      },
-      onEngineDepthChangeEnd: (value) {
-        final changed = value != _engineDepth;
-        setState(() => _engineDepth = value);
-        if (changed) {
-          _clearPositionAnalysisCache();
-        }
-        _persistCurrentSettings();
-      },
-      onSuggestedMovesChanged: (value) {
-        _applySuggestionCount(value);
-      },
-      onSuggestedMovesChangeEnd: (value) {
-        _applySuggestionCount(value, persist: true);
-      },
-      extraSectionsBuilder: (sheetContext, setSheetState, markChanged) {
-        final theme = Theme.of(sheetContext);
-        final scheme = theme.colorScheme;
-        final sectionColor = Color.alphaBlend(
-          scheme.primary.withValues(alpha: 0.06),
-          scheme.surface,
-        );
-        final borderColor = scheme.outline.withValues(alpha: 0.24);
-        final sections = <Widget>[];
+      onEngineDepthChanged: remoteAppearanceOnly
+          ? null
+          : (value) {
+              final changed = value != _engineDepth;
+              setState(() => _engineDepth = value);
+              if (changed) {
+                _clearPositionAnalysisCache();
+              }
+              _analyze();
+            },
+      onEngineDepthChangeEnd: remoteAppearanceOnly
+          ? null
+          : (value) {
+              final changed = value != _engineDepth;
+              setState(() => _engineDepth = value);
+              if (changed) {
+                _clearPositionAnalysisCache();
+              }
+              _persistCurrentSettings();
+            },
+      onSuggestedMovesChanged: remoteAppearanceOnly
+          ? null
+          : (value) {
+              _applySuggestionCount(value);
+            },
+      onSuggestedMovesChangeEnd: remoteAppearanceOnly
+          ? null
+          : (value) {
+              _applySuggestionCount(value, persist: true);
+            },
+      extraSectionsBuilder: remoteAppearanceOnly
+          ? null
+          : (sheetContext, setSheetState, markChanged) {
+              final theme = Theme.of(sheetContext);
+              final scheme = theme.colorScheme;
+              final sectionColor = Color.alphaBlend(
+                scheme.primary.withValues(alpha: 0.06),
+                scheme.surface,
+              );
+              final borderColor = scheme.outline.withValues(alpha: 0.24);
+              final sections = <Widget>[];
 
-        if (isBoardAnalysisPage) {
-          sections.add(
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
-              decoration: BoxDecoration(
-                color: sectionColor,
-                border: Border.all(color: borderColor),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                value: _moveAssessmentEnabled,
-                title: const Text('Move Assessment'),
-                subtitle: const Text(
-                  'Show best, good, solid, and mistake labels after moves, independent from center suggestions.',
-                ),
-                onChanged: (enabled) {
-                  if (enabled == _moveAssessmentEnabled) {
-                    return;
-                  }
-                  markChanged();
-                  unawaited(_setMoveAssessmentEnabled(enabled));
-                  setSheetState(() {});
-                },
-              ),
-            ),
-          );
-        }
-
-        if (_isRemoteFriendMatchMode) {
-          sections.add(
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
-              decoration: BoxDecoration(
-                color: sectionColor,
-                border: Border.all(color: borderColor),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                value: _remoteFriendKeepScoreDefault,
-                title: const Text('Keep score on rematch'),
-                subtitle: const Text(
-                  'Carry the 1V1 cross-play score into the next game. Off stays the default.',
-                ),
-                onChanged: (enabled) {
-                  if (enabled == _remoteFriendKeepScoreDefault) {
-                    return;
-                  }
-                  markChanged();
-                  setState(() {
-                    _remoteFriendKeepScoreDefault = enabled;
-                  });
-                  setSheetState(() {});
-                  _persistCurrentSettings();
-                },
-              ),
-            ),
-          );
-        }
-
-        final hasAllThemes =
-            _availableBoardThemes.length >= BoardThemeMode.values.length &&
-            _availablePieceThemes.length >= PieceThemeMode.values.length &&
-            _availableArrowThemes.length >= ArrowThemeMode.values.length;
-        final hasAllStockfishUpgrades =
-            _depthTier >= 3 && _maxSuggestionsAllowed >= 10;
-
-        if (!hasAllThemes || !hasAllStockfishUpgrades) {
-          final storeButtonLabel = hasAllThemes
-              ? 'Open Stockfish Upgrades'
-              : 'Open Theme Store';
-          final storeButtonIcon = hasAllThemes
-              ? Icons.upgrade_rounded
-              : Icons.auto_awesome_rounded;
-          final initialStoreSection = hasAllThemes
-              ? StoreSection.general
-              : StoreSection.themes;
-
-          sections.add(
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: sectionColor,
-                border: Border.all(color: borderColor),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(sheetContext).pop();
-                  Future.microtask(
-                    () => _openStore(initialSection: initialStoreSection),
-                  );
-                },
-                icon: Icon(storeButtonIcon, size: 18),
-                label: Text(storeButtonLabel),
-              ),
-            ),
-          );
-        }
-
-        if (isBoardAnalysisPage) {
-          final advancedSectionColor = Color.alphaBlend(
-            scheme.outline.withValues(alpha: 0.05),
-            sectionColor,
-          );
-          final advancedBorderColor = scheme.outline.withValues(alpha: 0.20);
-          final advancedLabelColor = scheme.onSurface.withValues(alpha: 0.58);
-          final secondaryTextColor = scheme.onSurface.withValues(alpha: 0.74);
-          final nestedSectionColor = Color.alphaBlend(
-            scheme.primary.withValues(alpha: 0.05),
-            scheme.surface,
-          );
-
-          Widget buildOpeningButtonModeTile(OpeningMode mode) {
-            final selected = _analysisOpeningButtonMode == mode;
-            final locked =
-                mode == OpeningMode.sacrificeGlow && !_sacrificeModeOwned;
-            final accent = _openingModeButtonColor(mode);
-            final tileFill = Color.alphaBlend(
-              accent.withValues(alpha: selected ? 0.14 : 0.05),
-              scheme.surface,
-            );
-            final tileBorder = selected
-                ? accent.withValues(alpha: 0.60)
-                : accent.withValues(alpha: locked ? 0.18 : 0.28);
-            final titleColor = locked
-                ? scheme.onSurface.withValues(alpha: 0.52)
-                : selected
-                ? accent
-                : scheme.onSurface;
-            final bodyColor = locked
-                ? scheme.onSurface.withValues(alpha: 0.44)
-                : scheme.onSurface.withValues(alpha: 0.70);
-
-            return Opacity(
-              opacity: locked ? 0.76 : 1,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: locked
-                      ? null
-                      : () {
-                          if (_analysisOpeningButtonMode == mode) {
-                            return;
-                          }
-                          markChanged();
-                          unawaited(_setAnalysisOpeningButtonMode(mode));
-                          setSheetState(() {});
-                        },
-                  child: Ink(
-                    padding: const EdgeInsets.all(12),
+              if (isBoardAnalysisPage) {
+                sections.add(
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
                     decoration: BoxDecoration(
-                      color: tileFill,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: tileBorder),
-                      boxShadow: selected
-                          ? [
-                              BoxShadow(
-                                color: accent.withValues(alpha: 0.16),
-                                blurRadius: 16,
-                                offset: const Offset(0, 6),
-                              ),
-                            ]
-                          : null,
+                      color: sectionColor,
+                      border: Border.all(color: borderColor),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Color.alphaBlend(
-                              accent.withValues(alpha: selected ? 0.20 : 0.10),
-                              scheme.surface,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: accent.withValues(alpha: 0.34),
-                            ),
-                          ),
-                          child: Icon(
-                            _openingButtonModeIcon(mode),
-                            color: locked
-                                ? accent.withValues(alpha: 0.55)
-                                : accent,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _openingButtonModeTitle(mode),
-                                      style: theme.textTheme.titleSmall
-                                          ?.copyWith(
-                                            color: titleColor,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                  ),
-                                  if (selected)
-                                    Icon(
-                                      Icons.check_circle_rounded,
-                                      color: accent,
-                                      size: 18,
-                                    )
-                                  else if (locked)
-                                    Icon(
-                                      Icons.lock_outline_rounded,
-                                      color: scheme.onSurface.withValues(
-                                        alpha: 0.42,
-                                      ),
-                                      size: 18,
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _openingButtonModeDescription(mode),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: bodyColor,
-                                  height: 1.28,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    child: SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _moveAssessmentEnabled,
+                      title: const Text('Move Assessment'),
+                      subtitle: const Text(
+                        'Show best, good, solid, and mistake labels after moves, independent from center suggestions.',
+                      ),
+                      onChanged: (enabled) {
+                        if (enabled == _moveAssessmentEnabled) {
+                          return;
+                        }
+                        markChanged();
+                        unawaited(_setMoveAssessmentEnabled(enabled));
+                        setSheetState(() {});
+                      },
                     ),
                   ),
-                ),
-              ),
-            );
-          }
+                );
+              }
 
-          sections.add(
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-              decoration: BoxDecoration(
-                color: advancedSectionColor,
-                border: Border.all(color: advancedBorderColor),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ADVANCED BOARD LAYOUT',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: advancedLabelColor,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.7,
+              if (_isRemoteFriendMatchMode) {
+                sections.add(
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+                    decoration: BoxDecoration(
+                      color: sectionColor,
+                      border: Border.all(color: borderColor),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _remoteFriendKeepScoreDefault,
+                      title: const Text('Keep score on rematch'),
+                      subtitle: const Text(
+                        'Carry the 1V1 cross-play score into the next game. Off stays the default.',
                       ),
+                      onChanged: (enabled) {
+                        if (enabled == _remoteFriendKeepScoreDefault) {
+                          return;
+                        }
+                        markChanged();
+                        setState(() {
+                          _remoteFriendKeepScoreDefault = enabled;
+                        });
+                        setSheetState(() {});
+                        _persistCurrentSettings();
+                      },
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Head-to-head board',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Shows the board face-to-face for two players. Overrides the White / Black / Auto view above and turns off Stockfish analysis while enabled.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: secondaryTextColor,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Switch.adaptive(
-                            value: _isHeadToHeadPerspective,
-                            onChanged: (enabled) {
-                              markChanged();
-                              _applyPerspectiveSelection(
-                                enabled
-                                    ? BoardPerspective.headToHead
-                                    : (_analysisStandardPerspective ==
-                                              BoardPerspective.headToHead
-                                          ? _defaultPerspective
-                                          : _analysisStandardPerspective),
-                              );
-                              setSheetState(() {});
-                            },
-                          ),
-                        ),
-                      ],
+                  ),
+                );
+              }
+
+              final hasAllThemes =
+                  _availableBoardThemes.length >=
+                      BoardThemeMode.values.length &&
+                  _availablePieceThemes.length >=
+                      PieceThemeMode.values.length &&
+                  _availableArrowThemes.length >= ArrowThemeMode.values.length;
+              final hasAllStockfishUpgrades =
+                  _depthTier >= 3 && _maxSuggestionsAllowed >= 10;
+
+              if (!hasAllThemes || !hasAllStockfishUpgrades) {
+                final storeButtonLabel = hasAllThemes
+                    ? 'Open Stockfish Upgrades'
+                    : 'Open Theme Store';
+                final storeButtonIcon = hasAllThemes
+                    ? Icons.upgrade_rounded
+                    : Icons.auto_awesome_rounded;
+                final initialStoreSection = hasAllThemes
+                    ? StoreSection.general
+                    : StoreSection.themes;
+
+                sections.add(
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: sectionColor,
+                      border: Border.all(color: borderColor),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SizeTransition(
-                            sizeFactor: animation,
-                            axisAlignment: -1,
-                            child: child,
-                          ),
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        Future.microtask(
+                          () => _openStore(initialSection: initialStoreSection),
                         );
                       },
-                      child: !_isHeadToHeadPerspective
-                          ? const SizedBox.shrink(
-                              key: ValueKey<String>('head_to_head_lock_hidden'),
-                            )
-                          : Padding(
-                              key: const ValueKey<String>(
-                                'head_to_head_lock_visible',
-                              ),
-                              padding: const EdgeInsets.only(top: 12, left: 10),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.fromLTRB(
-                                  12,
-                                  12,
-                                  12,
-                                  10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: nestedSectionColor,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: scheme.primary.withValues(
-                                      alpha: 0.16,
+                      icon: Icon(storeButtonIcon, size: 18),
+                      label: Text(storeButtonLabel),
+                    ),
+                  ),
+                );
+              }
+
+              if (isBoardAnalysisPage) {
+                final advancedSectionColor = Color.alphaBlend(
+                  scheme.outline.withValues(alpha: 0.05),
+                  sectionColor,
+                );
+                final advancedBorderColor = scheme.outline.withValues(
+                  alpha: 0.20,
+                );
+                final advancedLabelColor = scheme.onSurface.withValues(
+                  alpha: 0.58,
+                );
+                final secondaryTextColor = scheme.onSurface.withValues(
+                  alpha: 0.74,
+                );
+                final nestedSectionColor = Color.alphaBlend(
+                  scheme.primary.withValues(alpha: 0.05),
+                  scheme.surface,
+                );
+
+                Widget buildOpeningButtonModeTile(OpeningMode mode) {
+                  final selected = _analysisOpeningButtonMode == mode;
+                  final locked =
+                      mode == OpeningMode.sacrificeGlow && !_sacrificeModeOwned;
+                  final accent = _openingModeButtonColor(mode);
+                  final tileFill = Color.alphaBlend(
+                    accent.withValues(alpha: selected ? 0.14 : 0.05),
+                    scheme.surface,
+                  );
+                  final tileBorder = selected
+                      ? accent.withValues(alpha: 0.60)
+                      : accent.withValues(alpha: locked ? 0.18 : 0.28);
+                  final titleColor = locked
+                      ? scheme.onSurface.withValues(alpha: 0.52)
+                      : selected
+                      ? accent
+                      : scheme.onSurface;
+                  final bodyColor = locked
+                      ? scheme.onSurface.withValues(alpha: 0.44)
+                      : scheme.onSurface.withValues(alpha: 0.70);
+
+                  return Opacity(
+                    opacity: locked ? 0.76 : 1,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: locked
+                            ? null
+                            : () {
+                                if (_analysisOpeningButtonMode == mode) {
+                                  return;
+                                }
+                                markChanged();
+                                unawaited(_setAnalysisOpeningButtonMode(mode));
+                                setSheetState(() {});
+                              },
+                        child: Ink(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: tileFill,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: tileBorder),
+                            boxShadow: selected
+                                ? [
+                                    BoxShadow(
+                                      color: accent.withValues(alpha: 0.16),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
                                     ),
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Color.alphaBlend(
+                                    accent.withValues(
+                                      alpha: selected ? 0.20 : 0.10,
+                                    ),
+                                    scheme.surface,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: accent.withValues(alpha: 0.34),
                                   ),
                                 ),
-                                child: Row(
+                                child: Icon(
+                                  _openingButtonModeIcon(mode),
+                                  color: locked
+                                      ? accent.withValues(alpha: 0.55)
+                                      : accent,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Lock head-to-head orientation',
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _openingButtonModeTitle(mode),
                                             style: theme.textTheme.titleSmall
                                                 ?.copyWith(
-                                                  fontWeight: FontWeight.w700,
+                                                  color: titleColor,
+                                                  fontWeight: FontWeight.w800,
                                                 ),
                                           ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'Keeps white at the bottom and rotates black pieces toward the top player.',
-                                            style: theme.textTheme.bodyMedium
-                                                ?.copyWith(
-                                                  color: secondaryTextColor,
-                                                  height: 1.32,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Switch.adaptive(
-                                        value: _lockedHeadToHeadPerspective,
-                                        onChanged: (value) {
-                                          markChanged();
-                                          unawaited(
-                                            _setLockedHeadToHeadPerspective(
-                                              value,
+                                        ),
+                                        if (selected)
+                                          Icon(
+                                            Icons.check_circle_rounded,
+                                            color: accent,
+                                            size: 18,
+                                          )
+                                        else if (locked)
+                                          Icon(
+                                            Icons.lock_outline_rounded,
+                                            color: scheme.onSurface.withValues(
+                                              alpha: 0.42,
                                             ),
-                                          );
-                                          setSheetState(() {});
-                                        },
-                                      ),
+                                            size: 18,
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _openingButtonModeDescription(mode),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: bodyColor,
+                                            height: 1.28,
+                                          ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-
-          sections.add(
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: sectionColor,
-                border: Border.all(color: borderColor),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Opening Button Mode',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Choose what the opening button toggles in analysis mode. The button now turns the selected mode on and off directly.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurface.withValues(alpha: 0.72),
-                      height: 1.32,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      const spacing = 10.0;
-                      final useSingleColumn = constraints.maxWidth < 430;
-                      final tileWidth = useSingleColumn
-                          ? constraints.maxWidth
-                          : (constraints.maxWidth - spacing) / 2;
-
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: [
-                          for (final mode in _configurableOpeningButtonModes)
-                            SizedBox(
-                              width: tileWidth,
-                              child: buildOpeningButtonModeTile(mode),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                  if (!_sacrificeModeOwned) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      'Sacrifice Scan appears here after you unlock Sacrifice Mode in the store.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurface.withValues(alpha: 0.58),
-                        height: 1.25,
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        }
+                  );
+                }
 
-        return sections;
-      },
+                sections.add(
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                    decoration: BoxDecoration(
+                      color: advancedSectionColor,
+                      border: Border.all(color: advancedBorderColor),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ADVANCED BOARD LAYOUT',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: advancedLabelColor,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.7,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Head-to-head board',
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Shows the board face-to-face for two players. Overrides the White / Black / Auto view above and turns off Stockfish analysis while enabled.',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: secondaryTextColor,
+                                            height: 1.35,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Switch.adaptive(
+                                  value: _isHeadToHeadPerspective,
+                                  onChanged: (enabled) {
+                                    markChanged();
+                                    _applyPerspectiveSelection(
+                                      enabled
+                                          ? BoardPerspective.headToHead
+                                          : (_analysisStandardPerspective ==
+                                                    BoardPerspective.headToHead
+                                                ? _defaultPerspective
+                                                : _analysisStandardPerspective),
+                                    );
+                                    setSheetState(() {});
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SizeTransition(
+                                  sizeFactor: animation,
+                                  axisAlignment: -1,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: !_isHeadToHeadPerspective
+                                ? const SizedBox.shrink(
+                                    key: ValueKey<String>(
+                                      'head_to_head_lock_hidden',
+                                    ),
+                                  )
+                                : Padding(
+                                    key: const ValueKey<String>(
+                                      'head_to_head_lock_visible',
+                                    ),
+                                    padding: const EdgeInsets.only(
+                                      top: 12,
+                                      left: 10,
+                                    ),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.fromLTRB(
+                                        12,
+                                        12,
+                                        12,
+                                        10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: nestedSectionColor,
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: scheme.primary.withValues(
+                                            alpha: 0.16,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Lock head-to-head orientation',
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleSmall
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Keeps white at the bottom and rotates black pieces toward the top player.',
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.copyWith(
+                                                        color:
+                                                            secondaryTextColor,
+                                                        height: 1.32,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 2,
+                                            ),
+                                            child: Switch.adaptive(
+                                              value:
+                                                  _lockedHeadToHeadPerspective,
+                                              onChanged: (value) {
+                                                markChanged();
+                                                unawaited(
+                                                  _setLockedHeadToHeadPerspective(
+                                                    value,
+                                                  ),
+                                                );
+                                                setSheetState(() {});
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+
+                sections.add(
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: sectionColor,
+                      border: Border.all(color: borderColor),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Opening Button Mode',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Choose what the opening button toggles in analysis mode. The button now turns the selected mode on and off directly.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurface.withValues(alpha: 0.72),
+                            height: 1.32,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            const spacing = 10.0;
+                            final useSingleColumn = constraints.maxWidth < 430;
+                            final tileWidth = useSingleColumn
+                                ? constraints.maxWidth
+                                : (constraints.maxWidth - spacing) / 2;
+
+                            return Wrap(
+                              spacing: spacing,
+                              runSpacing: spacing,
+                              children: [
+                                for (final mode
+                                    in _configurableOpeningButtonModes)
+                                  SizedBox(
+                                    width: tileWidth,
+                                    child: buildOpeningButtonModeTile(mode),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                        if (!_sacrificeModeOwned) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            'Sacrifice Scan appears here after you unlock Sacrifice Mode in the store.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurface.withValues(alpha: 0.58),
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return sections;
+            },
     );
   }
 

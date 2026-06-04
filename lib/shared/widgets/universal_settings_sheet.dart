@@ -375,7 +375,7 @@ Future<void> showUniversalSettingsSheet({
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Color Mode',
+                                'Day/Night Toggle',
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
