@@ -352,6 +352,26 @@ class _PendingMoveQualityGrading {
   bool get isSacrifice => moverMaterialAfter < moverMaterialBefore;
 }
 
+class _RemoteFriendPremove {
+  const _RemoteFriendPremove({
+    required this.from,
+    required this.to,
+    this.promotion,
+  });
+
+  final String from;
+  final String to;
+  final String? promotion;
+
+  String get uci {
+    if (promotion == null) {
+      return '$from$to';
+    }
+    final promotionCode = promotion == 't' ? 'r' : promotion!.toLowerCase();
+    return '$from$to$promotionCode';
+  }
+}
+
 class _GradingSearchSnapshot {
   const _GradingSearchSnapshot({
     required this.lines,
@@ -765,6 +785,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int _moveQualityGradingGeneration = 0;
   bool _analysisRefreshQueuedWhileGrading = false;
   _PendingMoveQualityGrading? _pendingMoveQualityGrading;
+  _RemoteFriendPremove? _remoteFriendPremove;
   Timer? _moveQualityPublishTimer;
   _DeferredMoveQualityPublication? _deferredMoveQualityPublication;
   Future<void> _sacrificePreviewScanOperation = Future<void>.value();
@@ -5973,36 +5994,35 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
                   value: _RemoteFriendNavigationAction.mainMenu,
                   label: 'Main Menu',
-                  description: 'Return to the ChessIQ landing screen.',
+                  description: 'Return to home.',
                   icon: Icons.home_rounded,
                   accent: menuAccent,
                 ),
                 _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
                   value: _RemoteFriendNavigationAction.settings,
                   label: 'Settings',
-                  description: 'Change board and UI appearance for this match.',
+                  description: 'Appearance.',
                   icon: Icons.settings_outlined,
                   accent: scheme.secondary,
                 ),
                 _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
                   value: _RemoteFriendNavigationAction.playChess,
                   label: 'Play Chess',
-                  description:
-                      'Go back to the versus hub and pick another mode.',
+                  description: 'Pick another mode.',
                   icon: Icons.sports_esports_rounded,
                   accent: playAccent,
                 ),
                 _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
                   value: _RemoteFriendNavigationAction.analysis,
                   label: 'Analysis',
-                  description: 'Keep the board and continue in analysis mode.',
+                  description: 'Enter analysis mode.',
                   icon: Icons.insights_rounded,
                   accent: analysisAccent,
                 ),
                 _RemoteFriendActionSheetOption<_RemoteFriendNavigationAction>(
                   value: _RemoteFriendNavigationAction.store,
                   label: 'Store',
-                  description: 'Open the ChessIQ store.',
+                  description: 'Open store.',
                   icon: Icons.storefront_outlined,
                   accent: scheme.tertiary,
                 ),
@@ -6050,9 +6070,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           460.0,
         );
         final spacing = compactDialog ? 10.0 : 12.0;
-        final columnCount = dialogWidth >= 400 ? 2 : 1;
+        final columnCount = dialogWidth >= 420 ? 2 : 1;
         final tileWidth =
             (dialogWidth - 40 - spacing * (columnCount - 1)) / columnCount;
+        final panelColor = Color.alphaBlend(
+          dialogScheme.surfaceContainerHighest.withValues(
+            alpha: dialogIsLight ? 0.42 : 0.24,
+          ),
+          dialogScheme.surface,
+        );
 
         return Dialog(
           insetPadding: EdgeInsets.symmetric(
@@ -6063,16 +6089,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: dialogWidth,
-              maxHeight: min(dialogMedia.size.height * 0.84, 420.0),
+              maxHeight: min(dialogMedia.size.height * 0.84, 520.0),
             ),
             child: Container(
               decoration: BoxDecoration(
-                color: Color.alphaBlend(
-                  dialogScheme.surfaceContainerHighest.withValues(
-                    alpha: dialogIsLight ? 0.42 : 0.24,
-                  ),
-                  dialogScheme.surface,
-                ),
+                color: panelColor,
                 borderRadius: BorderRadius.circular(compactDialog ? 24 : 28),
                 border: Border.all(
                   color: dialogScheme.outline.withValues(
@@ -6091,10 +6112,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               ),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  compactDialog ? 16 : 20,
-                  compactDialog ? 16 : 20,
-                  compactDialog ? 16 : 20,
-                  compactDialog ? 14 : 18,
+                  compactDialog ? 16 : 18,
+                  compactDialog ? 16 : 18,
+                  compactDialog ? 16 : 18,
+                  compactDialog ? 14 : 16,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -6107,7 +6128,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                             title,
                             style: TextStyle(
                               color: dialogScheme.onSurface,
-                              fontSize: compactDialog ? 22 : 24,
+                              fontSize: compactDialog ? 20 : 22,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -6128,7 +6149,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ],
                     ),
                     if (subtitle.trim().isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Text(
                         subtitle,
                         style: TextStyle(
@@ -6138,7 +6159,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     Wrap(
                       spacing: spacing,
                       runSpacing: spacing,
@@ -6163,45 +6184,78 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                       decoration: BoxDecoration(
                                         color: Color.alphaBlend(
                                           itemAccent.withValues(
-                                            alpha: dialogIsLight ? 0.06 : 0.12,
+                                            alpha: dialogIsLight ? 0.05 : 0.10,
                                           ),
                                           dialogScheme.surface,
                                         ),
                                         borderRadius: BorderRadius.circular(20),
                                         border: Border.all(
                                           color: itemAccent.withValues(
-                                            alpha: dialogIsLight ? 0.18 : 0.28,
+                                            alpha: dialogIsLight ? 0.16 : 0.24,
                                           ),
                                         ),
                                       ),
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
-                                          horizontal: 10,
-                                        ),
-                                        child: Center(
-                                          child: Semantics(
-                                            label: option.label,
-                                            button: true,
-                                            child: Container(
-                                              width: 64,
-                                              height: 64,
+                                        padding: const EdgeInsets.all(12),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 38,
+                                              height: 38,
                                               decoration: BoxDecoration(
                                                 color: itemAccent.withValues(
                                                   alpha: dialogIsLight
-                                                      ? 0.14
-                                                      : 0.20,
+                                                      ? 0.12
+                                                      : 0.18,
                                                 ),
                                                 borderRadius:
-                                                    BorderRadius.circular(18),
+                                                    BorderRadius.circular(14),
                                               ),
                                               child: Icon(
                                                 option.icon,
                                                 color: itemAccent,
-                                                size: 28,
+                                                size: 20,
                                               ),
                                             ),
-                                          ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    option.label,
+                                                    style: TextStyle(
+                                                      color: dialogScheme
+                                                          .onSurface,
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    option.description,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: dialogScheme
+                                                          .onSurface
+                                                          .withValues(
+                                                            alpha: 0.66,
+                                                          ),
+                                                      fontSize: 11.2,
+                                                      height: 1.25,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
@@ -7117,7 +7171,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           remoteMode: true,
           inSetState: true,
         );
+        unawaited(_submitRemoteFriendPremoveIfReady());
       }
+    } else if (_remoteFriendPremove != null && _isHumanTurnInRemoteFriendGame) {
+      unawaited(_submitRemoteFriendPremoveIfReady());
     }
   }
 
@@ -7341,6 +7398,59 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       title: 'Private match update',
       message: message,
       icon: Icons.groups_rounded,
+    );
+  }
+
+  void _clearRemoteFriendPremove() {
+    if (_remoteFriendPremove == null) {
+      return;
+    }
+    setState(() {
+      _remoteFriendPremove = null;
+    });
+  }
+
+  void _setRemoteFriendPremove(String from, String to, {String? promotion}) {
+    final premove = _RemoteFriendPremove(
+      from: from,
+      to: to,
+      promotion: promotion,
+    );
+    setState(() {
+      _remoteFriendPremove = premove;
+    });
+    _showTransientGhostArrowInSetState(premove.uci);
+    _showRemoteFriendNotice('Queued premove: ${premove.uci.toUpperCase()}');
+  }
+
+  bool _isLegalRemoteFriendPremove(_RemoteFriendPremove premove) {
+    if (_remoteFriendSnapshot == null || !_isHumanTurnInRemoteFriendGame) {
+      return false;
+    }
+    final moves = _legalMovesFrom(premove.from);
+    return moves.contains(premove.to);
+  }
+
+  Future<void> _submitRemoteFriendPremoveIfReady() async {
+    final premove = _remoteFriendPremove;
+    if (premove == null || !_isHumanTurnInRemoteFriendGame) {
+      return;
+    }
+    if (!_isLegalRemoteFriendPremove(premove)) {
+      _showRemoteFriendNotice(
+        'Queued premove is no longer legal and has been cleared.',
+      );
+      _clearRemoteFriendPremove();
+      return;
+    }
+    _clearRemoteFriendPremove();
+    _showRemoteFriendNotice('Submitting queued premove');
+    await _submitRemoteFriendMove(
+      premove.from,
+      premove.to,
+      promotion: premove.promotion,
+      ignoreTurnGuard: true,
+      movedByWhite: _isWhiteTurn,
     );
   }
 
@@ -7775,6 +7885,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _remoteFriendOperationInProgress = false;
         });
       }
+    }
+  }
+
+  void _fireAndForgetCancelPendingInvite() {
+    final matchId = _remoteFriendSnapshot?.matchId;
+    if (matchId == null || matchId.isEmpty) {
+      return;
+    }
+
+    unawaited(_sendCancelPendingInvite(matchId));
+  }
+
+  Future<void> _sendCancelPendingInvite(String matchId) async {
+    try {
+      final result = await RemoteFriendService.instance.actOnMatch(
+        matchId: matchId,
+        action: RemoteFriendMatchAction.cancelPending,
+      );
+      if (!result.success) {
+        _addLog('Invite cancel failed: ${result.reason ?? 'unknown'}');
+      }
+    } catch (e) {
+      _addLog('Invite cancel error: $e');
     }
   }
 
@@ -12777,18 +12910,27 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return _isWhiteTurn ? piece.endsWith('_w') : piece.endsWith('_b');
   }
 
+  bool _isLocalRemoteFriendPiece(String? piece) {
+    if (piece == null) return false;
+    final seat = _remoteFriendPlayerSeat;
+    if (seat == null) return false;
+    return seat == RemoteFriendSeat.white
+        ? piece.endsWith('_w')
+        : piece.endsWith('_b');
+  }
+
   bool _canHumanInteractWithBoardPiece(String? piece) {
     if (piece == null) return false;
     if (_isAnalysisEditModeActive && !_isOpeningSelectionMode) {
       return true;
     }
-    if (!_isCurrentTurnPiece(piece)) {
+    if (!_isCurrentTurnPiece(piece) &&
+        !(_isRemoteFriendMatchMode &&
+            !_isHumanTurnInRemoteFriendGame &&
+            _isLocalRemoteFriendPiece(piece))) {
       return false;
     }
     if (_isBotMatchMode && !_isHumanTurnInBotGame) {
-      return false;
-    }
-    if (_isRemoteFriendMatchMode && !_isHumanTurnInRemoteFriendGame) {
       return false;
     }
     return true;
@@ -14349,7 +14491,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     if (_isRemoteFriendMatchMode && !_isAnalysisEditModeActive) {
+      if (!_isHumanTurnInRemoteFriendGame) {
+        _setRemoteFriendPremove(from, to, promotion: promotion);
+        return;
+      }
       final moverIsWhite = _isWhiteTurn;
+      _remoteFriendPremove = null;
       _onMove(from, to, promotion: promotion);
       await _submitRemoteFriendMove(
         from,
@@ -15049,7 +15196,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   Set<String> _legalMovesFrom(String from) {
     final piece = boardState[from];
-    if (piece == null || !_isCurrentTurnPiece(piece)) {
+    if (piece == null) {
+      return <String>{};
+    }
+    if (!_isCurrentTurnPiece(piece) &&
+        !(_isRemoteFriendMatchMode &&
+            !_isHumanTurnInRemoteFriendGame &&
+            _isLocalRemoteFriendPiece(piece))) {
       return <String>{};
     }
 
@@ -25991,11 +26144,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             icon: Icons.close_rounded,
             onPressed: _remoteFriendOperationInProgress
                 ? null
-                : () => unawaited(
-                    _runRemoteFriendAction(
-                      RemoteFriendMatchAction.cancelPending,
-                    ),
-                  ),
+                : () {
+                    _fireAndForgetCancelPendingInvite();
+                    _openVsModeFromMenu();
+                  },
             accent: remoteDangerAccent,
             primary: true,
           ),
