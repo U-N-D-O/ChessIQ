@@ -157,7 +157,25 @@ AvatarCatalogEntry _entry({
 
 String _displayNameFromFileName(String fileName) {
   final withoutExtension = fileName.replaceFirst(RegExp(r'\.[^.]+$'), '');
-  return withoutExtension.replaceAll('_', ' ');
+  final withSpaces = withoutExtension.replaceAll('_', ' ');
+
+  final buffer = StringBuffer();
+  for (var i = 0; i < withSpaces.length; i++) {
+    final char = withSpaces[i];
+    if (i > 0 && _isUpperCase(char)) {
+      final previous = withSpaces[i - 1];
+      if (previous != ' ' && previous != '-' && previous != '_') {
+        buffer.write(' ');
+      }
+    }
+    buffer.write(char);
+  }
+
+  return buffer.toString().replaceAll('_', ' ').trim();
+}
+
+bool _isUpperCase(String char) {
+  return char.toUpperCase() == char && char.toLowerCase() != char;
 }
 
 String _slugify(String value) {
@@ -174,88 +192,88 @@ String _normalizeAvatarKey(String value) {
 }
 
 const List<String> _normalFileNames = <String>[
-  'Celician Mara.png',
-  'General Valerius.png',
-  'General Valerius_2.png',
-  'General Valerius_3.png',
-  'Goldon Pauus.png',
-  'Grae Maha.png',
-  'Pilman Banin.png',
-  'Powera Altaita.png',
-  'Revelator Isolde.png',
-  'Revelator Isolde_2.png',
-  'Sacreian Bride.png',
-  'Sacrolan Gride.png',
-  'Tactician Mara.png',
-  'Tactician Mara_2.png',
-  'Tactician Mara_3.png',
-  'Tactician Raya.png',
-  'Turnian Helly.png',
-  'Varliord Kael.png',
-  'Wanian Balm.png',
-  'Wanian Balon.png',
-  'Warlord Kael.png',
-  'Warlord Kael_2.png',
-  'Warlord Kael_3.png',
-  'World Jass.png',
+  'CelicianMara.png',
+  'GeneralValerius.png',
+  'GeneralValerius_2.png',
+  'GeneralValerius_3.png',
+  'GoldonPauus.png',
+  'GraeMaha.png',
+  'PilmanBanin.png',
+  'PoweraAltaita.png',
+  'RevelatorIsolde.png',
+  'RevelatorIsolde_2.png',
+  'SacreianBride.png',
+  'SacrolanGride.png',
+  'TacticianMara.png',
+  'TacticianMara_2.png',
+  'TacticianMara_3.png',
+  'TacticianRaya.png',
+  'TurnianHelly.png',
+  'VarliordKael.png',
+  'WanianBalm.png',
+  'WanianBalon.png',
+  'WarlordKael.png',
+  'WarlordKael_2.png',
+  'WarlordKael_3.png',
+  'WorldJass.png',
 ];
 
 const List<String> _rareFileNames = <String>[
-  'Agent Nova.png',
-  'Alchemist Gideon.png',
-  'Beast Tamer Luna.png',
-  'Chieftain Kor.png',
-  'Chronomancer Eldritch.png',
-  'Commander Thorne.png',
-  'Engineer Fizzle.png',
-  'General Valerius.png',
-  'High Priestess Kaela.png',
-  'Mage Elara.png',
-  'Navigator Lyra.png',
-  'Oracle Sirene.png',
-  'Revelator Isolde.png',
-  'Revelator Isolde_2.png',
-  'Scout Jax.png',
-  'Sentinel Aria.png',
-  'Shaman Orok.png',
-  'Siege Engineer Thorin.png',
-  'Spymaster Val.png',
-  'Strategist Grok.png',
-  'Tactician Mara.png',
-  'War Chief Rok.png',
-  'Warlord Kael.png',
-  'Warlord Kael_2.png',
-  'Warlord Kaelen.png',
+  'AgentNova.png',
+  'AlchemistGideon.png',
+  'BeastTamerLuna.png',
+  'ChieftainKor.png',
+  'ChronomancerEldritch.png',
+  'CommanderThorne.png',
+  'EngineerFizzle.png',
+  'GeneralValerius.png',
+  'HighPriestessKaela.png',
+  'MageElara.png',
+  'NavigatorLyra.png',
+  'OracleSirene.png',
+  'RevelatorIsolde.png',
+  'RevelatorIsolde_2.png',
+  'ScoutJax.png',
+  'SentinelAria.png',
+  'ShamanOrok.png',
+  'SiegeEngineerThorin.png',
+  'SpymasterVal.png',
+  'StrategistGrok.png',
+  'TacticianMara.png',
+  'WarChiefRok.png',
+  'WarlordKael.png',
+  'WarlordKaelen.png',
+  'WarlordKael_2.png',
 ];
 
 const List<String> _epicFileNames = <String>[
-  'Algo-Strategist Ben.png',
-  'Chess Grandmaster Elias.png',
-  'Cold War Strategist Leon.png',
-  'Cyber Commander Ren.png',
-  'General Al.png',
-  'High Score Dave.png',
-  'Market Sage Kate.png',
-  'Modeler Pete.png',
-  'Private Security Sarah.png',
-  'Root Commander Max.png',
-  'The Pro Kai.png',
-  'Urban Planner Chloe.png',
+  'Algo-StrategistBen.png',
+  'ChessGrandmasterElias.png',
+  'ColdWarStrategistLeon.png',
+  'CyberCommanderRen.png',
+  'GeneralAl.png',
+  'HighScoreDave.png',
+  'MarketSageKate.png',
+  'ModelerPete.png',
+  'PrivateSecuritySarah.png',
+  'RootCommanderMax.png',
+  'TheProKai.png',
+  'UrbanPlannerChloe.png',
 ];
 
 const List<String> _legendaryFileNames = <String>[
-  'Agent Nova.png',
-  'Commander Thorne.png',
-  'Engineer Fizzle.png',
-  'General Valerius.png',
-  'High Priestess Kaela.png',
-  'Mage Elara.png',
-  'Scout Jax.png',
-  'Sentinel Aria.png',
-  'Strategist Grok.png',
-  'Tactician Mara.png',
-  'War Chief Rok.png',
-  'Warlord Kaelen.png',
+  'AgentNova.png',
+  'CommanderThorne.png',
+  'EngineerFizzle.png',
+  'GeneralValerius.png',
+  'HighPriestessKaela.png',
+  'MageElara.png',
+  'ScoutJax.png',
+  'SentinelAria.png',
+  'StrategistGrok.png',
+  'TacticianMara.png',
+  'WarChiefRok.png',
+  'WarlordKaelen.png',
 ];
 
-const List<String> _promoFileNames = <String>['Demon Hunter.png'];
+const List<String> _promoFileNames = <String>['DemonHunter.png'];
