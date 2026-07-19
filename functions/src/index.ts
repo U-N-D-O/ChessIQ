@@ -4381,6 +4381,7 @@ async function refreshFriendMatchStateImpl(
 ) {
     const uid = requireAuthUid(context);
     const matchId = readFriendMatchId(data?.matchId);
+    const avatarId = readFriendAvatarId(data?.avatarId);
     const matchRef = db.ref(`friend_matches/${matchId}`);
     const preflightMatchValue = await readFriendMatchTransactionSeed(matchId);
     let responseMatch: FriendMatchRecord | null = null;
@@ -4405,10 +4406,29 @@ async function refreshFriendMatchStateImpl(
             );
         }
 
-        const synchronizedMatch = synchronizeFriendMatchForNow(
+        const nowMs = Date.now();
+        let synchronizedMatch = synchronizeFriendMatchForNow(
             existingMatch,
-            Date.now(),
+            nowMs,
         );
+        const playerSeat = friendMatchParticipantSeat(synchronizedMatch, uid);
+        if (avatarId != null && playerSeat != null) {
+            const currentAvatarId = playerSeat === "white"
+                ? synchronizedMatch.whiteAvatarId
+                : synchronizedMatch.blackAvatarId;
+            if (currentAvatarId !== avatarId) {
+                synchronizedMatch = {
+                    ...synchronizedMatch,
+                    whiteAvatarId: playerSeat === "white"
+                        ? avatarId
+                        : synchronizedMatch.whiteAvatarId,
+                    blackAvatarId: playerSeat === "black"
+                        ? avatarId
+                        : synchronizedMatch.blackAvatarId,
+                    updatedAtMs: nowMs,
+                };
+            }
+        }
         responseMatch = synchronizedMatch;
         return friendMatchChanged(existingMatch, synchronizedMatch)
             ? synchronizedMatch

@@ -7477,6 +7477,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Future<String?> _selectedRemoteFriendAvatarId() async {
+    if (!mounted) {
+      return null;
+    }
+    final avatarInventory = context.read<AvatarInventoryProvider>();
+    await avatarInventory.load();
+    if (!mounted) {
+      return null;
+    }
+    return avatarInventory.selectedAvatar?.id;
+  }
+
+  bool _remoteFriendSnapshotNeedsLocalAvatarRefresh(
+    RemoteFriendMatchSnapshot snapshot,
+    String? avatarId,
+  ) {
+    final normalizedAvatarId = avatarId?.trim() ?? '';
+    if (normalizedAvatarId.isEmpty) {
+      return false;
+    }
+    final playerSeat = _remoteFriendPlayerSeatForSnapshot(snapshot);
+    if (playerSeat == null) {
+      return false;
+    }
+    final currentSeatAvatarId = playerSeat == RemoteFriendSeat.white
+        ? snapshot.whiteAvatarId
+        : snapshot.blackAvatarId;
+    return currentSeatAvatarId != normalizedAvatarId;
+  }
+
   Future<void> _createRemoteFriendInvite() async {
     if (_remoteFriendOperationInProgress) {
       return;
@@ -7485,10 +7515,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _remoteFriendOperationInProgress = true;
     });
     try {
-      final avatarId = context
-          .read<AvatarInventoryProvider>()
-          .selectedAvatar
-          ?.id;
+      final avatarId = await _selectedRemoteFriendAvatarId();
+      if (!mounted) {
+        return;
+      }
       await _ensureRemoteFriendLocalUid();
       final result = await RemoteFriendService.instance.createInvite(
         timeControl: _selectedRemoteFriendTimeControl,
@@ -7561,10 +7591,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _remoteFriendOperationInProgress = true;
     });
     try {
-      final avatarId = context
-          .read<AvatarInventoryProvider>()
-          .selectedAvatar
-          ?.id;
+      final avatarId = await _selectedRemoteFriendAvatarId();
+      if (!mounted) {
+        return;
+      }
       await _ensureRemoteFriendLocalUid();
       final result = await RemoteFriendService.instance.joinInvite(
         normalized,
@@ -7749,8 +7779,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _remoteFriendOperationInProgress = true;
     });
     try {
+      final avatarId = await _selectedRemoteFriendAvatarId();
+      if (!mounted) {
+        return;
+      }
       await _ensureRemoteFriendLocalUid();
-      final result = await RemoteFriendService.instance.refreshMatch(matchId);
+      final result = await RemoteFriendService.instance.refreshMatch(
+        matchId,
+        avatarId: avatarId,
+      );
       if (!mounted) {
         return;
       }
@@ -7788,6 +7825,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     _remoteFriendPollInFlight = true;
     try {
+      final avatarId = await _selectedRemoteFriendAvatarId();
+      if (!mounted) {
+        return;
+      }
       final previousOutcome = _remoteFriendSnapshot?.outcome?.code;
       final fetchedSnapshot = await RemoteFriendService.instance.fetchMatch(
         matchId,
@@ -7797,8 +7838,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
       var nextInvite = _remoteFriendInviteFromSnapshot(fetchedSnapshot);
       var nextSnapshot = fetchedSnapshot;
-      if (_remoteFriendSnapshotNeedsAuthoritativeRefresh(fetchedSnapshot)) {
-        final result = await RemoteFriendService.instance.refreshMatch(matchId);
+      if (_remoteFriendSnapshotNeedsAuthoritativeRefresh(fetchedSnapshot) ||
+          _remoteFriendSnapshotNeedsLocalAvatarRefresh(
+            fetchedSnapshot,
+            avatarId,
+          )) {
+        final result = await RemoteFriendService.instance.refreshMatch(
+          matchId,
+          avatarId: avatarId,
+        );
         if (!mounted) {
           return;
         }

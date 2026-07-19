@@ -132,10 +132,18 @@ class RemoteFriendService {
     return RemoteFriendMatchSnapshot.fromMap(map);
   }
 
-  Future<RemoteFriendMutationResult> refreshMatch(String matchId) async {
-    final result = await _callFunction(_refreshMatchFunction, <String, dynamic>{
+  Future<RemoteFriendMutationResult> refreshMatch(
+    String matchId, {
+    String? avatarId,
+  }) async {
+    final data = <String, dynamic>{
       'matchId': matchId.trim(),
-    });
+    };
+    final normalizedAvatarId = avatarId?.trim() ?? '';
+    if (normalizedAvatarId.isNotEmpty) {
+      data['avatarId'] = normalizedAvatarId;
+    }
+    final result = await _callFunction(_refreshMatchFunction, data);
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 
