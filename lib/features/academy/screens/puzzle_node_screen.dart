@@ -1929,7 +1929,7 @@ class _PuzzleNodeScreenState extends State<PuzzleNodeScreen>
         ? (compactLandscape ? 'Exam' : 'Bracket ${widget.node.title} Exam')
         : _isDailySequence
         ? (compactLandscape
-              ? '${_compactDailyTitle()} • ${widget.node.title}'
+              ? _compactDailyTitle()
               : '${widget.sequenceTitle ?? 'Daily Challenge'} • ${widget.node.title}')
         : compactLandscape
         ? widget.node.title

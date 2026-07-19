@@ -3,6 +3,7 @@ import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/models/puzzle_progress_model.dart';
 import 'package:chessiq/features/academy/providers/puzzle_academy_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_map_screen.dart';
+import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -245,8 +246,15 @@ Future<void> _pumpAcademyProfileDialog(
   addTearDown(tester.view.resetDevicePixelRatio);
 
   await tester.pumpWidget(
-    ChangeNotifierProvider<AppThemeProvider>(
-      create: (_) => AppThemeProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppThemeProvider>(
+          create: (_) => AppThemeProvider(),
+        ),
+        ChangeNotifierProvider<AvatarInventoryProvider>(
+          create: (_) => AvatarInventoryProvider(),
+        ),
+      ],
       child: MaterialApp(
         home: MediaQuery(
           data: MediaQueryData(size: size, viewInsets: viewInsets),

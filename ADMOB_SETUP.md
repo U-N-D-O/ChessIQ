@@ -110,6 +110,23 @@ Placement-specific rewarded defines:
 - `ADMOB_ANDROID_REWARDED_STORE_AD_UNIT_ID`
 - `ADMOB_ANDROID_REWARDED_ACADEMY_AD_UNIT_ID`
 
+Optional rewarded-interstitial defines:
+
+- `ADMOB_IOS_REWARDED_INTERSTITIAL_AD_UNIT_ID`
+- `ADMOB_IOS_REWARDED_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID`
+- `ADMOB_IOS_REWARDED_INTERSTITIAL_ACADEMY_EXAM_BONUS_AD_UNIT_ID`
+- `ADMOB_IOS_REWARDED_INTERSTITIAL_DAILY_CHALLENGE_AD_UNIT_ID`
+- `ADMOB_ANDROID_REWARDED_INTERSTITIAL_AD_UNIT_ID`
+- `ADMOB_ANDROID_REWARDED_INTERSTITIAL_QUIZ_MILESTONE_AD_UNIT_ID`
+- `ADMOB_ANDROID_REWARDED_INTERSTITIAL_ACADEMY_EXAM_BONUS_AD_UNIT_ID`
+- `ADMOB_ANDROID_REWARDED_INTERSTITIAL_DAILY_CHALLENGE_AD_UNIT_ID`
+
+Rewarded interstitials are optional for launch. If those AdMob units are not
+created yet, keep these keys present in `secrets.json` with empty string values.
+That intentionally disables rewarded interstitial loading in release builds and
+lets the app use its standard rewarded or interstitial fallback paths instead of
+falling back to Google's sample rewarded-interstitial IDs.
+
 ## Placement To Define Mapping
 
 Create the AdMob unit, then place its ID into the matching define.

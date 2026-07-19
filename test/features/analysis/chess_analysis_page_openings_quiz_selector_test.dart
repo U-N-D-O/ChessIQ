@@ -579,7 +579,10 @@ void main() {
       );
       await tester.pump();
       expect(
-        find.descendant(of: startButton, matching: find.text('START QUIZ')),
+        find.descendant(
+          of: startButton,
+          matching: find.text('START NAME QUIZ'),
+        ),
         findsOneWidget,
       );
 
@@ -843,7 +846,10 @@ void main() {
       );
       expect(startButton, findsOneWidget);
       expect(
-        find.descendant(of: startButton, matching: find.text('START QUIZ')),
+        find.descendant(
+          of: startButton,
+          matching: find.text('START NAME QUIZ'),
+        ),
         findsOneWidget,
       );
 

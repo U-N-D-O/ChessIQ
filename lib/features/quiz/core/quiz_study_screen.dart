@@ -591,6 +591,7 @@ Widget _buildQuizStudyCompactLandscapeRailTopBar(
   required EcoLine selectedLine,
   required _QuizAcademyPalette palette,
   required Color accent,
+  required String title,
 }) {
   final styleButton = _buildQuizStudyTopIconButton(
     state,
@@ -628,19 +629,29 @@ Widget _buildQuizStudyCompactLandscapeRailTopBar(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
     child: Row(
       children: <Widget>[
+        _buildQuizStudyTopIconButton(
+          state,
+          palette: palette,
+          icon: Icons.arrow_back_rounded,
+          accent: accent,
+          tooltip: 'Back to study library',
+          onTap: state._closeQuizStudyDetail,
+        ),
+        const SizedBox(width: 8),
         Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: state._academyHudButton(
-                palette: palette,
-                icon: Icons.arrow_back_rounded,
-                label: 'BACK',
-                accent: accent,
-                onTap: state._closeQuizStudyDetail,
-              ),
+          child: Text(
+            title,
+            key: const ValueKey<String>(
+              'quiz_study_compact_landscape_family_label',
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: state._academyHudStyle(
+              palette: palette,
+              size: 10.8,
+              color: palette.textMuted,
+              weight: FontWeight.w800,
+              letterSpacing: 0.35,
             ),
           ),
         ),
@@ -1828,6 +1839,9 @@ Widget _buildQuizStudyDetailHeaderPanel(
     palette: palette,
     accent: accent,
     fillColor: palette.panelAlt,
+    padding: compactLandscape
+        ? const EdgeInsets.all(12)
+        : const EdgeInsets.all(16),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -1841,11 +1855,11 @@ Widget _buildQuizStudyDetailHeaderPanel(
                   children: <Widget>[
                     Text(
                       compactLandscapeTitle ?? variationLabel,
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: state._academyDisplayStyle(
                         palette: palette,
-                        size: 16.6,
+                        size: 15.4,
                         color: palette.text,
                         weight: FontWeight.w700,
                         letterSpacing: 0.5,
@@ -1853,14 +1867,14 @@ Widget _buildQuizStudyDetailHeaderPanel(
                     ),
                     if ((compactLandscapeSubtitle ?? '')
                         .isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         compactLandscapeSubtitle!,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: state._academyHudStyle(
                           palette: palette,
-                          size: 11.2,
+                          size: 10.8,
                           color: palette.textMuted,
                           weight: FontWeight.w700,
                           letterSpacing: 0.28,
@@ -2042,9 +2056,9 @@ Widget _buildQuizStudyDetailScreen(
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final panelGap = max(8.0, layout.sectionGap - 4);
-        const compactBoardHorizontalPadding = 20.0;
-        const compactBoardVerticalPadding = 22.0;
+        final panelGap = max(7.0, layout.sectionGap - 5);
+        const compactBoardHorizontalPadding = 26.0;
+        const compactBoardVerticalPadding = 28.0;
         final compactRailWidth = min(
           max(280.0, constraints.maxWidth * 0.34),
           332.0,
@@ -2097,6 +2111,7 @@ Widget _buildQuizStudyDetailScreen(
                     selectedLine: selectedLine,
                     palette: palette,
                     accent: accent,
+                    title: compactLandscapeTitle,
                   ),
                   SizedBox(height: panelGap),
                   Expanded(
@@ -2223,6 +2238,9 @@ Widget _buildQuizStudyFamilyNavigatorPanel(
     palette: palette,
     accent: accent,
     fillColor: palette.panelAlt,
+    padding: compactLandscape
+        ? const EdgeInsets.all(12)
+        : const EdgeInsets.all(16),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

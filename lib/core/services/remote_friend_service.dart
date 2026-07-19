@@ -246,10 +246,15 @@ class RemoteFriendService {
 
     final data = <String, dynamic>{'matchId': matchId.trim()};
     if (normalizedEmoji.isNotEmpty) {
+      data['kind'] = RemoteFriendReactionKind.emoji.wireName;
+      data['code'] = normalizedEmoji;
       data['emoji'] = normalizedEmoji;
     }
     if (normalizedPhraseId.isNotEmpty) {
+      data['kind'] = RemoteFriendReactionKind.phrase.wireName;
+      data['code'] = normalizedPhraseId;
       data['phraseId'] = normalizedPhraseId;
+      data['phrase'] = normalizedPhraseId;
     }
 
     final result = await _callFunction(_sendReactionFunction, data);

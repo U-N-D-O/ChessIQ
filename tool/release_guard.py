@@ -59,6 +59,8 @@ def _emit_github_env(config: dict) -> int:
     print(f"CHESSIQ_PRIVACY_NOTICE_URL={config['privacy_notice_url']}")
     print(f"CHESSIQ_ANDROID_APPLICATION_ID={config['android_application_id']}")
     print(f"CHESSIQ_IOS_BUNDLE_ID={config['ios_bundle_identifier']}")
+    print(f"CHESSIQ_ANDROID_ADMOB_APP_ID={config['android_admob_app_id']}")
+    print(f"CHESSIQ_IOS_ADMOB_APP_ID={config['ios_admob_app_id']}")
     return 0
 
 
@@ -67,6 +69,7 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
     privacy_url = config["privacy_notice_url"]
     android_application_id = config["android_application_id"]
     ios_bundle_identifier = config["ios_bundle_identifier"]
+    ios_admob_app_id = config["ios_admob_app_id"]
     stockfish = config["stockfish"]
 
     _expect(errors, CONFIG_PATH.exists(), "release_guard.json is missing")
@@ -168,6 +171,7 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         errors,
         "ios/Runner/Info.plist",
         "$(PRODUCT_BUNDLE_IDENTIFIER)",
+        ios_admob_app_id,
     )
     _check_contains(
         errors,
@@ -236,6 +240,8 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         "refs/tags/${{ inputs.release_tag }}",
         "ADMOB_SECRETS_JSON_BASE64",
         "--dart-define-from-file=secrets.json",
+        "required_ios_admob_secret_keys",
+        "ios_admob_app_id",
     )
     _check_contains(
         errors,
@@ -249,6 +255,8 @@ def _run_checks(config: dict, expected_tag: str | None) -> int:
         "flutter build appbundle --release",
         "ADMOB_SECRETS_JSON_BASE64",
         "--dart-define-from-file=secrets.json",
+        "required_android_admob_secret_keys",
+        "android_admob_app_id",
     )
 
     if expected_tag:

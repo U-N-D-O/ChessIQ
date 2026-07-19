@@ -7324,6 +7324,29 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               'There is no active draw offer for you to respond to anymore.',
           includeInternetHint: false,
         );
+      case 'cannot-offer-rematch':
+        return (
+          title: 'Rematch Unavailable',
+          message:
+              'A rematch can only be offered after this private match has finished.',
+          includeInternetHint: false,
+        );
+      case 'cannot-accept-rematch':
+      case 'cannot-decline-rematch':
+      case 'no-rematch-offer':
+        return (
+          title: 'Rematch Offer Missing',
+          message:
+              'There is no active rematch offer for you to respond to anymore.',
+          includeInternetHint: false,
+        );
+      case 'rematch-offer-pending':
+        return (
+          title: 'Rematch Already Offered',
+          message:
+              'A rematch offer is already waiting for the other player to respond.',
+          includeInternetHint: false,
+        );
       case 'expired':
       case 'cancelled':
       case 'completed':
@@ -7873,10 +7896,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       if (!mounted) {
         return;
       }
+      final details = _cleanRemoteFriendErrorMessage(e);
       await _showThemedErrorDialog(
         title: 'Action Failed',
-        message:
-            'Could not update that remote friend match. Check your connection and try again.',
+        message: details.isEmpty
+            ? 'Could not update that remote friend match. Check your connection and try again.'
+            : 'Could not update that remote friend match. $details',
         includeInternetHint: true,
       );
     } finally {
@@ -15260,7 +15285,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
   void _handleHoldTap(String square) {
     if (_isBotMatchMode && !_isHumanTurnInBotGame) return;
-    if (_isRemoteFriendMatchMode && !_isHumanTurnInRemoteFriendGame) return;
+    final canQueueRemotePremove =
+        _isRemoteFriendActiveMatch &&
+        _remoteFriendPlayerSeat != null &&
+        _gameOutcome == null &&
+        !_isRemoteFriendPieceSelectionOpen;
+    if (_isRemoteFriendMatchMode &&
+        !_isHumanTurnInRemoteFriendGame &&
+        !canQueueRemotePremove) {
+      return;
+    }
     if (_isAnalysisEditModeActive && !_isOpeningSelectionMode) {
       if (_editToolboxEraserSelected) {
         _eraseEditModePiece(square);

@@ -2396,10 +2396,28 @@ function readFriendReactionPhraseId(rawPhraseId: unknown): string {
 }
 
 function readFriendReactionInput(data: any): FriendMatchReactionInput {
-    const rawEmoji = typeof data?.emoji === "string" ? data.emoji.trim() : "";
-    const rawPhraseId = typeof data?.phraseId === "string"
+    const rawKind = typeof data?.kind === "string"
+        ? data.kind.trim().toLowerCase()
+        : "";
+    const rawCode = typeof data?.code === "string" ? data.code.trim() : "";
+    let rawEmoji = typeof data?.emoji === "string" ? data.emoji.trim() : "";
+    let rawPhraseId = typeof data?.phraseId === "string"
         ? data.phraseId.trim()
         : "";
+    if (!rawPhraseId && typeof data?.phrase === "string") {
+        rawPhraseId = data.phrase.trim();
+    }
+    if (!rawEmoji && !rawPhraseId && rawCode) {
+        if (rawKind === "phrase") {
+            rawPhraseId = rawCode;
+        } else if (rawKind === "emoji") {
+            rawEmoji = rawCode;
+        } else if (FRIEND_MATCH_SIGNAL_PHRASES.has(rawCode)) {
+            rawPhraseId = rawCode;
+        } else {
+            rawEmoji = rawCode;
+        }
+    }
     if ((rawEmoji && rawPhraseId) || (!rawEmoji && !rawPhraseId)) {
         throw new functions.https.HttpsError(
             "invalid-argument",

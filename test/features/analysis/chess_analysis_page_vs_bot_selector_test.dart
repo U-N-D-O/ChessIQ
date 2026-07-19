@@ -57,6 +57,21 @@ Future<void> _pumpVsBotSelector(
 
   await tester.tap(vsCpuMode);
   await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+
+  final openBotSelector = find.text('Open Bot Selector');
+  if (openBotSelector.evaluate().isNotEmpty) {
+    final openButton = find.widgetWithText(FilledButton, 'Open Bot Selector');
+    final tapTarget = openButton.evaluate().isNotEmpty
+        ? openButton
+        : openBotSelector.hitTestable();
+    expect(tapTarget, findsOneWidget);
+    await tester.ensureVisible(tapTarget);
+    await tester.pump();
+    await tester.tap(tapTarget);
+    await tester.pump();
+  }
+
   await tester.pump(const Duration(milliseconds: 900));
 }
 
@@ -124,17 +139,13 @@ void main() {
 
     await _pumpPlayChessMenu(tester, size: const Size(844, 390));
 
-    expect(find.text('LANDSCAPE SHOWCASE'), findsOneWidget);
-    expect(find.text('MATCH SETUP'), findsOneWidget);
+    expect(find.text('PLAY CHESS'), findsOneWidget);
+    expect(find.text('Choose Match Type'), findsOneWidget);
     expect(find.text('1 PLAYER VS CPU'), findsOneWidget);
     expect(find.text('1V1 SHARED SCREEN'), findsOneWidget);
+    expect(find.text('1V1 CROSS-PLAY'), findsOneWidget);
     expect(find.text('QUICK JOIN CODE'), findsOneWidget);
-    expect(
-      find.text(
-        'Select a match type to open its setup panel. Tap the same card again to close it.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Open Bot Selector'), findsNothing);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());

@@ -177,7 +177,22 @@ jobs:
           : "${ADMOB_SECRETS_JSON_BASE64:?Missing secret ADMOB_SECRETS_JSON_BASE64}"
 
           echo "$ADMOB_SECRETS_JSON_BASE64" | base64 --decode > secrets.json
-          python3 -c "import json; data=json.load(open('secrets.json', encoding='utf-8')); required=['ADMOB_IOS_APP_ID','ADMOB_IOS_INTERSTITIAL_BOARD_RESET_AD_UNIT_ID']; missing=[key for key in required if key not in data]; (_ for _ in ()).throw(SystemExit('Missing AdMob secrets keys: ' + ', '.join(missing))) if missing else None"
+          python3 - <<'PY'
+          import json
+
+          config = json.load(open('release_guard.json', encoding='utf-8'))
+          data = json.load(open('secrets.json', encoding='utf-8'))
+          required = config['required_ios_admob_secret_keys']
+          blank_allowed = set(config['blank_allowed_ios_admob_secret_keys'])
+          missing = [key for key in required if key not in data]
+          if missing:
+              raise SystemExit('Missing AdMob secrets keys: ' + ', '.join(missing))
+          blank = [key for key in required if key not in blank_allowed and not str(data.get(key, '')).strip()]
+          if blank:
+              raise SystemExit('Blank AdMob secrets keys: ' + ', '.join(blank))
+          if data.get('ADMOB_IOS_APP_ID') != config['ios_admob_app_id']:
+              raise SystemExit('ADMOB_IOS_APP_ID does not match release_guard.json')
+          PY
 
       - name: Build Stockfish objects (iOS device arm64)
         working-directory: Stockfish/src

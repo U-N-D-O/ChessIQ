@@ -280,6 +280,22 @@ String _studyBoardFlipTooltip(WidgetTester tester) {
       .message!;
 }
 
+Future<void> _tapStudyBoardFlipButton(WidgetTester tester) async {
+  final flipButton = find.byKey(
+    const ValueKey<String>('quiz_study_board_flip_button'),
+  );
+  expect(flipButton, findsOneWidget);
+  final inkWell = find.descendant(
+    of: flipButton,
+    matching: find.byType(InkWell),
+  );
+  expect(inkWell, findsOneWidget);
+  final button = tester.widget<InkWell>(inkWell);
+  expect(button.onTap, isNotNull);
+  button.onTap!();
+  await tester.pump();
+}
+
 Future<void> _tapStudyReplayControl(WidgetTester tester, String label) async {
   final replayControls = find.byKey(
     const ValueKey<String>('quiz_study_detail_replay_controls'),
@@ -289,11 +305,26 @@ Future<void> _tapStudyReplayControl(WidgetTester tester, String label) async {
     matching: find.text(label),
   );
   expect(buttonLabel, findsOneWidget);
-  await tester.ensureVisible(buttonLabel);
+  final button = find.ancestor(of: buttonLabel, matching: find.byType(InkWell));
+  expect(button, findsOneWidget);
+  await tester.ensureVisible(button);
   await tester.pump();
-  await tester.tap(buttonLabel);
+  final inkWell = tester.widget<InkWell>(button);
+  expect(inkWell.onTap, isNotNull);
+  inkWell.onTap!();
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 250));
+}
+
+Future<void> _tapStudyFollowUpToggle(WidgetTester tester) async {
+  final toggle = _studyFollowUpToggleInkWell();
+  expect(toggle, findsOneWidget);
+  final inkWell = tester.widget<InkWell>(toggle);
+  expect(inkWell.onTap, isNotNull);
+  inkWell.onTap!();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+  await tester.pump(const Duration(seconds: 5));
 }
 
 Future<void> _advanceStudyLineUntilFollowUpsUnlock(
@@ -433,8 +464,7 @@ void main() {
       expect(flipButton, findsOneWidget);
 
       final initialFlipTooltip = _studyBoardFlipTooltip(tester);
-      await tester.tap(flipButton);
-      await tester.pump();
+      await _tapStudyBoardFlipButton(tester);
 
       expect(_studyBoardFlipTooltip(tester), isNot(equals(initialFlipTooltip)));
     },
@@ -487,9 +517,7 @@ void main() {
       );
       expect(unlockedToggle.onTap, isNotNull);
 
-      await tester.tap(followUpToggle);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 150));
+      await _tapStudyFollowUpToggle(tester);
 
       expect(find.text('FOLLOW-UPS ON'), findsOneWidget);
       expect(find.text('SUGGESTIONS'), findsOneWidget);
@@ -658,9 +686,7 @@ void main() {
       );
       expect(followUpToggle, findsOneWidget);
 
-      await tester.tap(followUpToggle);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+      await _tapStudyFollowUpToggle(tester);
 
       tester.view.physicalSize = landscapeViewport;
       await tester.pump();
@@ -727,9 +753,7 @@ void main() {
     );
     expect(followUpToggle, findsOneWidget);
 
-    await tester.tap(followUpToggle);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 150));
+    await _tapStudyFollowUpToggle(tester);
 
     expect(
       find.byKey(const ValueKey<String>('quiz_study_follow_up_status_tags')),
