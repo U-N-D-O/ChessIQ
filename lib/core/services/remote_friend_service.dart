@@ -136,9 +136,7 @@ class RemoteFriendService {
     String matchId, {
     String? avatarId,
   }) async {
-    final data = <String, dynamic>{
-      'matchId': matchId.trim(),
-    };
+    final data = <String, dynamic>{'matchId': matchId.trim()};
     final normalizedAvatarId = avatarId?.trim() ?? '';
     if (normalizedAvatarId.isNotEmpty) {
       data['avatarId'] = normalizedAvatarId;
