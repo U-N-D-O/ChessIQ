@@ -86,10 +86,7 @@ class AvatarCatalog {
       <String, AvatarCatalogEntry>{for (final item in items) item.id: item};
 
   static final Map<String, AvatarCatalogEntry> _byNormalizedName =
-      <String, AvatarCatalogEntry>{
-        for (final item in items) _normalizeAvatarKey(item.name): item,
-        for (final item in items) _normalizeAvatarKey(item.id): item,
-      };
+      _buildNormalizedAliasMap(items);
 
   static final Set<String> ids = byId.keys.toSet();
 
@@ -121,16 +118,59 @@ class AvatarCatalog {
     return _byNormalizedName[_normalizeAvatarKey(trimmed)];
   }
 
+  static String? canonicalIdFor(String? id) => entryFor(id)?.id;
+
   static List<AvatarCatalogEntry> entriesForBucket(AvatarRarityBucket bucket) {
     return _itemsByBucket[bucket] ?? const <AvatarCatalogEntry>[];
   }
 
   static List<AvatarCatalogEntry> ownedEntriesFor(Iterable<String> ownedIds) {
-    final ownedSet = ownedIds.toSet();
+    final ownedSet = <String>{};
+    for (final ownedId in ownedIds) {
+      final canonicalId = canonicalIdFor(ownedId);
+      if (canonicalId != null) {
+        ownedSet.add(canonicalId);
+      }
+    }
     return items
         .where((item) => ownedSet.contains(item.id))
         .toList(growable: false);
   }
+}
+
+List<String> _avatarAliasKeys(AvatarCatalogEntry item) {
+  final relativeAssetPath = item.assetPath.replaceFirst('assets/avatars/', '');
+  final fileName = relativeAssetPath.split('/').last;
+  return <String>[
+    item.id,
+    item.name,
+    item.assetPath,
+    relativeAssetPath,
+    fileName,
+  ];
+}
+
+Map<String, AvatarCatalogEntry> _buildNormalizedAliasMap(
+  Iterable<AvatarCatalogEntry> items,
+) {
+  final aliases = <String, AvatarCatalogEntry>{};
+  final ambiguousAliases = <String>{};
+  for (final item in items) {
+    for (final alias in _avatarAliasKeys(item)) {
+      final key = _normalizeAvatarKey(alias);
+      if (key.isEmpty || ambiguousAliases.contains(key)) {
+        continue;
+      }
+      final existing = aliases[key];
+      if (existing == null || existing.id == item.id) {
+        aliases[key] = item;
+      } else {
+        aliases.remove(key);
+        ambiguousAliases.add(key);
+      }
+    }
+  }
+  return Map<String, AvatarCatalogEntry>.unmodifiable(aliases);
 }
 
 List<AvatarCatalogEntry> _entriesFor(

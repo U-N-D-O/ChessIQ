@@ -4,6 +4,8 @@ import 'package:chessiq/features/avatar/models/avatar_catalog.dart';
 import 'package:chessiq/features/avatar/models/avatar_reward_catalog.dart';
 import 'package:chessiq/features/avatar/providers/avatar_inventory_provider.dart';
 import 'package:chessiq/features/vs_bot/models/vs_bot_models.dart';
+import 'package:chessiq/core/providers/economy_provider.dart';
+import 'package:chessiq/core/services/local_integrity_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -104,6 +106,36 @@ void main() {
     expect(reloadedProvider.ownsAvatar(rareAvatar.id), isTrue);
     expect(reloadedProvider.selectedAvatar?.id, rareAvatar.id);
     expect(reloadedProvider.starterAvatar?.bucket, AvatarRarityBucket.normal);
+  });
+
+  test('load canonicalizes legacy avatar ids from saved inventory', () async {
+    final legacyAvatar = AvatarCatalog.entriesForBucket(
+      AvatarRarityBucket.normal,
+    ).first;
+    final signedPayload = LocalIntegrityService.wrapJson(<String, dynamic>{
+      'avatar_inventory_v1': <String, dynamic>{
+        'ownedAvatarIds': <String>[
+          legacyAvatar.assetPath,
+          'assets/avatars/1/AgentNova.png',
+        ],
+        'selectedAvatarId': legacyAvatar.assetPath,
+        'starterAvatarId': legacyAvatar.assetPath,
+      },
+    }, scope: 'economy_store');
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      EconomyProvider.storeStateKey: signedPayload,
+    });
+
+    final provider = AvatarInventoryProvider(random: Random(13));
+    await provider.load();
+
+    expect(provider.bootstrappedStarter, isFalse);
+    expect(provider.ownsAvatar(legacyAvatar.assetPath), isTrue);
+    expect(provider.ownsAvatar('assets/avatars/1/AgentNova.png'), isTrue);
+    expect(provider.selectedAvatar?.id, legacyAvatar.id);
+    expect(provider.starterAvatar?.id, legacyAvatar.id);
+    expect(provider.ownedAvatarIds, contains(legacyAvatar.id));
+    expect(provider.ownedAvatarIds, contains('rare-agent-nova'));
   });
 
   test('paid rolls never duplicate and never grant promo avatars', () async {

@@ -2093,6 +2093,8 @@ type FriendMatchRecord = {
     guestUid: string | null;
     whiteUid: string | null;
     blackUid: string | null;
+    whiteAvatarId: string | null;
+    blackAvatarId: string | null;
     fen: string;
     pgn: string;
     nextPly: number;
@@ -2219,6 +2221,29 @@ function readFriendSeatPreference(rawPreference: unknown): FriendSeatPreference 
         default:
             return "random";
     }
+}
+
+function readFriendAvatarId(rawAvatarId: unknown): string | null {
+    if (rawAvatarId == null) {
+        return null;
+    }
+    if (typeof rawAvatarId !== "string") {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "avatarId must be a string.",
+        );
+    }
+    const avatarId = rawAvatarId.trim();
+    if (!avatarId) {
+        return null;
+    }
+    if (avatarId.length > 128) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "avatarId is invalid.",
+        );
+    }
+    return avatarId;
 }
 
 function readFriendMatchAction(rawAction: unknown): FriendMatchAction {
@@ -2661,6 +2686,12 @@ function normalizeFriendMatchRecord(
         blackUid: payload.blackUid == null
             ? null
             : payload.blackUid.toString().trim() || null,
+        whiteAvatarId: payload.whiteAvatarId == null
+            ? null
+            : payload.whiteAvatarId.toString().trim() || null,
+        blackAvatarId: payload.blackAvatarId == null
+            ? null
+            : payload.blackAvatarId.toString().trim() || null,
         fen: (payload.fen ?? initialFen).toString().trim() || initialFen,
         pgn: (payload.pgn ?? "").toString(),
         nextPly: readFriendNonNegativeInt(payload.nextPly, "nextPly", 4096),
@@ -2897,6 +2928,7 @@ function createFriendMatchRecord(params: {
     inviteCode: string;
     hostUid: string;
     hostSeat: FriendSeat;
+    hostAvatarId: string | null;
     hostPieceThemeIndex: number;
     timeControl: FriendTimeControl;
     nowMs: number;
@@ -2911,6 +2943,8 @@ function createFriendMatchRecord(params: {
         guestUid: null,
         whiteUid: params.hostSeat === "white" ? params.hostUid : null,
         blackUid: params.hostSeat === "black" ? params.hostUid : null,
+        whiteAvatarId: params.hostSeat === "white" ? params.hostAvatarId : null,
+        blackAvatarId: params.hostSeat === "black" ? params.hostAvatarId : null,
         fen: chess.fen(),
         pgn: "",
         nextPly: 0,
@@ -3070,6 +3104,8 @@ function resetFriendMatchForRematch(
         status: "active",
         whiteUid: match.blackUid,
         blackUid: match.whiteUid,
+        whiteAvatarId: match.blackAvatarId,
+        blackAvatarId: match.whiteAvatarId,
         fen: chess.fen(),
         pgn: "",
         nextPly: 0,
@@ -3443,6 +3479,7 @@ async function createFriendMatchInviteImpl(
         data?.defaultPieceThemeIndex,
         "defaultPieceThemeIndex",
     );
+    const hostAvatarId = readFriendAvatarId(data?.hostAvatarId);
     const hostSeat = seatPreference === "random"
         ? randomFriendSeat()
         : seatPreference;
@@ -3462,6 +3499,7 @@ async function createFriendMatchInviteImpl(
         inviteCode,
         hostUid: uid,
         hostSeat,
+        hostAvatarId,
         hostPieceThemeIndex: defaultPieceThemeIndex,
         timeControl,
         nowMs,
@@ -3490,6 +3528,7 @@ async function joinFriendMatchInviteImpl(
         data?.defaultPieceThemeIndex,
         "defaultPieceThemeIndex",
     );
+    const guestAvatarId = readFriendAvatarId(data?.guestAvatarId);
     const inviteRecord = await findFriendInviteRecord(inviteCode);
     if (inviteRecord == null || !inviteRecord.matchId) {
         throw new functions.https.HttpsError(
@@ -3553,6 +3592,12 @@ async function joinFriendMatchInviteImpl(
             guestUid: uid,
             whiteUid: guestSeat === "white" ? uid : synchronizedMatch.whiteUid,
             blackUid: guestSeat === "black" ? uid : synchronizedMatch.blackUid,
+            whiteAvatarId: guestSeat === "white"
+                ? guestAvatarId
+                : synchronizedMatch.whiteAvatarId,
+            blackAvatarId: guestSeat === "black"
+                ? guestAvatarId
+                : synchronizedMatch.blackAvatarId,
             whitePieceThemeIndex: guestSeat === "white"
                 ? defaultPieceThemeIndex
                 : synchronizedMatch.whitePieceThemeIndex,

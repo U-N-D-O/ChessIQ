@@ -116,7 +116,10 @@ class AvatarInventoryProvider extends ChangeNotifier {
 
   int get ownedCount => _ownedAvatarIds.length;
 
-  bool ownsAvatar(String avatarId) => _ownedAvatarIds.contains(avatarId);
+  bool ownsAvatar(String avatarId) {
+    final canonicalId = AvatarCatalog.canonicalIdFor(avatarId);
+    return canonicalId != null && _ownedAvatarIds.contains(canonicalId);
+  }
 
   bool hasClaimedReward(String rewardKey) {
     return _claimedRewardKeys.contains(rewardKey.trim());
@@ -134,10 +137,7 @@ class AvatarInventoryProvider extends ChangeNotifier {
         ? rawInventory.cast<String, dynamic>()
         : <String, dynamic>{};
 
-    _ownedAvatarIds = _readStringSet(
-      inventory[_ownedAvatarIdsKey],
-      validValues: AvatarCatalog.ids,
-    );
+    _ownedAvatarIds = _readAvatarIdSet(inventory[_ownedAvatarIdsKey]);
     _claimedRewardKeys = _readStringSet(inventory[_claimedRewardKeysKey]);
     _starterAvatarId = _normalizeStarterId(inventory[_starterAvatarIdKey]);
     _paidRollPurchaseCount = _readNonNegativeInt(
@@ -182,13 +182,14 @@ class AvatarInventoryProvider extends ChangeNotifier {
     if (!_loaded) {
       await load();
     }
-    if (!_ownedAvatarIds.contains(avatarId)) {
+    final canonicalId = AvatarCatalog.canonicalIdFor(avatarId);
+    if (canonicalId == null || !_ownedAvatarIds.contains(canonicalId)) {
       return false;
     }
-    if (_selectedAvatarId == avatarId) {
+    if (_selectedAvatarId == canonicalId) {
       return true;
     }
-    _selectedAvatarId = avatarId;
+    _selectedAvatarId = canonicalId;
     await _persistAvatarInventory();
     notifyListeners();
     return true;
@@ -341,6 +342,17 @@ class AvatarInventoryProvider extends ChangeNotifier {
     return values.where(validValues.contains).toSet();
   }
 
+  Set<String> _readAvatarIdSet(Object? rawValue) {
+    final canonicalIds = <String>{};
+    for (final value in _readStringSet(rawValue)) {
+      final canonicalId = AvatarCatalog.canonicalIdFor(value);
+      if (canonicalId != null) {
+        canonicalIds.add(canonicalId);
+      }
+    }
+    return canonicalIds;
+  }
+
   int _readNonNegativeInt(Object? rawValue) {
     if (rawValue is int) {
       return rawValue < 0 ? 0 : rawValue;
@@ -373,10 +385,11 @@ class AvatarInventoryProvider extends ChangeNotifier {
 
   String? _normalizeOwnedAvatarId(Object? rawValue) {
     final value = rawValue?.toString().trim() ?? '';
-    if (value.isEmpty || !_ownedAvatarIds.contains(value)) {
+    final canonicalId = AvatarCatalog.canonicalIdFor(value);
+    if (canonicalId == null || !_ownedAvatarIds.contains(canonicalId)) {
       return null;
     }
-    return value;
+    return canonicalId;
   }
 
   AvatarCatalogEntry? _pickRandomAvatar(List<AvatarCatalogEntry> pool) {
