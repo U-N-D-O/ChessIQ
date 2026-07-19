@@ -30363,12 +30363,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   width: isSelected ? 2.4 : 1.2,
                                 ),
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: Image.asset(
-                                  avatar.assetPath,
-                                  fit: BoxFit.cover,
-                                ),
+                              child: AvatarPortrait(
+                                avatar: avatar,
+                                size: 76,
+                                radius: 14,
+                                borderWidth: 0,
+                                backgroundColor: Colors.transparent,
+                                showShadow: false,
                               ),
                             ),
                           );

@@ -5570,14 +5570,13 @@ class _AcademyProfileDialogState extends State<AcademyProfileDialog> {
                                     avatarInventory.selectAvatar(avatar.id),
                                   );
                                 },
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Image.asset(
-                                    avatar.assetPath,
-                                    width: 58,
-                                    height: 58,
-                                    fit: BoxFit.cover,
-                                  ),
+                                child: AvatarPortrait(
+                                  avatar: avatar,
+                                  size: 58,
+                                  radius: 16,
+                                  borderWidth: 0,
+                                  backgroundColor: Colors.transparent,
+                                  showShadow: false,
                                 ),
                               );
                             },
