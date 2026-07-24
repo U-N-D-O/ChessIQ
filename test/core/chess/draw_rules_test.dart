@@ -223,4 +223,122 @@ void main() {
       );
     });
   });
+
+  group('isValidPawnSquare', () {
+    test('allows non-pawn pieces on any rank', () {
+      expect(isValidPawnSquare('q_w', 'a1'), isTrue);
+      expect(isValidPawnSquare('n_b', 'h8'), isTrue);
+      expect(isValidPawnSquare('k_w', 'e1'), isTrue);
+    });
+
+    test('allows white pawn on ranks 2 through 7', () {
+      for (int rank = 2; rank <= 7; rank++) {
+        expect(isValidPawnSquare('p_w', 'e$rank'), isTrue,
+            reason: 'white pawn on rank $rank should be valid');
+      }
+    });
+
+    test('allows black pawn on ranks 2 through 7', () {
+      for (int rank = 2; rank <= 7; rank++) {
+        expect(isValidPawnSquare('p_b', 'd$rank'), isTrue,
+            reason: 'black pawn on rank $rank should be valid');
+      }
+    });
+
+    test('rejects white pawn on rank 1', () {
+      expect(isValidPawnSquare('p_w', 'e1'), isFalse);
+      expect(isValidPawnSquare('p_w', 'a1'), isFalse);
+    });
+
+    test('rejects white pawn on rank 8', () {
+      expect(isValidPawnSquare('p_w', 'e8'), isFalse);
+      expect(isValidPawnSquare('p_w', 'h8'), isFalse);
+    });
+
+    test('rejects black pawn on rank 1', () {
+      expect(isValidPawnSquare('p_b', 'a1'), isFalse);
+      expect(isValidPawnSquare('p_b', 'f1'), isFalse);
+    });
+
+    test('rejects black pawn on rank 8', () {
+      expect(isValidPawnSquare('p_b', 'a8'), isFalse);
+      expect(isValidPawnSquare('p_b', 'g8'), isFalse);
+    });
+  });
+
+  group('sanitizeBoardState', () {
+    test('removes white pawns on rank 1', () {
+      final board = <String, String>{
+        'e1': 'k_w',
+        'e8': 'k_b',
+        'f1': 'p_w',
+        'a2': 'p_w',
+      };
+      final sanitized = sanitizeBoardState(board);
+      expect(sanitized.containsKey('f1'), isFalse);
+      expect(sanitized['a2'], 'p_w');
+      expect(sanitized['e1'], 'k_w');
+      expect(sanitized['e8'], 'k_b');
+    });
+
+    test('removes white pawns on rank 8', () {
+      final board = <String, String>{
+        'e1': 'k_w',
+        'e8': 'k_b',
+        'c8': 'p_w',
+        'g7': 'p_w',
+      };
+      final sanitized = sanitizeBoardState(board);
+      expect(sanitized.containsKey('c8'), isFalse);
+      expect(sanitized['g7'], 'p_w');
+    });
+
+    test('removes black pawns on rank 1', () {
+      final board = <String, String>{
+        'e1': 'k_w',
+        'e8': 'k_b',
+        'b1': 'p_b',
+        'd7': 'p_b',
+      };
+      final sanitized = sanitizeBoardState(board);
+      expect(sanitized.containsKey('b1'), isFalse);
+      expect(sanitized['d7'], 'p_b');
+    });
+
+    test('removes black pawns on rank 8', () {
+      final board = <String, String>{
+        'e1': 'k_w',
+        'e8': 'k_b',
+        'a8': 'p_b',
+        'e7': 'p_b',
+      };
+      final sanitized = sanitizeBoardState(board);
+      expect(sanitized.containsKey('a8'), isFalse);
+      expect(sanitized['e7'], 'p_b');
+    });
+
+    test('preserves all valid pieces', () {
+      final board = <String, String>{
+        'e1': 'k_w',
+        'e8': 'k_b',
+        'a2': 'p_w',
+        'b7': 'p_b',
+        'h1': 't_w',
+        'a8': 't_b',
+        'c1': 'b_w',
+        'd4': 'q_w',
+      };
+      final sanitized = sanitizeBoardState(board);
+      expect(sanitized, equals(board));
+    });
+
+    test('returns empty map when all pieces are invalid', () {
+      final board = <String, String>{
+        'a1': 'p_w',
+        'h8': 'p_b',
+        'b1': 'p_b',
+      };
+      expect(sanitizeBoardState(board), isEmpty);
+    });
+  });
 }
