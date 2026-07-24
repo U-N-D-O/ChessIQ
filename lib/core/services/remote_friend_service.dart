@@ -345,9 +345,13 @@ class RemoteFriendService {
                     }
                   }
                 }
-              } catch (_) {
-                // Silently skip malformed SSE frames – the polling path
-                // provides the authoritative state.
+              } catch (parseError) {
+                // Skip malformed SSE frames – the polling path provides the
+                // authoritative state, so individual frame parse errors are
+                // non-fatal.  Forward to the stream so subscribers can log.
+                if (!controller.isClosed) {
+                  controller.addError(parseError);
+                }
               }
             } else if (eventType == 'cancel' ||
                 eventType == 'auth_revoked') {

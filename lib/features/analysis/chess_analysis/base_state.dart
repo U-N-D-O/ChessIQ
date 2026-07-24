@@ -6856,6 +6856,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 // SSE error is non-fatal – the poll timer continues as
                 // the authoritative sync mechanism.
               },
+              onDone: () {
+                // Stream ended (auth revoked, server cancel, or network drop).
+                // Clear the subscription so the next timer tick can reconnect.
+                _remoteFriendRtdbSubscription = null;
+              },
               cancelOnError: false,
             );
       }
