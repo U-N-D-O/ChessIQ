@@ -611,6 +611,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   late AnimationController _openingButtonFlashController;
   late AnimationController _storeCoinGainController;
   late AnimationController _turnNudgeController;
+  late AnimationController _remoteFriendMoveFlashController;
   final Stopwatch _spectralMotionClock = Stopwatch()..start();
   bool _openingButtonFlashRed = false;
   Timer? _openingModeFeedbackTimer;
@@ -925,6 +926,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _remoteFriendReactionInFlight = false;
   Timer? _remoteFriendPollTimer;
   Timer? _remoteFriendClockDisplayTimer;
+  StreamSubscription<RemoteFriendMatchSnapshot>? _remoteFriendRtdbSubscription;
+  String? _remoteFriendRtdbWatchMatchId;
   String? _remoteFriendLastError;
   String? _remoteFriendOutcomeReason;
   String? _pendingRemoteFriendInviteCode;
@@ -1310,6 +1313,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _openingButtonFlashController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
+    );
+    _remoteFriendMoveFlashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
     );
     _historyScrollController = ScrollController();
     _quizStudyLibraryScrollController = ScrollController();
@@ -6753,10 +6760,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _remoteFriendClockDisplayTimer?.cancel();
     _remoteFriendClockDisplayTimer = null;
     _remoteFriendPollInFlight = false;
+    // The SSE subscription is intentionally kept alive across timer restarts
+    // to avoid excessive reconnect overhead; it is torn down only when the
+    // match session itself ends (_resetRemoteFriendSessionState / dispose).
+  }
+
+  void _stopRemoteFriendRtdbStream() {
+    unawaited(_remoteFriendRtdbSubscription?.cancel());
+    _remoteFriendRtdbSubscription = null;
+    _remoteFriendRtdbWatchMatchId = null;
   }
 
   void _resetRemoteFriendSessionState({bool clearMemberships = false}) {
     _stopRemoteFriendSyncTimers();
+    _stopRemoteFriendRtdbStream();
     _remoteFriendInvite = null;
     _remoteFriendSnapshot = null;
     _remoteFriendOptimisticSnapshot = null;
@@ -6805,12 +6822,47 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     if (snapshot.status == RemoteFriendMatchStatus.pending ||
         snapshot.status == RemoteFriendMatchStatus.active) {
+      // Fallback periodic poll – kept as a safety net in case SSE drops.
       _remoteFriendPollTimer = Timer.periodic(
         _remoteFriendPollIntervalForSnapshot(snapshot),
         (_) => unawaited(_refreshRemoteFriendMatch(silent: true)),
       );
       if (immediateRefresh) {
         unawaited(_refreshRemoteFriendMatch(silent: true));
+      }
+
+      // RTDB SSE stream – provides near-zero-latency change notifications so
+      // that the poll above fires immediately when the server data changes
+      // rather than waiting for the next timer tick.  The subscription is
+      // kept alive across timer restarts; only cancel/recreate if the matchId
+      // changes.
+      final watchMatchId = snapshot.matchId;
+      if (watchMatchId.isNotEmpty &&
+          (_remoteFriendRtdbSubscription == null ||
+              _remoteFriendRtdbWatchMatchId != watchMatchId)) {
+        _stopRemoteFriendRtdbStream();
+        _remoteFriendRtdbWatchMatchId = watchMatchId;
+        _remoteFriendRtdbSubscription = RemoteFriendService.instance
+            .watchMatch(watchMatchId)
+            .listen(
+              (incomingSnapshot) {
+                if (!mounted || !_isRemoteFriendMatchMode) return;
+                // Trigger a lightweight authoritative refresh rather than
+                // applying the SSE snapshot directly; this ensures the full
+                // invite + server-reconciled fields are always used.
+                unawaited(_refreshRemoteFriendMatch(silent: true));
+              },
+              onError: (Object _) {
+                // SSE error is non-fatal – the poll timer continues as
+                // the authoritative sync mechanism.
+              },
+              onDone: () {
+                // Stream ended (auth revoked, server cancel, or network drop).
+                // Clear the subscription so the next timer tick can reconnect.
+                _remoteFriendRtdbSubscription = null;
+              },
+              cancelOnError: false,
+            );
       }
     }
   }
@@ -7057,6 +7109,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         }
 
         unawaited(_lightHaptic());
+        _showRemoteFriendNotice('Your opponent joined! The match is starting.');
         setState(() {
           _introCompleted = false;
           _buttonUnlocked = false;
@@ -7074,6 +7127,36 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             _buttonUnlocked = true;
           });
         });
+      });
+    }
+
+    // Detect when the opponent accepted our rematch offer – the match outcome
+    // transitions from non-null back to null on the same matchId.
+    final rematchJustAccepted =
+        previousSnapshot != null &&
+        previousSnapshot.matchId == snapshot.matchId &&
+        previousSnapshot.outcome != null &&
+        snapshot.outcome == null &&
+        snapshot.status == RemoteFriendMatchStatus.active;
+    // Capture this now because _gameResultDialogVisible is reset inside the
+    // board-rebuild block that follows.
+    final wasShowingResultDialog = _gameResultDialogVisible;
+    if (rematchJustAccepted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_isRemoteFriendMatchMode) return;
+        if (_remoteFriendSnapshot?.matchId != snapshot.matchId) return;
+        _showRemoteFriendNotice(
+          'Rematch accepted! The next game is starting.',
+        );
+        unawaited(_lightHaptic());
+        // Dismiss the result dialog if it was open so that the board
+        // seamlessly transitions into the new match without requiring the
+        // user to navigate manually.
+        if (wasShowingResultDialog) {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop('remote-rematch-started');
+          }
+        }
       });
     }
 
@@ -7165,6 +7248,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     if (remoteOpponentMoveArrived) {
       _showTransientGhostArrowInSetState(latestRemoteMoveUci);
+      // Flash the active player's clock and trigger haptic to provide a clear
+      // paired visual+haptic notification when the opponent completes a move.
+      _remoteFriendMoveFlashController.forward(from: 0);
       if (_isHumanTurnInRemoteFriendGame) {
         _triggerTurnTagNudge(
           botMode: false,
@@ -24473,10 +24559,50 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
     );
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        AnimatedContainer(
+    return AnimatedBuilder(
+      animation: _remoteFriendMoveFlashController,
+      builder: (context, child) {
+        final flashProgress = _remoteFriendMoveFlashController.value;
+        // Flash affects only the local player's clock (to signal it's their
+        // turn), fading from an accent glow at 0.0 → 1.0.
+        final flashAlpha =
+            isLocalSeat && isActive && flashProgress > 0
+            ? (1.0 - Curves.easeOut.transform(flashProgress)) * 0.48
+            : 0.0;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (flashAlpha > 0)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: accent.withValues(
+                          alpha: (flashAlpha + 0.52).clamp(0.0, 1.0),
+                        ),
+                        width: 2.4,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accent.withValues(alpha: flashAlpha),
+                          blurRadius: 22,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            child!,
+          ],
+        );
+      },
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           width: double.infinity,
@@ -24594,6 +24720,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
           ),
       ],
+    ), // inner Stack
     );
   }
 
@@ -34129,6 +34256,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _cancelIdleInterstitialTimer();
     _stopLocalFriendClock(clearDisplay: true);
     _stopRemoteFriendSyncTimers();
+    _stopRemoteFriendRtdbStream();
     unawaited(_remoteFriendInviteLinkSubscription?.cancel());
     _editModeHintTimer?.cancel();
     _moveQualityOverlayTimer?.cancel();
@@ -34157,6 +34285,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _openingModeFeedbackTimer?.cancel();
     _openingButtonFlashController.dispose();
     _storeCoinGainController.dispose();
+    _remoteFriendMoveFlashController.dispose();
     _botSetupPageController.dispose();
     _historyScrollController.dispose();
     _quizStudyLibraryScrollController.dispose();

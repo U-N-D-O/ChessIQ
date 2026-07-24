@@ -1607,6 +1607,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     switch (result) {
       case 'board':
       case null:
+      // The opponent accepted a rematch offer while the dialog was open.
+      // The board has already transitioned into the new match state via
+      // _applyRemoteFriendSnapshot; nothing further is needed here.
+      case 'remote-rematch-started':
         return;
       case 'vs-menu':
         _openVsModeFromMenu();
