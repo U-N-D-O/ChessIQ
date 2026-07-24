@@ -323,7 +323,7 @@ void main() {
         'e8': 'k_b',
         'a2': 'p_w',
         'b7': 'p_b',
-        'h1': 't_w',
+        'h1': 't_w', // 't' is the project notation for rook (tower)
         'a8': 't_b',
         'c1': 'b_w',
         'd4': 'q_w',
