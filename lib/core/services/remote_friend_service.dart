@@ -312,6 +312,10 @@ class RemoteFriendService {
         final dataBuffer = StringBuffer();
 
         await for (final chunk in streamed.stream
+            // allowMalformed: true is intentional: SSE chunks can be split at
+            // arbitrary byte boundaries.  Replacing the incomplete byte with
+            // the Unicode replacement character is preferable to throwing and
+            // tearing down the long-lived stream.
             .transform(const Utf8Decoder(allowMalformed: true))
             .transform(const LineSplitter())) {
           if (controller.isClosed) {
@@ -319,8 +323,10 @@ class RemoteFriendService {
           }
 
           if (chunk.startsWith('event:')) {
+            // Per SSE spec, event: may appear before or after data: in a block.
+            // Only update the type; do NOT clear the data buffer here — it is
+            // already cleared after each blank-line frame separator below.
             eventType = chunk.substring(6).trim();
-            dataBuffer.clear();
           } else if (chunk.startsWith('data:')) {
             if (dataBuffer.isNotEmpty) {
               dataBuffer.write('\n');
@@ -345,12 +351,13 @@ class RemoteFriendService {
                     }
                   }
                 }
-              } catch (parseError) {
+              } catch (frameError) {
                 // Skip malformed SSE frames – the polling path provides the
-                // authoritative state, so individual frame parse errors are
-                // non-fatal.  Forward to the stream so subscribers can log.
+                // authoritative state, so individual frame errors (JSON decode,
+                // type cast, or snapshot construction) are non-fatal.
+                // Forward to the stream so subscribers can log if needed.
                 if (!controller.isClosed) {
-                  controller.addError(parseError);
+                  controller.addError(frameError);
                 }
               }
             } else if (eventType == 'cancel' ||
