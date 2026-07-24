@@ -593,7 +593,7 @@ abstract class _QuizComponents extends _QuizScreen {
     final scheme = Theme.of(context).colorScheme;
     final reverse =
         reverseOverride ??
-        (_perspective == BoardPerspective.black ||
+ n        (_perspective == BoardPerspective.black ||
             ((_perspective == BoardPerspective.auto ||
                     _perspective == BoardPerspective.headToHead) &&
                 !whiteToMove));
