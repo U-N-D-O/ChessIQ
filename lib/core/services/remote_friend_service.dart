@@ -267,6 +267,111 @@ class RemoteFriendService {
     return RemoteFriendMutationResult.fromResultMap(result);
   }
 
+  /// Opens a Server-Sent Events (SSE) stream on the Firebase Realtime Database
+  /// node for [matchId], yielding a new [RemoteFriendMatchSnapshot] every time
+  /// the server pushes a change.  The stream closes automatically when the
+  /// caller cancels the subscription, when the auth token is revoked, or when
+  /// the RTDB emits a `cancel` event.
+  ///
+  /// Because RTDB SSE only covers the plain data node (not Cloud-Function
+  /// derived fields such as `invite`), callers should continue to use the
+  /// polling path for full `RemoteFriendMutationResult` hydration.  This stream
+  /// is intended as a low-latency trigger to kick off a lightweight re-fetch.
+  Stream<RemoteFriendMatchSnapshot> watchMatch(String matchId) {
+    final controller = StreamController<RemoteFriendMatchSnapshot>.broadcast();
+
+    Future<void> connect() async {
+      http.Client? client;
+      try {
+        client = http.Client();
+        final token = await FirebaseAuthService.instance.getIdToken();
+        if (token == null || token.isEmpty) {
+          controller.addError(
+            Exception('RTDB watch requires a valid sign-in token.'),
+          );
+          return;
+        }
+
+        final uri = Uri.parse(
+          '$_databaseUrl/friend_matches/${matchId.trim()}.json',
+        ).replace(queryParameters: <String, String>{'auth': token});
+
+        final request = http.Request('GET', uri)
+          ..headers['Accept'] = 'text/event-stream'
+          ..headers['Cache-Control'] = 'no-cache';
+
+        final streamed = await client.send(request);
+        if (streamed.statusCode != 200) {
+          controller.addError(
+            Exception('RTDB SSE returned HTTP ${streamed.statusCode}.'),
+          );
+          return;
+        }
+
+        String eventType = '';
+        final dataBuffer = StringBuffer();
+
+        await for (final chunk in streamed.stream
+            .transform(const Utf8Decoder(allowMalformed: true))
+            .transform(const LineSplitter())) {
+          if (controller.isClosed) {
+            break;
+          }
+
+          if (chunk.startsWith('event:')) {
+            eventType = chunk.substring(6).trim();
+            dataBuffer.clear();
+          } else if (chunk.startsWith('data:')) {
+            if (dataBuffer.isNotEmpty) {
+              dataBuffer.write('\n');
+            }
+            dataBuffer.write(chunk.substring(5).trim());
+          } else if (chunk.isEmpty) {
+            // Blank line signals end of this SSE frame.
+            final data = dataBuffer.toString().trim();
+            dataBuffer.clear();
+
+            if (eventType == 'put' || eventType == 'patch') {
+              try {
+                final decoded = jsonDecode(data);
+                if (decoded is Map) {
+                  final payload =
+                      (decoded['data'] as Map?)?.cast<String, dynamic>();
+                  if (payload != null) {
+                    payload.putIfAbsent('matchId', () => matchId.trim());
+                    final snapshot = RemoteFriendMatchSnapshot.fromMap(payload);
+                    if (!controller.isClosed) {
+                      controller.add(snapshot);
+                    }
+                  }
+                }
+              } catch (_) {
+                // Silently skip malformed SSE frames – the polling path
+                // provides the authoritative state.
+              }
+            } else if (eventType == 'cancel' ||
+                eventType == 'auth_revoked') {
+              break;
+            }
+            eventType = '';
+          }
+        }
+      } catch (e) {
+        if (!controller.isClosed) {
+          controller.addError(e);
+        }
+      } finally {
+        client?.close();
+        if (!controller.isClosed) {
+          controller.close();
+        }
+      }
+    }
+
+    controller.onListen = () => unawaited(connect());
+    return controller.stream;
+  }
+
   Future<Uri> _authedUrl(String path, [Map<String, String>? extra]) async {
     final token = await FirebaseAuthService.instance.getIdToken();
     if (token == null || token.isEmpty) {
