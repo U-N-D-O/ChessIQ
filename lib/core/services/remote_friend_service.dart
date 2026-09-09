@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:chessiq/core/services/firebase_auth_service.dart';
+import 'package:chessiq/core/services/realtime_database_stream.dart';
 import 'package:chessiq/features/vs_friend/models/remote_friend_models.dart';
 import 'package:chessiq/firebase_options.dart';
 import 'package:flutter/foundation.dart';
@@ -130,6 +131,16 @@ class RemoteFriendService {
     final map = json.cast<String, dynamic>();
     map.putIfAbsent('matchId', () => matchId.trim());
     return RemoteFriendMatchSnapshot.fromMap(map);
+  }
+
+  Stream<RemoteFriendMatchSnapshot> watchMatch(String matchId) {
+    final id = matchId.trim();
+    return watchRealtimeDatabase(
+      authenticatedUrl: () => _authedUrl('friend_matches/$id'),
+    ).map((map) {
+      map.putIfAbsent('matchId', () => id);
+      return RemoteFriendMatchSnapshot.fromMap(map);
+    });
   }
 
   Future<RemoteFriendMutationResult> refreshMatch(

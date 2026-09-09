@@ -197,6 +197,21 @@ class EconomyProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> purchaseAvatarRoll(
+    int amount,
+    String requestId,
+    String avatarId,
+  ) async {
+    // Network failures must propagate: the server may have charged already.
+    final result = await EconomyRemoteService.instance.purchaseAvatarRoll(
+      amount,
+      requestId,
+      avatarId,
+    );
+    await _applyRemoteMutation(result, notify: true);
+    return result.success;
+  }
+
   Future<bool> claimAnalysisInterstitialCoins({bool notify = true}) async {
     return _claimReward(EconomyRewardKey.analysisInterstitial, notify: notify);
   }

@@ -924,6 +924,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool _remoteFriendKeepScoreDefault = false;
   bool _remoteFriendReactionInFlight = false;
   Timer? _remoteFriendPollTimer;
+  Duration? _remoteFriendPollTimerInterval;
+  StreamSubscription<RemoteFriendMatchSnapshot>? _remoteFriendMatchSubscription;
+  String? _remoteFriendStreamMatchId;
+  bool _remoteFriendStreamConnected = false;
+  int _remoteFriendSyncGeneration = 0;
   Timer? _remoteFriendClockDisplayTimer;
   String? _remoteFriendLastError;
   String? _remoteFriendOutcomeReason;
@@ -6748,8 +6753,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _stopRemoteFriendSyncTimers() {
+    _remoteFriendSyncGeneration++;
+    unawaited(_remoteFriendMatchSubscription?.cancel());
+    _remoteFriendMatchSubscription = null;
+    _remoteFriendStreamMatchId = null;
+    _remoteFriendStreamConnected = false;
     _remoteFriendPollTimer?.cancel();
     _remoteFriendPollTimer = null;
+    _remoteFriendPollTimerInterval = null;
     _remoteFriendClockDisplayTimer?.cancel();
     _remoteFriendClockDisplayTimer = null;
     _remoteFriendPollInFlight = false;
@@ -6773,13 +6784,51 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _startRemoteFriendSyncTimers({bool immediateRefresh = false}) {
-    _stopRemoteFriendSyncTimers();
     final snapshot = _remoteFriendSnapshot;
     if (!_isRemoteFriendMatchMode || snapshot == null) {
+      _stopRemoteFriendSyncTimers();
       return;
     }
 
-    if (_remoteFriendNeedsDisplayTickerForSnapshot(snapshot)) {
+    if (_remoteFriendStreamMatchId != snapshot.matchId) {
+      _stopRemoteFriendSyncTimers();
+      _remoteFriendStreamMatchId = snapshot.matchId;
+      final generation = _remoteFriendSyncGeneration;
+      _remoteFriendMatchSubscription = RemoteFriendService.instance
+          .watchMatch(snapshot.matchId)
+          .listen(
+            (next) {
+              if (!mounted ||
+                  generation != _remoteFriendSyncGeneration ||
+                  !_isRemoteFriendMatchMode) {
+                return;
+              }
+              _remoteFriendStreamConnected = true;
+              final previousOutcome = _remoteFriendSnapshot?.outcome?.code;
+              setState(() {
+                _applyRemoteFriendSnapshot(
+                  invite: _remoteFriendInviteFromSnapshot(next),
+                  snapshot: next,
+                );
+              });
+              _startRemoteFriendSyncTimers();
+              final outcome = _remoteOutcomeToGameOutcome(
+                _remoteFriendSnapshot?.outcome?.code,
+              );
+              if (previousOutcome == null && outcome != null) {
+                unawaited(_startGameResultReveal(outcome));
+              }
+            },
+            onError: (Object error) {
+              if (!mounted || generation != _remoteFriendSyncGeneration) return;
+              _remoteFriendStreamConnected = false;
+              _addLog('Live match connection interrupted; retrying.');
+            },
+          );
+    }
+
+    if (_remoteFriendClockDisplayTimer == null &&
+        _remoteFriendNeedsDisplayTickerForSnapshot(snapshot)) {
       final displayTickerInterval =
           (_isRemoteFriendTimedMatch || _isRemoteFriendPieceSelectionOpen)
           ? const Duration(milliseconds: 250)
@@ -6803,15 +6852,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       });
     }
 
-    if (snapshot.status == RemoteFriendMatchStatus.pending ||
-        snapshot.status == RemoteFriendMatchStatus.active) {
-      _remoteFriendPollTimer = Timer.periodic(
-        _remoteFriendPollIntervalForSnapshot(snapshot),
-        (_) => unawaited(_refreshRemoteFriendMatch(silent: true)),
-      );
-      if (immediateRefresh) {
+    // Keep listening after completion so draw/rematch offers also arrive live.
+    final pollInterval = _remoteFriendPollIntervalForSnapshot(snapshot);
+    if (_remoteFriendPollTimerInterval != pollInterval) {
+      _remoteFriendPollTimer?.cancel();
+      _remoteFriendPollTimer = null;
+      _remoteFriendPollTimerInterval = pollInterval;
+    }
+    _remoteFriendPollTimer ??= Timer.periodic(pollInterval, (_) {
+      final current = _remoteFriendSnapshot;
+      if (current == null) return;
+      final avatarId = context
+          .read<AvatarInventoryProvider>()
+          .selectedAvatar
+          ?.id;
+      if (!_remoteFriendStreamConnected ||
+          _remoteFriendSnapshotNeedsAuthoritativeRefresh(current) ||
+          _remoteFriendSnapshotNeedsLocalAvatarRefresh(current, avatarId)) {
         unawaited(_refreshRemoteFriendMatch(silent: true));
       }
+    });
+    if (immediateRefresh) {
+      unawaited(_refreshRemoteFriendMatch(silent: true));
     }
   }
 
@@ -7024,6 +7086,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     required RemoteFriendMatchSnapshot snapshot,
   }) {
     final previousSnapshot = _remoteFriendSnapshot;
+    // HTTP responses can arrive after newer events from the live connection.
+    if (previousSnapshot != null &&
+        previousSnapshot.matchId == snapshot.matchId &&
+        snapshot.isOlderThan(previousSnapshot)) {
+      return;
+    }
+    // An unchanged poll/event must not undo a move awaiting server acceptance.
+    if (_remoteFriendOptimisticSnapshot != null &&
+        previousSnapshot != null &&
+        snapshot.nextPly == previousSnapshot.nextPly &&
+        snapshot.fen == previousSnapshot.fen &&
+        snapshot.status == previousSnapshot.status &&
+        snapshot.outcome == null) {
+      return;
+    }
     final shouldRebuildBoard =
         previousSnapshot == null ||
         previousSnapshot.matchId != snapshot.matchId ||
@@ -7817,6 +7894,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<void> _refreshRemoteFriendMatch({bool silent = false}) async {
+    final generation = _remoteFriendSyncGeneration;
     final matchId =
         _remoteFriendSnapshot?.matchId ?? _remoteFriendInvite?.matchId;
     if (matchId == null || matchId.isEmpty || _remoteFriendPollInFlight) {
@@ -7833,7 +7911,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final fetchedSnapshot = await RemoteFriendService.instance.fetchMatch(
         matchId,
       );
-      if (!mounted) {
+      if (!mounted || generation != _remoteFriendSyncGeneration) {
         return;
       }
       var nextInvite = _remoteFriendInviteFromSnapshot(fetchedSnapshot);
@@ -7847,7 +7925,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           matchId,
           avatarId: avatarId,
         );
-        if (!mounted) {
+        if (!mounted || generation != _remoteFriendSyncGeneration) {
           return;
         }
         nextInvite = result.invite;
@@ -7858,7 +7936,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       });
       _startRemoteFriendSyncTimers();
 
-      final nextOutcome = nextSnapshot.outcome?.code;
+      final nextOutcome = _remoteFriendSnapshot?.outcome?.code;
       if (previousOutcome == null && nextOutcome != null) {
         final gameOutcome = _remoteOutcomeToGameOutcome(nextOutcome);
         if (gameOutcome != null) {
@@ -7867,7 +7945,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
     } catch (e) {
       _addLog('Remote friend sync failed: $e');
-      if (!mounted) {
+      if (!mounted || generation != _remoteFriendSyncGeneration) {
         return;
       }
       setState(() {
@@ -7882,7 +7960,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         );
       }
     } finally {
-      _remoteFriendPollInFlight = false;
+      if (generation == _remoteFriendSyncGeneration) {
+        _remoteFriendPollInFlight = false;
+      }
     }
   }
 
@@ -7934,7 +8014,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
 
       final gameOutcome = _remoteOutcomeToGameOutcome(
-        result.snapshot.outcome?.code,
+        _remoteFriendSnapshot?.outcome?.code,
       );
       if (previousOutcome == null && gameOutcome != null) {
         unawaited(_startGameResultReveal(gameOutcome));
@@ -8021,12 +8101,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         moveUci: moveUci,
         expectedPly: snapshot.nextPly,
       );
-      if (!mounted) {
+      if (!mounted ||
+          _remoteFriendSnapshot?.matchId != snapshot.matchId ||
+          !_isRemoteFriendMatchMode) {
         return;
       }
 
       if (!result.acceptedMove) {
         _addLog('Remote move rejected: ${result.reason ?? 'unknown'}');
+        _remoteFriendOptimisticSnapshot = null;
         await _refreshRemoteFriendMatch(silent: true);
         if (mounted) {
           _showRemoteFriendNotice(
@@ -8045,13 +8128,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _startRemoteFriendSyncTimers();
 
       final gameOutcome = _remoteOutcomeToGameOutcome(
-        result.snapshot.outcome?.code,
+        _remoteFriendSnapshot?.outcome?.code,
       );
       if (previousOutcome == null && gameOutcome != null) {
         unawaited(_startGameResultReveal(gameOutcome));
       }
     } catch (e) {
       _addLog('Submit remote move failed: $e');
+      _remoteFriendOptimisticSnapshot = null;
       if (mounted) {
         await _showThemedErrorDialog(
           title: 'Move Sync Failed',
@@ -8067,6 +8151,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           _remoteFriendOperationInProgress = false;
           _remoteFriendOptimisticSnapshot = null;
         });
+        unawaited(_submitRemoteFriendPremoveIfReady());
       }
     }
   }
@@ -24414,11 +24499,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
 
     final avatarInventory = context.watch<AvatarInventoryProvider>();
     final avatarId = white ? snapshot.whiteAvatarId : snapshot.blackAvatarId;
-    final avatarEntry = avatarId != null
-        ? AvatarCatalog.entryFor(avatarId)
-        : isLocalSeat
-        ? avatarInventory.selectedAvatar
-        : null;
+    final avatarEntry = isLocalSeat
+        ? avatarInventory.selectedAvatar ?? AvatarCatalog.entryFor(avatarId)
+        : AvatarCatalog.entryFor(avatarId);
     final avatarBorderColor = avatarEntry != null
         ? _avatarRollBucketAccent(
             avatarEntry.bucket,
@@ -30086,86 +30169,107 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       );
     }
 
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        for (final entry in bucketEntries)
-          Builder(
-            builder: (context) {
-              final bucket = entry.bucket;
-              final accent = _avatarRollBucketAccent(
-                bucket,
-                scheme,
-                useMonochrome: useMonochrome,
-              );
-              return Container(
-                constraints: const BoxConstraints(minWidth: 128, maxWidth: 152),
-                padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.alphaBlend(
-                        accent.withValues(alpha: isLight ? 0.14 : 0.20),
-                        scheme.surface,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columnCount = constraints.maxWidth >= 360
+            ? 4
+            : constraints.maxWidth >= 220
+            ? 2
+            : 1;
+        const spacing = 8.0;
+        final cardWidth = columnCount == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - (spacing * (columnCount - 1))) /
+                  columnCount;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final entry in bucketEntries)
+              Builder(
+                builder: (context) {
+                  final bucket = entry.bucket;
+                  final accent = _avatarRollBucketAccent(
+                    bucket,
+                    scheme,
+                    useMonochrome: useMonochrome,
+                  );
+                  return Container(
+                    width: cardWidth,
+                    padding: const EdgeInsets.fromLTRB(9, 9, 9, 9),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color.alphaBlend(
+                            accent.withValues(alpha: isLight ? 0.14 : 0.20),
+                            scheme.surface,
+                          ),
+                          Color.alphaBlend(
+                            accent.withValues(alpha: isLight ? 0.04 : 0.08),
+                            scheme.surface,
+                          ),
+                        ],
                       ),
-                      Color.alphaBlend(
-                        accent.withValues(alpha: isLight ? 0.04 : 0.08),
-                        scheme.surface,
-                      ),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: accent.withValues(alpha: 0.24)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: isLight ? 0.14 : 0.22),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        bucket.label.toUpperCase(),
-                        style: TextStyle(
-                          color: scheme.onSurface,
-                          fontSize: 9.4,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.42,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: accent.withValues(alpha: 0.24)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(
+                              alpha: isLight ? 0.14 : 0.22,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            bucket.label.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontSize: 9.1,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.32,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 7),
+                        Text(
+                          _avatarRollRateLabel(bucket.paidRollWeight),
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 13.2,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${entry.count} remaining',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: scheme.onSurface.withValues(alpha: 0.68),
+                            fontSize: 10.4,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      _avatarRollRateLabel(bucket.paidRollWeight),
-                      style: TextStyle(
-                        color: scheme.onSurface,
-                        fontSize: 13.8,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${entry.count} remaining',
-                      style: TextStyle(
-                        color: scheme.onSurface.withValues(alpha: 0.68),
-                        fontSize: 10.8,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-      ],
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -30395,7 +30499,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           return GestureDetector(
                             onTap: () async {
                               await avatarInventory.selectAvatar(avatar.id);
-                              setSheetState(() {});
+                              if (mounted && _isRemoteFriendMatchMode) {
+                                unawaited(
+                                  _refreshRemoteFriendMatch(silent: true),
+                                );
+                              }
+                              if (sheetContext.mounted) setSheetState(() {});
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 180),
@@ -30434,7 +30543,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _buildAvatarRollPreview(avatarInventory),
+                    _buildAvatarRollPreview(
+                      avatarInventory,
+                      showAvatarPickerAction: false,
+                    ),
                     const SizedBox(height: 12),
                     if (avatarInventory.hasAvailablePaidRolls) ...[
                       SizedBox(
@@ -30631,7 +30743,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
-  Widget _buildAvatarRollPreview(AvatarInventoryProvider avatarInventory) {
+  Widget _buildAvatarRollPreview(
+    AvatarInventoryProvider avatarInventory, {
+    bool showAvatarPickerAction = true,
+  }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
@@ -30729,15 +30844,28 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          'Weighted 200-coin pull with no duplicate results and no promo-only entries.',
-                          style: TextStyle(
-                            color: scheme.onSurface.withValues(alpha: 0.70),
-                            fontSize: 11.3,
-                            height: 1.3,
-                            fontWeight: FontWeight.w600,
+                        if (showAvatarPickerAction)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: _showAvatarBoutiqueSheet,
+                              icon: const Icon(Icons.edit_outlined, size: 15),
+                              label: Text(
+                                selectedAvatar == null
+                                    ? 'Choose avatar'
+                                    : 'Change avatar',
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: scheme.primary,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                  vertical: 2,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -30757,11 +30885,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     label: 'Rollable left',
                     value: '${avatarInventory.availablePaidRollCount}',
                     accent: vaultAccent,
-                  ),
-                  _buildAvatarRollStatChip(
-                    label: 'Pool rule',
-                    value: 'No duplicates',
-                    accent: scheme.onSurface.withValues(alpha: 0.72),
                   ),
                 ],
               ),
@@ -30881,9 +31004,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _purchaseAvatarRoll() async {
     final avatarInventory = context.read<AvatarInventoryProvider>();
     final economy = context.read<EconomyProvider>();
+    if (avatarInventory.purchaseInProgress) return;
     await avatarInventory.load();
 
-    if (!avatarInventory.hasAvailablePaidRolls) {
+    if (!avatarInventory.hasAvailablePaidRolls &&
+        !avatarInventory.hasPendingPurchase) {
       _addLog('All rollable avatars already owned');
       if (mounted) {
         await _showThemedErrorDialog(
@@ -30898,22 +31023,35 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       StoreOfferIds.avatarRoll,
       AvatarInventoryProvider.paidRollPrice,
     );
-    if (!await economy.spendCoins(price)) {
-      _addLog('Not enough coins for avatar roll');
-      return;
+    try {
+      final result = await avatarInventory.purchasePaidAvatar(
+        price: price,
+        charge: economy.purchaseAvatarRoll,
+      );
+      if (!mounted) return;
+      if (result == null) {
+        if (!avatarInventory.purchaseInProgress) {
+          await _showThemedErrorDialog(
+            title: 'Avatar Roll Unavailable',
+            message:
+                'Check that you have enough coins for this roll and try again.',
+          );
+        }
+        return;
+      }
+      unawaited(_playStorePurchaseSound());
+      _addLog('Avatar unlocked: ${result.avatar.name}');
+      await _showAvatarRollRevealDialog(result.avatar);
+    } catch (error) {
+      _addLog('Avatar purchase pending: $error');
+      if (!mounted) return;
+      await _showThemedErrorDialog(
+        title: 'Avatar Purchase Interrupted',
+        message:
+            'We could not confirm this roll. Reconnect and try again to finish the purchase. Confirmed payments will not be charged twice.',
+        includeInternetHint: true,
+      );
     }
-
-    final result = await avatarInventory.rollPaidAvatar();
-    if (result == null) {
-      _addLog('Avatar roll failed: no rollable avatar available');
-      return;
-    }
-
-    unawaited(_playStorePurchaseSound());
-    _addLog(
-      'Avatar unlocked: ${result.avatar.name} (${result.bucket.label.toLowerCase()})',
-    );
-    await _showAvatarRollRevealDialog(result.avatar);
   }
 
   Future<void> _performResetWithSponsoredBreak() async {
@@ -31834,10 +31972,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                   setL(() {});
                                 },
                               ),
-                            _storeSectionHeader(
-                              'Avatar Shop',
-                              'Weighted 200-coin rolls with no duplicate pulls',
-                            ),
+                            _storeSectionHeader('Avatar Shop'),
                             if (_showStoreOffer(StoreOfferIds.avatarRoll))
                               _storeItemCard(
                                 icon: Icons.account_box_outlined,
@@ -31852,15 +31987,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                         AvatarInventoryProvider.paidRollPrice,
                                       )
                                     : 'Complete',
-                                enabled: avatarInventory.hasAvailablePaidRolls,
+                                enabled:
+                                    !avatarInventory.purchaseInProgress &&
+                                    (avatarInventory.hasAvailablePaidRolls ||
+                                        avatarInventory.hasPendingPurchase),
                                 badgeLabel: _storefrontBadge(
                                   StoreOfferIds.avatarRoll,
                                 ),
                                 preview: _buildAvatarRollPreview(
                                   avatarInventory,
                                 ),
-                                actionLabel:
-                                    avatarInventory.hasAvailablePaidRolls
+                                actionLabel: avatarInventory.purchaseInProgress
+                                    ? 'Purchasing...'
+                                    : avatarInventory.hasPendingPurchase
+                                    ? 'Retry Roll'
+                                    : avatarInventory.hasAvailablePaidRolls
                                     ? _storefrontActionLabel(
                                         StoreOfferIds.avatarRoll,
                                         'Roll',
@@ -31869,7 +32010,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                                 actionColor: const Color(0xFFD8B640),
                                 onTap: () async {
                                   await _purchaseAvatarRoll();
-                                  setL(() {});
+                                  if (ctx.mounted) setL(() {});
                                 },
                               ),
                             Container(
@@ -32653,7 +32794,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
-  Widget _storeSectionHeader(String title, String subtitle) {
+  Widget _storeSectionHeader(String title, [String? subtitle]) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 4, 2, 10),
@@ -32668,14 +32809,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               color: scheme.onSurface,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: scheme.onSurface.withValues(alpha: 0.64),
-              fontSize: 12,
+          if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.64),
+                fontSize: 12,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

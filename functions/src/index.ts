@@ -2,6 +2,7 @@ import { Chess } from "chess.js";
 import { randomInt } from "crypto";
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
+import { applyAvatarPurchase, AvatarPurchaseReceipts, normalizeAvatarPurchaseReceipts } from "./avatar_purchase";
 
 const DATABASE_URL = "https://chessiq-89b45-default-rtdb.firebaseio.com";
 
@@ -337,6 +338,7 @@ type EconomyState = {
     rewardTrackers?: Record<string, EconomyRewardTracker>;
     deliveredFingerprints?: string[];
     migratedFromClient?: boolean;
+    avatarPurchaseReceipts?: AvatarPurchaseReceipts;
 };
 
 type EconomyClientPayload = {
@@ -903,6 +905,7 @@ function normalizeEconomyState(
         rewardTrackers,
         deliveredFingerprints,
         migratedFromClient: record.migratedFromClient === true,
+        avatarPurchaseReceipts: normalizeAvatarPurchaseReceipts(record.avatarPurchaseReceipts),
     };
 }
 
@@ -1876,10 +1879,13 @@ async function spendEconomyCoinsImpl(
 
     const amount = readRequiredEconomyAmount(data?.amount);
     const ref = db.ref(`economy_profiles/${context.auth.uid}`);
+    // RTDB may first invoke a transaction with null from its local cache.
+    // Seed that invocation before making a decision that could abort it.
+    const seed = (await ref.get()).val();
     let responseState: EconomyState | null = null;
 
     const transactionResult = await ref.transaction((currentValue) => {
-        const state = normalizeEconomyState(currentValue);
+        const state = normalizeEconomyState(currentValue ?? seed);
         if (state.coins < amount) {
             responseState = state;
             return;
@@ -1898,6 +1904,44 @@ async function spendEconomyCoinsImpl(
     return {
         success: transactionResult.committed,
         reason: transactionResult.committed ? null : "insufficient-funds",
+        state: buildEconomyClientPayload(state),
+    };
+}
+
+async function purchaseAvatarRollImpl(data: any, context: functions.https.CallableContext) {
+    const uid = requireAuthUid(context);
+    const requestId = typeof data?.requestId === "string" ? data.requestId : "";
+    const avatarId = typeof data?.avatarId === "string" ? data.avatarId.trim() : "";
+    const amount = data?.amount;
+    if (!/^[A-Za-z0-9_-]{16,80}$/.test(requestId) ||
+        !avatarId || avatarId.length > 128 ||
+        !Number.isInteger(amount) || amount < 0 || amount > ECONOMY_MAX_COINS) {
+        throw new functions.https.HttpsError("invalid-argument", "Invalid avatar purchase.");
+    }
+    const ref = db.ref(`economy_profiles/${uid}`);
+    const seed = (await ref.get()).val();
+    const transaction = await ref.transaction((currentValue) => {
+        const state = normalizeEconomyState(currentValue ?? seed);
+        let purchase;
+        try {
+            purchase = applyAvatarPurchase(state.coins,
+                state.avatarPurchaseReceipts ?? {}, requestId, { amount, avatarId });
+        } catch (_) {
+            throw new functions.https.HttpsError("failed-precondition", "Purchase receipt mismatch.");
+        }
+        if (!purchase.success) return;
+        return {
+            ...state,
+            coins: purchase.coins,
+            avatarPurchaseReceipts: purchase.receipts,
+            updatedAt: new Date().toISOString(),
+        };
+    });
+    const state = normalizeEconomyState(transaction.snapshot.val() ?? seed);
+    return {
+        success: transaction.committed,
+        reason: transaction.committed ? null : "insufficient-funds",
+        requestId,
         state: buildEconomyClientPayload(state),
     };
 }
@@ -3686,6 +3730,10 @@ async function submitFriendMatchMoveImpl(
     let responseMatch: FriendMatchRecord | null = null;
 
     const transactionResult = await matchRef.transaction((currentValue) => {
+        // Transaction callbacks may rerun after a concurrent move/refresh.
+        acceptedMove = false;
+        responseMatch = null;
+        blockedReason = "match-unavailable";
         const existingMatch = normalizeFriendMatchRecord(
             currentValue ?? preflightMatchValue,
             matchId,
@@ -4602,6 +4650,10 @@ export const claimStoreRewardAd = functions.https.onCall(
 
 export const spendEconomyCoins = functions.https.onCall(
     async (data, context) => spendEconomyCoinsImpl(data, context),
+);
+
+export const purchaseAvatarRoll = functions.https.onCall(
+    async (data, context) => purchaseAvatarRollImpl(data, context),
 );
 
 export const grantEconomyReward = functions.https.onCall(

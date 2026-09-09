@@ -29,7 +29,29 @@ class ChessIQApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider<AvatarInventoryProvider>(
-          create: (_) => AvatarInventoryProvider()..load(),
+          create: (context) {
+            final inventory = AvatarInventoryProvider();
+            final economy = context.read<EconomyProvider>();
+            unawaited(
+              inventory
+                  .load()
+                  .then((_) async {
+                    if (inventory.hasPendingPurchase) {
+                      await inventory.purchasePaidAvatar(
+                        price: AvatarInventoryProvider.paidRollPrice,
+                        charge: economy.purchaseAvatarRoll,
+                        resumeOnly: true,
+                      );
+                    }
+                  })
+                  .catchError((Object error) {
+                    debugPrint(
+                      'Avatar recovery will retry from the store: $error',
+                    );
+                  }),
+            );
+            return inventory;
+          },
         ),
         ChangeNotifierProxyProvider<EconomyProvider, PuzzleAcademyProvider>(
           create: (_) => PuzzleAcademyProvider(),

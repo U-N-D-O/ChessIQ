@@ -43,7 +43,7 @@ abstract class _StoreState extends _VsBotCore {
     StoreSection initialSection = StoreSection.general,
   }) => super._openStore(initialSection: initialSection);
 
-  Widget _storeSectionHeader(String title, String subtitle) =>
+  Widget _storeSectionHeader(String title, [String? subtitle]) =>
       super._storeSectionHeader(title, subtitle);
 
   Widget _buildStoreRewardCooldownPreview(

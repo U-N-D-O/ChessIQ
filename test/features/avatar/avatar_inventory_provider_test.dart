@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:chessiq/features/avatar/models/avatar_catalog.dart';
@@ -46,6 +47,107 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
+
+  test('concurrent startup loads choose only one starter', () async {
+    final provider = AvatarInventoryProvider(random: Random(7));
+    await Future.wait([provider.load(), provider.load(), provider.load()]);
+    expect(provider.ownedCount, 1);
+    final reloaded = AvatarInventoryProvider();
+    await reloaded.load();
+    expect(reloaded.ownedAvatarIds, provider.ownedAvatarIds);
+  });
+
+  test('saving other store settings cannot erase avatar purchases', () async {
+    final provider = AvatarInventoryProvider(random: Random(7));
+    await provider.load();
+    final result = await provider.rollPaidAvatar();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      EconomyProvider.storeStateKey,
+      LocalIntegrityService.wrapJson({'coins': 20}, scope: 'economy_store'),
+    );
+    final reloaded = AvatarInventoryProvider();
+    await reloaded.load();
+    expect(reloaded.ownsAvatar(result!.avatar.id), isTrue);
+    expect(reloaded.paidRollPurchaseCount, 1);
+  });
+
+  test('lost charge response resumes the same roll after restart', () async {
+    final provider = AvatarInventoryProvider(random: Random(7));
+    var balance = 500;
+    final receipts = <String, String>{};
+    var interrupt = true;
+    Future<bool> charge(int amount, String requestId, String avatarId) async {
+      if (!receipts.containsKey(requestId)) {
+        receipts[requestId] = avatarId;
+        balance -= amount;
+      }
+      if (interrupt) throw TimeoutException('response lost after commit');
+      return true;
+    }
+
+    await expectLater(
+      provider.purchasePaidAvatar(price: 200, charge: charge),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(provider.hasPendingPurchase, isTrue);
+    final reloaded = AvatarInventoryProvider(random: Random(9));
+    await reloaded.load();
+    interrupt = false;
+    final result = await reloaded.purchasePaidAvatar(
+      price: 300,
+      charge: charge,
+      resumeOnly: true,
+    );
+    expect(balance, 300);
+    expect(receipts, hasLength(1));
+    expect(result!.avatar.id, receipts.values.single);
+    expect(reloaded.ownsAvatar(result.avatar.id), isTrue);
+    expect(reloaded.paidRollPurchaseCount, 1);
+    expect(reloaded.hasPendingPurchase, isFalse);
+    final finalReload = AvatarInventoryProvider();
+    await finalReload.load();
+    expect(finalReload.ownsAvatar(result.avatar.id), isTrue);
+    expect(finalReload.hasPendingPurchase, isFalse);
+  });
+
+  test('repeated taps while charging do not start another purchase', () async {
+    final provider = AvatarInventoryProvider(random: Random(7));
+    final gate = Completer<bool>();
+    final entered = Completer<void>();
+    var calls = 0;
+    Future<bool> charge(int amount, String requestId, String avatarId) {
+      calls++;
+      entered.complete();
+      return gate.future;
+    }
+
+    final first = provider.purchasePaidAvatar(price: 200, charge: charge);
+    await entered.future;
+    expect(
+      await provider.purchasePaidAvatar(price: 200, charge: charge),
+      isNull,
+    );
+    gate.complete(true);
+    expect(await first, isNotNull);
+    expect(calls, 1);
+    expect(provider.paidRollPurchaseCount, 1);
+  });
+
+  test(
+    'insufficient funds does not grant an avatar or count a purchase',
+    () async {
+      final provider = AvatarInventoryProvider(random: Random(7));
+      final result = await provider.purchasePaidAvatar(
+        price: 200,
+        charge: (_, _, _) async => false,
+      );
+      expect(result, isNull);
+      expect(provider.ownedCount, 1);
+      expect(provider.paidRollPurchaseCount, 0);
+      expect(provider.hasPendingPurchase, isFalse);
+    },
+  );
 
   test('avatar catalog totals match the current asset layout', () {
     expect(AvatarCatalog.items, hasLength(74));

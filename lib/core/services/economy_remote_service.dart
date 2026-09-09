@@ -103,6 +103,24 @@ class EconomyRemoteService {
     return _parseMutationResult(result);
   }
 
+  Future<EconomyMutationResult> purchaseAvatarRoll(
+    int amount,
+    String requestId,
+    String avatarId,
+  ) async {
+    final result = await _callFunction('purchaseAvatarRoll', {
+      'amount': amount,
+      'requestId': requestId,
+      'avatarId': avatarId,
+    });
+    if (result['success'] == true && result['requestId'] != requestId) {
+      throw StateError(
+        'Avatar purchase confirmation was missing. Please retry.',
+      );
+    }
+    return _parseMutationResult(result);
+  }
+
   Future<EconomyMutationResult> grantReward(
     EconomyRewardKey rewardKey, {
     String? claimKey,

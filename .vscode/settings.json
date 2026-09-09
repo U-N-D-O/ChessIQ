@@ -1,4 +1,14 @@
 {
+  "git.enabled": true,
+  "git.enableSmartCommit": true,
+  "git.showCommitInput": true,
+  "git.showActionButton": {
+    "commit": true,
+    "publish": true,
+    "sync": true
+  },
+  "scm.showActionButton": true,
+  "scm.alwaysShowRepositories": true,
   "files.exclude": {
     "**/windows/flutter/ephemeral": true
   },

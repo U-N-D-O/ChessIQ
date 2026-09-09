@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:chessiq/core/providers/economy_provider.dart';
@@ -29,6 +30,7 @@ class AvatarInventoryProvider extends ChangeNotifier {
   static const int paidRollPrice = 200;
   static const String _storeIntegrityScope = 'economy_store';
   static const String _avatarInventoryKey = 'avatar_inventory_v1';
+  static const String inventoryStorageKey = 'avatar_inventory_v2';
   static const String _ownedAvatarIdsKey = 'ownedAvatarIds';
   static const String _selectedAvatarIdKey = 'selectedAvatarId';
   static const String _starterAvatarIdKey = 'starterAvatarId';
@@ -44,6 +46,10 @@ class AvatarInventoryProvider extends ChangeNotifier {
   final Random _random;
 
   bool _loaded = false;
+  Future<void>? _loadFuture;
+  Future<void> _saveFuture = Future<void>.value();
+  bool _purchaseInProgress = false;
+  Map<String, dynamic>? _pendingPurchase;
   bool _bootstrappedStarter = false;
   Set<String> _ownedAvatarIds = <String>{};
   Set<String> _claimedRewardKeys = <String>{};
@@ -52,6 +58,8 @@ class AvatarInventoryProvider extends ChangeNotifier {
   int _paidRollPurchaseCount = 0;
 
   bool get loaded => _loaded;
+  bool get purchaseInProgress => _purchaseInProgress;
+  bool get hasPendingPurchase => _pendingPurchase != null;
 
   bool get bootstrappedStarter => _bootstrappedStarter;
 
@@ -125,14 +133,28 @@ class AvatarInventoryProvider extends ChangeNotifier {
     return _claimedRewardKeys.contains(rewardKey.trim());
   }
 
-  Future<void> load({bool forceRefresh = false}) async {
+  Future<void> load({bool forceRefresh = false}) {
+    if (_loadFuture != null) return _loadFuture!;
+    return _loadFuture = _load(forceRefresh: forceRefresh).whenComplete(() {
+      _loadFuture = null;
+    });
+  }
+
+  Future<void> _load({required bool forceRefresh}) async {
     if (_loaded && !forceRefresh) {
       return;
     }
 
     final prefs = await SharedPreferences.getInstance();
     final payload = _readStorePayload(prefs);
-    final rawInventory = payload[_avatarInventoryKey];
+    final saved = LocalIntegrityService.decodeJson(
+      prefs.getString(inventoryStorageKey),
+      scope: _storeIntegrityScope,
+    );
+    final rawInventory =
+        saved.data != null && (!saved.isSigned || saved.isValid)
+        ? saved.data
+        : payload[_avatarInventoryKey];
     final inventory = rawInventory is Map
         ? rawInventory.cast<String, dynamic>()
         : <String, dynamic>{};
@@ -143,6 +165,10 @@ class AvatarInventoryProvider extends ChangeNotifier {
     _paidRollPurchaseCount = _readNonNegativeInt(
       inventory[_paidRollPurchaseCountKey],
     );
+    final pending = inventory['pendingPurchase'];
+    _pendingPurchase = pending is Map
+        ? Map<String, dynamic>.from(pending)
+        : null;
     if (_starterAvatarId != null) {
       _ownedAvatarIds.add(_starterAvatarId!);
     }
@@ -169,11 +195,11 @@ class AvatarInventoryProvider extends ChangeNotifier {
       changed = true;
     }
 
-    _loaded = true;
-
-    if (changed) {
+    if (changed || !prefs.containsKey(inventoryStorageKey)) {
       await _persistAvatarInventory(prefs: prefs);
     }
+
+    _loaded = true;
 
     notifyListeners();
   }
@@ -265,6 +291,75 @@ class AvatarInventoryProvider extends ChangeNotifier {
     return AvatarRollResult(avatar: avatar, bucket: bucket);
   }
 
+  /// Save the chosen avatar before charging. Retrying uses the same server
+  /// receipt, so a lost response or app restart cannot charge for a second roll.
+  Future<AvatarRollResult?> purchasePaidAvatar({
+    required int price,
+    required Future<bool> Function(
+      int amount,
+      String requestId,
+      String avatarId,
+    )
+    charge,
+    bool resumeOnly = false,
+  }) async {
+    if (_purchaseInProgress) return null;
+    _purchaseInProgress = true;
+    notifyListeners();
+    try {
+      await load();
+      if (_pendingPurchase == null) {
+        if (resumeOnly) return null;
+        final buckets = _availablePaidRollBuckets();
+        final bucket = _pickWeightedBucket(buckets);
+        if (bucket == null) return null;
+        final pool = buckets[bucket]!;
+        final avatar = pool[_random.nextInt(pool.length)];
+        final secure = Random.secure();
+        _pendingPurchase = <String, dynamic>{
+          'requestId': base64UrlEncode(
+            List<int>.generate(18, (_) => secure.nextInt(256)),
+          ),
+          'avatarId': avatar.id,
+          'amount': price,
+        };
+      }
+      // Also re-save on retry if the previous local write failed.
+      await _persistAvatarInventory();
+      final pending = _pendingPurchase!;
+      final avatar = AvatarCatalog.entryFor(pending['avatarId'] as String);
+      if (avatar == null) {
+        throw StateError('The pending avatar is unavailable.');
+      }
+      final paid = await charge(
+        pending['amount'] as int,
+        pending['requestId'] as String,
+        avatar.id,
+      );
+      if (!paid) {
+        _pendingPurchase = null;
+        await _persistAvatarInventory();
+        return null;
+      }
+      // Inventory and receipt completion are committed in one local record.
+      final added = _ownedAvatarIds.add(avatar.id);
+      _paidRollPurchaseCount++;
+      _pendingPurchase = null;
+      try {
+        await _persistAvatarInventory();
+      } catch (_) {
+        if (added) _ownedAvatarIds.remove(avatar.id);
+        _paidRollPurchaseCount--;
+        _pendingPurchase = pending;
+        rethrow;
+      }
+      return AvatarRollResult(avatar: avatar, bucket: avatar.bucket);
+    } finally {
+      _purchaseInProgress = false;
+      notifyListeners();
+    }
+  }
+
   Future<AvatarRewardClaimResult> claimRewardGroup(
     Iterable<String> avatarIds, {
     required String rewardKey,
@@ -312,23 +407,29 @@ class AvatarInventoryProvider extends ChangeNotifier {
     return <String, dynamic>{...?signed.data};
   }
 
-  Future<void> _persistAvatarInventory({SharedPreferences? prefs}) async {
-    final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
-    final payload = _readStorePayload(resolvedPrefs);
+  Future<void> _persistAvatarInventory({SharedPreferences? prefs}) {
     final ownedAvatarIds = _ownedAvatarIds.toList()..sort();
     final claimedRewardKeys = _claimedRewardKeys.toList()..sort();
-    payload[_avatarInventoryKey] = <String, dynamic>{
+    final payload = <String, dynamic>{
       _ownedAvatarIdsKey: ownedAvatarIds,
       _selectedAvatarIdKey: _selectedAvatarId,
       _starterAvatarIdKey: _starterAvatarId,
       _claimedRewardKeysKey: claimedRewardKeys,
       _paidRollPurchaseCountKey: _paidRollPurchaseCount,
+      'pendingPurchase': _pendingPurchase,
     };
-
-    await resolvedPrefs.setString(
-      EconomyProvider.storeStateKey,
-      LocalIntegrityService.wrapJson(payload, scope: _storeIntegrityScope),
+    final encoded = LocalIntegrityService.wrapJson(
+      payload,
+      scope: _storeIntegrityScope,
     );
+    final operation = _saveFuture.then((_) async {
+      final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
+      if (!await resolvedPrefs.setString(inventoryStorageKey, encoded)) {
+        throw StateError('Could not save avatar inventory. Please try again.');
+      }
+    });
+    _saveFuture = operation.catchError((Object _) {});
+    return operation;
   }
 
   Set<String> _readStringSet(Object? rawValue, {Set<String>? validValues}) {

@@ -537,6 +537,12 @@ class RemoteFriendMatchSnapshot {
 
   bool get hasOpponent => (guestUid ?? '').isNotEmpty;
 
+  bool isOlderThan(RemoteFriendMatchSnapshot other) {
+    if (matchId != other.matchId) return false;
+    if (updatedAt.isBefore(other.updatedAt)) return true;
+    return startedAt == other.startedAt && nextPly < other.nextPly;
+  }
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'matchId': matchId,
