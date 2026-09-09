@@ -39,7 +39,7 @@ fun decodeDartDefines(rawValue: String?): Map<String, String> {
     return rawValue.split(',')
         .filter { it.isNotBlank() }
         .mapNotNull { encodedEntry ->
-            val decodedEntry = String(Base64.getUrlDecoder().decode(encodedEntry))
+            val decodedEntry = String(Base64.getDecoder().decode(encodedEntry))
             val separatorIndex = decodedEntry.indexOf('=')
             if (separatorIndex <= 0) {
                 null
