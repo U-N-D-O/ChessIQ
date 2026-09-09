@@ -10314,8 +10314,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       }
 
       if (savedBoard is Map) {
-        boardState = savedBoard.map(
-          (key, value) => MapEntry(key.toString(), value.toString()),
+        boardState = sanitizeBoardState(
+          savedBoard.map(
+            (key, value) => MapEntry(key.toString(), value.toString()),
+          ),
         );
       }
 
@@ -15540,6 +15542,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String get _editModeKingsLockedHint =>
       'Kings stay locked so the board remains analyzable.';
 
+  String get _editModePawnRankHint =>
+      'Pawns cannot be placed on the first or last rank.';
+
   void _applyManualBoardEdit(
     Map<String, String> nextBoardState, {
     String? hintText,
@@ -15628,6 +15633,13 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (existingPiece == 'k_w' || existingPiece == 'k_b') {
       setState(() {
         _editModeHintText = _editModeKingsLockedHint;
+      });
+      _scheduleEditModeHintHide();
+      return;
+    }
+    if (!isValidPawnSquare(piece, square)) {
+      setState(() {
+        _editModeHintText = _editModePawnRankHint;
       });
       _scheduleEditModeHintHide();
       return;

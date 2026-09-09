@@ -101,6 +101,30 @@ class _MaterialPieceOnBoard {
   bool get isRook => pieceType == 't';
 }
 
+/// Returns true if placing [piece] on [square] is a valid pawn placement.
+///
+/// White pawns can only exist on ranks 2–7 (they start on rank 2 and promote
+/// on rank 8, so they are never legally present on ranks 1 or 8).  Black
+/// pawns follow the same rule in the opposite direction.  Any non-pawn piece
+/// passes unconditionally.
+bool isValidPawnSquare(String piece, String square) {
+  if (!piece.startsWith('p_')) return true;
+  if (square.length != 2) return false;
+  final rank = int.tryParse(square[1]);
+  if (rank == null) return false;
+  return rank >= 2 && rank <= 7;
+}
+
+/// Removes any entry from [boardState] whose piece violates [isValidPawnSquare].
+///
+/// Used when restoring a saved board to prevent invalid positions (e.g. a
+/// white pawn on rank 1) from being sent to Stockfish and crashing the app.
+Map<String, String> sanitizeBoardState(Map<String, String> boardState) {
+  return Map<String, String>.fromEntries(
+    boardState.entries.where((e) => isValidPawnSquare(e.value, e.key)),
+  );
+}
+
 String buildBoardFen(Map<String, String> boardState) {
   final buffer = StringBuffer();
   for (var rank = 8; rank >= 1; rank--) {
