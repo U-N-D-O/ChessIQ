@@ -162,9 +162,10 @@ For sideload or emulator-only release artifacts, pass
 Google's sample Android app ID (`ca-app-pub-3940256099942544~3347511713`).
 That keeps unsigned release-like builds on sample ads instead of live traffic.
 
-The iOS unsigned sideload workflow instead passes
-`--dart-define=ADMOB_DISABLE=true`, which prevents `AdService` from
-initializing AdMob or loading/showing any ads at all in that test IPA.
+The iOS unsigned sideload workflows pass
+`--dart-define=ADMOB_FORCE_TEST_ADS=true`. This makes the release-mode test IPA
+initialize AdMob with Google's sample iOS app ID and use Google's sample ad
+units, so every existing ad trigger can be exercised without serving live ads.
 
 ## Local And CI Secret Flow
 
@@ -182,8 +183,9 @@ repository secret `ADMOB_SECRETS_JSON_BASE64` as a base64-encoded blob. The
 signed Android AAB and signed iOS IPA workflows decode that secret into a local
 `secrets.json` and pass it through `--dart-define-from-file=secrets.json`.
 
-The unsigned iOS sideload workflows intentionally disable AdMob with
-`ADMOB_DISABLE=true` so test IPAs do not initialize ads at all.
+The unsigned iOS sideload workflows intentionally force Google's test ads with
+`ADMOB_FORCE_TEST_ADS=true`. They do not use the production AdMob app ID or
+production ad-unit IDs.
 
 ## AdMob Console Setup
 
