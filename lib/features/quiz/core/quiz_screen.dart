@@ -129,9 +129,7 @@ class _QuizAcademySetupLayoutSpec {
 }
 
 EdgeInsets _quizAcademyViewportPadding(MediaQueryData media) {
-  return media.orientation == Orientation.portrait
-      ? EdgeInsets.zero
-      : media.padding;
+  return media.padding;
 }
 
 class _QuizAcademyBackdropPainter extends CustomPainter {

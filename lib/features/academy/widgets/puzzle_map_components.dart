@@ -315,7 +315,7 @@ class _DashboardStateNotice extends StatelessWidget {
   }
 }
 
-class _DailyChallengeCard extends StatelessWidget {
+class _DailyChallengeCard extends StatefulWidget {
   const _DailyChallengeCard({
     required this.total,
     required this.completed,
@@ -335,6 +335,49 @@ class _DailyChallengeCard extends StatelessWidget {
   final String? errorMessage;
   final VoidCallback? onRetry;
   final bool monochrome;
+
+  @override
+  State<_DailyChallengeCard> createState() => _DailyChallengeCardState();
+}
+
+class _DailyChallengeCardState extends State<_DailyChallengeCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _activityController;
+
+  int get total => widget.total;
+  int get completed => widget.completed;
+  bool get hasTodayPuzzle => widget.hasTodayPuzzle;
+  VoidCallback get onTap => widget.onTap;
+  bool get isLoading => widget.isLoading;
+  String? get errorMessage => widget.errorMessage;
+  VoidCallback? get onRetry => widget.onRetry;
+  bool get monochrome => widget.monochrome;
+
+  @override
+  void initState() {
+    super.initState();
+    _activityController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (puzzleAcademyShouldReduceEffects(context)) {
+      _activityController.stop();
+      _activityController.value = 0.22;
+    } else if (!_activityController.isAnimating) {
+      _activityController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _activityController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -521,14 +564,8 @@ class _DailyChallengeCard extends StatelessWidget {
       accent: accentGold,
       monochromeOverride: monochrome,
       borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: puzzleAcademyPanelDecoration(
-          palette: palette,
-          accent: accentGold,
-          fillColor: palette.panelAlt,
-          radius: 10,
-        ),
+      child: AnimatedBuilder(
+        animation: _activityController,
         child: PuzzleAcademyAnimatedSwap(
           child: KeyedSubtree(
             key: ValueKey<String>(
@@ -543,6 +580,70 @@ class _DailyChallengeCard extends StatelessWidget {
             child: content,
           ),
         ),
+        builder: (context, child) {
+          final pulse = Curves.easeInOut.transform(_activityController.value);
+          final isLive =
+              canLaunch && !puzzleAcademyShouldReduceEffects(context);
+          final baseDecoration = puzzleAcademyPanelDecoration(
+            palette: palette,
+            accent: accentGold,
+            fillColor: palette.panelAlt,
+            radius: 10,
+          );
+          final borderColor = isLive
+              ? (Color.lerp(palette.line, accentGold, 0.18 + (pulse * 0.22)) ??
+                    palette.line)
+              : palette.line;
+
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: baseDecoration.copyWith(
+              border: Border.all(color: borderColor, width: 3),
+              boxShadow: [
+                ...?baseDecoration.boxShadow,
+                if (isLive)
+                  BoxShadow(
+                    color: accentGold.withValues(alpha: 0.04 + (pulse * 0.09)),
+                    blurRadius: 14 + (pulse * 12),
+                    spreadRadius: pulse * 0.8,
+                  ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                if (isLive)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Align(
+                          alignment: Alignment(-1.25 + (pulse * 2.5), 0),
+                          child: FractionallySizedBox(
+                            widthFactor: 0.22,
+                            heightFactor: 1.4,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                  colors: [
+                                    accentGold.withValues(alpha: 0.0),
+                                    accentGold.withValues(alpha: 0.055),
+                                    accentGold.withValues(alpha: 0.0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                child!,
+              ],
+            ),
+          );
+        },
       ),
     );
   }

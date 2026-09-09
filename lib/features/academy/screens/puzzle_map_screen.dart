@@ -1777,124 +1777,128 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Consumer<PuzzleAcademyProvider>(
-        builder: (context, provider, _) {
-          _activeView = provider.showAcademyExamsDashboard
-              ? _AcademyEntryView.exams
-              : _AcademyEntryView.hub;
-          final materialTheme = Theme.of(context);
-          final scheme = materialTheme.colorScheme;
-          final isDark = materialTheme.brightness == Brightness.dark;
-          final themeProvider = context.watch<AppThemeProvider>();
-          final monochrome =
-              themeProvider.isMonochrome || widget.cinematicThemeEnabled;
+    return Consumer<PuzzleAcademyProvider>(
+      builder: (context, provider, _) {
+        _activeView = provider.showAcademyExamsDashboard
+            ? _AcademyEntryView.exams
+            : _AcademyEntryView.hub;
+        final materialTheme = Theme.of(context);
+        final scheme = materialTheme.colorScheme;
+        final isDark = materialTheme.brightness == Brightness.dark;
+        final themeProvider = context.watch<AppThemeProvider>();
+        final monochrome =
+            themeProvider.isMonochrome || widget.cinematicThemeEnabled;
 
-          if (provider.isLoading || !provider.initialized) {
-            return Center(child: _buildAcademyLoadingIndicator(materialTheme));
-          }
+        if (provider.isLoading || !provider.initialized) {
+          return SafeArea(
+            child: Center(child: _buildAcademyLoadingIndicator(materialTheme)),
+          );
+        }
 
-          _queuePostFrameWork(provider);
+        _queuePostFrameWork(provider);
 
-          return OrientationBuilder(
-            builder: (context, orientation) {
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final leadTone = monochrome
-                      ? const Color(0xFF808080)
-                      : scheme.primary;
-                  final altTone = monochrome
-                      ? const Color(0xFFA6A6A6)
-                      : scheme.secondary;
-                  final useReducedWindowsVisuals =
-                      _useReducedWindowsVisualEffects;
-                  final rootContent = Stack(
-                    key: _academyRootContentKey,
-                    children: [
-                      if (_activeView == _AcademyEntryView.hub)
-                        Positioned.fill(
-                          child: _buildAcademyHubBackdrop(
-                            monochrome: monochrome,
-                          ),
-                        )
-                      else if (!useReducedWindowsVisuals)
-                        Positioned.fill(
-                          child: _buildAtmosphere(
-                            monochrome,
-                            includeYellow: false,
-                          ),
+        return OrientationBuilder(
+          builder: (context, orientation) {
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final leadTone = monochrome
+                    ? const Color(0xFF808080)
+                    : scheme.primary;
+                final altTone = monochrome
+                    ? const Color(0xFFA6A6A6)
+                    : scheme.secondary;
+                final useReducedWindowsVisuals =
+                    _useReducedWindowsVisualEffects;
+                final rootContent = Stack(
+                  key: _academyRootContentKey,
+                  children: [
+                    if (_activeView == _AcademyEntryView.hub)
+                      Positioned.fill(
+                        child: _buildAcademyHubBackdrop(monochrome: monochrome),
+                      )
+                    else if (!useReducedWindowsVisuals)
+                      Positioned.fill(
+                        child: _buildAtmosphere(
+                          monochrome,
+                          includeYellow: false,
                         ),
-                      if (_activeView == _AcademyEntryView.hub)
-                        _buildAcademyHub(
-                          provider: provider,
-                          constraints: constraints,
-                          themeProvider: themeProvider,
-                          monochrome: monochrome,
-                        )
-                      else
-                        _buildAcademyExamsView(
-                          provider,
-                          constraints: constraints,
-                          themeProvider: themeProvider,
-                          monochrome: monochrome,
+                      ),
+                    Positioned.fill(
+                      child: SafeArea(
+                        child: LayoutBuilder(
+                          builder: (context, safeConstraints) {
+                            if (_activeView == _AcademyEntryView.hub) {
+                              return _buildAcademyHub(
+                                provider: provider,
+                                constraints: safeConstraints,
+                                themeProvider: themeProvider,
+                                monochrome: monochrome,
+                              );
+                            }
+                            return _buildAcademyExamsView(
+                              provider,
+                              constraints: safeConstraints,
+                              themeProvider: themeProvider,
+                              monochrome: monochrome,
+                            );
+                          },
                         ),
-                      if (!useReducedWindowsVisuals)
-                        Align(
-                          alignment: Alignment.topCenter,
-                          child: IgnorePointer(
-                            child: ConfettiWidget(
-                              confettiController: _confettiController,
-                              blastDirectionality:
-                                  BlastDirectionality.explosive,
-                              emissionFrequency: 0.06,
-                              numberOfParticles: 22,
-                              maxBlastForce: 28,
-                              minBlastForce: 12,
-                              gravity: 0.14,
-                              colors: const [
-                                Color(0xFFD8B640),
-                                Color(0xFFECCF7A),
-                                Color(0xFFF4E9C2),
-                                Color(0xFFB98A1B),
-                              ],
-                            ),
-                          ),
-                        ),
-                      if (!useReducedWindowsVisuals &&
-                          _academyHubFlight != null)
-                        Positioned.fill(
-                          child: _buildAcademyHubFlightOverlay(isDark: isDark),
-                        ),
-                    ],
-                  );
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color.alphaBlend(
-                            leadTone.withValues(alpha: isDark ? 0.16 : 0.12),
-                            scheme.surface,
-                          ),
-                          scheme.surface,
-                          Color.alphaBlend(
-                            altTone.withValues(alpha: isDark ? 0.10 : 0.08),
-                            scheme.surface,
-                          ),
-                        ],
-                        stops: const [0.0, 0.52, 1.0],
                       ),
                     ),
-                    child: rootContent,
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
+                    if (!useReducedWindowsVisuals)
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: IgnorePointer(
+                          child: ConfettiWidget(
+                            confettiController: _confettiController,
+                            blastDirectionality: BlastDirectionality.explosive,
+                            emissionFrequency: 0.06,
+                            numberOfParticles: 22,
+                            maxBlastForce: 28,
+                            minBlastForce: 12,
+                            gravity: 0.14,
+                            colors: const [
+                              Color(0xFFD8B640),
+                              Color(0xFFECCF7A),
+                              Color(0xFFF4E9C2),
+                              Color(0xFFB98A1B),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (!useReducedWindowsVisuals && _academyHubFlight != null)
+                      Positioned.fill(
+                        child: _buildAcademyHubFlightOverlay(isDark: isDark),
+                      ),
+                  ],
+                );
+
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color.alphaBlend(
+                          leadTone.withValues(alpha: isDark ? 0.16 : 0.12),
+                          scheme.surface,
+                        ),
+                        scheme.surface,
+                        Color.alphaBlend(
+                          altTone.withValues(alpha: isDark ? 0.10 : 0.08),
+                          scheme.surface,
+                        ),
+                      ],
+                      stops: const [0.0, 0.52, 1.0],
+                    ),
+                  ),
+                  child: rootContent,
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 

@@ -18819,8 +18819,6 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   // --- UI Sections ---
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final isLandscape = media.orientation == Orientation.landscape;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -18870,51 +18868,27 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       stops: [0.0, 0.72, 1.0],
                     ),
                   ),
-                  child: (!isLandscape)
-                      ? SafeArea(
-                          child: !_menuReady
-                              ? Center(
-                                  child: FadeTransition(
-                                    opacity: CurvedAnimation(
-                                      parent: _menuRevealController,
-                                      curve: Curves.easeOutCubic,
-                                    ),
-                                    child: Image.asset(
-                                      _menuLogoAsset(context),
-                                      width: 220,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                )
-                              : FadeTransition(
-                                  opacity: CurvedAnimation(
-                                    parent: _sectionTransitionController,
-                                    curve: Curves.easeInOutCubic,
-                                  ),
-                                  child: _buildMenuExitTransition(),
-                                ),
+                  child: !_menuReady
+                      ? Center(
+                          child: FadeTransition(
+                            opacity: CurvedAnimation(
+                              parent: _menuRevealController,
+                              curve: Curves.easeOutCubic,
+                            ),
+                            child: Image.asset(
+                              _menuLogoAsset(context),
+                              width: 220,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         )
-                      : (!_menuReady
-                            ? Center(
-                                child: FadeTransition(
-                                  opacity: CurvedAnimation(
-                                    parent: _menuRevealController,
-                                    curve: Curves.easeOutCubic,
-                                  ),
-                                  child: Image.asset(
-                                    _menuLogoAsset(context),
-                                    width: 220,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                              )
-                            : FadeTransition(
-                                opacity: CurvedAnimation(
-                                  parent: _sectionTransitionController,
-                                  curve: Curves.easeInOutCubic,
-                                ),
-                                child: _buildMenuExitTransition(),
-                              )),
+                      : FadeTransition(
+                          opacity: CurvedAnimation(
+                            parent: _sectionTransitionController,
+                            curve: Curves.easeInOutCubic,
+                          ),
+                          child: _buildMenuExitTransition(),
+                        ),
                 ),
               ),
       ),
@@ -19090,153 +19064,161 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               yellowDotColor: yellowDotColor,
               reducedEffects: reducedEffects,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      key: const ValueKey<String>('analysis_credits_trigger'),
-                      onPressed: _showCreditsDialog,
-                      tooltip: 'Credits and legal',
-                      style: IconButton.styleFrom(
-                        backgroundColor: Color.alphaBlend(
-                          scheme.surface.withValues(alpha: 0.76),
-                          arcade.panel,
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        key: const ValueKey<String>('analysis_credits_trigger'),
+                        onPressed: _showCreditsDialog,
+                        tooltip: 'Credits and legal',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Color.alphaBlend(
+                            scheme.surface.withValues(alpha: 0.76),
+                            arcade.panel,
+                          ),
+                          foregroundColor: isMono
+                              ? scheme.onSurface
+                              : arcade.cyan,
+                          side: BorderSide(
+                            color: scheme.outline.withValues(alpha: 0.26),
+                          ),
                         ),
-                        foregroundColor: isMono
-                            ? scheme.onSurface
-                            : arcade.cyan,
-                        side: BorderSide(
-                          color: scheme.outline.withValues(alpha: 0.26),
-                        ),
-                      ),
-                      icon: const Icon(Icons.info_outline_rounded),
-                    ),
-                  ),
-                  SizedBox(height: showMenuLogo ? 4 : 0),
-                  if (showMenuLogo)
-                    Center(
-                      child: GestureDetector(
-                        key: const ValueKey<String>(
-                          'analysis_menu_logo_credits_trigger',
-                        ),
-                        child: Image.asset(
-                          _menuLogoAsset(context),
-                          width: 220,
-                          fit: BoxFit.contain,
-                        ),
+                        icon: const Icon(Icons.info_outline_rounded),
                       ),
                     ),
-                  SizedBox(height: showMenuLogo ? 10 : 2),
-                  Expanded(
-                    child: Center(
-                      child: LayoutBuilder(
-                        builder: (context, innerConstraints) {
-                          final availableWidth = min(
-                            innerConstraints.maxWidth,
-                            430.0,
-                          );
-                          final availableHeight = min(
-                            innerConstraints.maxHeight,
-                            560.0,
-                          );
-                          return SizedBox(
-                            width: availableWidth,
-                            height: availableHeight,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: SizedBox(
-                                width: menuCompositionSize,
-                                height: menuCompositionSize,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    _buildMenuCenterShape(
-                                      size: menuCompositionSize,
-                                      strokeColor: Color.alphaBlend(
-                                        arcade.cyan.withValues(
-                                          alpha: isMono ? 0.04 : 0.14,
+                    SizedBox(height: showMenuLogo ? 4 : 0),
+                    if (showMenuLogo)
+                      Center(
+                        child: GestureDetector(
+                          key: const ValueKey<String>(
+                            'analysis_menu_logo_credits_trigger',
+                          ),
+                          child: Image.asset(
+                            _menuLogoAsset(context),
+                            width: 220,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: showMenuLogo ? 10 : 2),
+                    Expanded(
+                      child: Center(
+                        child: LayoutBuilder(
+                          builder: (context, innerConstraints) {
+                            final availableWidth = min(
+                              innerConstraints.maxWidth,
+                              430.0,
+                            );
+                            final availableHeight = min(
+                              innerConstraints.maxHeight,
+                              560.0,
+                            );
+                            return SizedBox(
+                              width: availableWidth,
+                              height: availableHeight,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: SizedBox(
+                                  width: menuCompositionSize,
+                                  height: menuCompositionSize,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      _buildMenuCenterShape(
+                                        size: menuCompositionSize,
+                                        strokeColor: Color.alphaBlend(
+                                          arcade.cyan.withValues(
+                                            alpha: isMono ? 0.04 : 0.14,
+                                          ),
+                                          scheme.outline.withValues(
+                                            alpha: 0.38,
+                                          ),
                                         ),
-                                        scheme.outline.withValues(alpha: 0.38),
+                                        strokeWidth: 2,
+                                        rotation: _menuCenterRotationA,
+                                        sides: _menuCenterShapeSidesA,
+                                        impact: _menuCenterImpact,
+                                        accentColor: blueDotColor,
                                       ),
-                                      strokeWidth: 2,
-                                      rotation: _menuCenterRotationA,
-                                      sides: _menuCenterShapeSidesA,
-                                      impact: _menuCenterImpact,
-                                      accentColor: blueDotColor,
-                                    ),
-                                    _buildMenuCenterShape(
-                                      size: 285 * 1.10,
-                                      strokeColor: Color.alphaBlend(
-                                        arcade.amber.withValues(
-                                          alpha: isMono ? 0.04 : 0.14,
+                                      _buildMenuCenterShape(
+                                        size: 285 * 1.10,
+                                        strokeColor: Color.alphaBlend(
+                                          arcade.amber.withValues(
+                                            alpha: isMono ? 0.04 : 0.14,
+                                          ),
+                                          scheme.outline.withValues(
+                                            alpha: 0.30,
+                                          ),
                                         ),
-                                        scheme.outline.withValues(alpha: 0.30),
+                                        strokeWidth: 1.5,
+                                        rotation: _menuCenterRotationB,
+                                        sides: _menuCenterShapeSidesB,
+                                        impact: _menuCenterImpact * 0.86,
+                                        accentColor: yellowDotColor,
                                       ),
-                                      strokeWidth: 1.5,
-                                      rotation: _menuCenterRotationB,
-                                      sides: _menuCenterShapeSidesB,
-                                      impact: _menuCenterImpact * 0.86,
-                                      accentColor: yellowDotColor,
-                                    ),
-                                    menuCard,
-                                  ],
+                                      menuCard,
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.only(bottom: media.viewPadding.bottom),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: () => _setMute(!_muteSounds),
-                          icon: Icon(
-                            _muteSounds
-                                ? Icons.volume_off_rounded
-                                : Icons.volume_up_rounded,
-                          ),
-                          label: Text(
-                            _muteSounds ? 'Muted' : 'Sound On',
-                            style: _mainMenuPixelStyle(
-                              color: scheme.onSurface,
-                              size: 8.4,
-                              height: 1.12,
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: media.viewPadding.bottom,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () => _setMute(!_muteSounds),
+                            icon: Icon(
+                              _muteSounds
+                                  ? Icons.volume_off_rounded
+                                  : Icons.volume_up_rounded,
+                            ),
+                            label: Text(
+                              _muteSounds ? 'Muted' : 'Sound On',
+                              style: _mainMenuPixelStyle(
+                                color: scheme.onSurface,
+                                size: 8.4,
+                                height: 1.12,
+                              ),
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: controlSurface,
+                              foregroundColor: scheme.onSurface,
                             ),
                           ),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: controlSurface,
-                            foregroundColor: scheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton.icon(
-                          onPressed: () => _openSettings(),
-                          icon: const Icon(Icons.settings_outlined),
-                          label: Text(
-                            'Settings',
-                            style: _mainMenuPixelStyle(
-                              color: scheme.onSurface,
-                              size: 8.4,
-                              height: 1.12,
+                          const SizedBox(width: 10),
+                          FilledButton.icon(
+                            onPressed: () => _openSettings(),
+                            icon: const Icon(Icons.settings_outlined),
+                            label: Text(
+                              'Settings',
+                              style: _mainMenuPixelStyle(
+                                color: scheme.onSurface,
+                                size: 8.4,
+                                height: 1.12,
+                              ),
+                            ),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: controlSurface,
+                              foregroundColor: scheme.onSurface,
                             ),
                           ),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: controlSurface,
-                            foregroundColor: scheme.onSurface,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -23245,7 +23227,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         : _botThinking
         ? 'BOT THINKING'
         : _isHumanTurnInBotGame
-        ? 'PLAYER TURN'
+        ? 'YOUR TURN'
         : 'BOT TURN';
     final localFriendStatusAccent = _gameOutcome != null
         ? (_gameOutcome == GameOutcome.draw
@@ -23471,7 +23453,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (!_isBotMatchMode && localAvatar != null) ...[
+          if (!_isBotMatchMode &&
+              !_isAnalysisMatchMode &&
+              localAvatar != null) ...[
             GestureDetector(
               onTap: _showAvatarBoutiqueSheet,
               child: Tooltip(
@@ -26410,6 +26394,62 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
   }
 
+  Widget _buildVsBotPlayerIdentity(_VsBotArcadePalette arcade) {
+    final avatar = context.watch<AvatarInventoryProvider>().selectedAvatar;
+    final avatarAccent = avatar == null
+        ? arcade.cyan
+        : _avatarRollBucketAccent(
+            avatar.bucket,
+            Theme.of(context).colorScheme,
+            useMonochrome: arcade.monochrome,
+          );
+
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Tooltip(
+        message: 'Open Avatar Boutique',
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          child: InkWell(
+            onTap: _showAvatarBoutiqueSheet,
+            customBorder: const CircleBorder(),
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: avatarAccent.withValues(alpha: 0.12),
+                border: Border.all(
+                  color: avatarAccent.withValues(alpha: 0.74),
+                  width: 1.8,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: avatarAccent.withValues(alpha: 0.20),
+                    blurRadius: 13,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: avatar == null
+                  ? Icon(Icons.person_rounded, color: avatarAccent, size: 24)
+                  : AvatarPortrait(
+                      avatar: avatar,
+                      size: 40,
+                      radius: 999,
+                      borderColor: Colors.transparent,
+                      borderWidth: 0,
+                      backgroundColor: Colors.transparent,
+                      showShadow: false,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBotUndoButton() {
     final useMonochrome =
         context.watch<AppThemeProvider>().isMonochrome ||
@@ -26601,7 +26641,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           : _botThinking
           ? 'BOT THINKING'
           : _isHumanTurnInBotGame
-          ? 'PLAYER TURN'
+          ? 'YOUR TURN'
           : 'BOT TURN';
       final filledTagForeground = arcade.monochrome
           ? arcade.text
@@ -26728,10 +26768,39 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                         ),
                       ];
 
+                      final playerIdentity = _buildVsBotPlayerIdentity(arcade);
+                      final actionSlotWidth =
+                          (inner.maxWidth - (actionSpacing * 3)) / 4;
+                      const playerIdentitySize = 48.0;
+                      final playerIdentityRightBuffer = max(
+                        0.0,
+                        (actionSlotWidth - playerIdentitySize) / 2,
+                      );
+
                       return Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Align(alignment: Alignment.center, child: powerPod),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 72,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                // Keep the charge button centered; the player
+                                // identity is centered above the Config slot,
+                                // so the action row below never moves.
+                                Align(
+                                  alignment: Alignment.center,
+                                  child: powerPod,
+                                ),
+                                Positioned(
+                                  right: playerIdentityRightBuffer,
+                                  top: 12,
+                                  child: playerIdentity,
+                                ),
+                              ],
+                            ),
+                          ),
                           const SizedBox(height: 6),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
