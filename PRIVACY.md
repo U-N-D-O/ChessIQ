@@ -121,6 +121,19 @@ That anonymous Firebase user ID helps ChessIQ:
 
 ChessIQ does not require you to create a traditional account with an email address or password to use these anonymous backend features.
 
+## Requesting Data Deletion
+
+You can request deletion of your Academy data directly in ChessIQ:
+
+1. Open Puzzle Academy.
+2. Open Academy settings.
+3. Choose the option to delete the Academy profile.
+4. Confirm the deletion.
+
+This removes the live Academy leaderboard profile, including the nickname, country or region, score, and title, and clears the local Academy profile and exam history stored on the device. Where available, ChessIQ also deletes the anonymous Firebase identity associated with that Academy profile and creates a fresh anonymous identity for future backend use.
+
+For privacy questions or deletion requests that are not covered by the in-app Academy deletion control, contact QILA Modus at modus@qila.gl. Platform-store purchase records and advertising-partner records are controlled by Google Play, Apple, or Google AdMob and may be subject to their own retention and deletion controls.
+
 ## In-App Purchases
 
 ChessIQ offers in-app purchases through the platform store on your device, such as Apple App Store or Google Play.
