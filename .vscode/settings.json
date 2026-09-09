@@ -1,6 +1,7 @@
 {
   "git.enabled": true,
   "git.enableSmartCommit": true,
+  "git.postCommitCommand": "push",
   "git.showCommitInput": true,
   "git.showActionButton": {
     "commit": true,
