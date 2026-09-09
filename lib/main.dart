@@ -14,23 +14,36 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
-Future<void> _configureIosAudioSession() async {
+Future<void> _configureIosAudioSession({
+  required AVAudioSessionCategory category,
+}) async {
   if (!_isIOS) {
     return;
   }
 
   await AudioPlayer.global.setAudioContext(
-    AudioContext(
-      iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
-    ),
+    AudioContext(iOS: AudioContextIOS(category: category)),
   );
 }
 
 Future<void> _seedMutePreference() async {
   final prefs = await SharedPreferences.getInstance();
   if (!prefs.containsKey(SystemAudioService.muteSoundsKey)) {
-    final phoneMuted = _isIOS ? false : await SystemAudioService.isPhoneMuted();
+    final phoneMuted = await SystemAudioService.isPhoneMuted();
     await prefs.setBool(SystemAudioService.muteSoundsKey, phoneMuted);
+  }
+}
+
+Future<void> _initializeAudioPolicy() async {
+  // Let the initial device state decide the first in-app preference. The
+  // temporary ambient session allows the iOS mute switch to be sampled before
+  // switching to playback, which lets a user explicitly opt into sound later.
+  if (_isIOS) {
+    await _configureIosAudioSession(category: AVAudioSessionCategory.ambient);
+  }
+  await _seedMutePreference();
+  if (_isIOS) {
+    await _configureIosAudioSession(category: AVAudioSessionCategory.playback);
   }
 }
 
@@ -81,13 +94,6 @@ void _startDeferredStartupWarmups() {
       timeout: const Duration(seconds: 20),
     ),
   );
-  unawaited(
-    _runStartupTask(
-      'mute preference seed',
-      _seedMutePreference,
-      timeout: const Duration(seconds: 5),
-    ),
-  );
 }
 
 Future<void> main() async {
@@ -101,8 +107,8 @@ Future<void> main() async {
   // cannot strand iOS users on a blank launch screen.
   unawaited(
     _runStartupTask(
-      'iOS audio session',
-      _configureIosAudioSession,
+      'audio policy',
+      _initializeAudioPolicy,
       timeout: const Duration(seconds: 5),
     ),
   );

@@ -19,6 +19,7 @@ import 'package:chessiq/core/services/push_notification_service.dart';
 import 'package:chessiq/core/services/remote_friend_invite_link_service.dart';
 import 'package:chessiq/core/services/remote_friend_service.dart';
 import 'package:chessiq/core/services/storefront_service.dart';
+import 'package:chessiq/core/services/system_audio_service.dart';
 import 'package:chessiq/core/theme/app_theme_provider.dart';
 import 'package:chessiq/features/academy/screens/puzzle_map_screen.dart';
 import 'package:chessiq/features/academy/widgets/puzzle_academy_surface.dart';

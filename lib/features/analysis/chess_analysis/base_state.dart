@@ -104,6 +104,54 @@ class _CheckAlert {
   final DateTime startedAt;
 }
 
+class _RecentRemoteFriendJoin {
+  const _RecentRemoteFriendJoin({
+    required this.matchId,
+    required this.inviteCode,
+    required this.joinedAt,
+    required this.lastCheckedAt,
+  });
+
+  factory _RecentRemoteFriendJoin.fromMap(Map<String, dynamic> map) {
+    final matchId = map['matchId']?.toString().trim() ?? '';
+    final inviteCode = map['inviteCode']?.toString().trim().toUpperCase() ?? '';
+    final joinedAtMs = (map['joinedAtMs'] as num?)?.toInt() ?? 0;
+    final lastCheckedAtMs = (map['lastCheckedAtMs'] as num?)?.toInt() ?? 0;
+    return _RecentRemoteFriendJoin(
+      matchId: matchId,
+      inviteCode: inviteCode,
+      joinedAt: DateTime.fromMillisecondsSinceEpoch(joinedAtMs),
+      lastCheckedAt: DateTime.fromMillisecondsSinceEpoch(lastCheckedAtMs),
+    );
+  }
+
+  final String matchId;
+  final String inviteCode;
+  final DateTime joinedAt;
+  final DateTime lastCheckedAt;
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'matchId': matchId,
+      'inviteCode': inviteCode,
+      'joinedAtMs': joinedAt.millisecondsSinceEpoch,
+      'lastCheckedAtMs': lastCheckedAt.millisecondsSinceEpoch,
+    };
+  }
+
+  _RecentRemoteFriendJoin copyWith({
+    String? inviteCode,
+    DateTime? lastCheckedAt,
+  }) {
+    return _RecentRemoteFriendJoin(
+      matchId: matchId,
+      inviteCode: inviteCode ?? this.inviteCode,
+      joinedAt: joinedAt,
+      lastCheckedAt: lastCheckedAt ?? this.lastCheckedAt,
+    );
+  }
+}
+
 class _RemoteFriendReactionOption {
   const _RemoteFriendReactionOption({
     required this.emoji,
@@ -514,6 +562,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       'analysis_opening_button_mode_v1';
   static const String _analysisLocalFriendTimeControlKey =
       'analysis_local_friend_time_control_v1';
+  static const String _recentRemoteFriendJoinKey =
+      'recent_remote_friend_join_v1';
   static const List<OpeningMode> _configurableOpeningButtonModes =
       <OpeningMode>[
         OpeningMode.yellowGlow,
@@ -525,6 +575,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const Duration _remoteFriendReactionCooldown = Duration(seconds: 60);
   static const Duration _remoteFriendReactionDisplayDuration = Duration(
     seconds: 8,
+  );
+  static const Duration _recentRemoteFriendJoinCheckInterval = Duration(
+    seconds: 15,
   );
   static const String _vsBotEngineOwner = 'analysis.vsbot';
   static const int _vsBotInterstitialMatchInterval = 3;
@@ -933,6 +986,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   String? _remoteFriendLastError;
   String? _remoteFriendOutcomeReason;
   String? _pendingRemoteFriendInviteCode;
+  _RecentRemoteFriendJoin? _recentRemoteFriendJoin;
+  bool _recentRemoteFriendJoinLoaded = false;
+  bool _recentRemoteFriendJoinAvailable = false;
+  bool _recentRemoteFriendJoinChecking = false;
+  Timer? _recentRemoteFriendJoinCheckTimer;
+  bool _remoteFriendRematchOfferDialogVisible = false;
   String? _remoteFriendPieceSelectionSessionId;
   StreamSubscription<String>? _remoteFriendInviteLinkSubscription;
   Timer? _checkAlertTimer;
@@ -4551,7 +4610,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _loadUiPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _muteSounds = prefs.getBool(_muteSoundsKey) ?? false;
+      final savedMuteSounds = prefs.getBool(_muteSoundsKey);
+      if (savedMuteSounds != null) {
+        _muteSounds = savedMuteSounds;
+      } else {
+        // Startup seeding normally handles this, but keep the page safe if it
+        // wins the race with the deferred startup task.
+        _muteSounds = await SystemAudioService.isPhoneMuted();
+        await prefs.setBool(_muteSoundsKey, _muteSounds);
+      }
       _hapticsEnabled = prefs.getBool(_hapticsEnabledKey) ?? true;
       _isCinematicThemeEnabled =
           prefs.getBool(_cinematicThemeEnabledKey) ?? false;
@@ -5235,6 +5302,18 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     return null;
   }
 
+  bool _remoteFriendSnapshotHasIncomingRematchOffer(
+    RemoteFriendMatchSnapshot? snapshot,
+  ) {
+    final localUid = _remoteFriendLocalUid;
+    final offerByUid = snapshot?.rematchOfferByUid;
+    return localUid != null &&
+        localUid.isNotEmpty &&
+        offerByUid != null &&
+        offerByUid.isNotEmpty &&
+        offerByUid != localUid;
+  }
+
   bool _remoteFriendPieceSelectionOpenForSnapshot(
     RemoteFriendMatchSnapshot snapshot,
   ) {
@@ -5393,46 +5472,12 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   Future<String?> _promptRemoteFriendInviteCode() async {
-    final controller = TextEditingController();
-    try {
-      final inviteCode = await showDialog<String?>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Join Remote Friend Match'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              textCapitalization: TextCapitalization.characters,
-              maxLength: 6,
-              decoration: const InputDecoration(
-                labelText: 'Invite code',
-                hintText: 'ABC123',
-              ),
-              onSubmitted: (value) {
-                Navigator.of(dialogContext).pop(value.trim().toUpperCase());
-              },
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(
-                  dialogContext,
-                ).pop(controller.text.trim().toUpperCase()),
-                child: const Text('Join'),
-              ),
-            ],
-          );
-        },
-      );
-      final normalized = inviteCode?.trim().toUpperCase();
-      return normalized == null || normalized.isEmpty ? null : normalized;
-    } finally {
-      controller.dispose();
-    }
+    final inviteCode = await showDialog<String?>(
+      context: context,
+      builder: (_) => const _RemoteFriendInviteCodeDialog(),
+    );
+    final normalized = inviteCode?.trim().toUpperCase();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   String? _resolvedRemoteFriendInviteCode({String? inviteCode}) {
@@ -5970,6 +6015,223 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  Future<void> _showIncomingRemoteRematchOfferDialog() async {
+    if (!mounted ||
+        _remoteFriendRematchOfferDialogVisible ||
+        !_isRemoteFriendMatchMode ||
+        !_remoteFriendSnapshotHasIncomingRematchOffer(_remoteFriendSnapshot)) {
+      return;
+    }
+
+    _remoteFriendRematchOfferDialogVisible = true;
+    final resultDialogWasVisible = _gameResultDialogVisible;
+    try {
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      final useMonochrome =
+          context.read<AppThemeProvider>().isMonochrome ||
+          _isCinematicThemeEnabled;
+      final accent = useMonochrome ? scheme.onSurface : const Color(0xFF58E09A);
+      final action = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          final dialogScheme = Theme.of(dialogContext).colorScheme;
+          final dialogSurface = Color.alphaBlend(
+            accent.withValues(alpha: 0.10),
+            dialogScheme.surface,
+          );
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [dialogSurface, dialogScheme.surface],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: accent.withValues(alpha: 0.42)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.16),
+                      blurRadius: 28,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.42),
+                      blurRadius: 30,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.16),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: accent.withValues(alpha: 0.44),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.replay_rounded,
+                            color: accent,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Rematch request',
+                                style: TextStyle(
+                                  color: dialogScheme.onSurface,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Your friend wants to play again.',
+                                style: TextStyle(
+                                  color: dialogScheme.onSurface.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: dialogScheme.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: dialogScheme.outline.withValues(alpha: 0.22),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.scoreboard_outlined,
+                            size: 18,
+                            color: accent,
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              _remoteFriendSnapshot?.rematchKeepScore == true
+                                  ? 'Keep the current series score for the next game.'
+                                  : 'Start a fresh game without carrying over the series score.',
+                              style: TextStyle(
+                                color: dialogScheme.onSurface.withValues(
+                                  alpha: 0.82,
+                                ),
+                                fontSize: 12.2,
+                                height: 1.3,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop('decline'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: dialogScheme.onSurface,
+                              side: BorderSide(
+                                color: dialogScheme.outline.withValues(
+                                  alpha: 0.34,
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                            ),
+                            child: const Text('Decline'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop('accept'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: accent,
+                              foregroundColor: const Color(0xFF0B1712),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 18,
+                            ),
+                            label: const Text('Accept'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+
+      if (!mounted || action == null) {
+        return;
+      }
+      if (action == 'accept') {
+        await _runRemoteFriendAction(RemoteFriendMatchAction.acceptRematch);
+        if (resultDialogWasVisible &&
+            mounted &&
+            !_gameResultDialogVisible &&
+            _isRemoteFriendActiveMatch) {
+          Navigator.of(context).pop();
+        }
+      } else {
+        await _runRemoteFriendAction(RemoteFriendMatchAction.declineRematch);
+      }
+    } finally {
+      _remoteFriendRematchOfferDialogVisible = false;
+    }
+  }
+
   Future<void> _showRemoteFriendActionMenu() async {
     if (!mounted) {
       return;
@@ -6045,7 +6307,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       case _RemoteFriendNavigationAction.playChess:
         _openVsModeFromMenu();
       case _RemoteFriendNavigationAction.analysis:
-        _openAnalysisFromRemoteFriendMenu();
+        await _openAnalysisFromRemoteFriendMenu();
       case _RemoteFriendNavigationAction.store:
         unawaited(_openStore(initialSection: StoreSection.general));
     }
@@ -6783,6 +7045,191 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
   }
 
+  void _startRecentRemoteFriendJoinChecks() {
+    _recentRemoteFriendJoinCheckTimer?.cancel();
+    _recentRemoteFriendJoinCheckTimer = Timer.periodic(
+      _recentRemoteFriendJoinCheckInterval,
+      (_) {
+        if (!mounted || _activeSection != AppSection.vsMode) {
+          _stopRecentRemoteFriendJoinChecks();
+          return;
+        }
+        unawaited(_checkRecentRemoteFriendJoin());
+      },
+    );
+    unawaited(_checkRecentRemoteFriendJoin());
+  }
+
+  void _stopRecentRemoteFriendJoinChecks() {
+    _recentRemoteFriendJoinCheckTimer?.cancel();
+    _recentRemoteFriendJoinCheckTimer = null;
+  }
+
+  Future<void> _loadRecentRemoteFriendJoin() async {
+    if (_recentRemoteFriendJoinLoaded) {
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_recentRemoteFriendJoinKey);
+      if (raw != null && raw.trim().isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          final recent = _RecentRemoteFriendJoin.fromMap(
+            decoded.cast<String, dynamic>(),
+          );
+          if (recent.matchId.isNotEmpty && recent.inviteCode.isNotEmpty) {
+            _recentRemoteFriendJoin = recent;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load recent remote friend join: $e');
+    } finally {
+      _recentRemoteFriendJoinLoaded = true;
+    }
+
+    if (mounted && _activeSection == AppSection.vsMode) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _rememberRecentRemoteFriendJoin({
+    required String matchId,
+    required String inviteCode,
+  }) async {
+    final normalizedMatchId = matchId.trim();
+    final normalizedInviteCode = inviteCode.trim().toUpperCase();
+    if (normalizedMatchId.isEmpty || normalizedInviteCode.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final recent = _RecentRemoteFriendJoin(
+      matchId: normalizedMatchId,
+      inviteCode: normalizedInviteCode,
+      joinedAt: now,
+      lastCheckedAt: now,
+    );
+    _recentRemoteFriendJoinLoaded = true;
+    _recentRemoteFriendJoin = recent;
+    _recentRemoteFriendJoinAvailable = true;
+    if (mounted && _activeSection == AppSection.vsMode) {
+      setState(() {});
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _recentRemoteFriendJoinKey,
+        jsonEncode(recent.toMap()),
+      );
+    } catch (e) {
+      debugPrint('Failed to save recent remote friend join: $e');
+    }
+  }
+
+  Future<void> _clearRecentRemoteFriendJoin() async {
+    _recentRemoteFriendJoin = null;
+    _recentRemoteFriendJoinAvailable = false;
+    if (mounted && _activeSection == AppSection.vsMode) {
+      setState(() {});
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_recentRemoteFriendJoinKey);
+    } catch (e) {
+      debugPrint('Failed to clear recent remote friend join: $e');
+    }
+  }
+
+  Future<void> _checkRecentRemoteFriendJoin() async {
+    if (!_recentRemoteFriendJoinLoaded) {
+      await _loadRecentRemoteFriendJoin();
+    }
+    final recent = _recentRemoteFriendJoin;
+    if (!mounted ||
+        _activeSection != AppSection.vsMode ||
+        recent == null ||
+        _recentRemoteFriendJoinChecking) {
+      return;
+    }
+
+    _recentRemoteFriendJoinChecking = true;
+    if (mounted) {
+      setState(() {});
+    }
+    try {
+      final fetchedSnapshot = await RemoteFriendService.instance.fetchMatch(
+        recent.matchId,
+      );
+      if (!mounted || _activeSection != AppSection.vsMode) {
+        return;
+      }
+
+      // A realtime snapshot can still say "active" after the running clock
+      // has reached zero. Ask the server to settle that state before deciding
+      // whether the quick-join card should remain available.
+      var snapshot = fetchedSnapshot;
+      if (_remoteFriendSnapshotNeedsAuthoritativeRefresh(fetchedSnapshot)) {
+        final refreshed = await RemoteFriendService.instance.refreshMatch(
+          recent.matchId,
+        );
+        if (!mounted || _activeSection != AppSection.vsMode) {
+          return;
+        }
+        snapshot = refreshed.snapshot;
+      }
+
+      // Do not let a slow response for an older join replace a newer one.
+      if (_recentRemoteFriendJoin?.matchId != recent.matchId) {
+        return;
+      }
+
+      if (snapshot.status != RemoteFriendMatchStatus.active ||
+          snapshot.outcome != null) {
+        await _clearRecentRemoteFriendJoin();
+        return;
+      }
+
+      _recentRemoteFriendJoinAvailable = true;
+      final checked = recent.copyWith(
+        inviteCode: snapshot.inviteCode.isEmpty
+            ? recent.inviteCode
+            : snapshot.inviteCode,
+        lastCheckedAt: DateTime.now(),
+      );
+      _recentRemoteFriendJoin = checked;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _recentRemoteFriendJoinKey,
+        jsonEncode(checked.toMap()),
+      );
+    } catch (e) {
+      final details = _cleanRemoteFriendErrorMessage(e).toLowerCase();
+      if (details.contains('not found') || details.contains('no longer')) {
+        await _clearRecentRemoteFriendJoin();
+      } else {
+        // Keep the card during transient outages; the next timer tick retries.
+        debugPrint('Recent remote friend join check failed: $e');
+      }
+    } finally {
+      _recentRemoteFriendJoinChecking = false;
+      if (mounted && _activeSection == AppSection.vsMode) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _openRecentRemoteFriendJoin() async {
+    final recent = _recentRemoteFriendJoin;
+    if (recent == null || _remoteFriendOperationInProgress) {
+      return;
+    }
+    await _openRemoteFriendMatch(recent.matchId);
+  }
+
   void _startRemoteFriendSyncTimers({bool immediateRefresh = false}) {
     final snapshot = _remoteFriendSnapshot;
     if (!_isRemoteFriendMatchMode || snapshot == null) {
@@ -7109,6 +7556,9 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         previousSnapshot.status != snapshot.status ||
         previousSnapshot.outcome?.code != snapshot.outcome?.code ||
         previousSnapshot.outcome?.reason != snapshot.outcome?.reason;
+    final rematchOfferArrived =
+        _remoteFriendSnapshotHasIncomingRematchOffer(snapshot) &&
+        !_remoteFriendSnapshotHasIncomingRematchOffer(previousSnapshot);
 
     _remoteFriendInvite = invite;
     _remoteFriendSnapshot = snapshot;
@@ -7117,6 +7567,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _remoteFriendOutcomeReason = snapshot.outcome?.reason;
     _remoteFriendLastError = null;
     _syncRemoteFriendPieceSelectionUi(snapshot);
+
+    if (rematchOfferArrived) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            !_isRemoteFriendMatchMode ||
+            !_remoteFriendSnapshotHasIncomingRematchOffer(
+              _remoteFriendSnapshot,
+            )) {
+          return;
+        }
+        unawaited(_showIncomingRemoteRematchOfferDialog());
+      });
+    }
 
     final remoteMatchJustStarted =
         previousSnapshot != null &&
@@ -7695,6 +8158,10 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         invite: result.invite,
         snapshot: result.snapshot,
       );
+      await _rememberRecentRemoteFriendJoin(
+        matchId: result.snapshot.matchId,
+        inviteCode: normalized,
+      );
       unawaited(_loadRemoteFriendMemberships(silent: true));
     } catch (e) {
       _addLog('Join remote friend invite failed: $e');
@@ -7969,6 +8436,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _runRemoteFriendAction(
     RemoteFriendMatchAction action, {
     bool? keepScore,
+    Future<void> Function()? onSuccess,
   }) async {
     final matchId = _remoteFriendSnapshot?.matchId;
     if (matchId == null ||
@@ -8010,6 +8478,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           message: failure.message,
           includeInternetHint: failure.includeInternetHint,
         );
+        return;
+      }
+
+      if (onSuccess != null) {
+        await onSuccess();
         return;
       }
 
@@ -13084,10 +13557,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (_isAnalysisEditModeActive && !_isOpeningSelectionMode) {
       return true;
     }
-    if (!_isCurrentTurnPiece(piece) &&
-        !(_isRemoteFriendMatchMode &&
-            !_isHumanTurnInRemoteFriendGame &&
-            _isLocalRemoteFriendPiece(piece))) {
+    if (_isRemoteFriendMatchMode) {
+      // Remote matches may queue a premove, but only with the local player's
+      // pieces. The current-turn piece can belong to the opponent while we
+      // are waiting, so checking only _isCurrentTurnPiece is not sufficient.
+      return _isRemoteFriendActiveMatch &&
+          _gameOutcome == null &&
+          !_isRemoteFriendPieceSelectionOpen &&
+          _isLocalRemoteFriendPiece(piece);
+    }
+    if (!_isCurrentTurnPiece(piece)) {
       return false;
     }
     if (_isBotMatchMode && !_isHumanTurnInBotGame) {
@@ -14964,6 +15443,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     bool resetQuizLaunch = true,
     bool resetBotSideChoice = false,
   }) {
+    _stopRecentRemoteFriendJoinChecks();
     _matchMode = MatchMode.analysis;
     _resetVsBotSessionState();
     _resetRemoteFriendSessionState();
@@ -15006,10 +15486,58 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       _vsModeRemoteTimeControlExpanded = false;
       _vsModeRemoteSeatPreferenceExpanded = false;
     });
+    unawaited(_loadRecentRemoteFriendJoin());
+    _startRecentRemoteFriendJoinChecks();
     unawaited(_loadRemoteFriendMemberships(silent: true));
   }
 
-  void _openAnalysisFromRemoteFriendMenu() {
+  Future<void> _openAnalysisFromRemoteFriendMenu() async {
+    if (!mounted) {
+      return;
+    }
+
+    if (_isRemoteFriendActiveMatch) {
+      final shouldResign = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Resign and enter analysis?'),
+            content: const Text(
+              'Entering analysis will end this 1v1 cross-play game by resignation. Your opponent will be notified. Continue?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Color(0xFFE35D6A),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Resign & Analyze'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldResign != true || !mounted) {
+        return;
+      }
+
+      await _runRemoteFriendAction(
+        RemoteFriendMatchAction.resign,
+        onSuccess: _enterAnalysisModeFromRemoteFriendMenu,
+      );
+      return;
+    }
+
+    await _enterAnalysisModeFromRemoteFriendMenu();
+  }
+
+  Future<void> _enterAnalysisModeFromRemoteFriendMenu() async {
     if (!mounted) {
       return;
     }
@@ -19750,7 +20278,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                       const SizedBox(height: 10),
                       infoRow(
-                        title: '1 PLAYER VS CPU',
+                        title: 'PLAY VS BOT',
                         detail:
                             'Select a bot profile, set difficulty, and launch a solo match instantly.',
                         icon: Icons.smart_toy_outlined,
@@ -20189,6 +20717,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     }
 
     Widget buildQuickJoinPanel() {
+      final recentJoin = _recentRemoteFriendJoin;
+      final recentJoinIsReady =
+          recentJoin != null && _recentRemoteFriendJoinAvailable;
+      final recentJoinCheckedLabel = recentJoin == null
+          ? ''
+          : _recentRemoteFriendJoinChecking
+          ? 'Checking the live match now...'
+          : recentJoinIsReady
+          ? 'Still in progress • checked ${_formatRemoteFriendMembershipTimestamp(recentJoin.lastCheckedAt)}'
+          : 'We will keep checking until the match can be verified.';
+
       return buildCardShell(
         accent: heroAccent,
         child: Column(
@@ -20200,6 +20739,105 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
               'Paste an invite code and jump directly into your private match lobby.',
               style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
             ),
+            if (recentJoin != null) ...[
+              const SizedBox(height: 12),
+              buildInsetShell(
+                accent: recentJoinIsReady ? remoteAccent : heroAccent,
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color:
+                                (recentJoinIsReady ? remoteAccent : heroAccent)
+                                    .withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color:
+                                  (recentJoinIsReady
+                                          ? remoteAccent
+                                          : heroAccent)
+                                      .withValues(alpha: 0.34),
+                            ),
+                          ),
+                          child: Icon(
+                            recentJoinIsReady
+                                ? Icons.play_circle_outline_rounded
+                                : Icons.sync_rounded,
+                            color: recentJoinIsReady
+                                ? remoteAccent
+                                : heroAccent,
+                            size: 21,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'RECENT JOINED GAME',
+                                style: buildHudStyle(
+                                  color: recentJoinIsReady
+                                      ? remoteAccent
+                                      : heroAccent,
+                                  size: 10.2,
+                                  weight: FontWeight.w800,
+                                  letterSpacing: 0.72,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Code ${recentJoin.inviteCode}',
+                                style: buildDisplayStyle(
+                                  color: arcade.text,
+                                  size: 17,
+                                  glow: false,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                recentJoinCheckedLabel,
+                                style: buildBodyStyle(
+                                  color: arcade.textMuted,
+                                  size: 11.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: buildActionButton(
+                        label: _recentRemoteFriendJoinChecking
+                            ? 'Checking...'
+                            : recentJoinIsReady
+                            ? 'Rejoin Match'
+                            : 'Waiting for Match Check',
+                        icon: recentJoinIsReady
+                            ? Icons.login_rounded
+                            : Icons.hourglass_top_rounded,
+                        onPressed:
+                            recentJoinIsReady &&
+                                !_remoteFriendOperationInProgress
+                            ? () => unawaited(_openRecentRemoteFriendJoin())
+                            : null,
+                        accent: recentJoinIsReady ? remoteAccent : heroAccent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -20900,7 +21538,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             ),
             (
               option: _VsModeQuickOption.vsCpu,
-              title: '1 PLAYER VS CPU',
+              title: 'PLAY VS BOT',
               subtitle: null,
               icon: Icons.smart_toy_outlined,
               accent: arcade.cyan,
@@ -34272,6 +34910,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _cancelIdleInterstitialTimer();
     _stopLocalFriendClock(clearDisplay: true);
     _stopRemoteFriendSyncTimers();
+    _stopRecentRemoteFriendJoinChecks();
     unawaited(_remoteFriendInviteLinkSubscription?.cancel());
     _editModeHintTimer?.cancel();
     _moveQualityOverlayTimer?.cancel();
@@ -34352,4 +34991,52 @@ class _SuggestionButtonPalette {
   final Color borderAccent;
   final Color glyphShell;
   final Color glyphBorder;
+}
+
+class _RemoteFriendInviteCodeDialog extends StatefulWidget {
+  const _RemoteFriendInviteCodeDialog();
+
+  @override
+  State<_RemoteFriendInviteCodeDialog> createState() =>
+      _RemoteFriendInviteCodeDialogState();
+}
+
+class _RemoteFriendInviteCodeDialogState
+    extends State<_RemoteFriendInviteCodeDialog> {
+  final _controller = TextEditingController();
+
+  void _submit([String? value]) {
+    Navigator.of(context).pop((value ?? _controller.text).trim().toUpperCase());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Join Remote Friend Match'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.characters,
+        maxLength: 6,
+        decoration: const InputDecoration(
+          labelText: 'Invite code',
+          hintText: 'ABC123',
+        ),
+        onSubmitted: _submit,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Join')),
+      ],
+    );
+  }
 }

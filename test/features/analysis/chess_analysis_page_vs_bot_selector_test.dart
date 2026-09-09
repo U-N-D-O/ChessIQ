@@ -52,7 +52,7 @@ Future<void> _pumpVsBotSelector(
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 900));
 
-  final vsCpuMode = find.text('1 PLAYER VS CPU').hitTestable();
+  final vsCpuMode = find.text('PLAY VS BOT').hitTestable();
   expect(vsCpuMode, findsOneWidget);
 
   await tester.tap(vsCpuMode);
@@ -141,7 +141,7 @@ void main() {
 
     expect(find.text('PLAY CHESS'), findsOneWidget);
     expect(find.text('Choose Match Type'), findsOneWidget);
-    expect(find.text('1 PLAYER VS CPU'), findsOneWidget);
+    expect(find.text('PLAY VS BOT'), findsOneWidget);
     expect(find.text('1V1 SHARED SCREEN'), findsOneWidget);
     expect(find.text('1V1 CROSS-PLAY'), findsOneWidget);
     expect(find.text('QUICK JOIN CODE'), findsOneWidget);
