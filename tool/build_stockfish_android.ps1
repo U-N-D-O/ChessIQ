@@ -260,6 +260,10 @@ $shellPath = Resolve-GitShell
 $originalEnvironment = Use-GitShellEnvironment -ShellPath $shellPath
 $toolchainBin = Resolve-NdkToolchainBin -ResolvedNdkPath $ndkResolved
 $env:PATH = $toolchainBin + ';' + $env:PATH
+$stripCommand = Get-Command llvm-strip -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $stripCommand) {
+    throw "LLVM strip tool was not found under $toolchainBin"
+}
 
 try {
     Push-Location $sourceRoot
@@ -281,6 +285,14 @@ try {
         $builtBinary = Join-Path $sourceRoot 'stockfish'
         if (-not (Test-Path $builtBinary)) {
             throw "Expected Stockfish binary was not produced for $abi"
+        }
+
+        # Stockfish is launched as an executable from the app's native
+        # library directory. Remove compiler/debug symbols from release
+        # artifacts while retaining the symbols required to run it.
+        & $stripCommand.Source --strip-unneeded $builtBinary
+        if ($LASTEXITCODE -ne 0) {
+            throw "llvm-strip failed for $abi"
         }
 
         $destinationDir = Join-Path $resolvedAssetsDir $abi

@@ -224,6 +224,11 @@ def build_android_stockfish(*, source_dir: Path | None, assets_dir: Path, ndk_pa
     try:
         ndk_value = ndk_path.as_posix()
         toolchain_bin = _resolve_ndk_toolchain_bin(ndk_path)
+        strip_path = shutil.which("llvm-strip", path=str(toolchain_bin))
+        if strip_path is None:
+            raise FileNotFoundError(
+                f"LLVM strip tool was not found under {toolchain_bin}",
+            )
         make_env["PATH"] = os.pathsep.join([str(toolchain_bin), make_env.get("PATH", "")])
         for abi in abis:
             arch = ANDROID_ABIS[abi]
@@ -244,6 +249,11 @@ def build_android_stockfish(*, source_dir: Path | None, assets_dir: Path, ndk_pa
             built_binary = source_root / "stockfish"
             if not built_binary.exists():
                 raise FileNotFoundError(f"Expected Stockfish binary was not produced for {abi}")
+
+            # Stockfish is launched as an executable from the app's native
+            # library directory. Remove compiler/debug symbols from release
+            # artifacts while retaining the symbols required to run it.
+            _run([strip_path, "--strip-unneeded", str(built_binary)])
 
             destination_dir = assets_dir / abi
             destination_dir.mkdir(parents=True, exist_ok=True)
