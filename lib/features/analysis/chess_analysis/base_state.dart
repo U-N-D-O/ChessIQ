@@ -820,6 +820,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   int _vsBotSessionDraws = 0;
   EngineSearchHandle? _botSearchHandle;
   int _engineRequestSequence = 0;
+  String? _activeLiveAnalysisRequestId;
   EvalSnapshot? _currentEvalSnapshot;
   final Map<String, PositionAnalysisCacheEntry> _positionAnalysisCacheByFen =
       <String, PositionAnalysisCacheEntry>{};
@@ -1005,6 +1006,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   AppSection _activeSection = AppSection.menu;
   GambitQuizMode _quizMode = GambitQuizMode.guessName;
   bool _menuReady = false;
+  bool _firstLaunchWelcomeShown = false;
   bool _muteSounds = false;
   bool _hapticsEnabled = true;
   bool _isCinematicThemeEnabled = false;
@@ -1387,6 +1389,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       setState(() => _menuReady = true);
       _menuRevealController.forward(from: 0);
       _sectionTransitionController.forward(from: 0);
+      unawaited(_showFirstLaunchWelcomeIfNeeded());
     });
   }
 
@@ -4605,6 +4608,83 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _activeSection == AppSection.gambitQuiz) {
       unawaited(_playMenuMusic());
     }
+  }
+
+  Future<void> _showFirstLaunchWelcomeIfNeeded() async {
+    if (_firstLaunchWelcomeShown || !mounted) {
+      return;
+    }
+
+    late final AvatarInventoryProvider avatarInventory;
+    try {
+      avatarInventory = context.read<AvatarInventoryProvider>();
+      await avatarInventory.load();
+    } on ProviderNotFoundException {
+      // Some standalone page tests intentionally omit the app-level avatar
+      // provider. The welcome is optional in that isolated context.
+      return;
+    } catch (error) {
+      debugPrint('First-launch welcome delayed: $error');
+      return;
+    }
+
+    if (!mounted ||
+        _firstLaunchWelcomeShown ||
+        !avatarInventory.bootstrappedStarter) {
+      return;
+    }
+
+    final avatar = avatarInventory.starterAvatar;
+    if (avatar == null) {
+      return;
+    }
+
+    _firstLaunchWelcomeShown = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final scheme = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          title: const Text('Welcome to ChessIQ'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Hallo, and thank you for downloading ChessIQ.\n\n'
+                  'We are currently in the alpha launch phase. We are still '
+                  'developing the game and adding options in Play Chess mode.\n\n'
+                  'Please enjoy your free avatar. More will come.',
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Your free avatar',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                AvatarPortrait(avatar: avatar, size: 104, radius: 24),
+                const SizedBox(height: 8),
+                Text(
+                  avatar.name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Let\'s play'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _loadUiPrefs() async {
@@ -9915,9 +9995,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       } else {
         _suggestionsEnabled = false;
       }
+      _activeLiveAnalysisRequestId = null;
       _topLines = [];
       _analysisLines = [];
       _analysisLinesFen = null;
+      _currentEvalSnapshot = null;
       _currentDepth = 0;
     });
     _send('stop');
@@ -11045,6 +11127,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     _topLines = [];
     _analysisLines = [];
     _analysisLinesFen = null;
+    _currentEvalSnapshot = null;
     _currentDepth = 0;
     _currentEval = 0.0;
     _evalWhiteTurn = true;
@@ -11323,6 +11406,15 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   void _clearPositionAnalysisCache() {
     _positionAnalysisCacheByFen.clear();
     _primaryEngineUpdateByFen.clear();
+    _activeLiveAnalysisRequestId = null;
+    // A cache invalidation is also a live-analysis invalidation. In
+    // particular, resetting/editing the board must not leave the previous
+    // position's evaluation eligible to be displayed while the new search is
+    // waiting for its first update.
+    _currentEvalSnapshot = null;
+    _currentDepth = 0;
+    _currentEval = 0.0;
+    _evalWhiteTurn = _isWhiteTurn;
   }
 
   void _restoreCachedEvalForFen(String fen) {
@@ -11397,6 +11489,14 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   }
 
   void _handleLiveAnalysisUpdate(EngineSearchUpdate update) {
+    // FEN matching alone is not enough here: a reset can return to the same
+    // FEN while output from the canceled search is still in flight. Only the
+    // request currently owned by the live-analysis view may update arrows or
+    // the displayed evaluation.
+    if (update.request.role != EngineRequestRole.liveAnalysis ||
+        update.request.requestId != _activeLiveAnalysisRequestId) {
+      return;
+    }
     _recordPrimaryEngineUpdate(update);
     _maybeResolvePendingMoveQualityFromUpdate(update);
     if (!mounted || !update.request.matchesFen(_genFen())) {
@@ -11880,9 +11980,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         reason: 'analysis inactive',
       );
       setState(() {
+        _activeLiveAnalysisRequestId = null;
         _topLines = [];
         _analysisLines = [];
         _analysisLinesFen = null;
+        _currentEvalSnapshot = null;
         _currentDepth = 0;
       });
       return;
@@ -11892,6 +11994,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
       reason: 'analysis refresh',
     );
+    final requestId = _nextEngineRequestId(EngineRequestRole.liveAnalysis);
+    _activeLiveAnalysisRequestId = requestId;
     setState(() {
       _topLines = [];
       _analysisLines = [];
@@ -11909,7 +12013,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
           );
     engine.scheduleSearch(
       EngineRequestSpec(
-        requestId: _nextEngineRequestId(EngineRequestRole.liveAnalysis),
+        requestId: requestId,
         role: EngineRequestRole.liveAnalysis,
         fen: _genFen(),
         whiteToMove: _isWhiteTurn,
@@ -31208,48 +31312,60 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                     const SizedBox(height: 8),
                     SizedBox(
                       height: 86,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: ownedAvatars.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 10),
-                        itemBuilder: (context, index) {
-                          final avatar = ownedAvatars[index];
-                          final isSelected = selectedAvatar?.id == avatar.id;
-                          return GestureDetector(
-                            onTap: () async {
-                              await avatarInventory.selectAvatar(avatar.id);
-                              if (mounted && _isRemoteFriendMatchMode) {
-                                unawaited(
-                                  _refreshRemoteFriendMatch(silent: true),
-                                );
-                              }
-                              if (sheetContext.mounted) setSheetState(() {});
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              width: 82,
-                              height: 82,
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? scheme.primary
-                                      : scheme.outline.withValues(alpha: 0.18),
-                                  width: isSelected ? 2.4 : 1.2,
+                      child: ScrollConfiguration(
+                        behavior: const MaterialScrollBehavior().copyWith(
+                          dragDevices: <PointerDeviceKind>{
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                          },
+                        ),
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: ownedAvatars.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 10),
+                          itemBuilder: (context, index) {
+                            final avatar = ownedAvatars[index];
+                            final isSelected = selectedAvatar?.id == avatar.id;
+                            return GestureDetector(
+                              onTap: () async {
+                                await avatarInventory.selectAvatar(avatar.id);
+                                if (mounted && _isRemoteFriendMatchMode) {
+                                  unawaited(
+                                    _refreshRemoteFriendMatch(silent: true),
+                                  );
+                                }
+                                if (sheetContext.mounted) {
+                                  setSheetState(() {});
+                                }
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: 82,
+                                height: 82,
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? scheme.primary
+                                        : scheme.outline.withValues(
+                                            alpha: 0.18,
+                                          ),
+                                    width: isSelected ? 2.4 : 1.2,
+                                  ),
+                                ),
+                                child: AvatarPortrait(
+                                  avatar: avatar,
+                                  size: 76,
+                                  radius: 14,
+                                  borderWidth: 0,
+                                  backgroundColor: Colors.transparent,
+                                  showShadow: false,
                                 ),
                               ),
-                              child: AvatarPortrait(
-                                avatar: avatar,
-                                size: 76,
-                                radius: 14,
-                                borderWidth: 0,
-                                backgroundColor: Colors.transparent,
-                                showShadow: false,
-                              ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),

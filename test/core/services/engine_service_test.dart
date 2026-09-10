@@ -137,6 +137,125 @@ void main() {
     expect(secondResult.lines.single.move, 'g8f6');
   });
 
+  test('cancelling a ready barrier does not strand later analysis', () async {
+    late _FakeEngineTransport transport;
+    var readyCount = 0;
+    final service = CoordinatedEngineService.debug(
+      owner: 'analysis.ready-cancel',
+      transportFactory: () => transport = _FakeEngineTransport((cmd, fake) {
+        if (cmd == 'uci') {
+          fake.emit('uciok');
+          return;
+        }
+        if (cmd == 'isready') {
+          readyCount++;
+          // The scheduler's startup barrier is the first one. Hold the first
+          // search at its barrier so it can be canceled, then let the next
+          // request proceed.
+          if (readyCount != 2) {
+            fake.emit('readyok');
+          }
+        }
+      }),
+    );
+    await service.startScheduler();
+
+    final first = service.scheduleSearch(
+      const EngineRequestSpec(
+        requestId: 'ready-cancel-1',
+        role: EngineRequestRole.liveAnalysis,
+        fen: 'fen-old',
+        whiteToMove: true,
+        multiPv: 1,
+        depth: 10,
+        timeout: Duration(milliseconds: 500),
+      ),
+    );
+    await _flushMicrotasks();
+
+    service.cancelSearches(
+      roles: <EngineRequestRole>{EngineRequestRole.liveAnalysis},
+      reason: 'board changed',
+    );
+    final second = service.scheduleSearch(
+      const EngineRequestSpec(
+        requestId: 'ready-cancel-2',
+        role: EngineRequestRole.liveAnalysis,
+        fen: 'fen-new',
+        whiteToMove: true,
+        multiPv: 1,
+        depth: 10,
+        timeout: Duration(milliseconds: 500),
+      ),
+    );
+    await _flushMicrotasks();
+
+    transport.emit('info depth 10 multipv 1 score cp 24 pv e2e4');
+    transport.emit('bestmove e2e4');
+
+    final firstResult = await first.result;
+    final secondResult = await second.result;
+    expect(firstResult.cancelled, isTrue);
+    expect(secondResult.succeeded, isTrue);
+    expect(secondResult.bestMove, 'e2e4');
+  });
+
+  test('reset cancels searches queued during scheduler startup', () async {
+    late _FakeEngineTransport transport;
+    final service = CoordinatedEngineService.debug(
+      owner: 'analysis.startup-reset',
+      transportFactory: () => transport = _FakeEngineTransport((cmd, fake) {
+        if (cmd == 'uci') {
+          fake.emit('uciok');
+          return;
+        }
+        if (cmd == 'isready') {
+          fake.emit('readyok');
+        }
+      }),
+    );
+
+    final oldPosition = service.scheduleSearch(
+      const EngineRequestSpec(
+        requestId: 'startup-reset-old',
+        role: EngineRequestRole.liveAnalysis,
+        fen: 'fen-old',
+        whiteToMove: true,
+        multiPv: 1,
+        depth: 10,
+        timeout: Duration(milliseconds: 500),
+      ),
+    );
+
+    // This is the same ordering used by a board reset. The scheduler has not
+    // necessarily completed UCI startup yet, so cancellation must not depend
+    // on _schedulerStarted already being true.
+    service.send('stop');
+    service.send('ucinewgame');
+    final newPosition = service.scheduleSearch(
+      const EngineRequestSpec(
+        requestId: 'startup-reset-new',
+        role: EngineRequestRole.liveAnalysis,
+        fen: 'fen-new',
+        whiteToMove: true,
+        multiPv: 1,
+        depth: 10,
+        timeout: Duration(milliseconds: 500),
+      ),
+    );
+
+    await _flushMicrotasks();
+    await _flushMicrotasks();
+    transport.emit('info depth 10 multipv 1 score cp 24 pv e2e4');
+    transport.emit('bestmove e2e4');
+
+    final oldResult = await oldPosition.result;
+    final newResult = await newPosition.result;
+    expect(oldResult.cancelled, isTrue);
+    expect(newResult.succeeded, isTrue);
+    expect(newResult.bestMove, 'e2e4');
+  });
+
   test('background confirmations for different FENs coexist', () async {
     late _FakeEngineTransport transport;
     var readyCount = 0;

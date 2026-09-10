@@ -191,6 +191,17 @@ void main() {
     expect(provider.selectedAvatar!.id, provider.starterAvatar!.id);
   });
 
+  test('starter avatar uses the random entry from the starter pool', () async {
+    final provider = AvatarInventoryProvider(
+      random: _SequenceRandom(intValues: const <int>[5]),
+    );
+
+    await provider.load();
+
+    expect(provider.starterAvatar?.id, AvatarCatalog.starterPool[5].id);
+    expect(provider.starterAvatar?.name, isNot('Celician Mara'));
+  });
+
   test('selected avatar persists across provider reloads', () async {
     final firstProvider = AvatarInventoryProvider(random: Random(5));
     await firstProvider.load();

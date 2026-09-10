@@ -25,7 +25,8 @@ class AvatarRewardClaimResult {
 }
 
 class AvatarInventoryProvider extends ChangeNotifier {
-  AvatarInventoryProvider({Random? random}) : _random = random ?? Random();
+  AvatarInventoryProvider({Random? random})
+    : _random = random ?? Random.secure();
 
   static const int paidRollPrice = 200;
   static const String _storeIntegrityScope = 'economy_store';

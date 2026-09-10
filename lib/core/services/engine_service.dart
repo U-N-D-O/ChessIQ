@@ -369,19 +369,22 @@ class CoordinatedEngineService extends EngineService {
 
   @override
   void send(String cmd) {
-    if (_schedulerStarted) {
-      final normalized = cmd.trim();
-      if (normalized == 'stop') {
-        cancelSearches(reason: 'manual stop');
-        _sendRaw('stop');
-        return;
-      }
-      if (normalized == 'ucinewgame') {
-        cancelSearches(reason: 'ucinewgame');
-        _sendRaw('stop');
-        _sendRaw(normalized);
-        return;
-      }
+    final normalized = cmd.trim();
+    // A reset can happen while UCI startup or a ready barrier is still in
+    // progress. Search requests are queued before _schedulerStarted flips to
+    // true, so gating cancellation on that flag leaves the old position in
+    // the queue. It may then run after the reset and starve the new request
+    // (especially when the old position has no legal moves).
+    if (normalized == 'stop') {
+      cancelSearches(reason: 'manual stop');
+      _sendRaw('stop');
+      return;
+    }
+    if (normalized == 'ucinewgame') {
+      cancelSearches(reason: 'ucinewgame');
+      _sendRaw('stop');
+      _sendRaw(normalized);
+      return;
     }
     _sendRaw(cmd);
   }
@@ -487,6 +490,16 @@ class CoordinatedEngineService extends EngineService {
     final barrierTask = _barrierTask;
     if (barrierTask != null && _matchesRole(barrierTask.request.role, roles)) {
       _barrierTask = null;
+      // _drainQueue is awaiting the ready barrier for this task. Completing
+      // it here is important: a board reset/edit can cancel a request while
+      // the engine is between `stop` and `isready`. Leaving the completer
+      // pending strands the queue until the timeout and can make every later
+      // analysis request appear stuck.
+      final readyBarrier = _readyBarrier;
+      _readyBarrier = null;
+      if (readyBarrier != null && !readyBarrier.isCompleted) {
+        readyBarrier.complete();
+      }
       _cancelTask(barrierTask, reason);
     }
 

@@ -770,7 +770,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     _vsBotProgressNextDifficulty = null;
   }
 
-  String? _vsBotAvatarRewardMessage(AvatarRewardClaimResult result) {
+  String? _vsBotAvatarRewardMessage(
+    AvatarRewardClaimResult result, {
+    required BotCharacter bot,
+    required BotDifficulty difficulty,
+  }) {
     if (result.alreadyClaimed) {
       return null;
     }
@@ -781,13 +785,14 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     final names = result.grantedAvatars
         .map((avatar) => avatar.name)
         .toList(growable: false);
+    final source = 'VS BOT REWARD • Beat ${bot.name} on ${difficulty.label}.';
     if (names.length == 1) {
-      return 'Avatar unlocked: ${names.first}.';
+      return 'NEW AVATAR UNLOCKED\n${names.first}\n$source';
     }
     if (names.length == 2) {
-      return 'Avatars unlocked: ${names.first} and ${names.last}.';
+      return 'NEW AVATARS UNLOCKED\n${names.first} and ${names.last}\n$source';
     }
-    return 'Avatars unlocked: ${names[0]}, ${names[1]}, and ${names.length - 2} more.';
+    return 'NEW AVATARS UNLOCKED\n${names[0]}, ${names[1]}, and ${names.length - 2} more\n$source';
   }
 
   Future<void> _resolveVsBotAvatarRewards(GameOutcome outcome) async {
@@ -820,7 +825,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
         _selectedBotDifficulty,
       ),
     );
-    final rewardMessage = _vsBotAvatarRewardMessage(rewardResult);
+    final rewardMessage = _vsBotAvatarRewardMessage(
+      rewardResult,
+      bot: bot,
+      difficulty: _selectedBotDifficulty,
+    );
     if (!mounted || rewardMessage == null) {
       return;
     }
@@ -828,8 +837,8 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
     setState(() {
       if (_vsBotProgressTitle == null) {
         _vsBotProgressTitle = rewardResult.grantedAvatars.length > 1
-            ? 'Avatars unlocked'
-            : 'Avatar unlocked';
+            ? 'New avatars unlocked'
+            : 'New avatar unlocked';
         _vsBotProgressMessage = rewardMessage;
         return;
       }
@@ -1913,6 +1922,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             : _botDifficultyToneFor(selectedBot, selectedDifficulty, arcade);
         final challengeAccent = challengeTone?.accent ?? arcade.cyan;
         final challengeGlowAccent = challengeTone?.aura ?? challengeAccent;
+        final hasAvatarReward =
+            progressTitle?.toLowerCase().contains('avatar') ?? false;
+        final progressAccent = hasAvatarReward ? arcade.amber : challengeAccent;
         final summaryText = isDraw
             ? _vsBotDrawSummaryText(_gameDrawReason)
             : isWin
@@ -1928,14 +1940,14 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: _vsBotArcadePanelDecoration(
               palette: arcade,
-              accent: challengeAccent,
+              accent: progressAccent,
               glowAccent: challengeGlowAccent,
               radius: 999,
               borderWidth: 2.0,
               inset: true,
               elevated: false,
               fillColor: Color.alphaBlend(
-                challengeAccent.withValues(
+                progressAccent.withValues(
                   alpha: arcade.monochrome ? 0.08 : 0.14,
                 ),
                 arcade.panelAlt,
@@ -1983,8 +1995,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   textAlign: TextAlign.center,
                   style: puzzleAcademyIdentityStyle(
                     palette: arcade.base,
-                    size: 8.0,
-                    color: challengeAccent,
+                    size: hasAvatarReward ? 10.0 : 8.0,
+                    weight: hasAvatarReward ? FontWeight.w700 : FontWeight.w400,
+                    color: progressAccent,
                     withGlow: true,
                   ),
                 ),
@@ -1994,8 +2007,10 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                   textAlign: TextAlign.center,
                   style: puzzleAcademyHudStyle(
                     palette: arcade.base,
-                    size: 11.2,
-                    color: arcade.textMuted,
+                    size: hasAvatarReward ? 13.0 : 11.2,
+                    weight: hasAvatarReward ? FontWeight.w800 : FontWeight.w600,
+                    color: hasAvatarReward ? arcade.text : arcade.textMuted,
+                    withGlow: hasAvatarReward,
                   ),
                 ),
               ],
@@ -2391,13 +2406,16 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
   }) {
     final hasProgressOverlay =
         isWin && progressTitle != null && progressMessage != null;
+    final hasAvatarReward =
+        progressTitle?.toLowerCase().contains('avatar') ?? false;
+    final progressAccent = hasAvatarReward ? arcade.amber : accent;
     const overlayDelayMs = 1500;
     const overlayDurationMs = 420;
     const overlayTotalMs = overlayDelayMs + overlayDurationMs;
     final overlayStart = overlayDelayMs / overlayTotalMs;
 
     return SizedBox(
-      width: hasProgressOverlay ? 292 : 96,
+      width: hasProgressOverlay ? 320 : 96,
       height: hasProgressOverlay ? 132 : 96,
       child: Stack(
         alignment: Alignment.center,
@@ -2545,17 +2563,19 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
               duration: const Duration(milliseconds: overlayTotalMs),
               curve: Curves.linear,
               child: Container(
-                constraints: const BoxConstraints(maxWidth: 280),
+                constraints: const BoxConstraints(maxWidth: 308),
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                 decoration: _vsBotArcadePanelDecoration(
                   palette: arcade,
-                  accent: accent,
+                  accent: progressAccent,
                   radius: 20,
                   borderWidth: 2.2,
                   inset: true,
                   elevated: false,
                   fillColor: Color.alphaBlend(
-                    accent.withValues(alpha: arcade.monochrome ? 0.08 : 0.14),
+                    progressAccent.withValues(
+                      alpha: arcade.monochrome ? 0.08 : 0.14,
+                    ),
                     arcade.panelAlt,
                   ),
                 ),
@@ -2567,8 +2587,11 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       textAlign: TextAlign.center,
                       style: puzzleAcademyIdentityStyle(
                         palette: arcade.base,
-                        size: 8.0,
-                        color: accent,
+                        size: hasAvatarReward ? 10.0 : 8.0,
+                        weight: hasAvatarReward
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                        color: progressAccent,
                         withGlow: true,
                       ),
                     ),
@@ -2578,8 +2601,12 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
                       textAlign: TextAlign.center,
                       style: puzzleAcademyHudStyle(
                         palette: arcade.base,
-                        size: 10.6,
-                        color: arcade.textMuted,
+                        size: hasAvatarReward ? 12.0 : 10.6,
+                        weight: hasAvatarReward
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                        color: hasAvatarReward ? arcade.text : arcade.textMuted,
+                        withGlow: hasAvatarReward,
                       ),
                     ),
                   ],

@@ -42,6 +42,7 @@ import 'package:chessiq/shared/widgets/chess_iq_transient_message.dart';
 import 'package:chessiq/shared/widgets/theme_selector_tiles.dart';
 import 'package:chessiq/shared/widgets/universal_settings_sheet.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
