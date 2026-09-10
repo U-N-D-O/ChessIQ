@@ -143,9 +143,8 @@ class _AcademyHubSelectorLayoutSpec {
 
   factory _AcademyHubSelectorLayoutSpec.fromConstraints(
     BoxConstraints constraints,
-    MediaQueryData media,
   ) {
-    final safeHeight = max(0.0, constraints.maxHeight - media.padding.vertical);
+    final safeHeight = constraints.maxHeight;
     final isLandscape = constraints.maxWidth > safeHeight;
     final shortLandscape = isLandscape && safeHeight <= 500;
     if (shortLandscape) {
@@ -1910,15 +1909,14 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final media = MediaQuery.of(context);
     final selectorLayout = _AcademyHubSelectorLayoutSpec.fromConstraints(
       constraints,
-      media,
     );
     final compactHub = constraints.maxHeight < 420;
     final horizontalPadding = selectorLayout.isTablet ? 20.0 : 4.0;
     final topPadding = compactHub ? 8.0 : 10.0;
-    final bottomPadding = max(14.0, 14.0 + media.padding.bottom);
+    // These constraints already exclude the enclosing SafeArea insets.
+    const bottomPadding = 14.0;
     final contentHeight = max(
       0.0,
       constraints.maxHeight - topPadding - bottomPadding,
@@ -3251,8 +3249,7 @@ class _PuzzleMapScreenState extends State<PuzzleMapScreen>
     required AppThemeProvider themeProvider,
     required bool monochrome,
   }) {
-    final media = MediaQuery.of(context);
-    final safeHeight = max(0.0, constraints.maxHeight - media.padding.vertical);
+    final safeHeight = constraints.maxHeight;
     final aspectRatio = constraints.maxWidth / max(1.0, constraints.maxHeight);
     final useDualPaneLayout = aspectRatio >= 0.95;
     final compactDashboard =

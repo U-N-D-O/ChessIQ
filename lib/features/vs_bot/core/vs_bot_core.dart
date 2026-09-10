@@ -2876,7 +2876,9 @@ abstract class _VsBotCore extends _ChessAnalysisPageStateCore {
           child: LayoutBuilder(
             builder: (context, viewportConstraints) {
               final footerReserve = layout.isLandscape
-                  ? (compactLandscape ? 84.0 : 74.0)
+                  // Tablet landscape cards need a little more room for the
+                  // profile tags and bot name below the avatar.
+                  ? (compactLandscape ? 84.0 : 112.0)
                   : compact
                   ? 92.0
                   : 116.0;

@@ -7,14 +7,17 @@ void main() {
   testWidgets('renders generated fallback when avatar asset is not decodable', (
     tester,
   ) async {
-    final avatar = AvatarCatalog.entryFor('Celician Mara');
-
-    expect(avatar, isNotNull);
+    const avatar = AvatarCatalogEntry(
+      id: 'test-celician-mara',
+      name: 'Celician Mara',
+      assetPath: 'assets/avatars/missing/test-celician-mara.png',
+      bucket: AvatarRarityBucket.normal,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: Center(child: AvatarPortrait(avatar: avatar!, size: 96)),
+          body: Center(child: AvatarPortrait(avatar: avatar, size: 96)),
         ),
       ),
     );

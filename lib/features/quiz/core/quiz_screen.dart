@@ -8284,6 +8284,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                       controller: _quizQuestionOptionsScrollController,
                       child: ListView(
                         controller: _quizQuestionOptionsScrollController,
+                        padding: EdgeInsets.zero,
                         children: optionButtons,
                       ),
                     ),
@@ -8466,6 +8467,7 @@ abstract class _QuizScreen extends _AnalysisPageShared {
                     }
 
                     return ListView(
+                      padding: EdgeInsets.zero,
                       children: <Widget>[
                         if (hasQuizBoard) buildQuizBoardCard(),
                         if (hasQuizBoard) SizedBox(height: contentGap),

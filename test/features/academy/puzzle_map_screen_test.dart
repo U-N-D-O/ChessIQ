@@ -277,6 +277,30 @@ Future<void> _pumpAcademyProfileDialog(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('Academy hub consumes safe-area height only once', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    await _pumpPuzzleMapScreen(
+      tester,
+      provider: _TestPuzzleAcademyProvider(),
+      size: const Size(402, 778),
+    );
+    final card = find.byKey(const ValueKey<String>('academy_hub_card_quiz'));
+    final originalRect = tester.getRect(card);
+    tester.view.physicalSize = const Size(402, 874);
+    tester.view.padding = const FakeViewPadding(top: 62, bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(top: 62, bottom: 34);
+    await tester.pump();
+    final insetRect = tester.getRect(card);
+    expect(insetRect.height, closeTo(originalRect.height, 0.01));
+    expect(insetRect.top, closeTo(originalRect.top + 62, 0.01));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets(
     'shows a forced rename warning when a moderated nickname is flagged',
     (tester) async {

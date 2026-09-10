@@ -88,11 +88,11 @@ flutter:
     - assets/sounds/
     - assets/bots/
     - assets/avatars/
-    - assets/avatars/1/
-    - assets/avatars/4/
+    - assets/avatars/normal/
+    - assets/avatars/rare/
+    - assets/avatars/epic/
+    - assets/avatars/legendary/
     - assets/avatars/a/
-    - assets/avatars/oo/
-    - "assets/avatars/e 12/"
     - store/
     - assets/puzzles/base_puzzles.json
     - assets/ChessIQ.png

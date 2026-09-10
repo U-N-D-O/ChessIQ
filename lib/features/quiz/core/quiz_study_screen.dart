@@ -1433,6 +1433,7 @@ Widget _buildQuizStudyFamilyListPane(
             controller: state._quizStudyLibraryScrollController,
             child: ListView(
               controller: state._quizStudyLibraryScrollController,
+              padding: EdgeInsets.zero,
               children: groups
                   .map((group) {
                     final expanded =

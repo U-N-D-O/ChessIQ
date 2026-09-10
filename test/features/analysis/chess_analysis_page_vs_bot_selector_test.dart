@@ -563,4 +563,27 @@ void main() {
       await tester.pump();
     },
   );
+
+  testWidgets(
+    'vs bot selector fits tablet landscape cards without overflow',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+
+      await _pumpVsBotSelector(tester, size: const Size(1280, 672));
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('bot_setup_card_mochi-gearheart'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 }

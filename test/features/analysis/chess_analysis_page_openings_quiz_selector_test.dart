@@ -864,6 +864,58 @@ void main() {
     },
   );
 
+  testWidgets('opening quiz board and options do not repeat system insets', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+
+    await _pumpOpeningsQuizSession(tester, size: const Size(402, 874));
+    tester.view.viewPadding = const FakeViewPadding(top: 62, bottom: 34);
+    tester.view.padding = const FakeViewPadding(top: 62, bottom: 34);
+    await tester.pump();
+
+    final board = find.byKey(
+      const ValueKey<String>('quiz_session_board_square'),
+    );
+    final grid = find.descendant(of: board, matching: find.byType(GridView));
+    final squares = find.descendant(
+      of: grid,
+      matching: find.byType(GestureDetector),
+    );
+    expect(squares, findsNWidgets(64));
+    expect(tester.getRect(squares.first).top, tester.getRect(grid).top);
+    expect(
+      tester.getRect(squares.last).bottom,
+      closeTo(tester.getRect(grid).bottom, 0.01),
+    );
+
+    final questionPanel = find.byKey(
+      const ValueKey<String>('quiz_session_question_panel'),
+    );
+    final optionsList = find.descendant(
+      of: questionPanel,
+      matching: find.byType(ListView),
+    );
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey<String>('quiz_session_option_0')))
+          .top,
+      tester.getRect(optionsList).top,
+    );
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey<String>('quiz_session_top_panel')))
+          .top,
+      greaterThanOrEqualTo(62),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets(
     'opening quiz live play fits board options and action on compact portrait and moves guidance behind info',
     (tester) async {

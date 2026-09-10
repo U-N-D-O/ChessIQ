@@ -4,13 +4,13 @@ extension AvatarRarityBucketX on AvatarRarityBucket {
   String get folderName {
     switch (this) {
       case AvatarRarityBucket.normal:
-        return '4';
+        return 'normal';
       case AvatarRarityBucket.rare:
-        return '1';
+        return 'rare';
       case AvatarRarityBucket.epic:
-        return 'oo';
+        return 'epic';
       case AvatarRarityBucket.legendary:
-        return 'e 12';
+        return 'legendary';
       case AvatarRarityBucket.promo:
         return 'a';
     }

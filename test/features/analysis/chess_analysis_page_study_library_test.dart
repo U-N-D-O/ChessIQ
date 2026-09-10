@@ -360,6 +360,25 @@ void main() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
   });
 
+  testWidgets('main menu applies the home indicator inset only once', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    await _pumpAnalysisMenu(tester, size: const Size(402, 874));
+    final settings = find.widgetWithText(FilledButton, 'Settings');
+    final originalBottom = tester.getRect(settings).bottom;
+    tester.view.padding = const FakeViewPadding(top: 62, bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(top: 62, bottom: 34);
+    await tester.pump();
+    expect(tester.getRect(settings).bottom, closeTo(originalBottom - 34, 0.01));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets(
     'main menu animations pause away from menu and resume on return',
     (tester) async {

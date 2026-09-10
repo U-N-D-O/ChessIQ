@@ -599,6 +599,8 @@ abstract class _QuizComponents extends _QuizScreen {
                 !whiteToMove));
 
     return GridView.builder(
+      // The enclosing screen already handles the system safe-area insets.
+      padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 8,

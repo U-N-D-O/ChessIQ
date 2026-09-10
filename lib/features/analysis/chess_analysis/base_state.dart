@@ -19275,9 +19275,8 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.only(
-                        bottom: media.viewPadding.bottom,
-                      ),
+                      // The menu SafeArea already reserves the bottom inset.
+                      padding: EdgeInsets.zero,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [

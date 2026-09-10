@@ -229,7 +229,7 @@ void main() {
       'avatar_inventory_v1': <String, dynamic>{
         'ownedAvatarIds': <String>[
           legacyAvatar.assetPath,
-          'assets/avatars/1/AgentNova.png',
+          'assets/avatars/rare/AgentNova.png',
         ],
         'selectedAvatarId': legacyAvatar.assetPath,
         'starterAvatarId': legacyAvatar.assetPath,
@@ -244,7 +244,7 @@ void main() {
 
     expect(provider.bootstrappedStarter, isFalse);
     expect(provider.ownsAvatar(legacyAvatar.assetPath), isTrue);
-    expect(provider.ownsAvatar('assets/avatars/1/AgentNova.png'), isTrue);
+    expect(provider.ownsAvatar('assets/avatars/rare/AgentNova.png'), isTrue);
     expect(provider.selectedAvatar?.id, legacyAvatar.id);
     expect(provider.starterAvatar?.id, legacyAvatar.id);
     expect(provider.ownedAvatarIds, contains(legacyAvatar.id));
