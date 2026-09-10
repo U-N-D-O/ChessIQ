@@ -46,6 +46,7 @@ dependencies:
   in_app_purchase: ^3.3.0
   package_info_plus: ^8.0.2
   app_links: ^6.4.1
+  mobile_scanner: ^7.4.1
   qr_flutter: ^4.1.0
   share_plus: ^10.1.4
   url_launcher: ^6.3.1

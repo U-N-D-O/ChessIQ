@@ -41,6 +41,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>ChessIQ uses the camera to scan private match QR codes.</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>

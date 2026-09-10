@@ -1749,6 +1749,11 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   bool get _useReducedMenuWindowsVisualEffects =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
+  bool get _supportsRemoteFriendQrScanner =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   double _menuUnit(double value) {
     if (value <= 0.0) return 0.0;
     if (value >= 1.0) return 1.0;
@@ -5559,6 +5564,22 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     );
     final normalized = inviteCode?.trim().toUpperCase();
     return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+
+  Future<void> _scanRemoteFriendInviteCode() async {
+    if (_remoteFriendOperationInProgress || !mounted) {
+      return;
+    }
+
+    final inviteCode = await showDialog<String?>(
+      context: context,
+      builder: (_) => const _RemoteFriendInviteQrScannerDialog(),
+    );
+    if (!mounted || inviteCode == null) {
+      return;
+    }
+
+    await _joinRemoteFriendInviteCode(inviteCode);
   }
 
   String? _resolvedRemoteFriendInviteCode({String? inviteCode}) {
@@ -20971,7 +20992,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
             buildSectionTitle('QUICK JOIN', heroAccent),
             const SizedBox(height: 10),
             Text(
-              'Paste an invite code and jump directly into your private match lobby.',
+              'Enter an invite code or scan one from another phone to jump directly into your private match lobby.',
               style: buildBodyStyle(color: arcade.textMuted, size: 11.8),
             ),
             if (recentJoin != null) ...[
@@ -21085,6 +21106,21 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
                 accent: heroAccent,
               ),
             ),
+            if (_supportsRemoteFriendQrScanner) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: buildActionButton(
+                  label: 'Scan QR Code',
+                  icon: Icons.qr_code_scanner_rounded,
+                  onPressed: _remoteFriendOperationInProgress
+                      ? null
+                      : () => unawaited(_scanRemoteFriendInviteCode()),
+                  accent: remoteAccent,
+                  filled: false,
+                ),
+              ),
+            ],
           ],
         ),
       );
@@ -35371,6 +35407,129 @@ class _RemoteFriendInviteCodeDialogState
         ),
         FilledButton(onPressed: _submit, child: const Text('Join')),
       ],
+    );
+  }
+}
+
+class _RemoteFriendInviteQrScannerDialog extends StatefulWidget {
+  const _RemoteFriendInviteQrScannerDialog();
+
+  @override
+  State<_RemoteFriendInviteQrScannerDialog> createState() =>
+      _RemoteFriendInviteQrScannerDialogState();
+}
+
+class _RemoteFriendInviteQrScannerDialogState
+    extends State<_RemoteFriendInviteQrScannerDialog> {
+  bool _didScan = false;
+  String _status = 'Point the camera at a ChessIQ invite QR code.';
+
+  void _handleDetection(BarcodeCapture capture) {
+    if (_didScan) {
+      return;
+    }
+
+    for (final barcode in capture.barcodes) {
+      final inviteCode = RemoteFriendInviteLinkService.instance
+          .inviteCodeFromScannedValue(barcode.rawValue);
+      if (inviteCode == null) {
+        continue;
+      }
+
+      _didScan = true;
+      Navigator.of(context).pop(inviteCode);
+      return;
+    }
+
+    if (mounted && _status != 'That QR code is not a ChessIQ invite.') {
+      setState(() {
+        _status = 'That QR code is not a ChessIQ invite.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final media = MediaQuery.of(context);
+    final compact = media.size.width <= 420 || media.size.height <= 700;
+
+    return Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 24,
+        vertical: compact ? 10 : 24,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          maxHeight: min(media.size.height * 0.9, 720.0),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Scan Invite QR Code',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      tooltip: 'Close scanner',
+                      color: Colors.white,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      MobileScanner(onDetect: _handleDetection),
+                      IgnorePointer(
+                        child: Center(
+                          child: Container(
+                            width: min(media.size.width * 0.64, 280.0),
+                            height: min(media.size.width * 0.64, 280.0),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: theme.colorScheme.primary,
+                                width: 3,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Text(
+                  _status,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.88),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
