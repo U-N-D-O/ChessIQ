@@ -233,15 +233,21 @@ void main() {
 
     test('allows white pawn on ranks 2 through 7', () {
       for (int rank = 2; rank <= 7; rank++) {
-        expect(isValidPawnSquare('p_w', 'e$rank'), isTrue,
-            reason: 'white pawn on rank $rank should be valid');
+        expect(
+          isValidPawnSquare('p_w', 'e$rank'),
+          isTrue,
+          reason: 'white pawn on rank $rank should be valid',
+        );
       }
     });
 
     test('allows black pawn on ranks 2 through 7', () {
       for (int rank = 2; rank <= 7; rank++) {
-        expect(isValidPawnSquare('p_b', 'd$rank'), isTrue,
-            reason: 'black pawn on rank $rank should be valid');
+        expect(
+          isValidPawnSquare('p_b', 'd$rank'),
+          isTrue,
+          reason: 'black pawn on rank $rank should be valid',
+        );
       }
     });
 
@@ -333,12 +339,50 @@ void main() {
     });
 
     test('returns empty map when all pieces are invalid', () {
-      final board = <String, String>{
-        'a1': 'p_w',
-        'h8': 'p_b',
-        'b1': 'p_b',
-      };
+      final board = <String, String>{'a1': 'p_w', 'h8': 'p_b', 'b1': 'p_b'};
       expect(sanitizeBoardState(board), isEmpty);
+    });
+  });
+
+  group('validateAnalysisBoardState', () {
+    test('allows a normal position', () {
+      expect(
+        validateAnalysisBoardState(<String, String>{
+          'e1': 'k_w',
+          'e8': 'k_b',
+          'a2': 'p_w',
+          'a7': 'p_b',
+        }),
+        isNull,
+      );
+    });
+
+    test('rejects more than 16 pieces for one side', () {
+      final board = <String, String>{'e1': 'k_w', 'e8': 'k_b'};
+      for (var index = 0; index < 15; index++) {
+        final file = String.fromCharCode(97 + (index % 8));
+        final rank = 2 + (index ~/ 8);
+        board['$file$rank'] = 'q_w';
+      }
+      board['a4'] = 'q_w';
+      expect(validateAnalysisBoardState(board), contains('16 pieces'));
+    });
+
+    test('rejects more than eight pawns for one side', () {
+      final board = <String, String>{'e1': 'k_w', 'e8': 'k_b'};
+      for (var index = 0; index < 8; index++) {
+        final file = String.fromCharCode(97 + index);
+        board['${file}2'] = 'p_w';
+      }
+      board['a3'] = 'p_w';
+      expect(validateAnalysisBoardState(board), contains('8 pawns'));
+    });
+
+    test('rejects neighbouring kings', () {
+      expect(
+        validateAnalysisBoardState(<String, String>{'e1': 'k_w', 'e2': 'k_b'}),
+        contains('neighbouring'),
+      );
     });
   });
 }

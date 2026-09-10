@@ -534,6 +534,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   static const int _oracleInfiniteDepth = 30;
   static const int _defaultMultiPvCount = 1;
   static const String _savedDefaultSnapshotKey = 'saved_default_snapshot_v1';
+  static const String _analysisSessionActiveKey = 'analysis_session_active_v1';
   static const String _storeStateKey = 'store_state_v1';
   static const String _storeIntegrityScope = 'economy_store';
   static const String _storeVsBotMatchStartCountKey = 'vsBotMatchStartCount';
@@ -10799,6 +10800,20 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
       final savedBlackQueensideRookMoved = decoded['blackQueensideRookMoved'];
       final savedEnPassantTarget = decoded['enPassantTarget'];
 
+      Map<String, String>? restoredBoard;
+      if (savedBoard is Map) {
+        restoredBoard = sanitizeBoardState(
+          savedBoard.map(
+            (key, value) => MapEntry(key.toString(), value.toString()),
+          ),
+        );
+        final boardError = validateAnalysisBoardState(restoredBoard);
+        if (boardError != null) {
+          await _discardUnsafeSavedAnalysisSnapshot(prefs, boardError);
+          return;
+        }
+      }
+
       if (!prefs.containsKey(_analysisPerspectiveKey) &&
           savedPerspective is int &&
           savedPerspective >= 0 &&
@@ -10868,27 +10883,33 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _enPassantTarget = savedEnPassantTarget;
       }
 
-      if (savedBoard is Map) {
-        boardState = sanitizeBoardState(
-          savedBoard.map(
-            (key, value) => MapEntry(key.toString(), value.toString()),
-          ),
-        );
+      if (restoredBoard != null) {
+        boardState = restoredBoard;
       }
 
       _moveHistory.clear();
+      var unsafeHistory = false;
       if (savedHistory is List) {
         for (final item in savedHistory) {
           if (item is Map) {
             final restored = _moveRecordFromMap(item);
             if (restored != null) {
+              if (validateAnalysisBoardState(restored.state) != null) {
+                unsafeHistory = true;
+                break;
+              }
               _moveHistory.add(restored);
             }
           }
         }
       }
 
-      if (savedHistoryIndex is int &&
+      if (unsafeHistory) {
+        _moveHistory.clear();
+      }
+
+      if (!unsafeHistory &&
+          savedHistoryIndex is int &&
           savedHistoryIndex >= -1 &&
           savedHistoryIndex < _moveHistory.length) {
         _historyIndex = savedHistoryIndex;
@@ -10896,14 +10917,19 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
         _historyIndex = _moveHistory.isEmpty ? -1 : _moveHistory.length - 1;
       }
 
-      _restoreDerivedDrawState(
-        savedPositionHistoryKeys: savedPositionHistoryKeys is List
-            ? savedPositionHistoryKeys
-            : null,
-        savedHalfmoveClockHistory: savedHalfmoveClockHistory is List
-            ? savedHalfmoveClockHistory
-            : null,
-      );
+      if (unsafeHistory) {
+        _historyIndex = -1;
+        _resetDerivedDrawState();
+      } else {
+        _restoreDerivedDrawState(
+          savedPositionHistoryKeys: savedPositionHistoryKeys is List
+              ? savedPositionHistoryKeys
+              : null,
+          savedHalfmoveClockHistory: savedHalfmoveClockHistory is List
+              ? savedHalfmoveClockHistory
+              : null,
+        );
+      }
 
       _topLines = <EngineLine>[];
       if (savedTopLines is List) {
@@ -10938,6 +10964,30 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     } catch (e) {
       debugPrint('Failed to load saved default snapshot: $e');
     }
+  }
+
+  Future<void> _discardUnsafeSavedAnalysisSnapshot(
+    SharedPreferences prefs,
+    String reason,
+  ) async {
+    await prefs.remove(_savedDefaultSnapshotKey);
+    boardState = _initialBoardState();
+    _isWhiteTurn = true;
+    _resetSpecialMoveState();
+    _moveHistory.clear();
+    _historyIndex = -1;
+    _resetDerivedDrawState();
+    _currentOpening = '';
+    _openingMode = OpeningMode.off;
+    _selectedGambit = null;
+    _gambitPreviewLines = <EngineLine>[];
+    _topLines = <EngineLine>[];
+    _analysisLines = <EngineLine>[];
+    _analysisLinesFen = null;
+    _currentEvalSnapshot = null;
+    _currentDepth = 0;
+    _currentEval = 0.0;
+    _addLog('Unsafe saved analysis position reset: $reason');
   }
 
   void _persistCurrentSettings() {
@@ -10995,6 +11045,84 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     await _loadSavedDefaultSnapshot();
     if (!mounted) return;
     setState(() {});
+  }
+
+  Future<void> _markAnalysisSessionActive() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_analysisSessionActiveKey, true);
+  }
+
+  Future<void> _markAnalysisSessionEnded() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_analysisSessionActiveKey, false);
+    } catch (error) {
+      debugPrint('Failed to mark analysis session ended: $error');
+    }
+  }
+
+  Future<bool> _analysisNeedsRecovery() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_analysisSessionActiveKey) == true) {
+        return true;
+      }
+
+      final raw = prefs.getString(_savedDefaultSnapshotKey);
+      if (raw == null || raw.isEmpty) {
+        return false;
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return true;
+      }
+      final savedBoard = decoded['boardState'];
+      if (savedBoard is! Map) {
+        return false;
+      }
+      final restoredBoard = sanitizeBoardState(
+        savedBoard.map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        ),
+      );
+      return validateAnalysisBoardState(restoredBoard) != null;
+    } catch (error) {
+      debugPrint('Failed to check analysis recovery state: $error');
+      return true;
+    }
+  }
+
+  Future<bool?> _showAnalysisRecoveryDialog() {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reset analysis board?'),
+        content: const Text(
+          'Analysis mode was interrupted and its saved position may be unsafe. '
+          'Reset the analysis board to the normal starting position? Your '
+          'analysis settings will be kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Reset analysis'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _resetAnalysisWorkspaceAfterCrash() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_savedDefaultSnapshotKey);
+    await prefs.setBool(_analysisSessionActiveKey, false);
+    _resetBoard(withIntro: false);
+    await _saveCurrentAsDefaultSnapshot(logChange: false);
   }
 
   Future<void> _releaseEngineSession() async {
@@ -15659,6 +15787,16 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
   Future<void> _enterAnalysisBoard() async {
     if (_activeSection == AppSection.analysis) return;
     try {
+      if (await _analysisNeedsRecovery()) {
+        final shouldReset = await _showAnalysisRecoveryDialog();
+        if (!mounted || shouldReset != true) {
+          return;
+        }
+        await _resetAnalysisWorkspaceAfterCrash();
+      }
+
+      await _markAnalysisSessionActive();
+
       // Coordinate menu exit animation with music fade.
       _menuExitAnimationController.reset();
       final transition = _menuExitAnimationController.forward();
@@ -15733,6 +15871,7 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     if (wasLocalFriendGame) {
       _stopLocalFriendClock();
     }
+    unawaited(_markAnalysisSessionEnded());
     unawaited(_releaseEngineSession());
 
     _menuExitAnimationController.reset();
@@ -16181,6 +16320,17 @@ abstract class _ChessAnalysisPageStateBase extends State<ChessAnalysisPage>
     Map<String, String> nextBoardState, {
     String? hintText,
   }) {
+    final boardError = validateAnalysisBoardState(nextBoardState);
+    if (boardError != null) {
+      if (mounted) {
+        setState(() {
+          _editModeHintText = boardError;
+        });
+      }
+      _scheduleEditModeHintHide();
+      return;
+    }
+
     _send('stop');
     _cancelGameResultReveal();
     _cancelPendingMoveQualityGrading();

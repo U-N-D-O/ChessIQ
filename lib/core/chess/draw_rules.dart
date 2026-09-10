@@ -115,6 +115,87 @@ bool isValidPawnSquare(String piece, String square) {
   return rank >= 2 && rank <= 7;
 }
 
+/// Returns a short explanation when [boardState] is unsafe to use as an
+/// analysis position, or null when the position is structurally safe.
+///
+/// Analysis positions may be unusual, but they still need to fit inside the
+/// bounds of a real chess position. In particular, a side cannot have more
+/// than 16 pieces in total or more than 8 pawns. Allowing those positions can
+/// make the chess/FEN and engine layers disagree about the position.
+String? validateAnalysisBoardState(Map<String, String> boardState) {
+  const validPieces = <String>{
+    'p_w',
+    'n_w',
+    'b_w',
+    't_w',
+    'q_w',
+    'k_w',
+    'p_b',
+    'n_b',
+    'b_b',
+    't_b',
+    'q_b',
+    'k_b',
+  };
+
+  var whitePieces = 0;
+  var blackPieces = 0;
+  var whitePawns = 0;
+  var blackPawns = 0;
+  String? whiteKingSquare;
+  String? blackKingSquare;
+
+  for (final entry in boardState.entries) {
+    final square = entry.key;
+    final piece = entry.value;
+    if (!RegExp(r'^[a-h][1-8]$').hasMatch(square)) {
+      return 'Invalid square: $square';
+    }
+    if (!validPieces.contains(piece)) {
+      return 'Invalid piece on $square';
+    }
+    if (!isValidPawnSquare(piece, square)) {
+      return 'Pawns cannot be placed on the first or last rank';
+    }
+
+    final isWhite = piece.endsWith('_w');
+    if (isWhite) {
+      whitePieces += 1;
+      if (piece == 'p_w') whitePawns += 1;
+      if (piece == 'k_w') whiteKingSquare = square;
+    } else {
+      blackPieces += 1;
+      if (piece == 'p_b') blackPawns += 1;
+      if (piece == 'k_b') blackKingSquare = square;
+    }
+  }
+
+  if (whiteKingSquare == null || blackKingSquare == null) {
+    return 'Keep one white king and one black king on the board';
+  }
+  if (whitePieces > 16 || blackPieces > 16) {
+    return 'Each side can have at most 16 pieces';
+  }
+  if (whitePawns > 8 || blackPawns > 8) {
+    return 'Each side can have at most 8 pawns';
+  }
+
+  final whiteFile = whiteKingSquare.codeUnitAt(0) - 97;
+  final whiteRank = int.parse(whiteKingSquare[1]) - 1;
+  final blackFile = blackKingSquare.codeUnitAt(0) - 97;
+  final blackRank = int.parse(blackKingSquare[1]) - 1;
+  if ((whiteFile - blackFile).abs() <= 1 &&
+      (whiteRank - blackRank).abs() <= 1) {
+    return 'The kings cannot be on neighbouring squares';
+  }
+
+  return null;
+}
+
+bool isSafeAnalysisBoardState(Map<String, String> boardState) {
+  return validateAnalysisBoardState(boardState) == null;
+}
+
 /// Removes any entry from [boardState] whose piece violates [isValidPawnSquare].
 ///
 /// Used when restoring a saved board to prevent invalid positions (e.g. a
