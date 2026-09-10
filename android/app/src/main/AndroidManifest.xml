@@ -6,7 +6,6 @@
         android:label="chessiq"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:extractNativeLibs="true"
         android:enableOnBackInvokedCallback="true">
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
